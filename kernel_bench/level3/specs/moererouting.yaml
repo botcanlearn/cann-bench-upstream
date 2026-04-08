@@ -1,0 +1,35 @@
+operator:
+  name: MoeReRouting
+  category: LayoutTransform
+  difficulty: L3
+  formula: y = moe_rerouting(x, expert_token_num_per_rank)
+  description: 将token按照专家顺序重新排列
+  shape_support: 'tokens: [A, H]'
+  attrs:
+  - name: expert_token_num_type
+    type: int
+    default: 1
+    description: 专家token数量类型
+    required: false
+  inputs:
+  - name: x
+    description: 输入token张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  - name: expert_token_num_per_rank
+    description: 每个rank的token数量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  outputs:
+  - name: y
+    description: 输出张量，重新排列的token
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  schema: moe_re_routing(Tensor x, Tensor expert_token_num_per_rank, int expert_token_num_type)
+    -> Tensor y

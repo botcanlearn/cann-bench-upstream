@@ -1,0 +1,46 @@
+# TODO 需要再分析
+operator:
+  name: SparseFlashAttention
+  category: FusedComposite
+  difficulty: L4
+  formula: y = softmax(Q @ K^T / sqrt(d)) @ V
+  description: 大序列长度推理场景的高效注意力计算
+  shape_support: 'query: [B,S1,N1,D]'
+  attrs:
+  - name: scaleValue
+    type: DOUBLE
+    description: 缩放因子
+    required: true
+  - name: sparseBlockSize
+    type: INT64
+    description: 稀疏块大小
+    required: true
+  - name: layoutQuery
+    type: CHAR*
+    default: BSND
+    description: 查询布局
+    required: false
+  inputs:
+  - name: query
+    description: 查询张量
+    dtype:
+    - bfloat16
+    - float16
+  - name: key
+    description: 键张量
+    dtype:
+    - bfloat16
+    - float16
+  - name: value
+    description: 值张量
+    dtype:
+    - bfloat16
+    - float16
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - bfloat16
+    - float16
+  schema: sparse_flash_attention(Tensor query, Tensor key, Tensor value, float scaleValue,
+    int sparseBlockSize, str layoutQuery) -> Tensor y

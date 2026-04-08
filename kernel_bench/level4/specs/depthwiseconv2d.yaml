@@ -1,0 +1,60 @@
+operator:
+  name: DepthwiseConv2D
+  category: Contraction
+  difficulty: L4
+  formula: y = bias + weight * x
+  description: 二维深度卷积运算
+  shape_support: 'x: [N, C_in, H, W], weight: [C_out, 1, K_h, K_w]'
+  attrs:
+  - name: kernelSize
+    type: IntArray
+    description: 卷积核大小
+    required: true
+  - name: stride
+    type: IntArray
+    description: 步长
+    required: true
+  - name: padding
+    type: IntArray
+    description: 填充
+    required: true
+  - name: dilations
+    type: IntArray
+    description: 膨胀率
+    required: true
+  - name: groups
+    type: int
+    description: 分组数
+    required: true
+  inputs:
+  - name: x
+    description: 输入特征图
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - hifloat8
+  - name: weight
+    description: 卷积核
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - hifloat8
+  - name: bias
+    description: 偏置
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - hifloat8
+  outputs:
+  - name: y
+    description: 输出特征图
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - hifloat8
+  schema: depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize,
+    int[] stride, int[] padding, int[] dilations, int groups) -> Tensor y

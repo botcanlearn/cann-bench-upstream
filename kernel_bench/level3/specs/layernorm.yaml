@@ -1,0 +1,52 @@
+operator:
+  name: LayerNorm
+  category: NumericalStable
+  difficulty: L3
+  formula: y = (x - mean) / sqrt(variance + eps) * gamma + beta
+  description: 对指定层进行归一化计算
+  shape_support: 输入 1-8 维
+  attrs:
+  - name: normalized_shape
+    type: int[]
+    description: 归一化的维度形状，指定最后 D 个维度进行归一化
+    required: true
+  - name: epsilon
+    type: float
+    default: 1e-5
+    description: 防止除零的小值
+    required: false
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - float16
+    - float32
+  - name: gamma
+    description: 缩放参数，形状与 normalized_shape 一致
+    dtype:
+    - float16
+    - float32
+    optional: true
+  - name: beta
+    description: 偏移参数，形状与 normalized_shape 一致
+    dtype:
+    - float16
+    - float32
+    optional: true
+  outputs:
+  - name: y
+    description: 归一化后的输出张量
+    dtype:
+    - float16
+    - float32
+  - name: mean
+    description: 均值（可选输出）
+    dtype:
+    - float16
+    - float32
+  - name: variance
+    description: 方差（可选输出）
+    dtype:
+    - float16
+    - float32
+  schema: layer_norm(Tensor x, int[] normalized_shape, Tensor? gamma=None, Tensor? beta=None, float epsilon=1e-5) -> (Tensor y, Tensor mean, Tensor variance)

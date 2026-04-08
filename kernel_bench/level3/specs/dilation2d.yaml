@@ -1,0 +1,57 @@
+operator:
+  name: Dilation2D
+  category: Contraction
+  difficulty: L3
+  formula: y[b, y, x, c] = max_{dy,dx} x[b, y + rates[1]*dy, x + rates[2]*dx, c] *
+    filter[dy, dx, c]
+  description: 2D形态学膨胀操作，使用最大池化在局部邻域内获取最大值
+  shape_support: '输入shape: [batch, height, width, depth]，输出shape根据padding和stride决定'
+  attrs:
+  - name: strides
+    type: listInt
+    description: 滑动窗口的步长 [1, stride_rows, stride_cols, 1]
+    required: true
+  - name: rates
+    type: listInt
+    description: 膨胀率 [1, rate_rows, rate_cols, 1]，用于空洞膨胀'
+    required: true
+  - name: padding_mode
+    type: string
+    default_value: SAME
+    description: 填充模式：'SAME' 或 'VALID''
+    required: false
+  - name: pads
+    type: listInt
+    default_value:
+    - 0
+    - 0
+    - 0
+    - 0
+    description: 填充值 [pad_top, pad_bottom, pad_left, pad_right]'
+    required: false
+  - name: ceil_mode
+    type: bool
+    default_value: false
+    description: 是否向上取整计算输出尺寸'
+    required: false
+  - name: data_format
+    type: string
+    default_value: NHWC
+    description: 数据格式，如 'NHWC''
+    required: false
+  inputs:
+  - name: x
+    description: 输入图像
+    dtype:
+    - float16
+  - name: filter
+    description: 结构元素/卷积核
+    dtype:
+    - float16
+  outputs:
+  - name: y
+    description: 膨胀后的图像"
+    dtype:
+    - float16
+  schema: dilation2_d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode,
+    int[] pads, bool ceil_mode, str data_format) -> Tensor y

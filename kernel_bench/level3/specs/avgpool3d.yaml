@@ -1,0 +1,47 @@
+operator:
+  name: AvgPool3D
+  category: Reduction
+  difficulty: L3
+  formula: y[n,c,d,h,w] = (1/(kD*kH*kW)) * sum_{i,j,k} x[n,c,d*strideD+i,h*strideH+j,w*strideW+k]
+  description: 对5D输入张量(N,C,D,H,W)进行三维平均池化，在深度(D)、高度(H)、宽度(W)三个维度上以指定核大小进行滑动窗口平均计算
+  shape_support: 输入[N, C, D, H, W]，输出[(D-kD+pad_front+pad_back)/strideD+1, (H-kH+pad_top+pad_bottom)/strideH+1,
+    (W-kW+pad_left+pad_right)/strideW+1]
+  attrs:
+  - name: ksize
+    type: INT64[]
+    description: 池化核大小数组 [kD, kH, kW]
+    required: true
+  - name: strides
+    type: INT64[]
+    description: 步长数组 [strideD, strideH, strideW]
+    required: true
+  - name: pads
+    type: INT64[]
+    description: 填充数组 [pad_front, pad_back, pad_top, pad_bottom, pad_left, pad_right]
+    required: true
+  - name: data_format
+    type: string
+    default: NCDHW
+    description: 数据格式，支持 NCDHW(默认) 或 NDHWC
+    required: false
+  - name: count_include_pad
+    type: bool
+    default: true
+    description: 是否在平均计算中包含填充值，true包含padding参与平均计算，false则padding区域不计入
+    required: false
+  inputs:
+  - name: x
+    description: 输入张量，5D张量(N,C,D,H,W)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  outputs:
+  - name: y
+    description: 输出张量，池化后的结果
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: avg_pool3_d(Tensor x, int[] ksize, int[] strides, int[] pads, str data_format,
+    bool count_include_pad) -> Tensor y

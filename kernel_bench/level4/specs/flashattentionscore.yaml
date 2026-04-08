@@ -1,0 +1,66 @@
+# TODO 补充InputLayout的取值， 
+operator:
+  name: FlashAttentionScore
+  category: FusedComposite
+  difficulty: L4
+  formula: y = Dropout(Softmax(Mask(scale * query * key^T))) * value
+  description: FlashAttention算法实现self-attention
+  shape_support: 'B: 1~2M, N: 1~256, S: 1~1M, D: 1~768'
+  attrs:
+  - name: scaleValue
+    type: DOUBLE
+    default: 1.0
+    description: 缩放因子
+    required: false
+  - name: keepProb
+    type: DOUBLE
+    default: 1.0
+    description: keep probability
+    required: false
+  - name: headNum
+    type: INT64
+    description: 注意力头数
+    required: true
+  - name: inputLayout
+    type: CHAR*
+    description: 输入布局
+    required: true
+  inputs:
+  - name: query
+    description: 查询张量
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - float8
+  - name: key
+    description: 键张量
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - float8
+  - name: value
+    description: 值张量
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - float8
+  - name: mask
+    description: 掩码张量
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - float8
+  outputs:
+  - name: y
+    description: 输出张量，注意力结果
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - float8
+  schema: flash_attention_score(Tensor query, Tensor key, Tensor value, Tensor mask,
+    float scaleValue, float keepProb, int headNum, str inputLayout) -> Tensor y

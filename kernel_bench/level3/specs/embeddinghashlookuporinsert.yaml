@@ -1,0 +1,37 @@
+operator:
+  name: EmbeddingHashLookupOrInsert
+  category: IndexGather
+  difficulty: L3
+  formula: y = embedding_table[key]
+  description: Embedding 表查找算子，根据键索引从嵌入表中获取对应的嵌入向量
+  shape_support: 'table: (num_embeddings, embedding_dim), key: 任意形状的索引张量'
+  attrs:
+  - name: padding_idx
+    type: int64
+    default: null
+    description: 填充索引，如果指定，该索引对应的输出为零
+    required: false
+  - name: max_norm
+    type: float
+    default: null
+    description: 如果指定，对输出 embedding 进行范数裁剪
+    required: false
+  inputs:
+  - name: table
+    description: 嵌入表权重矩阵，形状为 (num_embeddings, embedding_dim)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: key
+    description: 查找的键索引，形状任意
+    dtype:
+    - int64
+  outputs:
+  - name: y
+    description: 输出张量，查找到的嵌入向量，形状为 (*key.shape, embedding_dim)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: embedding_hash_lookup_or_insert(Tensor table, Tensor key, int64? padding_idx=None, float? max_norm=None) -> Tensor y

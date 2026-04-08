@@ -1,0 +1,40 @@
+operator:
+  name: Unique
+  category: SortSelect
+  difficulty: L3
+  formula: y, inverse = unique(x, return_inverse)
+  description: 去除张量中的重复元素
+  shape_support: 输入 ND 格式
+  attrs:
+  - name: return_inverse
+    type: bool
+    default: false
+    description: 是否返回逆索引，用于重建原始张量
+    required: false
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - int8
+    - int32
+    - int64
+    - uint8
+  outputs:
+  - name: y
+    description: 输出张量，唯一值
+    dtype:
+    - bfloat16
+    - float16
+    - float32
+    - int8
+    - int32
+    - int64
+    - uint8
+  - name: inverse
+    description: 逆索引，满足 x = y[inverse]
+    dtype:
+    - int64
+  schema: unique(Tensor x, bool return_inverse) -> (Tensor y, Tensor inverse)

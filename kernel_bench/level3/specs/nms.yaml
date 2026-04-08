@@ -1,0 +1,27 @@
+operator:
+  name: NMS
+  category: SortSelect
+  difficulty: L3
+  formula: keep_indices = nms(boxes, scores, iou_threshold)
+  description: 对候选框执行非极大值抑制 (Non-Maximum Suppression)
+  shape_support: 'boxes: [N,4], scores: [N], keep_indices: [M]'
+  attrs:
+  - name: iou_threshold
+    type: float
+    description: IoU 阈值，用于过滤重叠框
+    required: true
+  inputs:
+  - name: boxes
+    description: 输入候选框，格式为 [x1, y1, x2, y2]
+    dtype:
+    - float32
+  - name: scores
+    description: 每个候选框的置信度分数
+    dtype:
+    - float32
+  outputs:
+  - name: keep_indices
+    description: NMS 后保留的框索引
+    dtype:
+    - int64
+  schema: nms(Tensor boxes, Tensor scores, float iou_threshold) -> Tensor keep_indices

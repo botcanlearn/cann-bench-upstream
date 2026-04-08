@@ -1,0 +1,40 @@
+operator:
+  name: Addcdiv
+  category: FusedComposite
+  difficulty: L2
+  formula: y = x1 + value * (x2 / x3)
+  description: 执行加法和除法组合运算，输出等于第一个输入加上第二个和第三个输入商的value倍
+  shape_support: 输入需支持广播，输出shape为广播后的shape
+  attrs:
+  - name: value
+    type: float
+    default: 1.0
+    description: 缩放因子，乘以 x2/x3 的结果
+    required: false
+  inputs:
+  - name: x1
+    description: 第1个输入张量
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+  - name: x2
+    description: 第2个输入张量
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+  - name: x3
+    description: 第3个输入张量（除数）
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+  schema: addcdiv(Tensor x1, Tensor x2, Tensor x3, float value) -> Tensor y

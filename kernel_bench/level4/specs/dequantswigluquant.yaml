@@ -1,0 +1,39 @@
+operator:
+  name: DequantSwigluQuant
+  category: FusedComposite
+  difficulty: L4
+  formula: y = quantize(SwiGLU(dequantize(x)))
+  description: 反量化、SwiGLU和量化的融合
+  shape_support: 'x: 任意维度，H必须为偶数'
+  attrs:
+  - name: activate_left
+    type: bool
+    default: false
+    description: 是否激活左侧
+    required: false
+  - name: quant_mode
+    type: string
+    default: static
+    description: 量化模式'
+    required: false
+  - name: dst_type
+    type: int
+    default: 0
+    description: 目标数据类型 (0:DT_INT8, 1:DT_FP8)'
+    required: false
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - int8
+    - float8
+  schema: dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, int dst_type)
+    -> Tensor y

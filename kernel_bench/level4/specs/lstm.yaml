@@ -1,0 +1,119 @@
+operator:
+  name: LSTM
+  category: FusedComposite
+  difficulty: L4
+  formula: |
+    i_t = σ(W_i @ x_t + U_i @ h_{t-1} + b_i)  # 输入门
+    f_t = σ(W_f @ x_t + U_f @ h_{t-1} + b_f)  # 遗忘门
+    g_t = tanh(W_g @ x_t + U_g @ h_{t-1} + b_g)  # 候选细胞状态
+    o_t = σ(W_o @ x_t + U_o @ h_{t-1} + b_o)  # 输出门
+    c_t = f_t ⊙ c_{t-1} + i_t ⊙ g_t  # 细胞状态
+    h_t = o_t ⊙ tanh(c_t)  # 隐藏状态
+  description: Long Short-Term Memory 循环神经网络
+  shape_support: 'x: (S, B, input_size), (h0, c0): (num_layers * num_directions, B, hidden_size)'
+  attrs:
+  - name: inputSize
+    type: int
+    description: 输入特征维度
+    required: true
+  - name: hiddenSize
+    type: int
+    description: 隐藏状态特征维度
+    required: true
+  - name: numLayers
+    type: int
+    default: 1
+    description: 循环层数
+    required: false
+  - name: bias
+    type: bool
+    default: true
+    description: 是否使用偏置
+    required: false
+  - name: batchFirst
+    type: bool
+    default: false
+    description: 输入是否为 (batch, seq, feature) 格式
+    required: false
+  - name: dropout
+    type: float
+    default: 0.0
+    description: Dropout 概率（层间）
+    required: false
+  - name: bidirectional
+    type: bool
+    default: false
+    description: 是否双向 LSTM
+    required: false
+  - name: projSize
+    type: int
+    default: 0
+    description: 投影维度（>0 时启用 LSTM with Projection）
+    required: false
+  inputs:
+  - name: x
+    description: 输入序列张量
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: h0
+    description: 初始隐藏状态 (可选，默认全 0)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    optional: true
+  - name: c0
+    description: 初始细胞状态 (可选，默认全 0)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    optional: true
+  - name: weight_ih
+    description: 输入到隐藏层权重 (num_layers * 4 * hiddenSize, inputSize)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: weight_hh
+    description: 隐藏层到隐藏层权重 (num_layers * 4 * hiddenSize, hiddenSize)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: bias_ih
+    description: 输入到隐藏层偏置 (可选)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    optional: true
+  - name: bias_hh
+    description: 隐藏层到隐藏层偏置 (可选)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    optional: true
+  outputs:
+  - name: y
+    description: 输出序列 (S, B, num_directions * hiddenSize) 或 (B, S, num_directions * hiddenSize)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: hn
+    description: 最终隐藏状态 (num_layers * num_directions, B, hiddenSize)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: cn
+    description: 最终细胞状态 (num_layers * num_directions, B, hiddenSize)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: lstm(Tensor x, Tensor weight_ih, Tensor weight_hh, Tensor? bias_ih, Tensor? bias_hh, Tensor? h0, Tensor? c0, int inputSize, int hiddenSize, int numLayers, bool bias, bool batchFirst, float dropout, bool bidirectional, int projSize) -> (Tensor y, Tensor hn, Tensor cn)

@@ -1,0 +1,201 @@
+cases:
+- operator: Gelu
+  case_id: 1
+  input_shape: [[1024, 1, 3840]]
+  dtype: [float16]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大 Shape-对齐, 精确模式
+- operator: Gelu
+  case_id: 2
+  input_shape: [[11, 13, 7, 1024, 11]]
+  dtype: [float16]
+  attrs: {approximate: tanh}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对齐场景, tanh 近似
+- operator: Gelu
+  case_id: 3
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: float16 基准测试 - 对齐, 精确模式
+- operator: Gelu
+  case_id: 4
+  input_shape: [[1048576]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: float32 基准测试 - 对齐, 精确模式
+- operator: Gelu
+  case_id: 5
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16 基准测试 - 对齐, 精确模式
+- operator: Gelu
+  case_id: 6
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: tanh}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: float32 tanh 近似模式 - 对齐
+- operator: Gelu
+  case_id: 7
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {approximate: tanh}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: float16 tanh 近似模式 - 对齐
+- operator: Gelu
+  case_id: 8
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {approximate: tanh}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16 tanh 近似模式 - 对齐
+- operator: Gelu
+  case_id: 9
+  input_shape: [[2097152]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-5, 5]
+  baseline_perf_us: None
+  note: 1D 长向量 - 对齐
+- operator: Gelu
+  case_id: 10
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 张量 - 对齐
+- operator: Gelu
+  case_id: 11
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 张量 - 对齐
+- operator: Gelu
+  case_id: 12
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D 张量 NCHW 格式 - 对齐
+- operator: Gelu
+  case_id: 13
+  input_shape: [[11, 13, 17, 64, 64]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 5D 张量 - 非对齐
+- operator: Gelu
+  case_id: 14
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入 gelu=0 - 对齐
+- operator: Gelu
+  case_id: 15
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值 inf/-inf - 对齐
+- operator: Gelu
+  case_id: 16
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [nan, nan]
+  baseline_perf_us: None
+  note: NaN 输入测试 - 对齐
+- operator: Gelu
+  case_id: 17
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {approximate: none}
+  value_range: [-65504, 65504]
+  baseline_perf_us: None
+  note: float16 全范围边界 - 对齐
+- operator: Gelu
+  case_id: 18
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: float32 大范围 - 对齐
+- operator: Gelu
+  case_id: 19
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-0.01, 0.01]
+  baseline_perf_us: None
+  note: 小值范围接近 0 - 对齐
+- operator: Gelu
+  case_id: 20
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 质数非对齐
+- operator: Gelu
+  case_id: 21
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {approximate: tanh}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 质数非对齐
+- operator: Gelu
+  case_id: 22
+  input_shape: [[3, 7, 13, 4001]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D 质数非对齐
+- operator: Gelu
+  case_id: 23
+  input_shape: [[3, 7, 11, 13, 1009]]
+  dtype: [float32]
+  attrs: {approximate: tanh}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 5D 质数非对齐
+- operator: Gelu
+  case_id: 24
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 非 2 幂对齐
+- operator: Gelu
+  case_id: 25
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {approximate: none}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: float32 中等范围 - 对齐

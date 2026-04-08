@@ -1,0 +1,288 @@
+cases:
+  - operator: Add
+    case_id: 1
+    input_shape: [[1024, 1024], [1024, 1024]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-30000.0, 30000.0], [-30000.0, 30000.0]]
+    baseline_perf_us: None
+    note: float16 大 Shape-对齐
+
+  - operator: Add
+    case_id: 2
+    input_shape: [[2097152], [2097152]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [-100.0, 100.0]]
+    baseline_perf_us: None
+    note: float32 1D 长向量 - 对齐
+
+  - operator: Add
+    case_id: 3
+    input_shape: [[128, 128, 64], [128, 128, 64]]
+    dtype: [bfloat16, bfloat16]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-10.0, 10.0]]
+    baseline_perf_us: None
+    note: bfloat16 3D 张量 - 对齐
+
+  - operator: Add
+    case_id: 4
+    input_shape: [[2, 8, 256, 256], [2, 8, 256, 256]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-1.0, 1.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16 4D NCHW-对齐
+
+  - operator: Add
+    case_id: 5
+    input_shape: [[11, 13, 17, 64, 64], [11, 13, 17, 64, 64]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[0, 0], [0, 0]]
+    baseline_perf_us: None
+    note: float32 5D 质数非对齐
+
+  - operator: Add
+    case_id: 6
+    input_shape: [[1025, 17], [1, 17]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16 尾轴非对齐 Broadcast
+
+  - operator: Add
+    case_id: 7
+    input_shape: [[2049, 513], [1, 513]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-0.1, 0.1]]
+    baseline_perf_us: None
+    note: float32 尾轴非对齐 Broadcast
+
+  - operator: Add
+    case_id: 8
+    input_shape: [[1024, 1024], [1, 1024]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-30000.0, 30000.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16 尾轴对齐 Broadcast
+
+  - operator: Add
+    case_id: 9
+    input_shape: [[3, 127, 687, 37], [1, 1, 687, 1]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [-10.0, 10.0]]
+    baseline_perf_us: None
+    note: float32 多轴 Broadcast
+
+  - operator: Add
+    case_id: 10
+    input_shape: [[2, 1024, 512], [1, 1, 512]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16 3D 多轴 Broadcast
+
+  - operator: Add
+    case_id: 11
+    input_shape: [[4, 8, 256, 128], [1, 1, 256, 1]]
+    dtype: [bfloat16, bfloat16]
+    attrs: {}
+    value_range: [[-1.0, 1.0], [-0.1, 0.1]]
+    baseline_perf_us: None
+    note: bfloat16 4D 多轴 Broadcast
+
+  - operator: Add
+    case_id: 12
+    input_shape: [[2, 3, 5, 1, 256], [1, 1, 1, 256, 1]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float32 5D 多轴 Broadcast
+
+  - operator: Add
+    case_id: 13
+    input_shape: [[1024, 1024], [1024, 1]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [-10.0, 10.0]]
+    baseline_perf_us: None
+    note: float16 首轴 Broadcast
+
+  - operator: Add
+    case_id: 14
+    input_shape: [[2, 8, 256, 256], [2, 1, 1, 1]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-1.0, 1.0], [-0.1, 0.1]]
+    baseline_perf_us: None
+    note: float32 4D 首轴 Broadcast
+
+  - operator: Add
+    case_id: 15
+    input_shape: [[4, 256, 128], [4, 1, 128]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16 3D 中间轴 Broadcast
+
+  - operator: Add
+    case_id: 16
+    input_shape: [[8, 4, 512, 256], [8, 1, 512, 1]]
+    dtype: [bfloat16, bfloat16]
+    attrs: {}
+    value_range: [[-1.0, 1.0], [-0.1, 0.1]]
+    baseline_perf_us: None
+    note: bfloat16 4D 中间轴 Broadcast
+
+  - operator: Add
+    case_id: 17
+    input_shape: [[1024, 1024], [1]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [0.0]]
+    baseline_perf_us: None
+    note: float32 标量 Broadcast
+
+  - operator: Add
+    case_id: 18
+    input_shape: [[2, 8, 256, 256], [1]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [1.0]]
+    baseline_perf_us: None
+    note: float16 4D 标量 Broadcast
+
+  - operator: Add
+    case_id: 19
+    input_shape: [[1024, 1024], [1, 1024]]
+    dtype: [int32, int32]
+    attrs: {}
+    value_range: [[-2147483648, 2147483647], [-1000, 1000]]
+    baseline_perf_us: None
+    note: int32 尾轴 Broadcast
+
+  - operator: Add
+    case_id: 20
+    input_shape: [[512, 512, 4], [1, 512, 1]]
+    dtype: [int8, int8]
+    attrs: {}
+    value_range: [[-128, 127], [-10, 10]]
+    baseline_perf_us: None
+    note: int8 3D 多轴 Broadcast
+
+  - operator: Add
+    case_id: 21
+    input_shape: [[1024, 1024], [1, 1024]]
+    dtype: [bool, bool]
+    attrs: {}
+    value_range: [[0, 1], [0, 1]]
+    baseline_perf_us: None
+    note: bool 逻辑加 Broadcast
+
+  - operator: Add
+    case_id: 22
+    input_shape: [[2, 8, 256, 256], [1, 1, 1, 1]]
+    dtype: [bool, bool]
+    attrs: {}
+    value_range: [[0, 1], [0, 1]]
+    baseline_perf_us: None
+    note: bool 4D 全轴 Broadcast
+
+  - operator: Add
+    case_id: 23
+    input_shape: [[1024, 1024], [1024, 1024]]
+    dtype: [complex32, complex32]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [-100.0, 100.0]]
+    baseline_perf_us: None
+    note: complex32 复数加法 - 对齐
+
+  - operator: Add
+    case_id: 24
+    input_shape: [[512, 2048], [512, 2048]]
+    dtype: [complex64, complex64]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-10.0, 10.0]]
+    baseline_perf_us: None
+    note: complex64 复数加法 - 对齐
+
+  - operator: Add
+    case_id: 25
+    input_shape: [[4096, 4096], [4096, 4096]]
+    dtype: [float16, float16]
+    attrs: {}
+    value_range: [[-1.0, 1.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16 超大 Shape
+
+  - operator: Add
+    case_id: 26
+    input_shape: [[8192, 2048], [1, 2048]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float32 大 Shape Broadcast
+
+  - operator: Add
+    case_id: 27
+    input_shape: [[1000003], [1000003]]
+    dtype: [int32, int32]
+    attrs: {}
+    value_range: [[-100, 100], [-100, 100]]
+    baseline_perf_us: None
+    note: int32 1D 质数
+
+  - operator: Add
+    case_id: 28
+    input_shape: [[359, 359, 376], [1, 359, 1]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[-10.0, 10.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float32 3D 质数多轴 Broadcast
+
+  - operator: Add
+    case_id: 29
+    input_shape: [[1024, 1024], [1024, 1024]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[0, 0], [0, 0]]
+    baseline_perf_us: None
+    note: 零值测试
+
+  - operator: Add
+    case_id: 30
+    input_shape: [[1024, 1024], [1024, 1024]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[0.0, 1.0], [0.0, 1.0]]
+    baseline_perf_us: None
+    note: inf 值测试
+
+  - operator: Add
+    case_id: 31
+    input_shape: [[1024, 1024], [1024, 1024]]
+    dtype: [float32, float32]
+    attrs: {}
+    value_range: [[nan, nan], [0, 0]]
+    baseline_perf_us: None
+    note: nan 值测试
+
+  - operator: Add
+    case_id: 32
+    input_shape: [[1024, 1024], [1, 1024]]
+    dtype: [float16, float32]
+    attrs: {}
+    value_range: [[-100.0, 100.0], [-1.0, 1.0]]
+    baseline_perf_us: None
+    note: float16+float32 混合精度 Broadcast

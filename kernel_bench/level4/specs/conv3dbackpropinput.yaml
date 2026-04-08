@@ -1,0 +1,45 @@
+operator:
+  name: Conv3DBackpropInput
+  category: Contraction
+  difficulty: L4
+  formula: y = conv3d_input_grad(filter, grad)
+  description: Conv3D的输入梯度
+  shape_support: 'filter: 5D'
+  attrs:
+  - name: strides
+    type: ListInt
+    description: 步长
+    required: true
+  - name: pads
+    type: ListInt
+    description: 填充
+    required: true
+  - name: dilations
+    type: ListInt
+    description: 膨胀率
+    required: true
+  inputs:
+  - name: filter
+    description: 卷积核
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    - hifloat8
+  - name: grad
+    description: 输出梯度
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    - hifloat8
+  outputs:
+  - name: y
+    description: 输入梯度
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    - hifloat8
+  schema: conv3_d_backprop_input(Tensor filter, Tensor grad, int[] strides, int[]
+    pads, int[] dilations) -> Tensor y

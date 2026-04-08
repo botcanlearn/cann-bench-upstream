@@ -1,0 +1,59 @@
+operator:
+  name: Conv3DTranspose
+  category: Contraction
+  difficulty: L4
+  formula: y = conv3d_transpose(x, filter)
+  description: 3D转置卷积
+  shape_support: 'x: 5D, filter: 5D'
+  attrs:
+  - name: strides
+    type: ListInt
+    description: 步长
+    required: true
+  - name: pads
+    type: ListInt
+    description: 填充
+    required: true
+  - name: output_padding
+    type: ListInt
+    default:
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    description: 输出填充
+    required: false
+  - name: dilations
+    type: ListInt
+    description: 膨胀率
+    required: true
+  - name: groups
+    type: int
+    description: 分组数
+    required: true
+  inputs:
+  - name: x
+    description: 输入特征图
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    - hifloat8
+  - name: filter
+    description: 卷积核
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    - hifloat8
+  outputs:
+  - name: y
+    description: 输出特征图
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    - hifloat8
+  schema: conv3_d_transpose(Tensor x, Tensor filter, int[] strides, int[] pads, int[]
+    output_padding, int[] dilations, int groups) -> Tensor y

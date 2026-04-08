@@ -1,0 +1,49 @@
+# TODO 使用PromptFlashAttention代替，检查原型和定义
+operator:
+  name: PFA
+  category: FusedComposite
+  difficulty: L4
+  formula: y = Attention(Q,K,V) = Softmax(QK^T / sqrt(d)) @ V
+  description: 全量推理场景的FlashAttention算子
+  shape_support: 'B: <=65536, N: <=256, S: <=20M'
+  attrs:
+  - name: numHeads
+    type: INT64
+    description: 注意力头数
+    required: true
+  - name: scaleValue
+    type: DOUBLE
+    description: 缩放因子
+    required: true
+  - name: inputLayout
+    type: CHAR*
+    description: 输入布局
+    required: true
+  inputs:
+  - name: query
+    description: 查询张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  - name: key
+    description: 键张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  - name: value
+    description: 值张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  schema: pfa(Tensor query, Tensor key, Tensor value, int numHeads, float scaleValue,
+    str inputLayout) -> Tensor y

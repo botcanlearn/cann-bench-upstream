@@ -1,0 +1,42 @@
+operator:
+  name: ForeachAddcdivScalar
+  category: FusedComposite
+  difficulty: L1
+  formula: y_i = x1_i + (x2_i / x3_i) * scalar
+  description: 对多个张量进行逐元素加、乘、除操作
+  shape_support: 输入 shape 必须一致
+  attrs:
+  - name: scalar
+    type: float
+    description: 缩放因子
+    required: true
+  inputs:
+  - name: x1
+    description: 第 1 个输入张量列表 (TensorList)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    is_list: true
+  - name: x2
+    description: 第 2 个输入张量列表 (TensorList)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    is_list: true
+  - name: x3
+    description: 第 3 个输入张量列表 (TensorList)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    is_list: true
+  outputs:
+  - name: y
+    description: 输出张量列表
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: foreach_addcdiv_scalar(Tensor[] x1, Tensor[] x2, Tensor[] x3, float scalar) -> Tensor[] y

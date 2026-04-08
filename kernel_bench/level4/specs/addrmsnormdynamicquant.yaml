@@ -1,0 +1,51 @@
+operator:
+  name: AddRmsNormDynamicQuant
+  category: FusedComposite
+  difficulty: L4
+  formula: y, xOut, scaleOut = quantize(rmsnorm(x1 + x2) * gamma)
+  description: Add、RMSNorm 和动态量化的融合
+  shape_support: 'x1: ND 格式'
+  attrs:
+  - name: epsilon
+    type: float
+    default: 1e-6
+    description: epsilon 值
+    required: false
+  - name: dst_type
+    type: int
+    default: 0
+    description: 目标数据类型 (0:DT_INT8, 1:DT_INT4, 2:DT_FP8)'
+    required: false
+  inputs:
+  - name: x1
+    description: 第 1 个输入张量
+    dtype:
+    - float16
+    - bfloat16
+  - name: x2
+    description: 第 2 个输入张量
+    dtype:
+    - float16
+    - bfloat16
+  - name: gamma
+    description: 缩放参数
+    dtype:
+    - float16
+    - bfloat16
+  outputs:
+  - name: y
+    description: 量化后的输出张量
+    dtype:
+    - int8
+    - int4
+    - float8
+  - name: xOut
+    description: Add 结果，x1 + x2
+    dtype:
+    - float16
+    - bfloat16
+  - name: scaleOut
+    description: 量化使用的 scale 值
+    dtype:
+    - float32
+  schema: add_rms_norm_dynamic_quant(Tensor x1, Tensor x2, Tensor gamma, float epsilon, int dst_type) -> (Tensor y, Tensor xOut, Tensor scaleOut)

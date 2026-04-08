@@ -1,0 +1,45 @@
+# TODO 对其原型定义
+operator:
+  name: MlaProlog
+  category: FusedComposite
+  difficulty: L4
+  formula: y = Query/Key计算 + RmsNorm + ROPE编码
+  description: Multi-Head Latent Attention前处理
+  shape_support: 'token_x: (B,S,He)'
+  attrs:
+  - name: rmsnormEpsilonCq
+    type: DOUBLE
+    description: CQ的RMSNorm epsilon
+    required: true
+  - name: rmsnormEpsilonCkv
+    type: DOUBLE
+    description: CKV的RMSNorm epsilon
+    required: true
+  inputs:
+  - name: token_x
+    description: 输入token张量
+    dtype:
+    - int8
+    - bfloat16
+    - float16
+  - name: wk_cq
+    description: CQ权重张量
+    dtype:
+    - int8
+    - bfloat16
+    - float16
+  - name: wk_ckv
+    description: CKV权重张量
+    dtype:
+    - int8
+    - bfloat16
+    - float16
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - int8
+    - bfloat16
+    - float16
+  schema: mla_prolog(Tensor token_x, Tensor wk_cq, Tensor wk_ckv, float rmsnormEpsilonCq,
+    float rmsnormEpsilonCkv) -> Tensor y

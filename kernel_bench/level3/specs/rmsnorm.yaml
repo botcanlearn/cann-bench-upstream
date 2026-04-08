@@ -1,0 +1,34 @@
+operator:
+  name: RMSNorm
+  category: NumericalStable
+  difficulty: L3
+  formula: y = x * gamma / sqrt(mean(x^2) + epsilon)
+  description: 大模型常用归一化操作
+  shape_support: 输入1-8维
+  attrs:
+  - name: epsilon
+    type: float
+    default_value: 1e-6
+    description: 防止除零的小值
+    required: false
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+  - name: gamma
+    description: 缩放参数
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+  outputs:
+  - name: y
+    description: 归一化后的输出张量
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+  schema: rms_norm(Tensor x, Tensor gamma, float epsilon) -> Tensor y

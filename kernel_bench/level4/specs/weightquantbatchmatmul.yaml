@@ -1,0 +1,51 @@
+# TODO 输入数据类型需要再确认下
+operator:
+  name: WeightQuantBatchMatmul
+  category: Contraction
+  difficulty: L4
+  formula: y = quant(dequant(weight) @ x + bias)
+  description: 权重量化批量矩阵乘法算子
+  shape_support: 'x: [M, K], weight: [N, K]'
+  attrs:
+  - name: transpose_x
+    type: bool
+    default: false
+    description: 是否转置x
+    required: false
+  - name: transpose_weight
+    type: bool
+    default: false
+    description: 是否转置权重
+    required: false
+  inputs:
+  - name: weight
+    description: 权重矩阵
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - int4
+  - name: x
+    description: 输入矩阵
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - int4
+  - name: bias
+    description: 偏置张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - int4
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - int4
+  schema: weight_quant_batch_matmul(Tensor weight, Tensor x, Tensor bias, bool transpose_x,
+    bool transpose_weight) -> Tensor y

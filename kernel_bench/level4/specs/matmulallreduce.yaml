@@ -1,0 +1,48 @@
+# 暂不涉及通算融合类算子
+operator:
+  name: MatmulAllReduce
+  category: FusedComposite
+  difficulty: L4
+  formula: y = AllReduce(Matmul(x1, x2))
+  description: 矩阵乘法与AllReduce通信的融合
+  shape_support: 'x1: [M, K], x2: [K, N]'
+  attrs:
+  - name: group
+    type: string
+    description: 通信组
+    required: true
+  - name: reduce_op
+    type: string
+    default: sum
+    description: 归约操作
+    required: false
+  - name: is_trans_b
+    type: bool
+    default: false
+    description: 是否转置x2
+    required: false
+  inputs:
+  - name: x1
+    description: 第1个输入矩阵
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  - name: x2
+    description: 第2个输入矩阵
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  schema: matmul_all_reduce(Tensor x1, Tensor x2, str group, str reduce_op, bool is_trans_b)
+    -> Tensor y

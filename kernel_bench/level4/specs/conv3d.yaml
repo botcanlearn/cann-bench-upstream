@@ -1,0 +1,67 @@
+operator:
+  name: Conv3D
+  category: Contraction
+  difficulty: L4
+  formula: y = CONV(x, filter) + bias
+  description: 计算3D卷积
+  shape_support: 'x: [N, C_in, D, H, W], filter: [C_out, C_in, K_d, K_h, K_w]'
+  attrs:
+  - name: strides
+    type: ListInt
+    description: 步长
+    required: true
+  - name: pads
+    type: ListInt
+    description: 填充
+    required: true
+  - name: dilations
+    type: ListInt
+    default:
+    - 1
+    - 1
+    - 1
+    - 1
+    - 1
+    description: 膨胀率
+    required: false
+  - name: groups
+    type: Int
+    default: 1
+    description: 分组数
+    required: false
+  inputs:
+  - name: x
+    description: 输入特征图
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - int8
+    - hifloat8
+  - name: filter
+    description: 卷积核
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - int8
+    - hifloat8
+  - name: bias
+    description: 偏置
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - int8
+    - hifloat8
+  outputs:
+  - name: y
+    description: 输出特征图
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    - int8
+    - hifloat8
+  schema: conv3_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads,
+    int[] dilations, Int groups) -> Tensor y

@@ -1,0 +1,48 @@
+operator:
+  name: MaxPool3DGradWithArgmax
+  category: FusedComposite
+  difficulty: L3
+  formula: y = max_pool3d_grad(dy, argmax)
+  description: 将梯度回填到每个窗口最大值的坐标处
+  shape_support: 输入[N, C, D, H, W]
+  attrs:
+  - name: ksize
+    type: INT64[]
+    description: 池化核大小 [D, H, W]
+    required: true
+  - name: strides
+    type: INT64[]
+    description: 步长 [D, H, W]
+    required: true
+  - name: pads
+    type: INT64[]
+    description: 填充 [pad_front, pad_back, pad_top, pad_bottom, pad_left, pad_right]
+    required: true
+  inputs:
+  - name: x
+    description: 正向传播的原始输入张量
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: dy
+    description: 输入梯度张量
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: argmax
+    description: 前向传播的最大值索引
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  outputs:
+  - name: y
+    description: 输出梯度张量
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: max_pool3_d_grad_with_argmax(Tensor x, Tensor dy, Tensor argmax, int[] ksize,
+    int[] strides, int[] pads) -> Tensor y

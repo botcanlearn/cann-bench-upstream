@@ -1,0 +1,43 @@
+operator:
+  name: GroupedMatmul
+  category: Contraction
+  difficulty: L4
+  formula: y[i] = x[i] @ weight[i]
+  description: 分组矩阵乘法算子
+  shape_support: 'x: [M, K], weight: [N, K]'
+  attrs:
+  - name: split_item
+    type: int
+    default: 0
+    description: 分组项
+    required: false
+  - name: transpose_weight
+    type: bool
+    default: false
+    description: 是否转置权重
+    required: false
+  inputs:
+  - name: x
+    description: 输入矩阵
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  - name: weight
+    description: 权重矩阵
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  outputs:
+  - name: y
+    description: 输出张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+    - float8
+  schema: grouped_matmul(Tensor x, Tensor weight, int split_item, bool transpose_weight)
+    -> Tensor y

@@ -1,0 +1,29 @@
+operator:
+  name: Cummin
+  category: Reduction
+  difficulty: L3
+  formula: y[i] = min(x[0], x[1], ..., x[i]) 沿指定轴
+  description: 计算输入张量中的累积最小值
+  shape_support: 输入输出shape相同
+  attrs:
+  - name: axis
+    type: int64
+    description: 计算累积最小值的轴
+    required: true
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - float16
+    - float32
+    - int32
+    - bfloat16
+  outputs:
+  - name: y
+    description: 输出张量，累积最小值
+    dtype:
+    - float16
+    - float32
+    - int32
+    - bfloat16
+  schema: cummin(Tensor x, int axis) -> Tensor y

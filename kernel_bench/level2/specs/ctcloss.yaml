@@ -1,0 +1,59 @@
+operator:
+  name: CTCLoss
+  category: NumericalStable
+  difficulty: L2
+  formula: |
+    L = -log P(z|x)
+    其中 z 为目标序列，通过 CTC 对齐计算得到
+  description: 计算 CTC (Connectionist Temporal Classification) 损失，用于序列到序列学习
+  shape_support: |
+    log_probs: (T, N, C) - T=时间步，N=batch，C=类别数（含blank）
+    targets: (N, S) 或 flattened (sum(target_lengths))
+    input_lengths: (N,)
+    target_lengths: (N,)
+  attrs:
+  - name: blank
+    type: int
+    default: 0
+    description: blank 标签的索引位置
+    required: false
+  - name: reduction
+    type: string
+    default: mean
+    description: 损失聚合方式 ('none' | 'mean' | 'sum')
+    required: false
+  - name: zero_infinity
+    type: bool
+    default: false
+    description: 是否将无穷大的损失置零
+    required: false
+  inputs:
+  - name: log_probs
+    description: 对数概率张量，需先经过 log_softmax
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: targets
+    description: 目标序列标签索引
+    dtype:
+    - int32
+    - int64
+  - name: input_lengths
+    description: 每个样本的有效输入帧数
+    dtype:
+    - int32
+    - int64
+  - name: target_lengths
+    description: 每个样本的目标序列长度
+    dtype:
+    - int32
+    - int64
+  outputs:
+  - name: loss
+    description: 损失值 (reduction='none' 时为 shape (N,)，否则为标量)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: ctc_loss(Tensor log_probs, Tensor targets, Tensor input_lengths, Tensor target_lengths, int blank, str reduction, bool zero_infinity) -> Tensor loss

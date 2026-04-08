@@ -1,0 +1,39 @@
+operator:
+  name: MoeFinalizeRoutingV2
+  category: FusedComposite
+  difficulty: L3
+  formula: output = sum(routing_weights * expert_outputs)
+  description: 合并 MoE FFN 的输出结果，使用路由权重对专家输出进行加权求和
+  shape_support: 'expert_outputs: (num_tokens * topk, hidden_dim) 或 (num_tokens, topk, hidden_dim)'
+  attrs:
+  - name: renormalize
+    type: bool
+    default: "false"
+    description: 是否重新归一化路由权重
+  inputs:
+  - name: expert_outputs
+    description: 专家输出张量，形状为 (num_tokens * topk, hidden_dim) 或 (num_tokens, topk, hidden_dim)
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: routing_weights
+    description: 路由权重，形状为 (num_tokens, topk)，经过 softmax 归一化
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  - name: sorted_token_indices
+    description: 可选，排序后的 token 索引，用于恢复原始顺序
+    dtype:
+    - int32
+    - int64
+    optional: true
+  outputs:
+  - name: y
+    description: 输出张量，形状为 (num_tokens, hidden_dim)，加权求和后的 MoE 输出
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+  schema: moe_finalize_routing_v2(Tensor expert_outputs, Tensor routing_weights, Tensor? sorted_token_indices=None, bool renormalize=false) -> Tensor y
