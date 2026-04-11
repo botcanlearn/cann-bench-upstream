@@ -1,0 +1,121 @@
+cases:
+- operator: Unique
+  case_id: 1
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 唯一值排序 - 对齐
+- operator: Unique
+  case_id: 2
+  input_shape: [[1048576]]
+  dtype: [float32]
+  attrs: {sorted: false, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 唯一值不排序 - 对齐
+- operator: Unique
+  case_id: 3
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {sorted: true, return_inverse: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 带逆索引 - 对齐
+- operator: Unique
+  case_id: 4
+  input_shape: [[2048, 512]]
+  dtype: [float32]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 扁平形状 - 对齐
+- operator: Unique
+  case_id: 5
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {sorted: true, return_inverse: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 带逆索引 - 对齐
+- operator: Unique
+  case_id: 6
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D NCHW格式 - 对齐
+- operator: Unique
+  case_id: 7
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 质数非对齐
+- operator: Unique
+  case_id: 8
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {sorted: true, return_inverse: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 非2幂对齐
+- operator: Unique
+  case_id: 9
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {sorted: false, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 质数非对齐
+- operator: Unique
+  case_id: 10
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16 类型 - 对齐
+- operator: Unique
+  case_id: 11
+  input_shape: [[1024, 1024]]
+  dtype: [int32]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-10000, 10000]
+  baseline_perf_us: None
+  note: int32 类型 - 对齐
+- operator: Unique
+  case_id: 12
+  input_shape: [[512, 2048]]
+  dtype: [int64]
+  attrs: {sorted: true, return_inverse: true}
+  value_range: [-1000, 1000]
+  baseline_perf_us: None
+  note: int64 类型带逆索引 - 细长
+- operator: Unique
+  case_id: 13
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入 - 对齐
+- operator: Unique
+  case_id: 14
+  input_shape: [[256, 4096]]
+  dtype: [float32]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围 - 细长
+- operator: Unique
+  case_id: 15
+  input_shape: [[1536, 768]]
+  dtype: [float16]
+  attrs: {sorted: true, return_inverse: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对齐shape - float16

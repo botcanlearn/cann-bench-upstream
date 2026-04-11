@@ -1,0 +1,225 @@
+cases:
+- operator: UnsortedSegmentSum
+  case_id: 1
+  input_shape: [[1048576], [1048576]]
+  dtype: [float16, int32]
+  attrs: {num_segments: 1024}
+  value_range: [[-100.0, 100.0], [0, 1023]]
+  baseline_perf_us: 79838.67
+  note: 大 Shape-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 2
+  input_shape: [[1024, 1024], [1024]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 1024}
+  value_range: [[-10.0, 10.0], [0, 1023]]
+  baseline_perf_us: 31742.88
+  note: 2D data-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 3
+  input_shape: [[11, 13, 7, 1024, 11], [11, 13, 7, 1024, 11]]
+  dtype: [float16, int32]
+  attrs: {num_segments: 11}
+  value_range: [[-1.0, 1.0], [0, 10]]
+  baseline_perf_us: 1009192.77
+  note: 非对齐场景
+
+- operator: UnsortedSegmentSum
+  case_id: 4
+  input_shape: [[2097152], [2097152]]
+  dtype: [float16, int32]
+  attrs: {num_segments: 2048}
+  value_range: [[-100.0, 100.0], [0, 2047]]
+  baseline_perf_us: 182156.36
+  note: float16 基准测试-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 5
+  input_shape: [[1048576], [1048576]]
+  dtype: [float32, int64]
+  attrs: {num_segments: 1024}
+  value_range: [[-10.0, 10.0], [0, 1023]]
+  baseline_perf_us: 98303.24
+  note: float32+int64 segment_ids-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 6
+  input_shape: [[2048, 512], [2048]]
+  dtype: [int32, int32]
+  attrs: {num_segments: 512}
+  value_range: [[-1000, 1000], [0, 511]]
+  baseline_perf_us: 19840.01
+  note: int32 数据类型-扁平
+
+- operator: UnsortedSegmentSum
+  case_id: 7
+  input_shape: [[512, 2048], [512]]
+  dtype: [int64, int64]
+  attrs: {num_segments: 256}
+  value_range: [[-100, 100], [0, 255]]
+  baseline_perf_us: 9719.72
+  note: int64 数据类型-细长
+
+- operator: UnsortedSegmentSum
+  case_id: 8
+  input_shape: [[2097152], [2097152]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 4096}
+  value_range: [[-1.0, 1.0], [0, 4095]]
+  baseline_perf_us: 343886.55
+  note: 1D 长向量-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 9
+  input_shape: [[128, 128, 64], [128]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 128}
+  value_range: [[-10.0, 10.0], [0, 127]]
+  baseline_perf_us: 3881.12
+  note: 3D 张量-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 10
+  input_shape: [[2, 8, 256, 256], [2]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 2}
+  value_range: [[-100.0, 100.0], [0, 1]]
+  baseline_perf_us: 124.08
+  note: 4D 张量-对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 11
+  input_shape: [[11, 13, 17, 64, 64], [11]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 11}
+  value_range: [[-1.0, 1.0], [0, 10]]
+  baseline_perf_us: 842.59
+  note: 5D 张量-非对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 12
+  input_shape: [[1000003], [1000003]]
+  dtype: [float16, int32]
+  attrs: {num_segments: 1024}
+  value_range: [[-10.0, 10.0], [0, 1023]]
+  baseline_perf_us: 76834.9
+  note: 1D 质数
+
+- operator: UnsortedSegmentSum
+  case_id: 13
+  input_shape: [[363, 367, 373], [363]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 363}
+  value_range: [[-10.0, 10.0], [0, 362]]
+  baseline_perf_us: 18044.66
+  note: 3D 质数非对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 14
+  input_shape: [[3, 7, 13, 4001], [3]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 3}
+  value_range: [[-1.0, 1.0], [0, 2]]
+  baseline_perf_us: 161.66
+  note: 4D 质数非对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 15
+  input_shape: [[3, 7, 11, 13, 1009], [3]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 3}
+  value_range: [[-1.0, 1.0], [0, 2]]
+  baseline_perf_us: 267.41
+  note: 5D 质数非对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 16
+  input_shape: [[2049, 512], [2049]]
+  dtype: [float16, int32]
+  attrs: {num_segments: 2049}
+  value_range: [[-1.0, 1.0], [0, 2048]]
+  baseline_perf_us: 58739.8
+  note: 2D 非2幂
+
+- operator: UnsortedSegmentSum
+  case_id: 17
+  input_shape: [[1536, 768], [1536]]
+  dtype: [bfloat16, int32]
+  attrs: {num_segments: 1536}
+  value_range: [[-10.0, 10.0], [0, 1535]]
+  baseline_perf_us: 44476.46
+  note: bfloat16 非对齐
+
+- operator: UnsortedSegmentSum
+  case_id: 18
+  input_shape: [[8192, 128], [8192]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 8192}
+  value_range: [[-10.0, 10.0], [0, 8191]]
+  baseline_perf_us: 0.0
+  note: 扁平
+
+- operator: UnsortedSegmentSum
+  case_id: 19
+  input_shape: [[256, 4096], [256]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 256}
+  value_range: [[-10.0, 10.0], [0, 255]]
+  baseline_perf_us: 0.0
+  note: 细长
+
+- operator: UnsortedSegmentSum
+  case_id: 20
+  input_shape: [[1024, 1024], [1024]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 1}
+  value_range: [[-10.0, 10.0], [0, 0]]
+  baseline_perf_us: 67.85
+  note: num_segments=1
+
+- operator: UnsortedSegmentSum
+  case_id: 21
+  input_shape: [[1024, 1024], [1024]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 1024}
+  value_range: [[0, 0], [0, 1023]]
+  baseline_perf_us: 0.0
+  note: 零值输入
+
+- operator: UnsortedSegmentSum
+  case_id: 22
+  input_shape: [[2048, 2048], [2048]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 2048}
+  value_range: [[-inf, inf], [0, 2047]]
+  baseline_perf_us: 0.0
+  note: 特殊值 inf/-inf
+
+- operator: UnsortedSegmentSum
+  case_id: 23
+  input_shape: [[1024, 1024], [1024]]
+  dtype: [float32, int32]
+  attrs: {num_segments: 1024}
+  value_range: [[nan, nan], [0, 1023]]
+  baseline_perf_us: 0.0
+  note: NaN 输入测试
+
+- operator: UnsortedSegmentSum
+  case_id: 24
+  input_shape: [[4096, 256], [4096]]
+  dtype: [float16, int32]
+  attrs: {num_segments: 4096}
+  value_range: [[-100.0, 100.0], [0, 4095]]
+  baseline_perf_us: 0.0
+  note: float16 宽扁
+
+- operator: UnsortedSegmentSum
+  case_id: 25
+  input_shape: [[1024, 1024], [1024]]
+  dtype: [bfloat16, int32]
+  attrs: {num_segments: 1024}
+  value_range: [[-10.0, 10.0], [0, 1023]]
+  baseline_perf_us: 0.0
+  note: bfloat16 2D

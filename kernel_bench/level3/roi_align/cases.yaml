@@ -1,0 +1,81 @@
+cases:
+- operator: ROIAlign
+  case_id: 1
+  input_shape: [[2, 256, 64, 64], [100, 5]]
+  dtype: [float16, float16]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 0.0625, sample_ratio: 2}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 基础功能测试 - 7x7输出
+- operator: ROIAlign
+  case_id: 2
+  input_shape: [[2, 512, 128, 128], [200, 5]]
+  dtype: [float32, float32]
+  attrs: {pooled_height: 14, pooled_width: 14, spatial_scale: 0.0625, sample_ratio: 2}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大Feature Map - 14x14输出
+- operator: ROIAlign
+  case_id: 3
+  input_shape: [[1, 128, 32, 32], [50, 5]]
+  dtype: [bfloat16, bfloat16]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 0.125, sample_ratio: 1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16类型 - sample_ratio=1
+- operator: ROIAlign
+  case_id: 4
+  input_shape: [[4, 256, 64, 64], [150, 5]]
+  dtype: [float16, float16]
+  attrs: {pooled_height: 3, pooled_width: 3, spatial_scale: 0.25, sample_ratio: 4}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 小输出尺寸 - 3x3
+- operator: ROIAlign
+  case_id: 5
+  input_shape: [[2, 256, 64, 64], [100, 5]]
+  dtype: [float32, float32]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 1.0, sample_ratio: 2}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: spatial_scale=1.0 - 无缩放
+- operator: ROIAlign
+  case_id: 6
+  input_shape: [[2, 256, 64, 64], [100, 5]]
+  dtype: [float16, float16]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 0.015625, sample_ratio: 2}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入 - 小spatial_scale
+- operator: ROIAlign
+  case_id: 7
+  input_shape: [[1, 256, 128, 128], [80, 5]]
+  dtype: [float32, float32]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 0.0625, sample_ratio: 0}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: sample_ratio=0 自动计算
+- operator: ROIAlign
+  case_id: 8
+  input_shape: [[2, 256, 64, 64], [100, 5]]
+  dtype: [float16, float16]
+  attrs: {pooled_height: 1, pooled_width: 1, spatial_scale: 0.0625, sample_ratio: 2}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: 1x1输出 - 全局池化
+- operator: ROIAlign
+  case_id: 9
+  input_shape: [[3, 256, 65, 65], [100, 5]]
+  dtype: [float32, float32]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 0.0625, sample_ratio: 2}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对齐Feature Map
+- operator: ROIAlign
+  case_id: 10
+  input_shape: [[2, 256, 64, 64], [100, 5]]
+  dtype: [float32, float32]
+  attrs: {pooled_height: 7, pooled_width: 7, spatial_scale: 0.0625, sample_ratio: 2}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围

@@ -1,0 +1,121 @@
+cases:
+- operator: TopK
+  case_id: 1
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {k: 10, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D topk=10 - 对齐
+- operator: TopK
+  case_id: 2
+  input_shape: [[1048576]]
+  dtype: [float32]
+  attrs: {k: 100, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D topk=100 - 对齐
+- operator: TopK
+  case_id: 3
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {k: 10, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 沿最后一维 - 对齐
+- operator: TopK
+  case_id: 4
+  input_shape: [[2048, 512]]
+  dtype: [float32]
+  attrs: {k: 50, dim: 1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 沿轴1 - 扁平
+- operator: TopK
+  case_id: 5
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {k: 20, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 沿最后一维 - 对齐
+- operator: TopK
+  case_id: 6
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {k: 10, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D NCHW格式 - 对齐
+- operator: TopK
+  case_id: 7
+  input_shape: [[3, 7, 11, 13, 1009]]
+  dtype: [float32]
+  attrs: {k: 50, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 5D 沿最后一维 - 非对齐
+- operator: TopK
+  case_id: 8
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {k: 10, dim: -1, largest: false, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 最小k个值 - 对齐
+- operator: TopK
+  case_id: 9
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {k: 10, dim: -1, largest: true, sorted: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 不排序 - 对齐
+- operator: TopK
+  case_id: 10
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {k: 100, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 质数非对齐
+- operator: TopK
+  case_id: 11
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {k: 20, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 非2幂对齐
+- operator: TopK
+  case_id: 12
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {k: 30, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 质数非对齐
+- operator: TopK
+  case_id: 13
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {k: 10, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16 类型 - 对齐
+- operator: TopK
+  case_id: 14
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {k: 1024, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: k等于维度大小 - 对齐
+- operator: TopK
+  case_id: 15
+  input_shape: [[512, 2048]]
+  dtype: [float16]
+  attrs: {k: 1, dim: -1, largest: true, sorted: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: k=1 最值 - 细长

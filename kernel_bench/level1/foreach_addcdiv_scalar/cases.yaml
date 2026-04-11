@@ -1,0 +1,243 @@
+cases:
+- operator: ForeachAddcdivScalar
+  case_id: 1
+  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.46
+  note: 基准测试 y = x1 + x2/x3 - 对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 2
+  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
+  dtype: [float16]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 13.36
+  note: float16 基准测试 - 对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 3
+  input_shape: [[[2048, 512]], [[2048, 512]], [[2048, 512]]]
+  dtype: [bfloat16]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 12.13
+  note: bfloat16 基准测试 - 扁平
+
+- operator: ForeachAddcdivScalar
+  case_id: 4
+  input_shape: [[[512, 2048]], [[512, 2048]], [[512, 2048]]]
+  dtype: [float32]
+  attrs: {scalar: 0.5}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.22
+  note: scalar=0.5 缩放 - 细长
+
+- operator: ForeachAddcdivScalar
+  case_id: 5
+  input_shape: [[[2048, 2048]], [[2048, 2048]], [[2048, 2048]]]
+  dtype: [float32]
+  attrs: {scalar: 2.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 32.16
+  note: scalar=2.0 缩放 - 大shape
+
+- operator: ForeachAddcdivScalar
+  case_id: 6
+  input_shape: [[[1048576]], [[1048576]], [[1048576]]]
+  dtype: [float32]
+  attrs: {scalar: -1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.97
+  note: scalar=-1.0 负缩放 - 1D
+
+- operator: ForeachAddcdivScalar
+  case_id: 7
+  input_shape: [[[128, 128, 64]], [[128, 128, 64]], [[128, 128, 64]]]
+  dtype: [float32]
+  attrs: {scalar: 0.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.51
+  note: scalar=0.0 零缩放 - 3D
+
+- operator: ForeachAddcdivScalar
+  case_id: 8
+  input_shape: [[[2, 8, 256, 256]], [[2, 8, 256, 256]], [[2, 8, 256, 256]]]
+  dtype: [float32]
+  attrs: {scalar: inf}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.1
+  note: scalar=inf 无穷缩放 - 4D
+
+- operator: ForeachAddcdivScalar
+  case_id: 9
+  input_shape: [[[11, 13, 17, 64, 64]], [[11, 13, 17, 64, 64]], [[11, 13, 17, 64,
+        64]]]
+  dtype: [float32]
+  attrs: {scalar: nan}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 126.17
+  note: scalar=nan NaN 缩放 - 5D非对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 10
+  input_shape: [[[1000003]], [[1000003]], [[1000003]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 14.88
+  note: 1D 质数非对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 11
+  input_shape: [[[363, 367, 373]], [[363, 367, 373]], [[363, 367, 373]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 1351.07
+  note: 3D 质数非对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 12
+  input_shape: [[[3, 7, 13, 4001]], [[3, 7, 13, 4001]], [[3, 7, 13, 4001]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 16.16
+  note: 4D 质数非对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 13
+  input_shape: [[[3, 7, 11, 13, 1009]], [[3, 7, 11, 13, 1009]], [[3, 7, 11, 13, 
+          1009]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 25.9
+  note: 5D 质数非对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 14
+  input_shape: [[[2049, 512]], [[2049, 512]], [[2049, 512]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.05
+  note: 2D 非 2 幂对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 15
+  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[0, 0], [0, 0], [0.001, 1.0]]
+  baseline_perf_us: 15.61
+  note: 零值输入 x1=x2=0
+
+  # ==================== TensorList 多张量场景 ====================
+- operator: ForeachAddcdivScalar
+  case_id: 16
+  input_shape: [[[1024, 1024], [1024, 1024]], [[1024, 1024], [1024, 1024]], [[
+          1024, 1024], [1024, 1024]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 31.5
+  note: TensorList 长度=2
+
+- operator: ForeachAddcdivScalar
+  case_id: 17
+  input_shape: [[[2048, 512], [2048, 512], [2048, 512], [2048, 512]], [[2048, 
+          512], [2048, 512], [2048, 512], [2048, 512]], [[2048, 512], [2048, 512],
+      [2048, 512], [2048, 512]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 61.84
+  note: TensorList 长度=4 扁平
+
+- operator: ForeachAddcdivScalar
+  case_id: 18
+  input_shape: [[[512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048],
+      [512, 2048], [512, 2048], [512, 2048]], [[512, 2048], [512, 2048], [512, 
+          2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048]],
+    [[512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048],
+      [512, 2048], [512, 2048]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 137.62
+  note: TensorList 长度=8 细长
+
+- operator: ForeachAddcdivScalar
+  case_id: 19
+  input_shape: [[[1024, 1024], [1024, 1024], [1024, 1024], [1024, 1024]], [[1024,
+        1024], [1024, 1024], [1024, 1024], [1024, 1024]], [[1024, 1024], [1024, 
+          1024], [1024, 1024], [1024, 1024]]]
+  dtype: [float16]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 55.57
+  note: float16 TensorList 长度=4
+
+- operator: ForeachAddcdivScalar
+  case_id: 20
+  input_shape: [[[1536, 768], [1536, 768], [1536, 768], [1536, 768]], [[1536, 
+          768], [1536, 768], [1536, 768], [1536, 768]], [[1536, 768], [1536, 768],
+      [1536, 768], [1536, 768]]]
+  dtype: [bfloat16]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 51.03
+  note: bfloat16 TensorList 长度=4 非对齐
+
+- operator: ForeachAddcdivScalar
+  case_id: 21
+  input_shape: [[[8192, 128], [8192, 128], [8192, 128], [8192, 128]], [[8192, 
+          128], [8192, 128], [8192, 128], [8192, 128]], [[8192, 128], [8192, 128],
+      [8192, 128], [8192, 128]]]
+  dtype: [float32]
+  attrs: {scalar: 2.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 62.08
+  note: TensorList 长度=4 + scalar=2.0 扁平
+
+- operator: ForeachAddcdivScalar
+  case_id: 22
+  input_shape: [[[4096, 256], [4096, 256], [4096, 256], [4096, 256]], [[4096, 
+          256], [4096, 256], [4096, 256], [4096, 256]], [[4096, 256], [4096, 256],
+      [4096, 256], [4096, 256]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 62.68
+  note: TensorList 长度=4 宽扁
+
+- operator: ForeachAddcdivScalar
+  case_id: 23
+  input_shape: [[[64, 16384]], [[64, 16384]], [[64, 16384]]]
+  dtype: [float16]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 14.29
+  note: float16 超细长
+
+- operator: ForeachAddcdivScalar
+  case_id: 24
+  input_shape: [[[16384, 64]], [[16384, 64]], [[16384, 64]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  baseline_perf_us: 15.44
+  note: float32 超扁平
+
+- operator: ForeachAddcdivScalar
+  case_id: 25
+  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
+  dtype: [float16]
+  attrs: {scalar: 1.5}
+  value_range: [[-10.0, 10.0], [-10.0, 10.0], [0.1, 10.0]]
+  baseline_perf_us: 14.22
+  note: float16 scalar=1.5

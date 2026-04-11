@@ -1,0 +1,217 @@
+cases:
+- operator: SwiGLU
+  case_id: 1
+  input_shape: [[1025, 128]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 17.68
+  note: 小尾轴对齐
+- operator: SwiGLU
+  case_id: 2
+  input_shape: [[216, 36854]]
+  dtype: [bfloat16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 65.84
+  note: 大尾轴非对齐
+- operator: SwiGLU
+  case_id: 3
+  input_shape: [[1024, 3840]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 40.12
+  note: 大 Shape-对齐
+- operator: SwiGLU
+  case_id: 4
+  input_shape: [[11, 13, 7, 1024, 11]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 101.05
+  note: 非对齐场景
+- operator: SwiGLU
+  case_id: 5
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 17.23
+  note: float16 基准 - 对齐
+- operator: SwiGLU
+  case_id: 6
+  input_shape: [[1048576]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 16.89
+  note: float32 基准 - 对齐
+- operator: SwiGLU
+  case_id: 7
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {scalarValue: 0.5}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 24.25
+  note: scalarValue=0.5-对齐
+- operator: SwiGLU
+  case_id: 8
+  input_shape: [[2048, 512]]
+  dtype: [float32]
+  attrs: {scalarValue: 2.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 29.44
+  note: scalarValue=2.0-扁平
+- operator: SwiGLU
+  case_id: 9
+  input_shape: [[512, 2048]]
+  dtype: [float16]
+  attrs: {scalarValue: 0.1}
+  value_range: [-10.0, 10.0]
+  baseline_perf_us: 23.73
+  note: scalarValue=0.1 小值 - 细长
+- operator: SwiGLU
+  case_id: 10
+  input_shape: [[2097152]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 19.98
+  note: 1D 长向量 - 对齐
+- operator: SwiGLU
+  case_id: 11
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 29.13
+  note: 2D 张量 - 对齐
+- operator: SwiGLU
+  case_id: 12
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 46.12
+  note: 3D 张量 - 对齐
+- operator: SwiGLU
+  case_id: 13
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 29.64
+  note: 4D 张量 NCHW 格式 - 对齐
+- operator: SwiGLU
+  case_id: 14
+  input_shape: [[11, 13, 17, 64, 64]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 118.37
+  note: 5D 张量 - 非对齐
+- operator: SwiGLU
+  case_id: 15
+  input_shape: [[8192, 128]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [0, 0]
+  baseline_perf_us: 33.26
+  note: 零值输入 - 扁平
+- operator: SwiGLU
+  case_id: 16
+  input_shape: [[256, 4096]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-inf, inf]
+  baseline_perf_us: 29.64
+  note: 特殊值 inf/-inf - 细长
+- operator: SwiGLU
+  case_id: 17
+  input_shape: [[2048, 2048]]
+  dtype: [float32]
+  attrs: {scalarValue: 0.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 50.26
+  note: scalarValue=0 特殊情况 - 大shape
+- operator: SwiGLU
+  case_id: 18
+  input_shape: [[1536, 768]]
+  dtype: [float32]
+  attrs: {scalarValue: nan}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 30.62
+  note: scalarValue=nan 特殊情况 - 非对齐
+- operator: SwiGLU
+  case_id: 19
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 16.47
+  note: 1D 质数非对齐
+- operator: SwiGLU
+  case_id: 20
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 1782.62
+  note: 3D 质数非对齐
+- operator: SwiGLU
+  case_id: 21
+  input_shape: [[3, 7, 13, 4001]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 34.0
+  note: 4D 质数非对齐
+- operator: SwiGLU
+  case_id: 22
+  input_shape: [[3, 7, 11, 13, 1009]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 50.0
+  note: 5D 质数非对齐
+- operator: SwiGLU
+  case_id: 23
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 29.39
+  note: 2D 非 2 幂对齐
+- operator: SwiGLU
+  case_id: 24
+  input_shape: [[1025, 1025]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 32.47
+  note: 2D 非 2 幂对齐
+- operator: SwiGLU
+  case_id: 25
+  input_shape: [[367, 367, 367]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 885.84
+  note: 3D 非 2 幂对齐
+- operator: SwiGLU
+  case_id: 26
+  input_shape: [[113, 113, 59, 59]]
+  dtype: [float32]
+  attrs: {scalarValue: 1.0}
+  value_range: [-1.0, 1.0]
+  baseline_perf_us: 1403.36
+  note: 4D 非 2 幂对齐
+- operator: SwiGLU
+  case_id: 27
+  input_shape: [[2, 1024, 1023]]
+  dtype: [float16]
+  attrs: {scalarValue: 1.0}
+  value_range: [-10.0, 10.0]
+  baseline_perf_us: 40.67
+  note: 3D 大值范围

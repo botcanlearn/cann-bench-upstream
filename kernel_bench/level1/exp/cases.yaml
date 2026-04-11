@@ -1,0 +1,201 @@
+cases:
+- operator: Exp
+  case_id: 1
+  input_shape: [[1024, 1, 3840]]
+  dtype: [float16]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 21.05
+  note: 大 Shape-对齐
+- operator: Exp
+  case_id: 2
+  input_shape: [[11, 13, 7, 1024, 11]]
+  dtype: [float16]
+  attrs: {base: 2.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 49.21
+  note: 非对齐场景
+- operator: Exp
+  case_id: 3
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 18.27
+  note: float16 自然指数基准-对齐
+- operator: Exp
+  case_id: 4
+  input_shape: [[1048576]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 16.8
+  note: float32 自然指数基准-对齐
+- operator: Exp
+  case_id: 5
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 13.02
+  note: bfloat16 自然指数基准-对齐
+- operator: Exp
+  case_id: 6
+  input_shape: [[2048, 512]]
+  dtype: [float16]
+  attrs: {base: 2.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 19.03
+  note: 2 的指数 - 扁平形状
+- operator: Exp
+  case_id: 7
+  input_shape: [[512, 2048]]
+  dtype: [float32]
+  attrs: {base: 10.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 21.55
+  note: 10 的指数 - 细长形状
+- operator: Exp
+  case_id: 8
+  input_shape: [[2, 512, 1024]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 2.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 16.68
+  note: 缩放指数 y=e^ - 对齐
+- operator: Exp
+  case_id: 9
+  input_shape: [[4, 256, 1024]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 1.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 17.3
+  note: 偏移指数 y=e^ - 对齐
+- operator: Exp
+  case_id: 10
+  input_shape: [[2, 3, 17, 1024, 11]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 2.0, shift: 1.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 17.14
+  note: 缩放 + 偏移 y=e^ - 非对齐
+- operator: Exp
+  case_id: 11
+  input_shape: [[2097152]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-5, 5]
+  baseline_perf_us: 20.12
+  note: 1D 长向量 - 对齐
+- operator: Exp
+  case_id: 12
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 16.6
+  note: 2D 张量 - 对齐
+- operator: Exp
+  case_id: 13
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 16.06
+  note: 3D 张量 - 对齐
+- operator: Exp
+  case_id: 14
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 16.84
+  note: 4D 张量 NCHW 格式 - 对齐
+- operator: Exp
+  case_id: 15
+  input_shape: [[11, 13, 17, 64, 64]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 55.48
+  note: 5D 张量 - 非对齐
+- operator: Exp
+  case_id: 16
+  input_shape: [[8192, 128]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [0, 0]
+  baseline_perf_us: 16.76
+  note: 零值输入 e^0=1 - 扁平
+- operator: Exp
+  case_id: 17
+  input_shape: [[256, 4096]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-inf, inf]
+  baseline_perf_us: 17.28
+  note: 特殊值 inf/-inf - 细长
+- operator: Exp
+  case_id: 18
+  input_shape: [[4096, 256]]
+  dtype: [float32]
+  attrs: {base: 1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 21.67
+  note: base=1 特殊情况 1^x=1 - 宽扁
+- operator: Exp
+  case_id: 19
+  input_shape: [[2048, 2048]]
+  dtype: [float16]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-65504, 65504]
+  baseline_perf_us: 23.06
+  note: float16 全范围边界 - 大shape
+- operator: Exp
+  case_id: 20
+  input_shape: [[1536, 768]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-88, 88]
+  baseline_perf_us: 17.1
+  note: float32 exp 不溢出边界 - 非对齐
+- operator: Exp
+  case_id: 21
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 15.86
+  note: 1D 质数非对齐
+- operator: Exp
+  case_id: 22
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 951.43
+  note: 3D 质数非对齐
+- operator: Exp
+  case_id: 23
+  input_shape: [[3, 7, 13, 4001]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 16.34
+  note: 4D 质数非对齐
+- operator: Exp
+  case_id: 24
+  input_shape: [[3, 7, 11, 13, 1009]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 24.14
+  note: 5D 质数非对齐
+- operator: Exp
+  case_id: 25
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {base: -1.0, scale: 1.0, shift: 0.0}
+  value_range: [-1, 1]
+  baseline_perf_us: 17.25
+  note: 2D 非 2 幂对齐

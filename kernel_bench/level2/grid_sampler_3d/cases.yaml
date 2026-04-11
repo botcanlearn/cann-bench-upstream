@@ -1,0 +1,81 @@
+cases:
+- operator: GridSampler3D
+  case_id: 1
+  input_shape: [[2, 32, 16, 64, 64], [2, 8, 8, 8, 3]]
+  dtype: [float16, float16]
+  attrs: {interpolation_mode: bilinear, padding_mode: zeros, align_corners: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 基础功能测试 - bilinear
+- operator: GridSampler3D
+  case_id: 2
+  input_shape: [[2, 64, 32, 128, 128], [2, 16, 16, 16, 3]]
+  dtype: [float32, float32]
+  attrs: {interpolation_mode: bilinear, padding_mode: border, align_corners: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: padding_mode=border
+- operator: GridSampler3D
+  case_id: 3
+  input_shape: [[4, 16, 8, 256, 256], [4, 4, 4, 128, 3]]
+  dtype: [float16, float16]
+  attrs: {interpolation_mode: nearest, padding_mode: zeros, align_corners: true}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: nearest插值
+- operator: GridSampler3D
+  case_id: 4
+  input_shape: [[1, 128, 16, 32, 32], [1, 8, 16, 16, 3]]
+  dtype: [float32, float32]
+  attrs: {interpolation_mode: bilinear, padding_mode: reflection, align_corners: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: padding_mode=reflection
+- operator: GridSampler3D
+  case_id: 5
+  input_shape: [[3, 7, 13, 97, 103], [3, 5, 11, 51, 3]]
+  dtype: [float16, float16]
+  attrs: {interpolation_mode: bilinear, padding_mode: zeros, align_corners: false}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 非对齐质数Shape
+- operator: GridSampler3D
+  case_id: 6
+  input_shape: [[2, 32, 64, 64, 8], [2, 32, 32, 32, 3]]
+  dtype: [float16, float16]
+  attrs: {interpolation_mode: nearest, padding_mode: border, align_corners: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: nearest+border
+- operator: GridSampler3D
+  case_id: 7
+  input_shape: [[2, 256, 8, 32, 32], [2, 4, 16, 16, 3]]
+  dtype: [float32, float32]
+  attrs: {interpolation_mode: bilinear, padding_mode: zeros, align_corners: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大channel维度
+- operator: GridSampler3D
+  case_id: 8
+  input_shape: [[8, 8, 8, 32, 512], [8, 4, 4, 256, 3]]
+  dtype: [float16, float16]
+  attrs: {interpolation_mode: bilinear, padding_mode: zeros, align_corners: false}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入测试
+- operator: GridSampler3D
+  case_id: 9
+  input_shape: [[2, 128, 16, 64, 128], [2, 8, 32, 64, 3]]
+  dtype: [float32, float32]
+  attrs: {interpolation_mode: nearest, padding_mode: reflection, align_corners: false}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: nearest+reflection
+- operator: GridSampler3D
+  case_id: 10
+  input_shape: [[2, 64, 32, 64, 32], [2, 16, 16, 16, 3]]
+  dtype: [float32, float32]
+  attrs: {interpolation_mode: bilinear, padding_mode: zeros, align_corners: true}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围

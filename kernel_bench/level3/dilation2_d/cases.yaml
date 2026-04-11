@@ -1,0 +1,81 @@
+cases:
+- operator: Dilation2D
+  case_id: 1
+  input_shape: [[2, 32, 64, 64]]
+  dtype: [float16]
+  attrs: {kernel_size: [3, 3], strides: [1, 1], pads: [1, 1, 1, 1], dilations: [1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 基础功能测试 - 3x3核
+- operator: Dilation2D
+  case_id: 2
+  input_shape: [[2, 64, 128, 128]]
+  dtype: [float32]
+  attrs: {kernel_size: [5, 5], strides: [1, 1], pads: [2, 2, 2, 2], dilations: [1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大核5x5
+- operator: Dilation2D
+  case_id: 3
+  input_shape: [[4, 16, 256, 256]]
+  dtype: [bfloat16]
+  attrs: {kernel_size: [3, 3], strides: [2, 2], pads: [1, 1, 1, 1], dilations: [2, 2]}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: dilation=2
+- operator: Dilation2D
+  case_id: 4
+  input_shape: [[1, 128, 32, 32]]
+  dtype: [float16]
+  attrs: {kernel_size: [1, 1], strides: [1, 1], pads: [0, 0, 0, 0], dilations: [1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1x1核恒等映射
+- operator: Dilation2D
+  case_id: 5
+  input_shape: [[3, 7, 97, 103]]
+  dtype: [float32]
+  attrs: {kernel_size: [3, 5], strides: [1, 2], pads: [1, 2, 1, 2], dilations: [1, 1]}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 非对齐质数Shape
+- operator: Dilation2D
+  case_id: 6
+  input_shape: [[2, 32, 64, 64]]
+  dtype: [float32]
+  attrs: {kernel_size: [7, 7], strides: [1, 1], pads: [3, 3, 3, 3], dilations: [2, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大核+dilation
+- operator: Dilation2D
+  case_id: 7
+  input_shape: [[8, 8, 32, 512]]
+  dtype: [bfloat16]
+  attrs: {kernel_size: [3, 3], strides: [2, 2], pads: [1, 1, 1, 1], dilations: [1, 1]}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入测试
+- operator: Dilation2D
+  case_id: 8
+  input_shape: [[2, 128, 16, 128]]
+  dtype: [float16]
+  attrs: {kernel_size: [3, 3], strides: [1, 1], pads: [1, 1, 1, 1], dilations: [3, 3]}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: 大dilation=3
+- operator: Dilation2D
+  case_id: 9
+  input_shape: [[2049, 1, 64, 64]]
+  dtype: [float32]
+  attrs: {kernel_size: [3, 3], strides: [1, 1], pads: [1, 1, 1, 1], dilations: [1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对齐batch
+- operator: Dilation2D
+  case_id: 10
+  input_shape: [[2, 256, 64, 64]]
+  dtype: [float32]
+  attrs: {kernel_size: [3, 3], strides: [1, 1], pads: [1, 1, 1, 1], dilations: [1, 1]}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围

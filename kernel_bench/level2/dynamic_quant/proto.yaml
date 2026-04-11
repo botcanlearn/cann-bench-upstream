@@ -1,0 +1,33 @@
+operator:
+  name: DynamicQuant
+  category: FusedComposite
+  difficulty: L2
+  formula: scaleOut = row_max(abs(x)) / dtypeMax, yOut = round(x / scaleOut)
+  description: 对输入张量进行 per-token 对称动态量化
+  shape_support: '输入 x: 2-8 维'
+  attrs:
+  - name: axis
+    type: int64
+    default: -1
+    description: 计算 scale 和 zero_point 的维度，默认为最后一个维度
+    required: false
+  - name: dst_type
+    type: int64
+    default: 0
+    description: 目标数据类型
+    required: false
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+  outputs:
+  - name: y
+    description: 量化后的张量
+    dtype:
+    - float16
+    - bfloat16
+    - int8
+  schema: dynamic_quant(Tensor x, int axis=-1, int dst_type=0) -> Tensor y

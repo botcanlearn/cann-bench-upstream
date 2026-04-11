@@ -1,0 +1,81 @@
+cases:
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 1
+  input_shape: [[1024, 1024], [1048576]]
+  dtype: [float16, int64]
+  attrs: {padding_idx: null, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 大 embedding表-1D key对齐-float16-无属性
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 2
+  input_shape: [[10000, 128], [1000003]]
+  dtype: [float32, int64]
+  attrs: {padding_idx: null, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 大 embedding表-1D key非对齐-float32-无属性
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 3
+  input_shape: [[4096, 256], [1024, 1024]]
+  dtype: [bfloat16, int64]
+  attrs: {padding_idx: null, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 2D key对齐-bfloat16-无属性
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 4
+  input_shape: [[10000, 128], [997, 1009]]
+  dtype: [float16, int64]
+  attrs: {padding_idx: null, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 2D key非对齐-float16-无属性
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 5
+  input_shape: [[8192, 128], [128, 128, 64]]
+  dtype: [float32, int64]
+  attrs: {padding_idx: null, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 3D key对齐-float32-无属性
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 6
+  input_shape: [[1024, 1024], [1048576]]
+  dtype: [float32, int64]
+  attrs: {padding_idx: 0, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: padding_idx=0-float32-1D key对齐
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 7
+  input_shape: [[10000, 128], [1000003]]
+  dtype: [float16, int64]
+  attrs: {padding_idx: 100, max_norm: null}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: padding_idx=100-float16-1D key非对齐
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 8
+  input_shape: [[2048, 512], [1048576]]
+  dtype: [float32, int64]
+  attrs: {padding_idx: null, max_norm: 1.0}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: max_norm=1.0-float32-1D key对齐
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 9
+  input_shape: [[1024, 1024], [1048576]]
+  dtype: [float32, int64]
+  attrs: {padding_idx: 0, max_norm: 2.0}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 双属性组合-padding_idx+max_norm-float32
+- operator: EmbeddingHashLookupOrInsert
+  case_id: 10
+  input_shape: [[2048, 512], [1048576]]
+  dtype: [bfloat16, int64]
+  attrs: {padding_idx: null, max_norm: null}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值嵌入表-bfloat16-无属性

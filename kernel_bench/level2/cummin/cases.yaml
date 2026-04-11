@@ -1,0 +1,121 @@
+cases:
+- operator: Cummin
+  case_id: 1
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 累积最小值 - 对齐
+- operator: Cummin
+  case_id: 2
+  input_shape: [[1048576]]
+  dtype: [float32]
+  attrs: {dim: 0}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 沿轴0 - 对齐
+- operator: Cummin
+  case_id: 3
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 沿最后一维 - 对齐
+- operator: Cummin
+  case_id: 4
+  input_shape: [[2048, 512]]
+  dtype: [float32]
+  attrs: {dim: 0}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 沿第一维 - 扁平
+- operator: Cummin
+  case_id: 5
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {dim: 1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 沿中间维 - 对齐
+- operator: Cummin
+  case_id: 6
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D NCHW格式 - 对齐
+- operator: Cummin
+  case_id: 7
+  input_shape: [[3, 7, 11, 13, 1009]]
+  dtype: [float32]
+  attrs: {dim: 2}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 5D 沿指定维 - 非对齐
+- operator: Cummin
+  case_id: 8
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 质数非对齐
+- operator: Cummin
+  case_id: 9
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 非2幂对齐
+- operator: Cummin
+  case_id: 10
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 质数非对齐
+- operator: Cummin
+  case_id: 11
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16 类型 - 对齐
+- operator: Cummin
+  case_id: 12
+  input_shape: [[512, 2048]]
+  dtype: [int32]
+  attrs: {dim: -1}
+  value_range: [-10000, 10000]
+  baseline_perf_us: None
+  note: int32 类型 - 细长
+- operator: Cummin
+  case_id: 13
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {dim: -1}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入 - 对齐
+- operator: Cummin
+  case_id: 14
+  input_shape: [[256, 4096]]
+  dtype: [float32]
+  attrs: {dim: -1}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围 - 细长
+- operator: Cummin
+  case_id: 15
+  input_shape: [[1536, 768]]
+  dtype: [float16]
+  attrs: {dim: -1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对齐shape - float16

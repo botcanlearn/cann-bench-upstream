@@ -2,6 +2,9 @@
 # PyTorch 2.3+ 支持 numpy 2.x 和 uint16/uint32/uint64 类型
 torch>=2.3.0
 
+# TorchVision 用于 ROI 相关算子
+torchvision>=0.18.0
+
 # NumPy 2.x 需要 PyTorch 2.3+
 numpy>=1.21.0
 

@@ -1,0 +1,81 @@
+cases:
+- operator: MoeFinalizeRoutingV2
+  case_id: 1
+  input_shape: [[1024, 8, 512], [1024, 8], [8192]]
+  dtype: [float16, float16, int32]
+  attrs: {renormalize: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D expert_outputs-对齐-topk=8
+- operator: MoeFinalizeRoutingV2
+  case_id: 2
+  input_shape: [[8192, 512], [1024, 8], [8192]]
+  dtype: [float16, float16, int32]
+  attrs: {renormalize: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D expert_outputs-对齐-topk=8
+- operator: MoeFinalizeRoutingV2
+  case_id: 3
+  input_shape: [[2048, 4, 1024], [2048, 4], [8192]]
+  dtype: [float32, float32, int64]
+  attrs: {renormalize: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D expert_outputs-float32-topk=4-大shape
+- operator: MoeFinalizeRoutingV2
+  case_id: 4
+  input_shape: [[1024, 8, 512], [1024, 8]]
+  dtype: [bfloat16, bfloat16]
+  attrs: {renormalize: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 无sorted_token_indices-bfloat16
+- operator: MoeFinalizeRoutingV2
+  case_id: 5
+  input_shape: [[1009, 8, 512], [1009, 8], [8072]]
+  dtype: [float16, float16, int32]
+  attrs: {renormalize: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 质数num_tokens-非对齐
+- operator: MoeFinalizeRoutingV2
+  case_id: 6
+  input_shape: [[512, 4, 2048], [512, 4], [2048]]
+  dtype: [float32, float32, int64]
+  attrs: {renormalize: true}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: renormalize=true-小topk
+- operator: MoeFinalizeRoutingV2
+  case_id: 7
+  input_shape: [[2048, 2, 512], [2048, 2], [4096]]
+  dtype: [float16, float16, int32]
+  attrs: {renormalize: false}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入
+- operator: MoeFinalizeRoutingV2
+  case_id: 8
+  input_shape: [[1024, 8, 512], [1024, 8], [8192]]
+  dtype: [float32, float32, int32]
+  attrs: {renormalize: false}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值inf/-inf-float32
+- operator: MoeFinalizeRoutingV2
+  case_id: 9
+  input_shape: [[2049, 4, 512], [2049, 4], [8196]]
+  dtype: [float16, float16, int32]
+  attrs: {renormalize: false}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非2幂对齐
+- operator: MoeFinalizeRoutingV2
+  case_id: 10
+  input_shape: [[4096, 4, 256], [4096, 4], [16384]]
+  dtype: [float16, float16, int64]
+  attrs: {renormalize: false}
+  value_range: [0, 1]
+  baseline_perf_us: None
+  note: routing_weights标准范围-大shape

@@ -1,0 +1,81 @@
+cases:
+- operator: MoeReRouting
+  case_id: 1
+  input_shape: [[1024, 8], [1024]]
+  dtype: [float16, int32]
+  attrs: {topk: 8, num_experts: 16}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 基础功能测试 - topk=8
+- operator: MoeReRouting
+  case_id: 2
+  input_shape: [[2048, 16], [2048]]
+  dtype: [float32, int64]
+  attrs: {topk: 4, num_experts: 32}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大batch - topk=4
+- operator: MoeReRouting
+  case_id: 3
+  input_shape: [[512, 8], [512]]
+  dtype: [float16, int32]
+  attrs: {topk: 2, num_experts: 8}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 小topk=2
+- operator: MoeReRouting
+  case_id: 4
+  input_shape: [[1009, 8], [1009]]
+  dtype: [float32, int64]
+  attrs: {topk: 8, num_experts: 16}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 质数batch
+- operator: MoeReRouting
+  case_id: 5
+  input_shape: [[2048, 4], [2048]]
+  dtype: [float16, int32]
+  attrs: {topk: 1, num_experts: 4}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: topk=1 单专家
+- operator: MoeReRouting
+  case_id: 6
+  input_shape: [[1024, 8], [1024]]
+  dtype: [float16, int32]
+  attrs: {topk: 8, num_experts: 8}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入
+- operator: MoeReRouting
+  case_id: 7
+  input_shape: [[4096, 4], [4096]]
+  dtype: [float32, int64]
+  attrs: {topk: 4, num_experts: 16}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: 大范围输入
+- operator: MoeReRouting
+  case_id: 8
+  input_shape: [[2049, 8], [2049]]
+  dtype: [float16, int32]
+  attrs: {topk: 4, num_experts: 16}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非2幂对齐batch
+- operator: MoeReRouting
+  case_id: 9
+  input_shape: [[1024, 16], [1024]]
+  dtype: [float32, int64]
+  attrs: {topk: 16, num_experts: 32}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大topk=16
+- operator: MoeReRouting
+  case_id: 10
+  input_shape: [[1024, 8], [1024]]
+  dtype: [float32, int64]
+  attrs: {topk: 8, num_experts: 16}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围

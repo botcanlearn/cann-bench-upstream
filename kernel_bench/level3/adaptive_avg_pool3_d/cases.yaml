@@ -1,0 +1,81 @@
+cases:
+- operator: AdaptiveAvgPool3D
+  case_id: 1
+  input_shape: [[2, 32, 16, 64, 64]]
+  dtype: [float16]
+  attrs: {output_size: [8, 8, 8]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 基础功能测试 - 8x8x8输出
+- operator: AdaptiveAvgPool3D
+  case_id: 2
+  input_shape: [[2, 64, 32, 128, 128]]
+  dtype: [float32]
+  attrs: {output_size: [1, 1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 全局平均池化 - 1x1x1输出
+- operator: AdaptiveAvgPool3D
+  case_id: 3
+  input_shape: [[4, 16, 8, 256, 256]]
+  dtype: [bfloat16]
+  attrs: {output_size: [4, 16, 16]}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: bfloat16类型
+- operator: AdaptiveAvgPool3D
+  case_id: 4
+  input_shape: [[1, 128, 16, 32, 32]]
+  dtype: [float16]
+  attrs: {output_size: [8, 16, 16]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 小batch大channel
+- operator: AdaptiveAvgPool3D
+  case_id: 5
+  input_shape: [[3, 7, 13, 97, 103]]
+  dtype: [float32]
+  attrs: {output_size: [5, 11, 13]}
+  value_range: [-10, 10]
+  baseline_perf_us: None
+  note: 非对齐质数Shape
+- operator: AdaptiveAvgPool3D
+  case_id: 6
+  input_shape: [[2, 32, 64, 64, 8]]
+  dtype: [float16]
+  attrs: {output_size: [16, 16, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 细长D维度
+- operator: AdaptiveAvgPool3D
+  case_id: 7
+  input_shape: [[2, 256, 8, 32, 32]]
+  dtype: [float32]
+  attrs: {output_size: [4, 8, 8]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大channel维度
+- operator: AdaptiveAvgPool3D
+  case_id: 8
+  input_shape: [[8, 8, 8, 32, 512]]
+  dtype: [bfloat16]
+  attrs: {output_size: [4, 4, 256]}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入测试
+- operator: AdaptiveAvgPool3D
+  case_id: 9
+  input_shape: [[2, 128, 16, 64, 128]]
+  dtype: [float16]
+  attrs: {output_size: [7, 7, 7]}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: 质数输出尺寸
+- operator: AdaptiveAvgPool3D
+  case_id: 10
+  input_shape: [[4, 16, 128, 32, 16]]
+  dtype: [float32]
+  attrs: {output_size: [32, 8, 4]}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围

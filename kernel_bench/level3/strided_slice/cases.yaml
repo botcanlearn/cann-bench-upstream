@@ -1,0 +1,121 @@
+cases:
+- operator: StridedSlice
+  case_id: 1
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {begin: [0], end: [1048576], strides: [2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 隔点采样 - 对齐
+- operator: StridedSlice
+  case_id: 2
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {begin: [0, 0], end: [512, 512], strides: [2, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 隔点采样 - 对齐
+- operator: StridedSlice
+  case_id: 3
+  input_shape: [[2048, 512]]
+  dtype: [float32]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 全切片 - 扁平
+- operator: StridedSlice
+  case_id: 4
+  input_shape: [[128, 128, 64]]
+  dtype: [float32]
+  attrs: {begin: [0, 0, 0], end: [64, 64, 32], strides: [2, 2, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 隔点采样 - 对齐
+- operator: StridedSlice
+  case_id: 5
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float32]
+  attrs: {begin: [0, 0, 0, 0], end: [-1, -1, 128, 128], strides: [1, 1, 2, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D NCHW格式 - 对齐
+- operator: StridedSlice
+  case_id: 6
+  input_shape: [[1000003]]
+  dtype: [float32]
+  attrs: {begin: [0], end: [500000], strides: [3]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 1D 质数非对齐
+- operator: StridedSlice
+  case_id: 7
+  input_shape: [[2049, 512]]
+  dtype: [float32]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [2, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 2D 非2幂对齐
+- operator: StridedSlice
+  case_id: 8
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {begin: [0, 0, 0], end: [100, 100, 100], strides: [1, 1, 1]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 3D 质数非对齐
+- operator: StridedSlice
+  case_id: 9
+  input_shape: [[1024, 1024]]
+  dtype: [bfloat16]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [3, 3]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: bfloat16 类型 - 对齐
+- operator: StridedSlice
+  case_id: 10
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [1, 1]}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入 - 对齐
+- operator: StridedSlice
+  case_id: 11
+  input_shape: [[256, 4096]]
+  dtype: [float32]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [2, 4]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对称stride - 细长
+- operator: StridedSlice
+  case_id: 12
+  input_shape: [[512, 2048]]
+  dtype: [float16]
+  attrs: {begin: [100, 200], end: [400, 1800], strides: [1, 1]}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: 局部切片 - 细长
+- operator: StridedSlice
+  case_id: 13
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [1, 1]}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围 - 对齐
+- operator: StridedSlice
+  case_id: 14
+  input_shape: [[3, 7, 13, 4001]]
+  dtype: [float32]
+  attrs: {begin: [0, 0, 0, 0], end: [-1, -1, -1, -1], strides: [1, 1, 1, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 4D 质数非对齐
+- operator: StridedSlice
+  case_id: 15
+  input_shape: [[1536, 768]]
+  dtype: [float16]
+  attrs: {begin: [0, 0], end: [-1, -1], strides: [2, 2]}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 非对齐shape - float16

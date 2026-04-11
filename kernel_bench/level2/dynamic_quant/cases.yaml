@@ -1,0 +1,207 @@
+cases:
+- operator: DynamicQuant
+  case_id: 1
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-100, 100]
+  baseline_perf_us: 0.0
+  note: 基础测试 - 对齐, axis=-1, dst_type=int8
+
+- operator: DynamicQuant
+  case_id: 2
+  input_shape: [[2048, 512]]
+  dtype: [bfloat16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: bfloat16 基准 - 扁平
+
+- operator: DynamicQuant
+  case_id: 3
+  input_shape: [[512, 2048]]
+  dtype: [float16]
+  attrs: {axis: 0, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: axis=0 per-channel 量化 - 细长
+
+- operator: DynamicQuant
+  case_id: 4
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-65504, 65504]
+  baseline_perf_us: 0.0
+  note: float16 全范围 - 对齐
+
+- operator: DynamicQuant
+  case_id: 5
+  input_shape: [[2048, 2048]]
+  dtype: [bfloat16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-3.4e+38, 3.4e+38]
+  baseline_perf_us: 0.0
+  note: bfloat16 全范围 - 大shape
+
+- operator: DynamicQuant
+  case_id: 6
+  input_shape: [[4096, 256]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: float16 输入 - 宽扁
+
+- operator: DynamicQuant
+  case_id: 7
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: float16 输入 - 对齐
+
+- operator: DynamicQuant
+  case_id: 8
+  input_shape: [[256, 4096]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 1}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: dst_type=1 - 细长
+
+- operator: DynamicQuant
+  case_id: 9
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 2}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: dst_type=2 - 对齐
+
+- operator: DynamicQuant
+  case_id: 10
+  input_shape: [[2097152]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: axis=-1 (最后一维) - 1D per-token 量化
+
+- operator: DynamicQuant
+  case_id: 11
+  input_shape: [[1024, 1024]]
+  dtype: [float16]
+  attrs: {axis: 0, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: axis=0 (第一维) - per-channel 量化
+
+- operator: DynamicQuant
+  case_id: 12
+  input_shape: [[1000003]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: axis=-1 (最后一维) - 1D质数
+
+- operator: DynamicQuant
+  case_id: 13
+  input_shape: [[128, 128, 64]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: 3D 张量 - 对齐
+
+- operator: DynamicQuant
+  case_id: 14
+  input_shape: [[2, 8, 256, 256]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: 4D 张量 NCHW - 对齐
+
+- operator: DynamicQuant
+  case_id: 15
+  input_shape: [[11, 13, 17, 64, 64]]
+  dtype: [bfloat16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: 5D 张量 - 非对齐
+
+- operator: DynamicQuant
+  case_id: 16
+  input_shape: [[16, 16, 8, 8, 4, 4]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: 6D 张量 - 对齐
+
+- operator: DynamicQuant
+  case_id: 17
+  input_shape: [[2048, 512]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [0, 0]
+  baseline_perf_us: 0.0
+  note: 零值输入 - 扁平
+
+- operator: DynamicQuant
+  case_id: 18
+  input_shape: [[512, 2048]]
+  dtype: [float32]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-inf, inf]
+  baseline_perf_us: 0.0
+  note: 特殊值 inf/-inf - 细长
+
+- operator: DynamicQuant
+  case_id: 19
+  input_shape: [[1024, 1024]]
+  dtype: [float32]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [nan, nan]
+  baseline_perf_us: 0.0
+  note: NaN 输入测试 - 对齐
+
+- operator: DynamicQuant
+  case_id: 20
+  input_shape: [[1009, 1013]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: 质数维度非对齐
+
+- operator: DynamicQuant
+  case_id: 21
+  input_shape: [[363, 367, 373]]
+  dtype: [float32]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: 0.0
+  note: 3D 质数非对齐
+
+- operator: DynamicQuant
+  case_id: 22
+  input_shape: [[3, 7, 13, 4001]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-100, 100]
+  baseline_perf_us: 0.0
+  note: 4D 大范围值 - 质数
+
+- operator: DynamicQuant
+  case_id: 23
+  input_shape: [[3, 7, 11, 13, 1009]]
+  dtype: [float16]
+  attrs: {axis: -1, dst_type: 0}
+  value_range: [-0.01, 0.01]
+  baseline_perf_us: 0.0
+  note: 5D 小范围值 - 质数

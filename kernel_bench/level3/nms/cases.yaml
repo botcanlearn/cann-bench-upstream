@@ -1,0 +1,81 @@
+cases:
+- operator: NMS
+  case_id: 1
+  input_shape: [[1000, 4], [1000]]
+  dtype: [float16, float16]
+  attrs: {iou_threshold: 0.5}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 基础功能测试 - 1000框
+- operator: NMS
+  case_id: 2
+  input_shape: [[2000, 4], [2000]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 大量框 - 2000框
+- operator: NMS
+  case_id: 3
+  input_shape: [[500, 4], [500]]
+  dtype: [float16, float16]
+  attrs: {iou_threshold: 0.3}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 低IoU阈值
+- operator: NMS
+  case_id: 4
+  input_shape: [[500, 4], [500]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.7}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 高IoU阈值
+- operator: NMS
+  case_id: 5
+  input_shape: [[100, 4], [100]]
+  dtype: [float16, float16]
+  attrs: {iou_threshold: 0.5}
+  value_range: [0, 0]
+  baseline_perf_us: None
+  note: 零值输入测试
+- operator: NMS
+  case_id: 6
+  input_shape: [[1500, 4], [1500]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [-100, 100]
+  baseline_perf_us: None
+  note: 大范围坐标
+- operator: NMS
+  case_id: 7
+  input_shape: [[997, 4], [997]]
+  dtype: [float16, float16]
+  attrs: {iou_threshold: 0.5}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 质数数量框
+- operator: NMS
+  case_id: 8
+  input_shape: [[50, 4], [50]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.9}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 极高IoU阈值
+- operator: NMS
+  case_id: 9
+  input_shape: [[300, 4], [300]]
+  dtype: [float16, float16]
+  attrs: {iou_threshold: 0.1}
+  value_range: [-1, 1]
+  baseline_perf_us: None
+  note: 极低IoU阈值
+- operator: NMS
+  case_id: 10
+  input_shape: [[500, 4], [500]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [-inf, inf]
+  baseline_perf_us: None
+  note: 特殊值范围
