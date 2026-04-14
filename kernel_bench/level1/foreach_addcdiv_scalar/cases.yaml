@@ -1,4 +1,5 @@
 cases:
+# ==================== 基准场景 (对齐 shape, 小值域, scalar=1.0) ====================
 - operator: ForeachAddcdivScalar
   case_id: 1
   input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
@@ -6,238 +7,160 @@ cases:
   attrs: {scalar: 1.0}
   value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
   baseline_perf_us: 15.46
-  note: 基准测试 y = x1 + x2/x3 - 对齐
-
+  note: float32-y=x1+x2/x3*scalar-1M-对齐-对称小值域
 - operator: ForeachAddcdivScalar
   case_id: 2
-  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
+  input_shape: [[[2048, 2048]], [[2048, 2048]], [[2048, 2048]]]
   dtype: [float16]
   attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  value_range: [[-2.0, 2.0], [-2.0, 2.0], [0.2, 2.0]]
   baseline_perf_us: 13.36
-  note: float16 基准测试 - 对齐
-
+  note: float16-y=x1+x2/x3*scalar-4M-对齐-对称小值域
 - operator: ForeachAddcdivScalar
   case_id: 3
-  input_shape: [[[2048, 512]], [[2048, 512]], [[2048, 512]]]
+  input_shape: [[[4096, 4096]], [[4096, 4096]], [[4096, 4096]]]
   dtype: [bfloat16]
   attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  value_range: [[-3.0, 3.0], [-3.0, 3.0], [0.3, 3.0]]
   baseline_perf_us: 12.13
-  note: bfloat16 基准测试 - 扁平
-
+  note: bfloat16-y=x1+x2/x3*scalar-16M-对齐-对称小值域
+# ==================== scalar 参数变化 ====================
 - operator: ForeachAddcdivScalar
   case_id: 4
-  input_shape: [[[512, 2048]], [[512, 2048]], [[512, 2048]]]
+  input_shape: [[[8192, 8192]], [[8192, 8192]], [[8192, 8192]]]
   dtype: [float32]
   attrs: {scalar: 0.5}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  value_range: [[-10.0, 10.0], [-10.0, 10.0], [0.1, 10.0]]
   baseline_perf_us: 15.22
-  note: scalar=0.5 缩放 - 细长
-
+  note: float32-scalar=0.5-67M-对齐-对称中值域
 - operator: ForeachAddcdivScalar
   case_id: 5
-  input_shape: [[[2048, 2048]], [[2048, 2048]], [[2048, 2048]]]
-  dtype: [float32]
+  input_shape: [[[16384, 16384]], [[16384, 16384]], [[16384, 16384]]]
+  dtype: [float16]
   attrs: {scalar: 2.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 32.16
-  note: scalar=2.0 缩放 - 大shape
-
+  value_range: [[-100.0, 100.0], [-100.0, 100.0], [0.1, 100.0]]
+  baseline_perf_us: 55.57
+  note: float16-scalar=2.0-268M-对齐-对称大值域
+# ==================== 非对齐 shape (>= 50%) ====================
 - operator: ForeachAddcdivScalar
   case_id: 6
-  input_shape: [[[1048576]], [[1048576]], [[1048576]]]
-  dtype: [float32]
+  input_shape: [[[1023, 1023]], [[1023, 1023]], [[1023, 1023]]]
+  dtype: [bfloat16]
   attrs: {scalar: -1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 15.97
-  note: scalar=-1.0 负缩放 - 1D
-
+  value_range: [[-0.1, 0.1], [-0.1, 0.1], [0.1, 0.1]]
+  baseline_perf_us: 51.03
+  note: bfloat16-scalar=-1.0-1M-非对齐-对称微小值域
 - operator: ForeachAddcdivScalar
   case_id: 7
-  input_shape: [[[128, 128, 64]], [[128, 128, 64]], [[128, 128, 64]]]
+  input_shape: [[[1009, 1021]], [[1009, 1021]], [[1009, 1021]]]
   dtype: [float32]
-  attrs: {scalar: 0.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 15.51
-  note: scalar=0.0 零缩放 - 3D
-
+  attrs: {scalar: 1.5}
+  value_range: [[-1.0, 2.0], [-1.0, 2.0], [0.1, 2.0]]
+  baseline_perf_us: 14.88
+  note: float32-scalar=1.5-1M-质数非对齐-非对称小值域
 - operator: ForeachAddcdivScalar
   case_id: 8
-  input_shape: [[[2, 8, 256, 256]], [[2, 8, 256, 256]], [[2, 8, 256, 256]]]
-  dtype: [float32]
-  attrs: {scalar: inf}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 15.1
-  note: scalar=inf 无穷缩放 - 4D
-
+  input_shape: [[[1537, 769]], [[1537, 769]], [[1537, 769]]]
+  dtype: [float16]
+  attrs: {scalar: 1.0}
+  value_range: [[-5.0, 10.0], [-5.0, 10.0], [0.1, 10.0]]
+  baseline_perf_us: 14.29
+  note: float16-1M-非对齐-非对称中值域
 - operator: ForeachAddcdivScalar
   case_id: 9
-  input_shape: [[[11, 13, 17, 64, 64]], [[11, 13, 17, 64, 64]], [[11, 13, 17, 64,
-        64]]]
-  dtype: [float32]
-  attrs: {scalar: nan}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 126.17
-  note: scalar=nan NaN 缩放 - 5D非对齐
-
-- operator: ForeachAddcdivScalar
-  case_id: 10
-  input_shape: [[[1000003]], [[1000003]], [[1000003]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 14.88
-  note: 1D 质数非对齐
-
-- operator: ForeachAddcdivScalar
-  case_id: 11
   input_shape: [[[363, 367, 373]], [[363, 367, 373]], [[363, 367, 373]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 1351.07
-  note: 3D 质数非对齐
-
-- operator: ForeachAddcdivScalar
-  case_id: 12
-  input_shape: [[[3, 7, 13, 4001]], [[3, 7, 13, 4001]], [[3, 7, 13, 4001]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 16.16
-  note: 4D 质数非对齐
-
-- operator: ForeachAddcdivScalar
-  case_id: 13
-  input_shape: [[[3, 7, 11, 13, 1009]], [[3, 7, 11, 13, 1009]], [[3, 7, 11, 13, 
-          1009]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 25.9
-  note: 5D 质数非对齐
-
-- operator: ForeachAddcdivScalar
-  case_id: 14
-  input_shape: [[[2049, 512]], [[2049, 512]], [[2049, 512]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 15.05
-  note: 2D 非 2 幂对齐
-
-- operator: ForeachAddcdivScalar
-  case_id: 15
-  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[0, 0], [0, 0], [0.001, 1.0]]
-  baseline_perf_us: 15.61
-  note: 零值输入 x1=x2=0
-
-  # ==================== TensorList 多张量场景 ====================
-- operator: ForeachAddcdivScalar
-  case_id: 16
-  input_shape: [[[1024, 1024], [1024, 1024]], [[1024, 1024], [1024, 1024]], [[
-          1024, 1024], [1024, 1024]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 31.5
-  note: TensorList 长度=2
-
-- operator: ForeachAddcdivScalar
-  case_id: 17
-  input_shape: [[[2048, 512], [2048, 512], [2048, 512], [2048, 512]], [[2048, 
-          512], [2048, 512], [2048, 512], [2048, 512]], [[2048, 512], [2048, 512],
-      [2048, 512], [2048, 512]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 61.84
-  note: TensorList 长度=4 扁平
-
-- operator: ForeachAddcdivScalar
-  case_id: 18
-  input_shape: [[[512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048],
-      [512, 2048], [512, 2048], [512, 2048]], [[512, 2048], [512, 2048], [512, 
-          2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048]],
-    [[512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048],
-      [512, 2048], [512, 2048]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 137.62
-  note: TensorList 长度=8 细长
-
-- operator: ForeachAddcdivScalar
-  case_id: 19
-  input_shape: [[[1024, 1024], [1024, 1024], [1024, 1024], [1024, 1024]], [[1024,
-        1024], [1024, 1024], [1024, 1024], [1024, 1024]], [[1024, 1024], [1024, 
-          1024], [1024, 1024], [1024, 1024]]]
-  dtype: [float16]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 55.57
-  note: float16 TensorList 长度=4
-
-- operator: ForeachAddcdivScalar
-  case_id: 20
-  input_shape: [[[1536, 768], [1536, 768], [1536, 768], [1536, 768]], [[1536, 
-          768], [1536, 768], [1536, 768], [1536, 768]], [[1536, 768], [1536, 768],
-      [1536, 768], [1536, 768]]]
   dtype: [bfloat16]
   attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 51.03
-  note: bfloat16 TensorList 长度=4 非对齐
-
+  value_range: [[-50.0, 100.0], [-50.0, 100.0], [0.1, 100.0]]
+  baseline_perf_us: 1351.07
+  note: bfloat16-50M-质数非对齐-非对称大值域-3D
 - operator: ForeachAddcdivScalar
-  case_id: 21
-  input_shape: [[[8192, 128], [8192, 128], [8192, 128], [8192, 128]], [[8192, 
-          128], [8192, 128], [8192, 128], [8192, 128]], [[8192, 128], [8192, 128],
-      [8192, 128], [8192, 128]]]
+  case_id: 10
+  input_shape: [[[2049, 513]], [[2049, 513]], [[2049, 513]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-65504.0, 65504.0], [-65504.0, 65504.0], [1.0, 65504.0]]
+  baseline_perf_us: 15.05
+  note: float32-1M-非对齐-类型边界值
+# ==================== 特殊值覆盖 ====================
+- operator: ForeachAddcdivScalar
+  case_id: 11
+  input_shape: [[[3, 7, 13, 4001]], [[3, 7, 13, 4001]], [[3, 7, 13, 4001]]]
+  dtype: [float16]
+  attrs: {scalar: 1.0}
+  value_range: [[-88.0, 88.0], [-88.0, 88.0], [0.1, 88.0]]
+  baseline_perf_us: 14.22
+  note: float16-1M-质数非对齐-float32边界值-4D
+- operator: ForeachAddcdivScalar
+  case_id: 12
+  input_shape: [[[1000003]], [[1000003]], [[1000003]]]
+  dtype: [float32]
+  attrs: {scalar: inf}
+  value_range: [[-inf, inf], [-inf, inf], [0.1, inf]]
+  baseline_perf_us: 62.08
+  note: float32-scalar=inf-inf特殊值-1D-质数非对齐
+- operator: ForeachAddcdivScalar
+  case_id: 13
+  input_shape: [[[11, 13, 17, 67, 67]], [[11, 13, 17, 67, 67]], [[11, 13, 17, 67, 67]]]
+  dtype: [bfloat16]
+  attrs: {scalar: nan}
+  value_range: [[nan, nan], [nan, nan], [nan, nan]]
+  baseline_perf_us: 51.03
+  note: bfloat16-scalar=nan-nan特殊值-10M-质数非对齐-5D
+- operator: ForeachAddcdivScalar
+  case_id: 14
+  input_shape: [[[3, 7, 11, 13, 1013]], [[3, 7, 11, 13, 1013]], [[3, 7, 11, 13, 1013]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[0, 0], [0, 0], [0.001, 0.001]]
+  baseline_perf_us: 25.9
+  note: float32-零值-3M-质数非对齐-5D
+# ==================== TensorList 多张量场景 ====================
+- operator: ForeachAddcdivScalar
+  case_id: 15
+  input_shape: [[[512, 2049], [512, 2049]], [[512, 2049], [512, 2049]], [[512, 2049], [512, 2049]]]
+  dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [[-0.5, 0.5], [-0.5, 0.5], [0.1, 0.5]]
+  baseline_perf_us: 31.5
+  note: float32-TensorList_len=2-2M-非对齐-对称微小值域
+- operator: ForeachAddcdivScalar
+  case_id: 16
+  input_shape: [[[255, 8193], [255, 8193], [255, 8193], [255, 8193]], [[255, 8193], [255, 8193], [255, 8193], [255, 8193]], [[255, 8193], [255, 8193], [255, 8193], [255, 8193]]]
+  dtype: [bfloat16]
+  attrs: {scalar: 1.0}
+  value_range: [[-1.0, 3.0], [-1.0, 3.0], [0.1, 3.0]]
+  baseline_perf_us: 62.68
+  note: bfloat16-TensorList_len=4-8M-非对齐-非对称小值域
+- operator: ForeachAddcdivScalar
+  case_id: 17
+  input_shape: [[[4097, 511]], [[4097, 511]], [[4097, 511]]]
+  dtype: [float16]
+  attrs: {scalar: 0.0}
+  value_range: [[-1000.0, 1000.0], [-1000.0, 1000.0], [0.1, 1000.0]]
+  baseline_perf_us: 14.29
+  note: float16-scalar=0.0-2M-非对齐-对称大值域
+- operator: ForeachAddcdivScalar
+  case_id: 18
+  input_shape: [[[2, 511, 2049], [2, 511, 2049]], [[2, 511, 2049], [2, 511, 2049]], [[2, 511, 2049], [2, 511, 2049]], [[2, 511, 2049], [2, 511, 2049]]]
   dtype: [float32]
   attrs: {scalar: 2.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
+  value_range: [[-0.2, 0.2], [-0.2, 0.2], [0.1, 0.2]]
   baseline_perf_us: 62.08
-  note: TensorList 长度=4 + scalar=2.0 扁平
-
+  note: float32-TensorList_len=4-scalar=2.0-8M-非对齐-对称微小值域-3D
 - operator: ForeachAddcdivScalar
-  case_id: 22
-  input_shape: [[[4096, 256], [4096, 256], [4096, 256], [4096, 256]], [[4096, 
-          256], [4096, 256], [4096, 256], [4096, 256]], [[4096, 256], [4096, 256],
-      [4096, 256], [4096, 256]]]
+  case_id: 19
+  input_shape: [[[4, 255, 2049]], [[4, 255, 2049]], [[4, 255, 2049]]]
+  dtype: [bfloat16]
+  attrs: {scalar: -0.5}
+  value_range: [[-3.0, 6.0], [-3.0, 6.0], [0.1, 6.0]]
+  baseline_perf_us: 51.03
+  note: bfloat16-scalar=-0.5-2M-非对齐-非对称中值域-3D
+- operator: ForeachAddcdivScalar
+  case_id: 20
+  input_shape: [[[2, 3, 17, 1024, 101]], [[2, 3, 17, 1024, 101]], [[2, 3, 17, 1024, 101]]]
   dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 62.68
-  note: TensorList 长度=4 宽扁
-
-- operator: ForeachAddcdivScalar
-  case_id: 23
-  input_shape: [[[64, 16384]], [[64, 16384]], [[64, 16384]]]
-  dtype: [float16]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 14.29
-  note: float16 超细长
-
-- operator: ForeachAddcdivScalar
-  case_id: 24
-  input_shape: [[[16384, 64]], [[16384, 64]], [[16384, 64]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [0.1, 1.0]]
-  baseline_perf_us: 15.44
-  note: float32 超扁平
-
-- operator: ForeachAddcdivScalar
-  case_id: 25
-  input_shape: [[[1024, 1024]], [[1024, 1024]], [[1024, 1024]]]
-  dtype: [float16]
   attrs: {scalar: 1.5}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [0.1, 10.0]]
-  baseline_perf_us: 14.22
-  note: float16 scalar=1.5
+  value_range: [[-20.0, 40.0], [-20.0, 40.0], [0.1, 40.0]]
+  baseline_perf_us: 16.16
+  note: float32-scalar=1.5-10M-非对齐-非对称大值域-5D

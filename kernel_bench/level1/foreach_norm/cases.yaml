@@ -1,4 +1,5 @@
 cases:
+# ==================== 基准场景 (对齐 shape, 小值域, L1 范数) ====================
 - operator: ForeachNorm
   case_id: 1
   input_shape: [[[1024, 1024]]]
@@ -6,222 +7,160 @@ cases:
   attrs: {scalar: 1.0}
   value_range: [-1.0, 1.0]
   baseline_perf_us: 7.16
-  note: L1 范数基准测试 - 对齐
-
+  note: float16-L1范数-1M-对齐-对称小值域
 - operator: ForeachNorm
   case_id: 2
-  input_shape: [[[1024, 1024]]]
-  dtype: [float32]
-  attrs: {scalar: 1.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 6.93
-  note: L1 范数基准测试 - 对齐
-
-- operator: ForeachNorm
-  case_id: 3
-  input_shape: [[[2048, 512]]]
-  dtype: [bfloat16]
-  attrs: {scalar: 1.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 7.11
-  note: L1 范数 - 扁平
-
-- operator: ForeachNorm
-  case_id: 4
-  input_shape: [[[512, 2048]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 7.22
-  note: L2 范数 - 细长
-
-- operator: ForeachNorm
-  case_id: 5
   input_shape: [[[2048, 2048]]]
   dtype: [float32]
+  attrs: {scalar: 1.0}
+  value_range: [-2.0, 2.0]
+  baseline_perf_us: 6.93
+  note: float32-L1范数-4M-对齐-对称小值域
+- operator: ForeachNorm
+  case_id: 3
+  input_shape: [[[4096, 4096]]]
+  dtype: [bfloat16]
+  attrs: {scalar: 1.0}
+  value_range: [-3.0, 3.0]
+  baseline_perf_us: 7.04
+  note: bfloat16-L1范数-16M-对齐-对称小值域
+# ==================== scalar 参数变化 ====================
+- operator: ForeachNorm
+  case_id: 4
+  input_shape: [[[8192, 8192]]]
+  dtype: [float16]
+  attrs: {scalar: 2.0}
+  value_range: [-10.0, 10.0]
+  baseline_perf_us: 15.92
+  note: float16-L2范数-67M-对齐-对称中值域
+- operator: ForeachNorm
+  case_id: 5
+  input_shape: [[[16384, 16384]]]
+  dtype: [float32]
   attrs: {scalar: 3.0}
-  value_range: [-1.0, 1.0]
+  value_range: [-100.0, 100.0]
   baseline_perf_us: 15.13
-  note: L3 范数 - 大shape
-
+  note: float32-L3范数-268M-对齐-对称大值域
+# ==================== 非对齐 shape (>= 50%) ====================
 - operator: ForeachNorm
   case_id: 6
-  input_shape: [[[1048576]]]
-  dtype: [float16]
+  input_shape: [[[1023, 1023]]]
+  dtype: [bfloat16]
   attrs: {scalar: 0.5}
-  value_range: [0.0, 1.0]
-  baseline_perf_us: 16.15
-  note: L0.5 范数测试 - 1D
-
+  value_range: [-0.1, 0.1]
+  baseline_perf_us: 16.23
+  note: bfloat16-L0.5范数-1M-非对齐-对称微小值域
 - operator: ForeachNorm
   case_id: 7
-  input_shape: [[[128, 128, 64]]]
-  dtype: [float32]
-  attrs: {scalar: -1.0}
-  value_range: [0.1, 1.0]
-  baseline_perf_us: 11.46
-  note: L-1 范数测试 (调和平均) - 3D
-
+  input_shape: [[[1009, 1021]]]
+  dtype: [float16]
+  attrs: {scalar: 1.5}
+  value_range: [-1.0, 2.0]
+  baseline_perf_us: 15.92
+  note: float16-L1.5范数-1M-质数非对齐-非对称小值域
 - operator: ForeachNorm
   case_id: 8
-  input_shape: [[[2, 8, 256, 256]]]
+  input_shape: [[[1537, 769]]]
   dtype: [float32]
-  attrs: {scalar: -2.0}
-  value_range: [0.1, 1.0]
-  baseline_perf_us: 11.53
-  note: L-2 范数测试 - 4D
-
+  attrs: {scalar: 4.0}
+  value_range: [-5.0, 10.0]
+  baseline_perf_us: 9.27
+  note: float32-L4范数-1M-非对齐-非对称中值域
 - operator: ForeachNorm
   case_id: 9
-  input_shape: [[[11, 13, 17, 64, 64]]]
-  dtype: [float32]
-  attrs: {scalar: 0.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 74.46
-  note: L0 范数 (零范数) - 5D非对齐
-
+  input_shape: [[[363, 367, 373]]]
+  dtype: [bfloat16]
+  attrs: {scalar: 2.0}
+  value_range: [-50.0, 100.0]
+  baseline_perf_us: 91.2
+  note: bfloat16-L2范数-50M-质数非对齐-非对称大值域-3D
 - operator: ForeachNorm
   case_id: 10
-  input_shape: [[[1000003]]]
-  dtype: [float32]
-  attrs: {scalar: inf}
-  value_range: [-100.0, 100.0]
-  baseline_perf_us: 6.71
-  note: L 无穷范数测试 - 质数1D
-
+  input_shape: [[[2049, 513]]]
+  dtype: [float16]
+  attrs: {scalar: 1.0}
+  value_range: [-65504.0, 65504.0]
+  baseline_perf_us: 7.16
+  note: float16-L1范数-1M-非对齐-float16边界值
+# ==================== 特殊值覆盖 ====================
 - operator: ForeachNorm
   case_id: 11
-  input_shape: [[[2097152]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 8.8
-  note: 1D 向量 L2 范数 - 对齐
-
-- operator: ForeachNorm
-  case_id: 12
-  input_shape: [[[363, 367, 373]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 91.2
-  note: 3D 质数非对齐 L2 范数
-
-- operator: ForeachNorm
-  case_id: 13
   input_shape: [[[3, 7, 13, 4001]]]
   dtype: [float32]
   attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
+  value_range: [-88.0, 88.0]
   baseline_perf_us: 7.29
-  note: 4D 质数非对齐 L2 范数
-
+  note: float32-L2范数-1M-质数非对齐-float32边界值-4D
+- operator: ForeachNorm
+  case_id: 12
+  input_shape: [[[1000003]]]
+  dtype: [bfloat16]
+  attrs: {scalar: inf}
+  value_range: [-inf, inf]
+  baseline_perf_us: 6.71
+  note: bfloat16-Linf范数-1M-质数非对齐-inf特殊值-1D
+- operator: ForeachNorm
+  case_id: 13
+  input_shape: [[[11, 13, 17, 67, 67]]]
+  dtype: [float32]
+  attrs: {scalar: nan}
+  value_range: [nan, nan]
+  baseline_perf_us: 74.46
+  note: float32-Lnan范数-10M-质数非对齐-nan特殊值-5D
 - operator: ForeachNorm
   case_id: 14
   input_shape: [[[3, 7, 11, 13, 1009]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 10.07
-  note: 5D 质数非对齐 L2 范数
-
-  # ==================== TensorList 多张量场景 ====================
-- operator: ForeachNorm
-  case_id: 15
-  input_shape: [[[1024, 1024], [1024, 1024]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 14.44
-  note: TensorList 长度=2 的 L2 范数
-
-- operator: ForeachNorm
-  case_id: 16
-  input_shape: [[[2048, 512], [2048, 512], [2048, 512], [2048, 512]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 28.99
-  note: TensorList 长度=4 扁平 L2 范数
-
-- operator: ForeachNorm
-  case_id: 17
-  input_shape: [[[512, 2048], [512, 2048], [512, 2048], [512, 2048], [512, 2048],
-      [512, 2048], [512, 2048], [512, 2048]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 57.4
-  note: TensorList 长度=8 细长 L2 范数
-
-- operator: ForeachNorm
-  case_id: 18
-  input_shape: [[[1024, 1024]]]
   dtype: [float16]
   attrs: {scalar: 2.0}
   value_range: [0, 0]
-  baseline_perf_us: 7.41
-  note: 零值输入 L2 范数
-
+  baseline_perf_us: 16.15
+  note: float16-L2范数-3M-质数非对齐-零值-5D
+# ==================== TensorList 多张量场景 ====================
 - operator: ForeachNorm
-  case_id: 19
-  input_shape: [[[1536, 768]]]
+  case_id: 15
+  input_shape: [[[512, 2049], [512, 2049]]]
   dtype: [float32]
   attrs: {scalar: 2.0}
-  value_range: [-inf, inf]
-  baseline_perf_us: 7.77
-  note: 无穷大输入 L2 范数 - 非对齐
-
+  value_range: [-0.5, 0.5]
+  baseline_perf_us: 14.44
+  note: float32-TensorList_len=2-L2范数-非对齐-对称微小值域
 - operator: ForeachNorm
-  case_id: 20
-  input_shape: [[[8192, 128]]]
-  dtype: [float32]
-  attrs: {scalar: 2.0}
-  value_range: [nan, nan]
-  baseline_perf_us: 7.25
-  note: NaN 输入 L2 范数 - 扁平
-
-- operator: ForeachNorm
-  case_id: 21
-  input_shape: [[[4096, 256]]]
-  dtype: [float32]
-  attrs: {scalar: nan}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 11.54
-  note: NaN 标量 L2 范数 - 宽扁
-
-- operator: ForeachNorm
-  case_id: 22
-  input_shape: [[[64, 64, 256]]]
-  dtype: [float16]
-  attrs: {scalar: 1.5}
-  value_range: [-10.0, 10.0]
-  baseline_perf_us: 15.92
-  note: float16 L1.5范数 - 3D
-
-- operator: ForeachNorm
-  case_id: 23
-  input_shape: [[[16, 64, 1024]]]
-  dtype: [bfloat16]
-  attrs: {scalar: 0.5}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 16.23
-  note: bfloat16 L0.5范数 - 3D序列
-
-- operator: ForeachNorm
-  case_id: 24
-  input_shape: [[[7, 11, 13, 1024]]]
-  dtype: [float32]
-  attrs: {scalar: 4.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 9.27
-  note: L4 范数 - 4D非对齐
-
-- operator: ForeachNorm
-  case_id: 25
-  input_shape: [[[1024, 1024]]]
+  case_id: 16
+  input_shape: [[[255, 8193], [255, 8193], [255, 8193], [255, 8193]]]
   dtype: [bfloat16]
   attrs: {scalar: 1.0}
-  value_range: [-1.0, 1.0]
-  baseline_perf_us: 7.04
-  note: bfloat16 L1范数基准
+  value_range: [-1.0, 3.0]
+  baseline_perf_us: 51.03
+  note: bfloat16-TensorList_len=4-L1范数-非对齐-非对称小值域
+- operator: ForeachNorm
+  case_id: 17
+  input_shape: [[[4097, 511]]]
+  dtype: [float16]
+  attrs: {scalar: -1.0}
+  value_range: [-1000.0, 1000.0]
+  baseline_perf_us: 7.16
+  note: float16-L-1范数-2M-非对齐-对称大值域
+- operator: ForeachNorm
+  case_id: 18
+  input_shape: [[[2, 511, 2049], [2, 511, 2049]]]
+  dtype: [float32]
+  attrs: {scalar: 2.0}
+  value_range: [-0.2, 0.2]
+  baseline_perf_us: 28.99
+  note: float32-TensorList_len=2-L2范数-2M-非对齐-对称微小值域-3D
+- operator: ForeachNorm
+  case_id: 19
+  input_shape: [[[4, 255, 2049], [4, 255, 2049]]]
+  dtype: [bfloat16]
+  attrs: {scalar: -2.0}
+  value_range: [-3.0, 6.0]
+  baseline_perf_us: 51.03
+  note: bfloat16-L-2范数-2M-非对齐-非对称中值域-3D
+- operator: ForeachNorm
+  case_id: 20
+  input_shape: [[[2, 3, 17, 1024, 101], [2, 3, 17, 1024, 101], [2, 3, 17, 1024, 101], [2, 3, 17, 1024, 101]]]
+  dtype: [float32]
+  attrs: {scalar: 0.0}
+  value_range: [-20.0, 40.0]
+  baseline_perf_us: 137.62
+  note: float32-TensorList_len=4-L0范数-10M-非对齐-非对称大值域-5D
