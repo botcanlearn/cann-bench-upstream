@@ -1,0 +1,199 @@
+# CrossEntropyLoss 算子 API 描述
+
+## 1. 算子简介
+
+计算交叉熵损失，用于分类任务。
+
+**主要应用场景**：
+- 多分类任务的损失函数（图像分类、文本分类等）
+- 语言模型的 next-token 预测训练
+- 支持硬标签（类别索引）和软标签（概率分布）两种模式
+
+**算子特征**：
+- 难度等级：L2（NumericalStable）
+- 双输入（logits 和 target）单输出（loss），涉及 softmax、对数、归约等多步计算
+- 输入 x 为 (N, C) 或更高维的 logits 张量，target 为 (N,) 的类别索引或 (N, C) 的软标签
+
+## 2. 算子定义
+
+### 数学公式
+
+**基本公式**：
+
+$$
+L = -\log\left(\frac{\exp(x_{target})}{\sum_{j}\exp(x_j)}\right)
+$$
+
+等价于：
+
+$$
+L = -x_{target} + \log\left(\sum_{j}\exp(x_j)\right)
+$$
+
+**带权重的公式**：
+
+$$
+L = -weight_{target} \cdot \log\left(\frac{\exp(x_{target})}{\sum_{j}\exp(x_j)}\right)
+$$
+
+其中：
+- `reduction='none'` 时返回每个样本的损失，shape 为 (N,)
+- `reduction='mean'` 时返回 batch 平均损失（标量）
+- `reduction='sum'` 时返回 batch 总损失（标量）
+- `ignore_index` 指定的标签不参与损失计算
+
+## 3. 接口规范
+
+### 算子原型
+
+```python
+ascend_bench.cross_entropy_loss(Tensor x, Tensor target, str reduction, int ignore_index) -> Tensor loss
+```
+
+### 输入参数说明
+
+| 参数 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| x | Tensor | 必选 | 输入 logits 张量（未经 softmax） |
+| target | Tensor | 必选 | 目标标签索引（hard labels）或概率分布（soft labels） |
+| reduction | string | "mean" | 损失聚合方式 ('none' \| 'mean' \| 'sum') |
+| ignore_index | int | -100 | 忽略的标签索引（不影响损失计算） |
+
+### 输出
+
+| 参数 | Shape | dtype | 描述 |
+|------|-------|-------|------|
+| loss | reduction='none' 时为 (N,)，否则为标量 | 与输入 x 相同 | 损失值 |
+
+### 数据类型
+
+| x dtype | target dtype | 输出 dtype |
+|---------|-------------|-----------|
+| float32 | int32 / int64 | float32 |
+| float16 | int32 / int64 | float16 |
+| bfloat16 | int32 / int64 | bfloat16 |
+| float32 | float32 | float32 |
+| float16 | float16 | float16 |
+| bfloat16 | bfloat16 | bfloat16 |
+
+### 规则与约束
+
+- x 的 shape 为 (N, C) 或 (N, C, d1, d2, ...)，其中 N 为 batch size，C 为类别数
+- 硬标签模式：target 的 shape 为 (N,) 或 (N, d1, d2, ...)，值为 [0, C) 范围内的类别索引
+- 软标签模式：target 的 shape 为 (N, C)，值为概率分布
+- `ignore_index` 仅在硬标签模式下生效
+- 输入 x 应为原始 logits（未经 softmax），内部自动应用 log_softmax
+- 需注意数值稳定性：内部实现应使用 log-sum-exp 技巧避免溢出
+
+## 4. 精度要求
+
+计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+
+| 数据类型 | 验证方式 | rtol | atol |
+|---------|---------|------|------|
+| float16 | 相对误差 | 1e-3 | 1e-3 |
+| float32 | 相对误差 | 1e-4 | 1e-4 |
+| bfloat16 | 相对误差 | 4e-3 | 4e-3 |
+
+**对比公式**：
+
+$$
+|output - golden| \leq atol + rtol \times |golden|
+$$
+
+## 5. 标准 Golden 代码
+
+```python
+import torch
+
+"""
+CrossEntropyLoss 算子 Torch Golden 参考实现
+
+计算交叉熵损失，用于分类任务
+
+公式:
+    L = -log(exp(x[target]) / sum(exp(x)))
+    或带 weight: L = -weight[target] * log(exp(x[target]) / sum(exp(x)))
+
+参考 PyTorch API: torch.nn.CrossEntropyLoss
+    https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+
+Parameters:
+    - input: (N, C) 或 (N, C, H, W) 等 - logits 张量（未经 softmax）
+    - target: (N,) 硬标签 或 (N, C) 软标签（概率分布）
+    - weight: (C,) 各类别的权重（可选）
+    - ignore_index: int, 默认 -100 - 忽略的标签索引
+    - reduction: 'none' | 'mean' | 'sum', 默认 'mean' - 损失聚合方式
+"""
+
+
+def cross_entropy_loss(
+    x: torch.Tensor,
+    target: torch.Tensor,
+    reduction: str = 'mean',
+    ignore_index: int = -100
+) -> torch.Tensor:
+    """
+    计算交叉熵损失
+
+    Args:
+        x: 输入 logits 张量，shape (N, C) 或更高维
+           N = batch size, C = 类别数
+           注意：输入应为 logits（未经 softmax），内部会自动应用 log_softmax
+        target: 目标标签
+               - 硬标签：shape (N,) 或 (N, d1, d2, ...)，值为类别索引
+               - 软标签：shape (N, C)，值为概率分布
+        reduction: 损失聚合方式
+                  'none': 返回每个样本的损失，shape (N,)
+                  'mean': 返回 batch 平均损失
+                  'sum': 返回 batch 总损失
+        ignore_index: 忽略的标签索引
+                      当 target 为硬标签且值为 ignore_index 时，该样本不计入损失
+
+    Returns:
+        损失值：如果 reduction='none'，返回 shape (N,) 的张量
+               否则返回标量张量
+
+    Examples:
+        >>> N, C = 16, 10  # 16个样本，10个类别
+        >>> x = torch.randn(N, C)
+        >>> target = torch.randint(0, C, (N,))
+        >>> loss = cross_entropy_loss(x, target)
+    """
+    # 直接调用 PyTorch 标准 CrossEntropyLoss 实现
+    # torch.nn.functional.cross_entropy 内部会自动应用 log_softmax
+    loss = torch.nn.functional.cross_entropy(
+        input=x,
+        target=target,
+        reduction=reduction,
+        ignore_index=ignore_index
+    )
+
+    return loss
+```
+
+## 6. 额外信息
+
+### 算子调用示例
+
+```python
+import torch
+import ascend_bench
+
+x = torch.randn(1024, 2048, dtype=torch.float32, device="npu")
+target = torch.randint(0, 2048, (1024,), dtype=torch.int64, device="npu")
+
+loss = ascend_bench.cross_entropy_loss(x, target, reduction="mean", ignore_index=-100)
+loss = ascend_bench.cross_entropy_loss(x, target, reduction="sum", ignore_index=-100)
+loss = ascend_bench.cross_entropy_loss(x, target, reduction="none", ignore_index=-100)
+```
+
+### 性能基线参考
+
+基于 cases.yaml 中 20 个测试用例，当前所有用例的 baseline_perf_us 均为 0.0，性能基线数据待补充。
+
+### 相关算子
+
+- **ArgMax**：取最大值索引，分类任务中常与 CrossEntropyLoss 配合使用
+- **DynamicQuant**：动态量化算子，同涉及数值稳定性处理
+- **Gather**：按索引提取元素，交叉熵内部实现中涉及按 target 索引提取 logits

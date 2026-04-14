@@ -1,0 +1,170 @@
+# =============================================================================
+# [待废弃] 此文件即将废弃，请迁移至 cases.csv 格式
+# =============================================================================
+cases:
+# ==================== 基准场景 (对齐 shape, float16, layout=0, half) ====================
+- operator: ApplyRotaryPosEmb
+  case_id: 1
+  input_shape: [[16, 512, 16, 128], [16, 512, 16, 128], [512, 64], [512, 64]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-1, 1], [-1, 1], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-16M-对齐-layout=0-half-B,S,N,D
+- operator: ApplyRotaryPosEmb
+  case_id: 2
+  input_shape: [[7, 1021, 31, 61], [7, 1021, 31, 61], [1021, 32], [1021, 32]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-2, 2], [-2, 2], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float32-13M-质数非对齐-layout=0-half-B,S,N,D
+- operator: ApplyRotaryPosEmb
+  case_id: 3
+  input_shape: [[31, 251, 7, 257], [31, 251, 7, 257], [251, 128], [251, 128]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-3, 3], [-3, 3], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: bfloat16-14M-质数非对齐-layout=0-half-B,S,N,D
+# ==================== layout/rotaryMode 变化 ====================
+- operator: ApplyRotaryPosEmb
+  case_id: 4
+  input_shape: [[15, 16, 511, 127], [15, 16, 511, 127], [511, 64], [511, 64]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 1, rotaryMode: half}
+  value_range: [[-10, 10], [-10, 10], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-15M-质数非对齐-layout=1-half-B,N,S,D
+- operator: ApplyRotaryPosEmb
+  case_id: 5
+  input_shape: [[8, 2048, 16, 128], [8, 2048, 16, 128], [2048, 64], [2048, 64]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 0, rotaryMode: interleaved}
+  value_range: [[-100, 100], [-100, 100], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float32-33M-对齐-layout=0-interleaved-B,S,N,D
+- operator: ApplyRotaryPosEmb
+  case_id: 6
+  input_shape: [[17, 15, 1021, 61], [17, 15, 1021, 61], [1021, 32], [1021, 32]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {layout: 1, rotaryMode: interleaved}
+  value_range: [[-1000, 1000], [-1000, 1000], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: bfloat16-16M-质数非对齐-layout=1-interleaved-B,N,S,D
+# ==================== 非对齐 shape (>= 50%) ====================
+- operator: ApplyRotaryPosEmb
+  case_id: 7
+  input_shape: [[13, 511, 13, 127], [13, 511, 13, 127], [511, 64], [511, 64]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-0.1, 0.1], [-0.1, 0.1], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-10M-非对齐-layout=0-half-微小值域
+- operator: ApplyRotaryPosEmb
+  case_id: 8
+  input_shape: [[7, 1009, 7, 127], [7, 1009, 7, 127], [1009, 64], [1009, 64]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-1, 2], [-1, 2], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float32-6M-质数非对齐-layout=0-half-非对称
+- operator: ApplyRotaryPosEmb
+  case_id: 9
+  input_shape: [[17, 257, 17, 255], [17, 257, 17, 255], [257, 128], [257, 128]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {layout: 1, rotaryMode: half}
+  value_range: [[-5, 10], [-5, 10], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: bfloat16-2M-非对齐-layout=1-half-非对称
+- operator: ApplyRotaryPosEmb
+  case_id: 10
+  input_shape: [[11, 503, 11, 127], [11, 503, 11, 127], [503, 64], [503, 64]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 0, rotaryMode: interleaved}
+  value_range: [[-50, 100], [-50, 100], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-8M-质数非对齐-layout=0-interleaved
+# ==================== 多形态 shape ====================
+- operator: ApplyRotaryPosEmb
+  case_id: 11
+  input_shape: [[19, 1023, 19, 63], [19, 1023, 19, 63], [1023, 32], [1023, 32]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-65504, 65504], [-65504, 65504], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float32-24M-非对齐-float16边界值
+- operator: ApplyRotaryPosEmb
+  case_id: 12
+  input_shape: [[3, 4001, 3, 64], [3, 4001, 3, 64], [4001, 32], [4001, 32]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {layout: 1, rotaryMode: interleaved}
+  value_range: [[-88, 88], [-88, 88], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: bfloat16-2M-质数非对齐-float32边界值
+# ==================== 特殊值覆盖 ====================
+- operator: ApplyRotaryPosEmb
+  case_id: 13
+  input_shape: [[7, 1000003, 7, 3], [7, 1000003, 7, 3], [1000003, 1], [1000003, 1]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-inf, inf], [-inf, inf], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-14M-质数非对齐-inf特殊值-small_head
+- operator: ApplyRotaryPosEmb
+  case_id: 14
+  input_shape: [[3, 13, 17, 1013], [3, 13, 17, 1013], [13, 512], [13, 512]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[nan, nan], [nan, nan], [nan, nan], [nan, nan]]
+  baseline_perf_us: None
+  note: float32-1M-质数非对齐-nan特殊值
+- operator: ApplyRotaryPosEmb
+  case_id: 15
+  input_shape: [[4, 509, 4, 113], [4, 509, 4, 113], [509, 56], [509, 56]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {layout: 1, rotaryMode: half}
+  value_range: [[0, 0], [0, 0], [0, 0], [0, 0]]
+  baseline_perf_us: None
+  note: bfloat16-920K-质数非对齐-零值测试
+# ==================== 对齐/非对齐 shape 参数变化 ====================
+- operator: ApplyRotaryPosEmb
+  case_id: 16
+  input_shape: [[16, 61, 16, 1019], [16, 61, 16, 1019], [61, 512], [61, 512]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-0.5, 0.5], [-0.5, 0.5], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-16M-混合质数非对齐-layout=0-half-微小值域
+- operator: ApplyRotaryPosEmb
+  case_id: 17
+  input_shape: [[31, 1023, 31, 63], [31, 1023, 31, 63], [1023, 32], [1023, 32]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 1, rotaryMode: interleaved}
+  value_range: [[-1, 3], [-1, 3], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float32-60M-非对齐-layout=1-interleaved-非对称
+- operator: ApplyRotaryPosEmb
+  case_id: 18
+  input_shape: [[8, 255, 8, 2047], [8, 255, 8, 2047], [255, 1024], [255, 1024]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {layout: 0, rotaryMode: half}
+  value_range: [[-1000, 1000], [-1000, 1000], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: bfloat16-33M-非对齐-layout=0-half-大值域
+- operator: ApplyRotaryPosEmb
+  case_id: 19
+  input_shape: [[4, 127, 4, 509], [4, 127, 4, 509], [127, 256], [127, 256]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {layout: 1, rotaryMode: half}
+  value_range: [[-0.2, 0.2], [-0.2, 0.2], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float16-1M-质数非对齐-layout=1-half-微小值域
+- operator: ApplyRotaryPosEmb
+  case_id: 20
+  input_shape: [[7, 2047, 7, 127], [7, 2047, 7, 127], [2047, 64], [2047, 64]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {layout: 0, rotaryMode: interleaved}
+  value_range: [[-3, 6], [-3, 6], [-1, 1], [-1, 1]]
+  baseline_perf_us: None
+  note: float32-12M-质数非对齐-layout=0-interleaved-非对称中值域

@@ -1,225 +1,170 @@
+# =============================================================================
+# [待废弃] 此文件即将废弃，请迁移至 cases.csv 格式
+# =============================================================================
 cases:
+# ==================== 基准场景 (对齐 shape, float16, dim=0, reduce=update) ====================
 - operator: Scatter
   case_id: 1
-  input_shape: [[1024, 1024], [1024, 512], [1024, 512]]
+  input_shape: [[1024, 1024], [512, 1024], [512, 1024]]
   dtype: [float16, int32, float16]
-  attrs: {dim: 1, reduce: None}
-  value_range: [[-30000.0, 30000.0], [0, 1023], [-100.0, 100.0]]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-1, 1], [0, 1023], [-1, 1]]
   baseline_perf_us: 0.0
-  note: float16 大 Shape-对齐,dim=1,update
-
+  note: float16-int32-float16-1M-对齐-dim=0-update
 - operator: Scatter
   case_id: 2
-  input_shape: [[2097152], [1024], [1024]]
-  dtype: [float16, int32, float16]
+  input_shape: [[2048, 2048], [1024, 2048], [1024, 2048]]
+  dtype: [float32, int32, float32]
   attrs: {dim: 0, reduce: None}
-  value_range: [[-100.0, 100.0], [0, 2097151], [-10.0, 10.0]]
+  value_range: [[-2, 2], [0, 2047], [-2, 2]]
   baseline_perf_us: 0.0
-  note: float16 1D 长向量 - 对齐,dim=0
-
+  note: float32-int32-float32-4M-对齐-dim=0-update
 - operator: Scatter
   case_id: 3
-  input_shape: [[128, 128, 64], [128, 64, 32], [128, 64, 32]]
-  dtype: [float16, int64, float16]
-  attrs: {dim: 2, reduce: None}
-  value_range: [[-10.0, 10.0], [0, 63], [-1.0, 1.0]]
+  input_shape: [[4096, 4096], [2048, 4096], [2048, 4096]]
+  dtype: [bfloat16, int64, bfloat16]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-3, 3], [0, 4095], [-3, 3]]
   baseline_perf_us: 0.0
-  note: float16 3D 张量 - 对齐,dim=2
-
+  note: bfloat16-int64-bfloat16-16M-对齐-dim=0-update
+# ==================== dim/reduce 变化 ====================
 - operator: Scatter
   case_id: 4
-  input_shape: [[2, 8, 256, 256], [2, 8, 128, 256], [2, 8, 128, 256]]
+  input_shape: [[8192, 8192], [8192, 4096], [8192, 4096]]
   dtype: [float16, int32, float16]
-  attrs: {dim: 2, reduce: None}
-  value_range: [[-1.0, 1.0], [0, 255], [-0.5, 0.5]]
+  attrs: {dim: 1, reduce: add}
+  value_range: [[-10, 10], [0, 8191], [-5, 5]]
   baseline_perf_us: 0.0
-  note: float16 4D 张量 NCHW-dim=2
-
+  note: float16-67M-对齐-dim=1-add
 - operator: Scatter
   case_id: 5
-  input_shape: [[11, 13, 17, 64, 64], [11, 13, 17, 32, 64], [11, 13, 17, 32, 64]]
-  dtype: [float16, int64, float16]
-  attrs: {dim: 3, reduce: None}
-  value_range: [[0, 0], [0, 63], [0, 0]]
+  input_shape: [[16384, 16384], [8192, 16384], [8192, 16384]]
+  dtype: [float32, int64, float32]
+  attrs: {dim: 0, reduce: multiply}
+  value_range: [[-100, 100], [0, 16383], [-50, 50]]
   baseline_perf_us: 0.0
-  note: float16 5D 非对齐质数 -dim=3
-
+  note: float32-268M-对齐-dim=0-multiply
 - operator: Scatter
   case_id: 6
-  input_shape: [[2048, 512], [1024, 512], [1024, 512]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-3.4e+38, 3.4e+38], [0, 2047], [-100, 100]]
+  input_shape: [[16384, 65536], [8192, 65536], [8192, 65536]]
+  dtype: [int32, int32, int32]
+  attrs: {dim: 0, reduce: amax}
+  value_range: [[-2147483648, 2147483647], [0, 16383], [-10000, 10000]]
   baseline_perf_us: 0.0
-  note: float32 全范围 - 扁平,dim=0
-
+  note: int32-1G-对齐-dim=0-amax-int32全范围
+# ==================== 非对齐 shape (>= 50%) ====================
 - operator: Scatter
   case_id: 7
-  input_shape: [[1048576], [512], [512]]
-  dtype: [float32, int64, float32]
+  input_shape: [[1023, 1023], [511, 1023], [511, 1023]]
+  dtype: [bfloat16, int32, bfloat16]
   attrs: {dim: 0, reduce: None}
-  value_range: [[-100.0, 100.0], [0, 1048575], [-10.0, 10.0]]
+  value_range: [[-0.1, 0.1], [0, 1022], [-0.1, 0.1]]
   baseline_perf_us: 0.0
-  note: float32 1D 基准测试 - 对齐
-
+  note: bfloat16-1M-非对齐-dim=0-对称微小值域-2D
 - operator: Scatter
   case_id: 8
-  input_shape: [[512, 512, 4], [256, 512, 4], [256, 512, 4]]
-  dtype: [float32, int32, float32]
+  input_shape: [[1009, 1021], [505, 1021], [505, 1021]]
+  dtype: [float16, int64, float16]
   attrs: {dim: 0, reduce: None}
-  value_range: [[0.0, 1.0], [0, 511], [0.0, 1.0]]
+  value_range: [[-1, 2], [0, 1008], [-1, 2]]
   baseline_perf_us: 0.0
-  note: float32 3D 含 inf-对齐
-
+  note: float16-1M-质数非对齐-dim=0
 - operator: Scatter
   case_id: 9
-  input_shape: [[359, 359, 376], [229, 463, 467], [229, 463, 467]]
-  dtype: [float32, int64, float32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-10.0, 10.0], [0, 996], [-5.0, 5.0]]
-  baseline_perf_us: 0.0
-  note: float32 3D 质数非对齐
-
-- operator: Scatter
-  case_id: 10
-  input_shape: [[8192, 128], [4096, 128], [4096, 128]]
-  dtype: [bfloat16, int32, bfloat16]
-  attrs: {dim: 1, reduce: None}
-  value_range: [[-100.0, 100.0], [0, 8191], [-50.0, 50.0]]
-  baseline_perf_us: 0.0
-  note: bfloat16 大 Shape-超扁平
-
-- operator: Scatter
-  case_id: 11
-  input_shape: [[2, 4, 128, 1024], [2, 4, 64, 1024], [2, 4, 64, 1024]]
-  dtype: [bfloat16, int64, bfloat16]
-  attrs: {dim: 2, reduce: None}
-  value_range: [[-1.0, 1.0], [0, 127], [-0.5, 0.5]]
-  baseline_perf_us: 0.0
-  note: bfloat16 4D 张量 - 对齐
-
-- operator: Scatter
-  case_id: 12
-  input_shape: [[512, 2048], [256, 2048], [256, 2048]]
-  dtype: [int32, int32, int32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-2147483648, 2147483647], [0, 511], [-10000, 10000]]
-  baseline_perf_us: 0.0
-  note: int32 全范围 - 细长
-
-- operator: Scatter
-  case_id: 13
-  input_shape: [[2097152], [4096], [4096]]
-  dtype: [int32, int64, int32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-10000, 10000], [0, 2097151], [-1000, 1000]]
-  baseline_perf_us: 0.0
-  note: int32 1D-对齐
-
-- operator: Scatter
-  case_id: 14
-  input_shape: [[1000003], [1000], [1000]]
-  dtype: [int32, int32, int32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-100, 100], [0, 1000002], [-50, 50]]
-  baseline_perf_us: 0.0
-  note: int32 1D 质数非对齐
-
-- operator: Scatter
-  case_id: 15
-  input_shape: [[1024, 1024], [1024, 1024], [1024, 1024]]
-  dtype: [int64, int32, int64]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-10000, 10000], [0, 1023], [-1000, 1000]]
-  baseline_perf_us: 0.0
-  note: int64 大范围 - 对齐
-
-- operator: Scatter
-  case_id: 16
-  input_shape: [[3, 7, 13, 4001], [2, 7, 13, 4001], [2, 7, 13, 4001]]
-  dtype: [int64, int64, int64]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-1000, 1000], [0, 2], [-100, 100]]
-  baseline_perf_us: 0.0
-  note: int64 4D 质数非对齐
-
-- operator: Scatter
-  case_id: 17
-  input_shape: [[2048, 512], [1024, 512], [1024, 512]]
+  input_shape: [[1537, 769], [769, 769], [769, 769]]
   dtype: [float32, int32, float32]
   attrs: {dim: 0, reduce: add}
-  value_range: [[-10.0, 10.0], [0, 2047], [-1.0, 1.0]]
+  value_range: [[-5, 10], [0, 1536], [-5, 10]]
   baseline_perf_us: 0.0
-  note: float32 reduce=add 模式 - 扁平
-
+  note: float32-1M-非对齐-dim=0-add
+- operator: Scatter
+  case_id: 10
+  input_shape: [[363, 367, 373], [181, 367, 373], [181, 367, 373]]
+  dtype: [bfloat16, int32, bfloat16]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-50, 100], [0, 362], [-50, 100]]
+  baseline_perf_us: 0.0
+  note: bfloat16-50M-质数非对齐-dim=0-3D
+# ==================== 多形态 shape ====================
+- operator: Scatter
+  case_id: 11
+  input_shape: [[2049, 513], [1024, 513], [1024, 513]]
+  dtype: [float16, int32, float16]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-65504, 65504], [0, 2048], [-100, 100]]
+  baseline_perf_us: 0.0
+  note: float16-1M-非对齐-dim=0-float16边界值
+- operator: Scatter
+  case_id: 12
+  input_shape: [[3, 7, 13, 4001], [2, 7, 13, 4001], [2, 7, 13, 4001]]
+  dtype: [float32, int64, float32]
+  attrs: {dim: 0, reduce: amin}
+  value_range: [[-88, 88], [0, 2], [-88, 88]]
+  baseline_perf_us: 0.0
+  note: float32-1M-质数非对齐-dim=0-amin-4D
+- operator: Scatter
+  case_id: 13
+  input_shape: [[2, 7, 256, 251], [2, 4, 256, 251], [2, 4, 256, 251]]
+  dtype: [bfloat16, int32, bfloat16]
+  attrs: {dim: 1, reduce: None}
+  value_range: [[-0.01, 0.01], [0, 6], [-0.01, 0.01]]
+  baseline_perf_us: 0.0
+  note: bfloat16-900K-质数非对齐-dim=1-对称微小值域-4D
+# ==================== 特殊值覆盖 ====================
+- operator: Scatter
+  case_id: 14
+  input_shape: [[1048583], [1048], [1048]]
+  dtype: [float32, int32, float32]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-inf, inf], [0, 1048582], [-inf, inf]]
+  baseline_perf_us: 0.0
+  note: float32-1M-质数非对齐-dim=0-inf特殊值-1D
+- operator: Scatter
+  case_id: 15
+  input_shape: [[11, 13, 17, 67, 67], [7, 13, 17, 67, 67], [7, 13, 17, 67, 67]]
+  dtype: [float16, int64, float16]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[nan, nan], [0, 10], [nan, nan]]
+  baseline_perf_us: 0.0
+  note: float16-10M-质数非对齐-dim=0-nan特殊值-5D
+- operator: Scatter
+  case_id: 16
+  input_shape: [[3, 7, 11, 13, 1013], [2, 7, 11, 13, 1013], [2, 7, 11, 13, 1013]]
+  dtype: [float32, int32, float32]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[0, 0], [0, 2], [0, 0]]
+  baseline_perf_us: 0.0
+  note: float32-3M-质数非对齐-dim=0-零值-5D
+# ==================== 对齐/非对齐 shape 参数变化 ====================
+- operator: Scatter
+  case_id: 17
+  input_shape: [[512, 2049], [256, 2049], [256, 2049]]
+  dtype: [bfloat16, int32, bfloat16]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-0.5, 0.5], [0, 511], [-0.5, 0.5]]
+  baseline_perf_us: 0.0
+  note: bfloat16-1M-非对齐-dim=0-混合shape-微小值域
 - operator: Scatter
   case_id: 18
-  input_shape: [[512, 2048], [512, 1024], [512, 1024]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 1, reduce: add}
-  value_range: [[-100.0, 100.0], [0, 2047], [-10.0, 10.0]]
+  input_shape: [[255, 8193], [127, 8193], [127, 8193]]
+  dtype: [float16, int64, float16]
+  attrs: {dim: 0, reduce: add}
+  value_range: [[-1, 3], [0, 254], [-1, 3]]
   baseline_perf_us: 0.0
-  note: float32 reduce=add dim=1 - 细长
-
+  note: float16-2M-非对齐-dim=0-add
 - operator: Scatter
   case_id: 19
-  input_shape: [[8192, 128], [4096, 128], [4096, 128]]
+  input_shape: [[4097, 511], [2048, 511], [2048, 511]]
   dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: multiply}
-  value_range: [[-1.0, 1.0], [0, 8191], [0.5, 1.5]]
+  attrs: {dim: 0, reduce: None}
+  value_range: [[-1000, 1000], [0, 4096], [-500, 500]]
   baseline_perf_us: 0.0
-  note: float32 reduce=multiply 模式 - 超扁平
-
+  note: float32-2M-非对齐-dim=0-对称大值域
 - operator: Scatter
   case_id: 20
-  input_shape: [[128, 8192], [64, 8192], [64, 8192]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: amax}
-  value_range: [[-100.0, 100.0], [0, 127], [-50.0, 50.0]]
+  input_shape: [[2, 511, 2049], [2, 255, 2049], [2, 255, 2049]]
+  dtype: [bfloat16, int32, bfloat16]
+  attrs: {dim: 1, reduce: None}
+  value_range: [[-3, 6], [0, 510], [-3, 6]]
   baseline_perf_us: 0.0
-  note: float32 reduce=amax 模式 - 超细长
-
-- operator: Scatter
-  case_id: 21
-  input_shape: [[2049, 512], [1024, 512], [1024, 512]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: amin}
-  value_range: [[-100.0, 100.0], [0, 2048], [-50.0, 50.0]]
-  baseline_perf_us: 0.0
-  note: float32 reduce=amin 模式 - 非2幂
-
-- operator: Scatter
-  case_id: 22
-  input_shape: [[1536, 768], [768, 768], [768, 768]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[0, 0], [0, 0], [100.0, 100.0]]
-  baseline_perf_us: 0.0
-  note: 索引全 0 测试 - 非对齐
-
-- operator: Scatter
-  case_id: 23
-  input_shape: [[4096, 256], [2048, 256], [2048, 256]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-100.0, 100.0], [4095, 4095], [50.0, 50.0]]
-  baseline_perf_us: 0.0
-  note: 索引边界值测试 (最大索引) - 扁平
-
-- operator: Scatter
-  case_id: 24
-  input_shape: [[2049, 512], [1024, 512], [1024, 512]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 0, reduce: None}
-  value_range: [[-100, 100], [0, 2048], [-10, 10]]
-  baseline_perf_us: 0.0
-  note: 2D 非 2 幂对齐
-
-- operator: Scatter
-  case_id: 25
-  input_shape: [[4, 8, 256, 512], [4, 8, 256, 256], [4, 8, 256, 256]]
-  dtype: [float32, int32, float32]
-  attrs: {dim: 3, reduce: None}
-  value_range: [[-10.0, 10.0], [0, 511], [-5.0, 5.0]]
-  baseline_perf_us: 0.0
-  note: 4D-dim=3 测试
+  note: bfloat16-2M-非对齐-dim=1-非对称中值域-3D

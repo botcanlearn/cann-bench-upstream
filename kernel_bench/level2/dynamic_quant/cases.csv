@@ -1,0 +1,21 @@
+operator,case_id,input_shape,dtype,attrs,value_range,baseline_perf_us,note
+DynamicQuant,1,"[[1024, 1024]]",['float16'],"{'axis': -1, 'dst_type': 0}","[-1, 1]",0.0,float16-1M-对齐-对称小值域-axis=-1-dst_type=int8
+DynamicQuant,2,"[[2048, 2048]]",['float32'],"{'axis': -1, 'dst_type': 0}","[-2, 2]",0.0,float32-4M-对齐-对称小值域-axis=-1-dst_type=int8
+DynamicQuant,3,"[[4096, 4096]]",['bfloat16'],"{'axis': -1, 'dst_type': 0}","[-3, 3]",0.0,bfloat16-16M-对齐-对称小值域-axis=-1-dst_type=int8
+DynamicQuant,4,"[[8192, 8192]]",['float16'],"{'axis': 0, 'dst_type': 0}","[-10, 10]",0.0,float16-67M-对齐-对称中值域-axis=0-dst_type=int8
+DynamicQuant,5,"[[16384, 16384]]",['float32'],"{'axis': -1, 'dst_type': 1}","[-100, 100]",0.0,float32-268M-对齐-对称大值域-dst_type=1
+DynamicQuant,6,"[[16384, 65536]]",['bfloat16'],"{'axis': -1, 'dst_type': 2}","[-1000, 1000]",0.0,bfloat16-1G-对齐-对称大值域-dst_type=2
+DynamicQuant,7,"[[1023, 1023]]",['float16'],"{'axis': -1, 'dst_type': 0}","[-0.1, 0.1]",0.0,float16-1M-非对齐-对称微小值域-axis=-1
+DynamicQuant,8,"[[1009, 1021]]",['float32'],"{'axis': -1, 'dst_type': 0}","[-1, 2]",0.0,float32-1M-质数非对齐-非对称小值域-axis=-1
+DynamicQuant,9,"[[1537, 769]]",['bfloat16'],"{'axis': 0, 'dst_type': 0}","[-5, 10]",0.0,bfloat16-1M-非对齐-非对称中值域-axis=0
+DynamicQuant,10,"[[363, 367, 373]]",['float16'],"{'axis': -1, 'dst_type': 0}","[-50, 100]",0.0,float16-50M-质数非对齐-非对称大值域-3D
+DynamicQuant,11,"[[2049, 513]]",['float32'],"{'axis': -1, 'dst_type': 0}","[-65504, 65504]",0.0,float32-1M-非对齐-float16边界值-axis=-1
+DynamicQuant,12,"[[3, 7, 13, 4001]]",['bfloat16'],"{'axis': -1, 'dst_type': 0}","[-88, 88]",0.0,bfloat16-1M-质数非对齐-float32边界值-4D
+DynamicQuant,13,"[[2, 7, 256, 251]]",['float16'],"{'axis': -1, 'dst_type': 1}","[-0.01, 0.01]",0.0,float16-900K-质数非对齐-对称微小值域-4D-dst_type=1
+DynamicQuant,14,"[[11, 13, 17, 67, 67]]",['float32'],"{'axis': -1, 'dst_type': 0}","[-1000, 1000]",0.0,float32-10M-质数非对齐-5D
+DynamicQuant,15,[[1048583]],['bfloat16'],"{'axis': -1, 'dst_type': 0}","['-inf', 'inf']",0.0,bfloat16-1M-质数非对齐-inf特殊值-1D
+DynamicQuant,16,"[[3, 7, 11, 13, 1013]]",['float16'],"{'axis': -1, 'dst_type': 0}","['nan', 'nan']",0.0,float16-3M-质数非对齐-nan特殊值-5D
+DynamicQuant,17,"[[512, 2049]]",['float32'],"{'axis': 0, 'dst_type': 0}","[0, 0]",0.0,float32-1M-非对齐-零值-axis=0
+DynamicQuant,18,"[[255, 8193]]",['bfloat16'],"{'axis': -1, 'dst_type': 0}","[-0.5, 0.5]",0.0,bfloat16-2M-非对齐-对称微小值域-axis=-1
+DynamicQuant,19,"[[4097, 511]]",['float16'],"{'axis': -1, 'dst_type': 2}","[-1, 3]",0.0,float16-2M-非对齐-非对称小值域-dst_type=2
+DynamicQuant,20,"[[2, 511, 2049]]",['float32'],"{'axis': -1, 'dst_type': 0}","[-3, 6]",0.0,float32-2M-非对齐-非对称中值域-3D-axis=-1

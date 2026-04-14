@@ -24,9 +24,9 @@ def unique(
         inverse: 逆索引，满足 x = y[inverse] (当 return_inverse=True 时)
     """
 
-    y, inverse = torch.unique(x, return_inverse=return_inverse)
-
     if return_inverse:
+        y, inverse = torch.unique(x, return_inverse=True)
         return y, inverse
     else:
+        y = torch.unique(x, return_inverse=False)
         return y, None

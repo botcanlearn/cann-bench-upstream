@@ -1,81 +1,170 @@
+# =============================================================================
+# [待废弃] 此文件即将废弃，请迁移至 cases.csv 格式
+# =============================================================================
 cases:
+# ==================== 基准场景 (对齐 shape, float32, iou_threshold=0.5) ====================
 - operator: NMS
   case_id: 1
-  input_shape: [[1000, 4], [1000]]
-  dtype: [float16, float16]
+  input_shape: [[1024, 4], [1024]]
+  dtype: [float32, float32]
   attrs: {iou_threshold: 0.5}
-  value_range: [-1, 1]
+  value_range: [[-1, 1], [0, 1]]
   baseline_perf_us: None
-  note: 基础功能测试 - 1000框
+  note: float32-1K-对齐-iou=0.5
 - operator: NMS
   case_id: 2
-  input_shape: [[2000, 4], [2000]]
+  input_shape: [[4096, 4], [4096]]
   dtype: [float32, float32]
-  attrs: {iou_threshold: 0.5}
-  value_range: [-1, 1]
+  attrs: {iou_threshold: 0.3}
+  value_range: [[-2, 2], [0, 1]]
   baseline_perf_us: None
-  note: 大量框 - 2000框
+  note: float32-4K-对齐-iou=0.3
 - operator: NMS
   case_id: 3
-  input_shape: [[500, 4], [500]]
-  dtype: [float16, float16]
-  attrs: {iou_threshold: 0.3}
-  value_range: [-1, 1]
-  baseline_perf_us: None
-  note: 低IoU阈值
-- operator: NMS
-  case_id: 4
-  input_shape: [[500, 4], [500]]
+  input_shape: [[16384, 4], [16384]]
   dtype: [float32, float32]
   attrs: {iou_threshold: 0.7}
-  value_range: [-1, 1]
+  value_range: [[-3, 3], [0, 1]]
   baseline_perf_us: None
-  note: 高IoU阈值
+  note: float32-16K-对齐-iou=0.7
+# ==================== iou_threshold 变化 ====================
+- operator: NMS
+  case_id: 4
+  input_shape: [[65536, 4], [65536]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.1}
+  value_range: [[-10, 10], [0, 1]]
+  baseline_perf_us: None
+  note: float32-65K-对齐-iou=0.1极低阈值
 - operator: NMS
   case_id: 5
-  input_shape: [[100, 4], [100]]
-  dtype: [float16, float16]
-  attrs: {iou_threshold: 0.5}
-  value_range: [0, 0]
-  baseline_perf_us: None
-  note: 零值输入测试
-- operator: NMS
-  case_id: 6
-  input_shape: [[1500, 4], [1500]]
-  dtype: [float32, float32]
-  attrs: {iou_threshold: 0.5}
-  value_range: [-100, 100]
-  baseline_perf_us: None
-  note: 大范围坐标
-- operator: NMS
-  case_id: 7
-  input_shape: [[997, 4], [997]]
-  dtype: [float16, float16]
-  attrs: {iou_threshold: 0.5}
-  value_range: [-1, 1]
-  baseline_perf_us: None
-  note: 质数数量框
-- operator: NMS
-  case_id: 8
-  input_shape: [[50, 4], [50]]
+  input_shape: [[262144, 4], [262144]]
   dtype: [float32, float32]
   attrs: {iou_threshold: 0.9}
-  value_range: [-1, 1]
+  value_range: [[-100, 100], [0, 1]]
   baseline_perf_us: None
-  note: 极高IoU阈值
+  note: float32-262K-对齐-iou=0.9极高阈值
 - operator: NMS
-  case_id: 9
-  input_shape: [[300, 4], [300]]
-  dtype: [float16, float16]
-  attrs: {iou_threshold: 0.1}
-  value_range: [-1, 1]
+  case_id: 6
+  input_shape: [[1048576, 4], [1048576]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.05}
+  value_range: [[-1000, 1000], [0, 1]]
   baseline_perf_us: None
-  note: 极低IoU阈值
+  note: float32-1M-对齐-iou=0.05-极低阈值
+# ==================== 非对齐 shape (>= 50%) ====================
 - operator: NMS
-  case_id: 10
-  input_shape: [[500, 4], [500]]
+  case_id: 7
+  input_shape: [[1023, 4], [1023]]
   dtype: [float32, float32]
   attrs: {iou_threshold: 0.5}
-  value_range: [-inf, inf]
+  value_range: [[-0.1, 0.1], [0, 1]]
   baseline_perf_us: None
-  note: 特殊值范围
+  note: float32-1K-非对齐-iou=0.5-微小值域
+- operator: NMS
+  case_id: 8
+  input_shape: [[1009, 4], [1009]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.3}
+  value_range: [[-1, 2], [0, 1]]
+  baseline_perf_us: None
+  note: float32-1K-质数非对齐-iou=0.3-非对称
+- operator: NMS
+  case_id: 9
+  input_shape: [[1537, 4], [1537]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.7}
+  value_range: [[-5, 10], [0, 1]]
+  baseline_perf_us: None
+  note: float32-2K-非对齐-iou=0.7-非对称
+- operator: NMS
+  case_id: 10
+  input_shape: [[3001, 4], [3001]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.4}
+  value_range: [[-50, 100], [0, 1]]
+  baseline_perf_us: None
+  note: float32-3K-质数非对齐-iou=0.4
+# ==================== 多形态 shape ====================
+- operator: NMS
+  case_id: 11
+  input_shape: [[2049, 4], [2049]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [[-65504, 65504], [0, 1]]
+  baseline_perf_us: None
+  note: float32-2K-非对齐-float16边界值
+- operator: NMS
+  case_id: 12
+  input_shape: [[4001, 4], [4001]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.6}
+  value_range: [[-88, 88], [0, 1]]
+  baseline_perf_us: None
+  note: float32-4K-质数非对齐-float32边界值
+# ==================== 特殊值覆盖 ====================
+- operator: NMS
+  case_id: 13
+  input_shape: [[1000003, 4], [1000003]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [[-inf, inf], [0, 1]]
+  baseline_perf_us: None
+  note: float32-1M-质数非对齐-inf特殊值
+- operator: NMS
+  case_id: 14
+  input_shape: [[5003, 4], [5003]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [[nan, nan], [0, 1]]
+  baseline_perf_us: None
+  note: float32-5K-质数非对齐-nan特殊值
+- operator: NMS
+  case_id: 15
+  input_shape: [[8009, 4], [8009]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.5}
+  value_range: [[0, 0], [0, 0]]
+  baseline_perf_us: None
+  note: float32-8K-质数非对齐-零值
+# ==================== 对齐/非对齐 shape 参数变化 ====================
+- operator: NMS
+  case_id: 16
+  input_shape: [[511, 4], [511]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.2}
+  value_range: [[-0.5, 0.5], [0, 1]]
+  baseline_perf_us: None
+  note: float32-512-非对齐-iou=0.2-微小值域
+- operator: NMS
+  case_id: 17
+  input_shape: [[2047, 4], [2047]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.8}
+  value_range: [[-1, 3], [0, 1]]
+  baseline_perf_us: None
+  note: float32-2K-非对齐-iou=0.8-非对称
+- operator: NMS
+  case_id: 18
+  input_shape: [[4095, 4], [4095]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.35}
+  value_range: [[-1000, 1000], [0, 1]]
+  baseline_perf_us: None
+  note: float32-4K-非对齐-iou=0.35-大值域
+- operator: NMS
+  case_id: 19
+  input_shape: [[32768, 4], [32768]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.45}
+  value_range: [[-0.2, 0.2], [0, 1]]
+  baseline_perf_us: None
+  note: float32-32K-对齐-iou=0.45-微小值域
+- operator: NMS
+  case_id: 20
+  input_shape: [[7001, 4], [7001]]
+  dtype: [float32, float32]
+  attrs: {iou_threshold: 0.55}
+  value_range: [[-20, 40], [0, 1]]
+  baseline_perf_us: None
+  note: float32-7K-质数非对齐-iou=0.55-非对称中值域

@@ -1,0 +1,243 @@
+# ApplyRotaryPosEmb 算子 API 描述
+
+## 1. 算子简介
+
+对 query 和 key 执行旋转位置编码 (RoPE) 计算。
+
+**主要应用场景**：
+- 大语言模型（LLaMA、GPT-NeoX 等）中的位置编码
+- Transformer 自注意力机制中 query 和 key 的位置信息注入
+- 支持长序列外推的相对位置编码方案
+
+**算子特征**：
+- 难度等级：L4（FusedComposite）
+- 四输入（query、key、cos、sin）双输出（query_out、key_out）
+- 支持 BSND 和 BNSD 两种布局，以及 half 和 interleaved 两种旋转模式
+
+## 2. 算子定义
+
+### 数学公式
+
+$$
+rotate\_half(x) = concat(-x[head\_dim/2:], x[:head\_dim/2])
+$$
+
+$$
+y = x \cdot cos + rotate\_half(x) \cdot sin
+$$
+
+其中：
+- 在 half（连续半分）模式下，将最后一维分为前后两半进行旋转
+- 在 interleaved（交错）模式下，取偶数/奇数索引位置交错旋转
+- cos 和 sin 为预计算的位置编码，需要广播到与 query/key 匹配的 shape
+
+## 3. 接口规范
+
+### 算子原型
+
+```python
+ascend_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin, int layout, str rotaryMode) -> (Tensor query_out, Tensor key_out)
+```
+
+### 输入参数说明
+
+| 参数 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| query | Tensor | 必选 | 查询张量 |
+| key | Tensor | 必选 | 键张量 |
+| cos | Tensor | 必选 | 余弦位置编码 |
+| sin | Tensor | 必选 | 正弦位置编码 |
+| layout | int | 0 | 输入布局 (0: [B,S,N,D], 1: [B,N,S,D]) |
+| rotaryMode | string | "half" | 旋转模式 ("half": 连续半分式，"interleaved": 交错式) |
+
+### 输出
+
+| 参数 | Shape | dtype | 描述 |
+|------|-------|-------|------|
+| query_out | 与输入 query 相同 | 与输入 query 相同 | 旋转后的查询张量 |
+| key_out | 与输入 key 相同 | 与输入 key 相同 | 旋转后的键张量 |
+
+### 数据类型
+
+| 输入 dtype | 输出 dtype |
+|-----------|-----------|
+| float32 | float32 |
+| float16 | float16 |
+| bfloat16 | bfloat16 |
+
+### 规则与约束
+
+- query 和 key 的 shape 必须相同
+- query/key 为 4D 张量：layout=0 时为 (batch_size, seq_len, num_heads, head_dim)，layout=1 时为 (batch_size, num_heads, seq_len, head_dim)
+- cos/sin 为 (seq_len, head_dim/2) 或 (batch_size, seq_len, head_dim/2)
+- head_dim 必须为偶数（需要分为两半进行旋转）
+- 所有输入张量的 dtype 必须一致
+
+## 4. 精度要求
+
+计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+
+| 数据类型 | 验证方式 | rtol | atol |
+|---------|---------|------|------|
+| float16 | 相对误差 | 1e-3 | 1e-3 |
+| float32 | 相对误差 | 1e-4 | 1e-4 |
+| bfloat16 | 相对误差 | 4e-3 | 4e-3 |
+
+**对比公式**：
+
+$$
+|output - golden| \leq atol + rtol \times |golden|
+$$
+
+## 5. 标准 Golden 代码
+
+```python
+import torch
+
+"""
+ApplyRotaryPosEmb 算子 Torch Golden 参考实现
+
+对 query 和 key 执行旋转位置编码 (RoPE) 计算
+公式:
+    rotate_half(x) = concat(-x[head_dim/2:], x[:head_dim/2])
+    y = (x * cos) + (rotate_half(x) * sin)
+
+参考:
+    - RoFormer: https://arxiv.org/abs/2104.09864
+    - LLaMA: https://github.com/meta-llama/llama
+    - HuggingFace transformers: https://huggingface.co/docs/transformers/internal/rope_utils
+"""
+def apply_rotary_pos_emb(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    layout: int = 0,
+    rotaryMode: str = 'half'
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    对 query 和 key 执行旋转位置编码 (RoPE) 计算
+
+    Args:
+        query: 查询张量，shape 为 (B, S, N, D) 或 (B, N, S, D)
+        key: 键张量，shape 同 query
+        cos: 余弦位置编码，shape 为 (S, D/2) 或 (B, S, D/2)
+        sin: 正弦位置编码，shape 同 cos
+        layout: 输入布局 (0: [B,S,N,D], 1: [B,N,S,D])
+        rotaryMode: 旋转模式 ("half": 连续半分式，"interleaved": 交错式)
+
+    Returns:
+        query_out: 旋转后的查询张量
+        key_out: 旋转后的键张量
+
+    Examples:
+        >>> B, S, N, D = 2, 4, 8, 128
+        >>> query = torch.randn(B, S, N, D)
+        >>> key = torch.randn(B, S, N, D)
+        >>> cos = torch.randn(S, D // 2)
+        >>> sin = torch.randn(S, D // 2)
+        >>> q_out, k_out = apply_rotary_pos_emb(query, key, cos, sin)
+    """
+
+    def rotate_half(x: torch.Tensor, mode: str) -> torch.Tensor:
+        """
+        旋转输入张量的一半维度
+
+        Args:
+            x: 输入张量
+            mode: 旋转模式
+
+        Returns:
+            旋转后的张量
+        """
+        if mode == 'interleaved':
+            # GPT-J 风格的交错式旋转
+            x1 = x[..., ::2]       # 取偶数索引
+            x2 = x[..., 1::2]      # 取奇数索引
+            rotated = torch.stack([-x2, x1], dim=-1).flatten(-2)
+        else:
+            # LLaMA/Meta 风格的连续半分式旋转
+            half_dim = x.shape[-1] // 2
+            x1 = x[..., :half_dim]
+            x2 = x[..., half_dim:]
+            rotated = torch.cat([-x2, x1], dim=-1)
+        return rotated
+
+    def apply_rotary(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, mode: str) -> torch.Tensor:
+        """
+        对单个张量应用 RoPE
+
+        Args:
+            x: 输入张量
+            cos: 余弦编码
+            sin: 正弦编码
+            mode: 旋转模式
+
+        Returns:
+            旋转后的张量
+        """
+        # 调整 cos/sin 的 shape 以匹配输入
+        # cos/sin: (S, D/2) 或 (B, S, D/2)
+        # 需要扩展到 (B, S, N, D) 或 (B, N, S, D)
+
+        if cos.dim() == 2:
+            # cos: (S, D/2) -> 需要扩展到 (B, S, 1, D)
+            cos = cos.unsqueeze(0).unsqueeze(2)  # (1, S, 1, D/2)
+            sin = sin.unsqueeze(0).unsqueeze(2)
+        elif cos.dim() == 3:
+            # cos: (B, S, D/2) -> 需要扩展到 (B, S, 1, D)
+            cos = cos.unsqueeze(2)  # (B, S, 1, D/2)
+            sin = sin.unsqueeze(2)
+
+        # 如果 layout=1 (B,N,S,D)，需要调整
+        if layout == 1:
+            cos = cos.transpose(1, 2)  # (B, 1, S, D/2)
+            sin = sin.transpose(1, 2)
+
+        # 重复 cos/sin 到完整的 head_dim
+        cos = cos.repeat(1, 1, 1, 2) if cos.dim() == 4 else cos.repeat_interleave(2, dim=-1)
+        sin = sin.repeat(1, 1, 1, 2) if sin.dim() == 4 else sin.repeat_interleave(2, dim=-1)
+
+        # 应用 RoPE 公式
+        x_rotate = rotate_half(x, mode)
+        return (x * cos) + (x_rotate * sin)
+
+    # 对 query 和 key 分别应用 RoPE
+    query_out = apply_rotary(query, cos, sin, rotaryMode)
+    key_out = apply_rotary(key, cos, sin, rotaryMode)
+
+    return query_out, key_out
+```
+
+## 6. 额外信息
+
+### 算子调用示例
+
+```python
+import torch
+import ascend_bench
+
+B, S, N, D = 2, 128, 32, 128
+query = torch.randn(B, S, N, D, dtype=torch.float16, device="npu")
+key = torch.randn(B, S, N, D, dtype=torch.float16, device="npu")
+cos = torch.randn(S, D // 2, dtype=torch.float16, device="npu")
+sin = torch.randn(S, D // 2, dtype=torch.float16, device="npu")
+
+# BSND 布局，half 模式
+q_out, k_out = ascend_bench.apply_rotary_pos_emb(query, key, cos, sin, layout=0, rotaryMode="half")
+
+# BNSD 布局，interleaved 模式
+query_bnsd = query.transpose(1, 2)
+key_bnsd = key.transpose(1, 2)
+q_out, k_out = ascend_bench.apply_rotary_pos_emb(query_bnsd, key_bnsd, cos, sin, layout=1, rotaryMode="interleaved")
+```
+
+### 性能基线参考
+
+基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，性能基线数据尚未测量。
+
+### 相关算子
+
+- **ApplyAdamW**：同为 FusedComposite 类别的多输入融合算子
+- **DynamicQuant**：动态量化算子，同为多步融合计算
+- **Gather**：索引提取算子，在注意力机制中常与 RoPE 配合使用

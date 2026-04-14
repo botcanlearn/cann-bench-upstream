@@ -1,225 +1,170 @@
+# =============================================================================
+# [待废弃] 此文件即将废弃，请迁移至 cases.csv 格式
+# =============================================================================
 cases:
+# ==================== 基准场景 (对齐 shape, float16, reduction=mean) ====================
 - operator: CrossEntropyLoss
   case_id: 1
   input_shape: [[1024, 2048], [1024]]
   dtype: [float16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 2047]]
+  value_range: [[-1, 1], [0, 2047]]
   baseline_perf_us: 0.0
-  note: float16 基础测试 - 对齐
-
+  note: float16-int64_target-2M-对齐-对称小值域-mean
 - operator: CrossEntropyLoss
   case_id: 2
-  input_shape: [[512, 4096], [512]]
+  input_shape: [[2048, 4096], [2048]]
   dtype: [float32, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 4095]]
+  value_range: [[-2, 2], [0, 4095]]
   baseline_perf_us: 0.0
-  note: float32 基础测试 - 对齐
-
+  note: float32-int64_target-8M-对齐-对称小值域-mean
 - operator: CrossEntropyLoss
   case_id: 3
-  input_shape: [[1024, 2048], [1024]]
+  input_shape: [[4096, 8192], [4096]]
   dtype: [bfloat16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 2047]]
+  value_range: [[-3, 3], [0, 8191]]
   baseline_perf_us: 0.0
-  note: bfloat16 基础测试 - 对齐
-
+  note: bfloat16-int64_target-33M-对齐-对称小值域-mean
+# ==================== reduction 变化 ====================
 - operator: CrossEntropyLoss
   case_id: 4
-  input_shape: [[512, 2048], [512]]
-  dtype: [float32, int64]
+  input_shape: [[8192, 16384], [8192]]
+  dtype: [float16, int64]
   attrs: {reduction: sum, ignore_index: -100}
-  value_range: [[-10, 10], [0, 2047]]
+  value_range: [[-10, 10], [0, 16383]]
   baseline_perf_us: 0.0
-  note: reduction=sum 测试 - 对齐
-
+  note: float16-134M-对齐-对称中值域-sum
 - operator: CrossEntropyLoss
   case_id: 5
-  input_shape: [[2048, 512], [2048]]
+  input_shape: [[16384, 32768], [16384]]
   dtype: [float32, int64]
   attrs: {reduction: none, ignore_index: -100}
-  value_range: [[-10, 10], [0, 511]]
+  value_range: [[-100, 100], [0, 32767]]
   baseline_perf_us: 0.0
-  note: reduction=none 测试 - 扁平
-
+  note: float32-536M-对齐-对称大值域-none
+# ==================== ignore_index 变化 ====================
 - operator: CrossEntropyLoss
   case_id: 6
-  input_shape: [[512, 2048], [512]]
-  dtype: [float32, int64]
+  input_shape: [[1023, 2047], [1023]]
+  dtype: [bfloat16, int64]
   attrs: {reduction: mean, ignore_index: -1}
-  value_range: [[-10, 10], [0, 2047]]
+  value_range: [[-0.1, 0.1], [0, 2046]]
   baseline_perf_us: 0.0
-  note: ignore_index=-1 测试 - 细长
-
+  note: bfloat16-2M-非对齐-对称微小值域-ignore_index=-1
 - operator: CrossEntropyLoss
   case_id: 7
-  input_shape: [[2048, 2048], [2048]]
-  dtype: [float32, int64]
+  input_shape: [[1009, 1021], [1009]]
+  dtype: [float16, int64]
   attrs: {reduction: mean, ignore_index: 0}
-  value_range: [[-10, 10], [0, 2047]]
+  value_range: [[-1, 2], [0, 1020]]
   baseline_perf_us: 0.0
-  note: ignore_index=0 测试 - 大shape
-
+  note: float16-1M-质数非对齐-ignore_index=0
 - operator: CrossEntropyLoss
   case_id: 8
-  input_shape: [[1536, 768], [1536]]
+  input_shape: [[1537, 769], [1537]]
   dtype: [float32, int64]
   attrs: {reduction: mean, ignore_index: 100}
-  value_range: [[-10, 10], [0, 767]]
+  value_range: [[-5, 10], [0, 768]]
   baseline_perf_us: 0.0
-  note: ignore_index=100 测试 - 非对齐
-
+  note: float32-1M-非对齐-ignore_index=100
+# ==================== 多形态 shape ====================
 - operator: CrossEntropyLoss
   case_id: 9
-  input_shape: [[2097152, 2], [2097152]]
-  dtype: [float32, int64]
+  input_shape: [[363, 367, 373], [363, 367]]
+  dtype: [bfloat16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 1]]
+  value_range: [[-50, 100], [0, 372]]
   baseline_perf_us: 0.0
-  note: 二分类大 batch - 对齐
-
+  note: bfloat16-50M-质数非对齐-3D
 - operator: CrossEntropyLoss
   case_id: 10
-  input_shape: [[256, 8192], [256]]
-  dtype: [float32, int64]
+  input_shape: [[2049, 513], [2049]]
+  dtype: [float16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 8191]]
+  value_range: [[-65504, 65504], [0, 512]]
   baseline_perf_us: 0.0
-  note: 多分类 - 对齐
-
+  note: float16-1M-非对齐-float16边界值
+# ==================== 特殊值覆盖 ====================
 - operator: CrossEntropyLoss
   case_id: 11
-  input_shape: [[4096, 512], [4096]]
-  dtype: [float16, int64]
+  input_shape: [[3, 7, 13, 4001], [3, 7, 13]]
+  dtype: [float32, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 511]]
+  value_range: [[-88, 88], [0, 4000]]
   baseline_perf_us: 0.0
-  note: 小类别数大 batch - 对齐
-
+  note: float32-1M-质数非对齐-float32边界值-4D
 - operator: CrossEntropyLoss
   case_id: 12
-  input_shape: [[8192, 128], [8192]]
-  dtype: [float32, int64]
+  input_shape: [[1000003, 2], [1000003]]
+  dtype: [bfloat16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[0, 0], [0, 127]]
+  value_range: [[-inf, inf], [0, 1]]
   baseline_perf_us: 0.0
-  note: logits=0 特殊情况 - 超扁平
-
+  note: bfloat16-2M-质数非对齐-inf特殊值-二分类
 - operator: CrossEntropyLoss
   case_id: 13
-  input_shape: [[128, 8192], [128]]
-  dtype: [float32, int64]
+  input_shape: [[11, 13, 17, 67, 67], [11, 13, 17, 67]]
+  dtype: [float16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-100, 100], [0, 8191]]
+  value_range: [[nan, nan], [0, 66]]
   baseline_perf_us: 0.0
-  note: 大值范围 logits - 超细长
-
+  note: float16-10M-质数非对齐-nan特殊值-5D
 - operator: CrossEntropyLoss
   case_id: 14
-  input_shape: [[4096, 256], [4096]]
+  input_shape: [[3, 7, 11, 13, 1013], [3, 7, 11, 13]]
   dtype: [float32, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[0.0, 1.0], [0, 255]]
+  value_range: [[0, 0], [0, 1012]]
   baseline_perf_us: 0.0
-  note: inf/-inf 特殊值 - 宽扁
-
+  note: float32-3M-质数非对齐-logits=0特殊值-5D
+# ==================== 对齐/非对齐 shape 参数变化 ====================
 - operator: CrossEntropyLoss
   case_id: 15
-  input_shape: [[256, 4096], [256]]
-  dtype: [float32, int64]
+  input_shape: [[512, 2049], [512]]
+  dtype: [bfloat16, int64]
   attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[nan, nan], [0, 4095]]
+  value_range: [[-0.5, 0.5], [0, 2048]]
   baseline_perf_us: 0.0
-  note: nan 特殊值 - 细长
-
+  note: bfloat16-1M-非对齐-对称微小值域
 - operator: CrossEntropyLoss
   case_id: 16
-  input_shape: [[1000003, 3], [1000003]]
-  dtype: [float32, int64]
-  attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 2]]
-  baseline_perf_us: 0.0
-  note: 1D 质数非对齐
-
-- operator: CrossEntropyLoss
-  case_id: 17
-  input_shape: [[997, 2003], [997]]
-  dtype: [float32, int64]
-  attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 2002]]
-  baseline_perf_us: 0.0
-  note: 2D 质数非对齐
-
-- operator: CrossEntropyLoss
-  case_id: 18
-  input_shape: [[1009, 1013], [1009]]
-  dtype: [float16, int64]
-  attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 1012]]
-  baseline_perf_us: 0.0
-  note: 2D 质数非对齐
-
-- operator: CrossEntropyLoss
-  case_id: 19
-  input_shape: [[127, 1024, 13], [127, 13]]
-  dtype: [float32, int64]
-  attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 1023]]
-  baseline_perf_us: 0.0
-  note: 3D 混合非对齐
-
-- operator: CrossEntropyLoss
-  case_id: 20
-  input_shape: [[883, 56568], [883]]
-  dtype: [float16, int64]
-  attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 56567]]
-  baseline_perf_us: 0.0
-  note: 超大类别数 - 对齐
-
-- operator: CrossEntropyLoss
-  case_id: 21
-  input_shape: [[1048576, 4], [1048576]]
-  dtype: [float32, int64]
-  attrs: {reduction: mean, ignore_index: -100}
-  value_range: [[-10, 10], [0, 3]]
-  baseline_perf_us: 0.0
-  note: 超大 batch+ 小类别 - 对齐
-
-- operator: CrossEntropyLoss
-  case_id: 22
-  input_shape: [[2048, 1024], [2048]]
-  dtype: [bfloat16, int64]
-  attrs: {reduction: mean, ignore_index: 10}
-  value_range: [[-10, 10], [0, 1023]]
-  baseline_perf_us: 0.0
-  note: bfloat16+ignore_index=10 - 扁平
-
-- operator: CrossEntropyLoss
-  case_id: 23
-  input_shape: [[512, 4096], [512]]
+  input_shape: [[255, 8193], [255]]
   dtype: [float16, int64]
   attrs: {reduction: sum, ignore_index: 50}
-  value_range: [[-50, 50], [0, 4095]]
+  value_range: [[-1, 3], [0, 8192]]
   baseline_perf_us: 0.0
-  note: 综合测试：float16+sum+ignore_index=50 - 对齐
-
+  note: float16-2M-非对齐-ignore_index=50-sum
 - operator: CrossEntropyLoss
-  case_id: 24
-  input_shape: [[256, 8000], [256]]
+  case_id: 17
+  input_shape: [[4097, 511], [4097]]
   dtype: [float32, int64]
   attrs: {reduction: none, ignore_index: -1}
-  value_range: [[-20, 20], [0, 7999]]
+  value_range: [[-1000, 1000], [0, 510]]
   baseline_perf_us: 0.0
-  note: 综合测试：float32+none+ignore_index=-1 - 对齐
-
+  note: float32-2M-非对齐-对称大值域-none
 - operator: CrossEntropyLoss
-  case_id: 25
-  input_shape: [[1013, 2027], [1013]]
+  case_id: 18
+  input_shape: [[2, 511, 2049], [2, 511]]
   dtype: [bfloat16, int64]
-  attrs: {reduction: mean, ignore_index: 100}
-  value_range: [[-100, 100], [0, 2026]]
+  attrs: {reduction: mean, ignore_index: -100}
+  value_range: [[-0.2, 0.2], [0, 2048]]
   baseline_perf_us: 0.0
-  note: 综合测试：全质数非对齐
+  note: bfloat16-2M-非对齐-对称微小值域-3D
+- operator: CrossEntropyLoss
+  case_id: 19
+  input_shape: [[4, 255, 2049], [4, 255]]
+  dtype: [float16, int64]
+  attrs: {reduction: mean, ignore_index: 10}
+  value_range: [[-3, 6], [0, 2048]]
+  baseline_perf_us: 0.0
+  note: float16-2M-非对齐-ignore_index=10
+- operator: CrossEntropyLoss
+  case_id: 20
+  input_shape: [[2, 3, 17, 1024, 101], [2, 3, 17, 1024]]
+  dtype: [float32, int64]
+  attrs: {reduction: mean, ignore_index: -100}
+  value_range: [[-20, 40], [0, 100]]
+  baseline_perf_us: 0.0
+  note: float32-10M-非对齐-非对称大值域-5D

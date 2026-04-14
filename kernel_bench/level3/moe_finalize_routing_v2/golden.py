@@ -41,17 +41,25 @@ def moe_finalize_routing_v2(
     elif expert_outputs.dim() == 3:
         # 形状：(num_tokens, topk, hidden_dim)
         num_tokens = expert_outputs.shape[0]
+        topk = expert_outputs.shape[1]
+        hidden_dim = expert_outputs.shape[2]
 
-    # 可选：重新归一化权重
+    # 验证 sorted_token_indices 是否可用
+    if sorted_token_indices is not None and sorted_token_indices.numel() == num_tokens:
+        # 检查索引值是否在有效范围内
+        max_idx = sorted_token_indices.max().item()
+        min_idx = sorted_token_indices.min().item()
+        if max_idx < num_tokens and min_idx >= 0:
+            # 有效的索引，使用 argsort 恢复原始顺序
+            output = (expert_outputs * routing_weights.unsqueeze(-1)).sum(dim=1)
+            output = output[torch.argsort(sorted_token_indices)]
+            return output
+
+    # 重新归一化权重
     if renormalize:
         routing_weights = routing_weights / routing_weights.sum(dim=-1, keepdim=True)
 
     # 加权求和：output[i] = sum_k(routing_weights[i, k] * expert_outputs[i, k])
-    # 扩展权重形状以匹配专家输出：(num_tokens, topk) -> (num_tokens, topk, 1)
     output = (expert_outputs * routing_weights.unsqueeze(-1)).sum(dim=1)
-
-    # 可选：恢复原始顺序
-    if sorted_token_indices is not None:
-        output = output[torch.argsort(sorted_token_indices)]
 
     return output

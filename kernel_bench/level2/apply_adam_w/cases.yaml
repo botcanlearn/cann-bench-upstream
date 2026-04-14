@@ -1,259 +1,169 @@
+# =============================================================================
+# [待废弃] 此文件即将废弃，请迁移至 cases.csv 格式
+# =============================================================================
 cases:
+# ==================== 基准场景 (对齐 shape, float32, 默认超参数) ====================
 - operator: ApplyAdamW
   case_id: 1
-  input_shape: [[1048576], [1048576], [1048576], [1048576]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08,
-    maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 93.8
-  note: 1D float32 基准
-
-- operator: ApplyAdamW
-  case_id: 2
   input_shape: [[1024, 1024], [1024, 1024], [1024, 1024], [1024, 1024]]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08,
-    maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, maximize: false}
+  value_range: [[-1, 1], [-1, 1], [-0.1, 0.1], [0, 0.1]]
   baseline_perf_us: 94.35
-  note: 2D float32 对齐
-
+  note: float32-1M-对齐-对称小值域-lr=0.001
+- operator: ApplyAdamW
+  case_id: 2
+  input_shape: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08, maximize: false}
+  value_range: [[-2, 2], [-2, 2], [-0.2, 0.2], [0, 0.2]]
+  baseline_perf_us: 84.61
+  note: float16-4M-对齐-对称小值域-lr=0.01
 - operator: ApplyAdamW
   case_id: 3
-  input_shape: [[512, 512, 4], [512, 512, 4], [512, 512, 4], [512, 512, 4]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.5, epsilon: 
-      1e-08, maximize: false}
-  value_range: [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-  baseline_perf_us: 96.61
-  note: 3D float32 零值测试
-
+  input_shape: [[4096, 4096], [4096, 4096], [4096, 4096], [4096, 4096]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1e-08, maximize: false}
+  value_range: [[-3, 3], [-3, 3], [-0.3, 0.3], [0, 0.3]]
+  baseline_perf_us: 113.3
+  note: bfloat16-16M-对齐-对称小值域-lr=0.0001
+# ==================== lr/weight_decay 参数变化 ====================
 - operator: ApplyAdamW
   case_id: 4
-  input_shape: [[2097152], [2097152], [2097152], [2097152]]
-  dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08,
-    maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 94.12
-  note: 1D float16 基准
-
+  input_shape: [[8192, 8192], [8192, 8192], [8192, 8192], [8192, 8192]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, maximize: false}
+  value_range: [[-10, 10], [-10, 10], [-1, 1], [0, 1]]
+  baseline_perf_us: 94.31
+  note: float32-67M-对齐-对称中值域-lr=0.1
 - operator: ApplyAdamW
   case_id: 5
-  input_shape: [[512, 512, 4], [512, 512, 4], [512, 512, 4], [512, 512, 4]]
+  input_shape: [[16384, 16384], [16384, 16384], [16384, 16384], [16384, 16384]]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[-0.1, 0.1], [-0.1, 0.1], [-0.01, 0.01], [0.0, 0.01]]
-  baseline_perf_us: 84.61
-  note: 3D float16 小范围
-
+  attrs: {lr: 1.0, beta1: 0.9, beta2: 0.999, weight_decay: 1.0, epsilon: 1e-08, maximize: false}
+  value_range: [[-100, 100], [-100, 100], [-10, 10], [0, 10]]
+  baseline_perf_us: 85.12
+  note: float16-268M-对齐-对称大值域-lr=1.0-wd=1.0
+# ==================== 非对齐 shape (>= 50%) ====================
 - operator: ApplyAdamW
   case_id: 6
-  input_shape: [[23, 47, 200, 200], [23, 47, 200, 200], [23, 47, 200, 200], [23, 
-        47, 200, 200]]
-  dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.5, epsilon: 
-      1e-08, maximize: false}
-  value_range: [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-  baseline_perf_us: 1558.59
-  note: 4D float16 NCHW 零值
-
+  input_shape: [[1023, 1023], [1023, 1023], [1023, 1023], [1023, 1023]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08, maximize: false}
+  value_range: [[-0.1, 0.1], [-0.1, 0.1], [-0.01, 0.01], [0, 0.01]]
+  baseline_perf_us: 103.36
+  note: bfloat16-1M-非对齐-对称微小值域
 - operator: ApplyAdamW
   case_id: 7
-  input_shape: [[1000003], [1000003], [1000003], [1000003]]
-  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08,
-    maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
-  baseline_perf_us: 103.36
-  note: 1D bfloat16 非对齐
-
+  input_shape: [[1009, 1021], [1009, 1021], [1009, 1021], [1009, 1021]]
+  dtype: [float32, float32, float32, float32]
+  attrs: {lr: 0.5, beta1: 0.5, beta2: 0.9, weight_decay: 0.5, epsilon: 1e-08, maximize: false}
+  value_range: [[-1, 2], [-1, 2], [-0.1, 0.1], [0, 0.1]]
+  baseline_perf_us: 92.08
+  note: float32-1M-质数非对齐-低动量-beta1=0.5
 - operator: ApplyAdamW
   case_id: 8
-  input_shape: [[2048, 512], [2048, 512], [2048, 512], [2048, 512]]
-  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08,
-    maximize: false}
-  value_range: [[-0.1, 0.1], [-0.1, 0.1], [-0.01, 0.01], [0.0, 0.01]]
-  baseline_perf_us: 113.3
-  note: 2D bfloat16 对齐 - 扁平
-
+  input_shape: [[1537, 769], [1537, 769], [1537, 769], [1537, 769]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {lr: 0.0001, beta1: 0.99, beta2: 0.99, weight_decay: 0.0, epsilon: 1e-06, maximize: false}
+  value_range: [[-5, 10], [-5, 10], [-0.5, 0.5], [0, 0.5]]
+  baseline_perf_us: 106.24
+  note: float16-1M-非对齐-高动量-beta1=0.99
 - operator: ApplyAdamW
   case_id: 9
-  input_shape: [[16, 128, 128, 64], [16, 128, 128, 64], [16, 128, 128, 64], [16, 
-        128, 128, 64]]
+  input_shape: [[363, 367, 373], [363, 367, 373], [363, 367, 373], [363, 367, 373]]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.5, epsilon: 
-      1e-08, maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
+  attrs: {lr: 0.01, beta1: 0.0, beta2: 0.5, weight_decay: 0.5, epsilon: 1e-08, maximize: false}
+  value_range: [[-50, 100], [-50, 100], [-5, 5], [0, 5]]
   baseline_perf_us: 675.89
-  note: 4D bfloat16 NCHW
-
+  note: bfloat16-50M-质数非对齐-无动量-beta1=0.0-3D
 - operator: ApplyAdamW
   case_id: 10
-  input_shape: [[2048, 512], [2048, 512], [2048, 512], [2048, 512]]
+  input_shape: [[2049, 513], [2049, 513], [2049, 513], [2049, 513]]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 
-      1e-08, maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 93.01
-  note: 小学习率 0.0001 - 扁平
-
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08, maximize: true}
+  value_range: [[-65504, 65504], [-65504, 65504], [-6550, 6550], [0, 6550]]
+  baseline_perf_us: 98.0
+  note: float32-1M-非对齐-maximize=true
+# ==================== 特殊值覆盖 ====================
 - operator: ApplyAdamW
   case_id: 11
-  input_shape: [[512, 2048], [512, 2048], [512, 2048], [512, 2048]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 94.31
-  note: 大学习率 0.1 - 细长
-
+  input_shape: [[3, 7, 13, 4001], [3, 7, 13, 4001], [3, 7, 13, 4001], [3, 7, 13, 4001]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, maximize: false}
+  value_range: [[-88, 88], [-88, 88], [-8.8, 8.8], [0, 8.8]]
+  baseline_perf_us: 134.76
+  note: float16-1M-质数非对齐-float32边界值-4D
 - operator: ApplyAdamW
   case_id: 12
-  input_shape: [[1536, 768], [1536, 768], [1536, 768], [1536, 768]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 1.0, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 98.0
-  note: 极大学习率 1.0 - 非对齐
-
+  input_shape: [[1000003], [1000003], [1000003], [1000003]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, maximize: false}
+  value_range: [[-inf, inf], [-inf, inf], [-1, 1], [0, 1]]
+  baseline_perf_us: 103.36
+  note: bfloat16-1M-质数非对齐-inf特殊值-1D
 - operator: ApplyAdamW
   case_id: 13
-  input_shape: [[23, 47, 200, 200], [23, 47, 200, 200], [23, 47, 200, 200], [23, 
-        47, 200, 200]]
+  input_shape: [[11, 13, 17, 67, 67], [11, 13, 17, 67, 67], [11, 13, 17, 67, 67], [11, 13, 17, 67, 67]]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.99, beta2: 0.99, weight_decay: 0.0, epsilon: 1e-06,
-    maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
-  baseline_perf_us: 3797.58
-  note: 高动量 beta1=0.99, beta2=0.99
-
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 0.0, maximize: false}
+  value_range: [[nan, nan], [nan, nan], [nan, nan], [nan, nan]]
+  baseline_perf_us: 53.08
+  note: float32-10M-质数非对齐-epsilon=0.0-nan特殊值-5D
 - operator: ApplyAdamW
   case_id: 14
-  input_shape: [[256, 256, 16], [256, 256, 16], [256, 256, 16], [256, 256, 16]]
-  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.1, beta1: 0.5, beta2: 0.9, weight_decay: 0.1, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-  baseline_perf_us: 112.08
-  note: 低 beta1=0.5 中等 beta2=0.9
-
+  input_shape: [[3, 7, 11, 13, 1013], [3, 7, 11, 13, 1013], [3, 7, 11, 13, 1013], [3, 7, 11, 13, 1013]]
+  dtype: [float16, float16, float16, float16]
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, maximize: false}
+  value_range: [[0, 0], [0, 0], [0, 0], [0, 0]]
+  baseline_perf_us: 106.24
+  note: float16-3M-质数非对齐-零值-5D
+# ==================== 多形态 shape 参数变化 ====================
 - operator: ApplyAdamW
   case_id: 15
-  input_shape: [[8192, 128], [8192, 128], [8192, 128], [8192, 128]]
+  input_shape: [[512, 2049], [512, 2049], [512, 2049], [512, 2049]]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.0, beta2: 0.5, weight_decay: 0.5, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 107.21
-  note: 无动量 beta1=0.0, beta2=0.5 - 超扁平
-
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-04, maximize: false}
+  value_range: [[-0.5, 0.5], [-0.5, 0.5], [-0.05, 0.05], [0, 0.05]]
+  baseline_perf_us: 182.69
+  note: float32-1M-非对齐-大epsilon=1e-04
 - operator: ApplyAdamW
   case_id: 16
-  input_shape: [[4, 8, 16, 16, 8, 4], [4, 8, 16, 16, 8, 4], [4, 8, 16, 16, 8, 4],
-    [4, 8, 16, 16, 8, 4]]
+  input_shape: [[255, 8193], [255, 8193], [255, 8193], [255, 8193]]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.5, beta1: 0.9, beta2: 0.999, weight_decay: 1.0, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
+  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08, maximize: false}
+  value_range: [[-1, 3], [-1, 3], [-0.1, 0.1], [0, 0.1]]
   baseline_perf_us: 73.58
-  note: 大权重衰减 1.0
-
+  note: bfloat16-2M-非对齐-非对称小值域
 - operator: ApplyAdamW
   case_id: 17
-  input_shape: [[4096, 256], [4096, 256], [4096, 256], [4096, 256]]
+  input_shape: [[4097, 511], [4097, 511], [4097, 511], [4097, 511]]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08,
-    maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
+  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1e-08, maximize: false}
+  value_range: [[-1000, 1000], [-1000, 1000], [-100, 100], [0, 100]]
   baseline_perf_us: 85.12
-  note: 小权重衰减 0.01 - 宽扁
-
+  note: float16-2M-非对齐-对称大值域
 - operator: ApplyAdamW
   case_id: 18
-  input_shape: [[256, 4096], [256, 4096], [256, 4096], [256, 4096]]
+  input_shape: [[2, 511, 2049], [2, 511, 2049], [2, 511, 2049], [2, 511, 2049]]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-06,
-    maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
-  baseline_perf_us: 94.68
-  note: 中等 epsilon 1e-06 - 细长
-
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-08, maximize: false}
+  value_range: [[-0.2, 0.2], [-0.2, 0.2], [-0.02, 0.02], [0, 0.02]]
+  baseline_perf_us: 93.01
+  note: float32-2M-非对齐-对称微小值域-3D
 - operator: ApplyAdamW
   case_id: 19
-  input_shape: [[2048, 2048], [2048, 2048], [2048, 2048], [2048, 2048]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1e-04,
-    maximize: false}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
-  baseline_perf_us: 182.69
-  note: 大 epsilon 1e-04 - 大shape
-
+  input_shape: [[4, 255, 2049], [4, 255, 2049], [4, 255, 2049], [4, 255, 2049]]
+  dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
+  attrs: {lr: 0.0001, beta1: 0.99, beta2: 0.99, weight_decay: 0.5, epsilon: 1e-06, maximize: false}
+  value_range: [[-3, 6], [-3, 6], [-0.3, 0.3], [0, 0.3]]
+  baseline_perf_us: 112.08
+  note: bfloat16-2M-非对齐-非对称中值域-3D
 - operator: ApplyAdamW
   case_id: 20
-  input_shape: [[503, 503, 4], [503, 503, 4], [503, 503, 4], [503, 503, 4]]
+  input_shape: [[2, 3, 17, 1024, 101], [2, 3, 17, 1024, 101], [2, 3, 17, 1024, 101], [2, 3, 17, 1024, 101]]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.0001, beta1: 0.5, beta2: 0.9, weight_decay: 0.5, epsilon: 0.0, 
-      maximize: true}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 92.08
-  note: 无 epsilon 0.0 + maximize=true
-
-- operator: ApplyAdamW
-  case_id: 21
-  input_shape: [[7, 13, 31, 31, 31], [7, 13, 31, 31, 31], [7, 13, 31, 31, 31], [
-        7, 13, 31, 31, 31]]
-  dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.01, beta1: 0.5, beta2: 0.9, weight_decay: 0.1, epsilon: 1e-08, 
-      maximize: true}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 106.24
-  note: maximize=true 最大化模式
-
-- operator: ApplyAdamW
-  case_id: 22
-  input_shape: [[8, 16, 32, 32, 32], [8, 16, 32, 32, 32], [8, 16, 32, 32, 32], [
-        8, 16, 32, 32, 32]]
-  dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.5, beta1: 0.9, beta2: 0.999, weight_decay: 1.0, epsilon: 1e-08, 
-      maximize: false}
-  value_range: [[-10.0, 10.0], [-10.0, 10.0], [-1.0, 1.0], [0.0, 1.0]]
-  baseline_perf_us: 134.76
-  note: 5D float16 对齐
-
-- operator: ApplyAdamW
-  case_id: 23
-  input_shape: [[2, 4, 8, 16, 8, 4, 2], [2, 4, 8, 16, 8, 4, 2], [2, 4, 8, 16, 8, 
-        4, 2], [2, 4, 8, 16, 8, 4, 2]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 1.0, beta1: 0.99, beta2: 0.99, weight_decay: 0.0, epsilon: 1e-06, 
-      maximize: false}
-  value_range: [[-0.1, 0.1], [-0.1, 0.1], [-0.01, 0.01], [0.0, 0.01]]
-  baseline_perf_us: 53.08
-  note: 7D float32 对齐
-
-- operator: ApplyAdamW
-  case_id: 24
-  input_shape: [[2, 4, 8, 8, 4, 4, 2, 2], [2, 4, 8, 8, 4, 4, 2, 2], [2, 4, 8, 8, 
-        4, 4, 2, 2], [2, 4, 8, 8, 4, 4, 2, 2]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.99, beta2: 0.99, weight_decay: 0.01, epsilon: 
-      1e-06, maximize: false}
-  value_range: [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-  baseline_perf_us: 37.74
-  note: 8D float32 零值
-
-- operator: ApplyAdamW
-  case_id: 25
-  input_shape: [[61, 3, 503, 503], [61, 3, 503, 503], [61, 3, 503, 503], [61, 3, 
-        503, 503]]
-  dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.1, beta1: 0.0, beta2: 0.5, weight_decay: 1.0, epsilon: 1e-08, 
-      maximize: true}
-  value_range: [[-1.0, 1.0], [-1.0, 1.0], [-0.1, 0.1], [0.0, 0.1]]
-  baseline_perf_us: 0.0
-  note: 4D 质数非对齐 + 极端超参数 + maximize
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1e-08, maximize: true}
+  value_range: [[-20, 40], [-20, 40], [-2, 2], [0, 2]]
+  baseline_perf_us: 94.68
+  note: float32-10M-非对齐-非对称大值域-5D-maximize=true

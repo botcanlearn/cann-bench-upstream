@@ -1,0 +1,21 @@
+operator,case_id,input_shape,dtype,attrs,value_range,baseline_perf_us,note
+ResizeBilinearV2,1,"[[2, 8, 512, 512]]",['float16'],"{'output_size': [256, 256], 'align_corners': False}","[-1, 1]",0,float16-8M-对齐-下采样2x-对称小值域
+ResizeBilinearV2,2,"[[1, 16, 1024, 1024]]",['float32'],"{'output_size': [512, 512], 'align_corners': False}","[-2, 2]",0,float32-16M-对齐-下采样2x-对称小值域
+ResizeBilinearV2,3,"[[4, 4, 2048, 2048]]",['bfloat16'],"{'output_size': [1024, 1024], 'align_corners': False}","[-3, 3]",0,bfloat16-32M-对齐-下采样2x-对称小值域
+ResizeBilinearV2,4,"[[1, 32, 256, 256]]",['float16'],"{'output_size': [512, 512], 'align_corners': True}","[-10, 10]",0,float16-2M-对齐-上采样2x-对齐角点-对称中值域
+ResizeBilinearV2,5,"[[8, 8, 128, 128]]",['float32'],"{'output_size': [1024, 1024], 'align_corners': True}","[-100, 100]",0,float32-8M-对齐-上采样8x-对齐角点-对称大值域
+ResizeBilinearV2,6,"[[1, 23, 1023, 1023]]",['bfloat16'],"{'output_size': [511, 511], 'align_corners': False}","[-0.1, 0.1]",0,bfloat16-23M-非对齐-下采样-对称微小值域
+ResizeBilinearV2,7,"[[1, 13, 1009, 1021]]",['float16'],"{'output_size': [256, 256], 'align_corners': False}","[-1, 2]",0,float16-13M-质数非对齐-下采样-非对称小值域
+ResizeBilinearV2,8,"[[3, 7, 1537, 769]]",['float32'],"{'output_size': [128, 128], 'align_corners': True}","[-5, 10]",0,float32-24M-非对齐-下采样-对齐角点-非对称中值域
+ResizeBilinearV2,9,"[[1, 363, 367, 373]]",['bfloat16'],"{'output_size': [64, 64], 'align_corners': False}","[-50, 100]",0,bfloat16-49M-质数非对齐-上采样-非对称大值域
+ResizeBilinearV2,10,"[[2, 16, 2049, 513]]",['float16'],"{'output_size': [1024, 256], 'align_corners': False}","[-65504, 65504]",0,float16-33M-非对齐-float16边界值
+ResizeBilinearV2,11,"[[1, 3, 1025, 1025]]",['float32'],"{'output_size': [512, 512], 'align_corners': False}","[-88, 88]",0,float32-3M-质数非对齐-float32边界值
+ResizeBilinearV2,12,"[[4, 4, 2003, 2003]]",['bfloat16'],"{'output_size': [1001, 1001], 'align_corners': False}","['-inf', 'inf']",0,bfloat16-32M-质数非对齐-inf特殊值
+ResizeBilinearV2,13,"[[11, 13, 17, 67]]",['float32'],"{'output_size': [256, 256], 'align_corners': False}","['nan', 'nan']",0,float32-163K-质数非对齐-nan特殊值-4D
+ResizeBilinearV2,14,"[[3, 7, 13, 4001]]",['float16'],"{'output_size': [128, 128], 'align_corners': False}","[0, 0]",0,float16-1M-质数非对齐-零值-4D
+ResizeBilinearV2,15,"[[1, 64, 512, 2049]]",['float32'],"{'output_size': [256, 1024], 'align_corners': False}","[-0.5, 0.5]",0,float32-65M-非对齐-对称微小值域-扁平C
+ResizeBilinearV2,16,"[[127, 1, 1024, 1024]]",['bfloat16'],"{'output_size': [512, 512], 'align_corners': True}","[-1, 3]",0,bfloat16-130M-非对齐-非对称小值域-对齐角点
+ResizeBilinearV2,17,"[[1, 8, 4097, 511]]",['float16'],"{'output_size': [2048, 256], 'align_corners': False}","[-1000, 1000]",0,float16-16M-非对齐-对称大值域
+ResizeBilinearV2,18,"[[1, 3, 1023, 2049]]",['float32'],"{'output_size': [511, 1024], 'align_corners': False}","[-0.2, 0.2]",0,float32-6M-非对齐-对称微小值域
+ResizeBilinearV2,19,"[[7, 16, 511, 1023]]",['bfloat16'],"{'output_size': [256, 512], 'align_corners': False}","[-3, 6]",0,bfloat16-58M-非对齐-非对称中值域
+ResizeBilinearV2,20,"[[1, 1, 1000003]]",['float32'],"{'output_size': [500001], 'align_corners': False}","[-20, 40]",0,float32-1M-质数非对齐-非对称大值域-3D

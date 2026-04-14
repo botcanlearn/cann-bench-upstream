@@ -1,4 +1,4 @@
-# 算子代码生成评测方案V0.5.0
+# 算子代码生成评测方案V1.0.0
 
 ## 1. 方案概述
 
@@ -8,13 +8,15 @@
 
 | 版本 | 主要变更 |
 |------|----------|
-| V0.1.0 | 初版，建立基础评测框架 |
+| V1.0.0 | 初版，建立基础评测框架|
 | V0.2.0 | 引入Pass@k评测、算子分类体系、三大维度评测 |
-| V0.3.0 | 完善算子复杂度定义、细化评分评级映射、规范用例输入输出 |
-| V0.4.0 | 引入AI模型集成、增加评测报告结构、优化评测流程 |
+| V0.3.0 | 完善算子复杂度定义、规范用例输入输出 |
+| V0.4.0 | 增加评测报告结构、优化评测流程 |
 | V0.5.0 | 规范算子交付件要求 |
+| V0.6.0 | 调整算子，明确第一版55个算子|
 ---
 
+### 1.2 演进
 Bench会持续更新版本
 
 ## 2. 评测体系架构
@@ -159,7 +161,7 @@ y = ascend_bench.exp(x, -1.0, 1.0, 0.0)
 - MM量化：QuantBatchMatmul、WeightQuantBatchMatmul
 - 卷积：Conv2D、DepthwiseConv2D
 - 卷积反向：Conv3DBackpropFilter
-- VV融合：AddRmsNormDynamicQuant、DequantSwigluQuant、mhc_sinkhorn、engram
+- VV融合：AddRmsNormDynamicQuant、DequantSwigluQuant、MhcSinkhorn、Engram
  
 
 **L4算子**
@@ -179,30 +181,16 @@ y = ascend_bench.exp(x, -1.0, 1.0, 0.0)
 **算子评测用例设计原则**
 - 用例生成：输入输出（Shape维度/数据类型）、属性泛化、取值范围泛化、特殊值，常见网络Shape/网络Shape泛化
 
-**算子用例定义文件：** operator-exp.yaml
+**算子用例定义文件：** cases.csv
 ```
-  - operator: Exp
-    case_id: 1
-    input_shape: [[1024, 1, 3840]]
-    dtype: [float16]
-    attrs: {base: -1.0, scale: 1.0, shift: 0.0}
-    value_range: [-1, 1.0]
-    baseline_perf_us: 10
-    note: 大Shape
-
-  - operator: Exp
-    case_id: 2
-    input_shape: [[11, 13, 7, 3, 29]]
-    dtype: [float16]
-    attrs: {base: 2.0, scale: 1.0, shift: 0.0}
-    value_range: [0.0, 10.0]
-    baseline_perf_us: 12
-    note: 非对齐场景
+operator,case_id,input_shape,dtype,attrs,value_range,baseline_perf_us,note
+Exp,1,"[[1024, 1024]]",['float16'],"{'base': -1.0, 'scale': 1.0, 'shift': 0.0}","[-1, 1]",21.05,float16-1M-对齐-对称小值域-base=-1
+Exp,2,"[[2048, 2048]]",['float32'],"{'base': -1.0, 'scale': 1.5, 'shift': 0.0}","[-2, 2]",18.27,float32-4M-对齐-对称小值域-scale=1.5
 ```
 
 ### 3.3 Golden脚本
 
-根据operator-info.yaml中算子的定义，提供相应算子的Golden脚本
+根据proto.yaml中算子的定义，提供相应算子的Golden脚本
 
 实现方式：基于pytorch官方API
 ```python
@@ -283,7 +271,7 @@ Pass@1 = c / n
 |output - golden| ≤ (atol + rtol × |golden|)
 ```
 
->精度新标准：参考[算子精度标准](https://gitcode.com/cann/opbase/pull/270)
+>精度新标准：参考[算子精度标准](https://gitcode.com/cann/opbase/tree/master/docs/zh/ops_precision_standard)
 
 ### 4.5 性能评测
 

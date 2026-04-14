@@ -1,0 +1,146 @@
+# Maximum 算子 API 描述
+
+## 1. 算子简介
+
+返回两个输入张量中的最大值，支持广播。
+
+**主要应用场景**：
+- ReLU 激活函数实现（与零取最大值）
+- 梯度裁剪中的阈值限制
+- 多路径特征融合中的逐元素最大值选择
+- 数值计算中的下界约束
+
+**算子特征**：
+- 难度等级：L2（Broadcast）
+- 双输入单输出，逐元素运算，输入支持广播
+
+## 2. 算子定义
+
+### 数学公式
+
+$$
+y = \max(x_1, x_2)
+$$
+
+逐元素比较 $x_1$ 和 $x_2$，返回每个位置上的较大值。
+
+## 3. 接口规范
+
+### 算子原型
+
+```python
+ascend_bench.maximum(Tensor x1, Tensor x2) -> Tensor y
+```
+
+### 输入参数说明
+
+| 参数 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| x1 | Tensor | 必选 | 第1个输入张量 |
+| x2 | Tensor | 必选 | 第2个输入张量 |
+
+### 输出
+
+| 参数 | Shape | dtype | 描述 |
+|------|-------|-------|------|
+| y | 广播后的 shape | 与输入一致 | 输出张量，两个输入中的最大值 |
+
+### 数据类型
+
+| 输入 dtype | 输出 dtype |
+|-----------|-----------|
+| bfloat16 | bfloat16 |
+| float16 | float16 |
+| float32 | float32 |
+| int8 | int8 |
+| int32 | int32 |
+| int64 | int64 |
+
+### 规则与约束
+
+- 两个输入张量的 shape 需满足广播规则，输出 shape 为广播后的 shape
+- 两个输入张量的 dtype 必须一致
+- 支持浮点类型（bfloat16、float16、float32）、整数类型（int8、int32、int64）及布尔类型
+- 当输入包含 NaN 时，行为与 PyTorch torch.maximum 一致（NaN 会传播）
+- 当输入包含 inf/-inf 时，按正常数值比较规则处理
+
+## 4. 精度要求
+
+计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+
+| 数据类型 | 验证方式 | rtol | atol |
+|---------|---------|------|------|
+| float16 | 相对误差 | 1e-3 | 1e-3 |
+| float32 | 相对误差 | 1e-4 | 1e-4 |
+| bfloat16 | 相对误差 | 4e-3 | 4e-3 |
+| int/uint/bool | 完全相等 | — | — |
+
+**对比公式**：
+
+$$
+|output - golden| \leq atol + rtol \times |golden|
+$$
+
+## 5. 标准 Golden 代码
+
+```python
+import torch
+
+"""
+Maximum算子Torch Golden参考实现
+
+返回两个输入张量中的最大值，支持广播
+公式: y = max(x1, x2)
+"""
+def maximum(
+    x1: torch.Tensor, x2: torch.Tensor
+) -> torch.Tensor:
+    """
+    返回两个输入张量中的最大值，支持广播
+    
+    公式: y = max(x1, x2)
+    
+    Args:
+        x1: 第1个输入张量
+        x2: 第2个输入张量
+    
+    Returns:
+        输出张量，两个输入中的最大值
+    """
+
+    y = torch.maximum(x1, x2)
+    return y
+```
+
+## 6. 额外信息
+
+### 算子调用示例
+
+```python
+import torch
+import ascend_bench
+
+x1 = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
+x2 = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
+y = ascend_bench.maximum(x1, x2)
+
+# 广播场景：标量广播
+x1 = torch.randn(2, 8, 256, 256, dtype=torch.float32, device="npu")
+x2 = torch.tensor([0.0], dtype=torch.float32, device="npu")
+y = ascend_bench.maximum(x1, x2)  # 类似 ReLU
+
+# 整数类型
+x1 = torch.randint(-128, 127, (512, 512, 4), dtype=torch.int8, device="npu")
+x2 = torch.randint(-10, 10, (1, 512, 1), dtype=torch.int8, device="npu")
+y = ascend_bench.maximum(x1, x2)
+```
+
+### 性能基线参考
+
+基于 cases.yaml 中 20 个测试用例，NPU 上的基准 kernel 执行时间范围为 3~288 微秒。
+
+### 相关算子
+
+- **Gcd**：同为双输入广播算子，计算最大公约数
+- **CrossEntropyLoss**：内部涉及最大值计算（log-sum-exp 技巧）
+- **ArgMax**：求最大值索引，与 Maximum 在语义上相关
