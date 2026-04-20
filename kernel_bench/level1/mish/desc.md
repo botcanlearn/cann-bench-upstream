@@ -35,7 +35,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.mish(Tensor x) -> Tensor y
+cann_bench.mish(Tensor x) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -110,10 +110,10 @@ def mish(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
-y = ascend_bench.mish(x)
+y = cann_bench.mish(x)
 ```
 
 ### 性能基线参考

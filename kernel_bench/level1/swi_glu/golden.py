@@ -4,7 +4,7 @@ import torch
 SwiGLU算子Torch Golden参考实现
 
 采用Swish作为激活函数的GLU变体，输入在第-1维拆分成x0和x1两部分
-公式: y = x0 * (x0 * sigmoid(beta * x0)) * x1
+公式: y = swish(x0) * x1 = x0 * sigmoid(beta * x0) * x1
 """
 def swi_glu(
     x: torch.Tensor, scalarValue: float
@@ -12,7 +12,7 @@ def swi_glu(
     """
     采用Swish作为激活函数的GLU变体，输入在第-1维拆分成x0和x1两部分
 
-    公式: y = x0 * (x0 * sigmoid(beta * x0)) * x1
+    公式: y = swish(x0) * x1 = x0 * sigmoid(beta * x0) * x1
 
     Args:
         x: 输入张量，会在-1维拆分成x0和x1

@@ -26,7 +26,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.masked_scale(Tensor x, Tensor mask, float scale) -> Tensor y
+cann_bench.masked_scale(Tensor x, Tensor mask, float scale) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -107,11 +107,11 @@ def masked_scale(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
 mask = torch.randint(0, 2, (1024, 1024), dtype=torch.int8, device="npu")
-y = ascend_bench.masked_scale(x, mask, scale=2.0)
+y = cann_bench.masked_scale(x, mask, scale=2.0)
 ```
 
 ### 性能基线参考

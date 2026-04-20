@@ -101,8 +101,8 @@ def apply_rotary_pos_emb(
             sin = sin.transpose(1, 2)
 
         # 重复 cos/sin 到完整的 head_dim
-        cos = cos.repeat(1, 1, 1, 2) if cos.dim() == 4 else cos.repeat_interleave(2, dim=-1)
-        sin = sin.repeat(1, 1, 1, 2) if sin.dim() == 4 else sin.repeat_interleave(2, dim=-1)
+        cos = cos.repeat(1, 1, 1, 2)
+        sin = sin.repeat(1, 1, 1, 2)
 
         # 应用 RoPE 公式
         x_rotate = rotate_half(x, mode)

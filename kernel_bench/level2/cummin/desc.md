@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.cummin(Tensor x, int axis) -> Tensor y
+cann_bench.cummin(Tensor x, int dim) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -37,7 +37,7 @@ ascend_bench.cummin(Tensor x, int axis) -> Tensor y
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入张量 |
-| axis | int64 | 必选 | 计算累积最小值的轴 |
+| dim | int64 | 必选 | 计算累积最小值的轴 |
 
 ### 输出
 
@@ -57,7 +57,7 @@ ascend_bench.cummin(Tensor x, int axis) -> Tensor y
 ### 规则与约束
 
 - 输出 shape 与输入 shape 完全一致
-- `axis` 支持负数索引（如 -1 表示最后一维）
+- `dim` 支持负数索引（如 -1 表示最后一维）
 - 累积操作沿指定轴按顺序从前到后进行
 - 输出 dtype 与输入 dtype 一致
 
@@ -115,13 +115,13 @@ def cummin(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
-y = ascend_bench.cummin(x, axis=-1)   # 沿最后一维计算累积最小值
+y = cann_bench.cummin(x, dim=-1)   # 沿最后一维计算累积最小值
 
 x = torch.randn(2, 8, 256, 256, dtype=torch.float16, device="npu")
-y = ascend_bench.cummin(x, axis=2)    # 沿第 2 维计算累积最小值
+y = cann_bench.cummin(x, dim=2)    # 沿第 2 维计算累积最小值
 ```
 
 ### 性能基线参考

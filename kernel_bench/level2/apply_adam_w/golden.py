@@ -10,6 +10,9 @@ AdamW 优化器实现，解耦权重衰减
     m_hat = m_t / (1 - beta1^t)
     v_hat = v_t / (1 - beta2^t)
     var_t = var_{t-1} - lr * (m_hat / (sqrt(v_hat) + eps) + weight_decay * var_{t-1})
+
+注：API 不含 timestep 参数，按单步独立调用处理，t=1，
+故 bias_correction = 1 - beta^1 = 1 - beta
 """
 def apply_adam_w(
     var: torch.Tensor,
@@ -46,13 +49,9 @@ def apply_adam_w(
     # 更新二阶矩
     v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
-    # 计算偏差修正的一阶矩和二阶矩
-    # 注意：实际使用时需要传入 timestep t，这里简化处理
-    bias_correction1 = 1 - beta1
-    bias_correction2 = 1 - beta2
-
-    m_hat = m / bias_correction1
-    v_hat = v / bias_correction2
+    # 偏差修正（t=1）
+    m_hat = m / (1 - beta1)
+    v_hat = v / (1 - beta2)
 
     # 计算更新量
     update = m_hat / (v_hat.sqrt() + epsilon)
@@ -62,9 +61,5 @@ def apply_adam_w(
         update.add_(var, alpha=weight_decay)
 
     # 应用更新
-    if maximize:
-        y = var + lr * update
-    else:
-        y = var - lr * update
-
+    y = var + lr * update if maximize else var - lr * update
     return y

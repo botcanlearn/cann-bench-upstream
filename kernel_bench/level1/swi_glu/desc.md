@@ -37,7 +37,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.swi_glu(Tensor x, float scalarValue) -> Tensor y
+cann_bench.swi_glu(Tensor x, float scalarValue) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -92,7 +92,7 @@ def swi_glu(
     """
     采用Swish作为激活函数的GLU变体，输入在第-1维拆分成x0和x1两部分
 
-    公式: y = x0 * (x0 * sigmoid(beta * x0)) * x1
+    公式: y = swish(x0) * x1 = x0 * sigmoid(beta * x0) * x1
 
     Args:
         x: 输入张量，会在-1维拆分成x0和x1
@@ -123,10 +123,10 @@ def swi_glu(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
-y = ascend_bench.swi_glu(x, scalarValue=1.0)
+y = cann_bench.swi_glu(x, scalarValue=1.0)
 ```
 
 ### 性能基线参考

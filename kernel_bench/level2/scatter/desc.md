@@ -43,7 +43,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.scatter(Tensor data, int dim, Tensor indices, Tensor updates, str? reduce=None) -> Tensor y
+cann_bench.scatter(Tensor data, int dim, Tensor indices, Tensor updates, str? reduce=None) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -143,18 +143,18 @@ def scatter(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 data = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
 indices = torch.randint(0, 1024, (1024, 512), dtype=torch.int32, device="npu")
 updates = torch.randn(1024, 512, dtype=torch.float16, device="npu")
-y = ascend_bench.scatter(data, 1, indices, updates)  # dim=1, 直接更新
+y = cann_bench.scatter(data, 1, indices, updates)  # dim=1, 直接更新
 
 # reduce=add 模式
 data = torch.randn(2048, 512, dtype=torch.float32, device="npu")
 indices = torch.randint(0, 2048, (1024, 512), dtype=torch.int32, device="npu")
 updates = torch.randn(1024, 512, dtype=torch.float32, device="npu")
-y = ascend_bench.scatter(data, 0, indices, updates, reduce="add")
+y = cann_bench.scatter(data, 0, indices, updates, reduce="add")
 ```
 
 ### 性能基线参考

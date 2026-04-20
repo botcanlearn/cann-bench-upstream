@@ -28,7 +28,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.gcd(Tensor x1, Tensor x2) -> Tensor y
+cann_bench.gcd(Tensor x1, Tensor x2) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -57,7 +57,7 @@ ascend_bench.gcd(Tensor x1, Tensor x2) -> Tensor y
 - 两个输入张量的 shape 需满足广播规则，输出 shape 为广播后的 shape
 - 两个输入张量的 dtype 必须一致
 - 仅支持整数类型（int16、int32、int64）
-- Golden 实现中会先将输入转换为 int64 再计算，最终返回 int64 类型结果
+- Golden 实现使用 `torch.gcd` 直接计算，输出 dtype 与输入保持一致
 
 ## 4. 精度要求
 
@@ -97,18 +97,10 @@ def gcd(
         x2: 第2个输入张量
 
     Returns:
-        输出张量，最大公约数
+        输出张量，最大公约数（dtype 与输入一致）
     """
 
-    # 转换为int64
-    x1_int = x1.to(torch.int64)
-    x2_int = x2.to(torch.int64)
-
-    # torch.gcd不支持自动broadcast，需要手动处理
-    # 先进行broadcast，再计算gcd
-    x1_broadcast, x2_broadcast = torch.broadcast_tensors(x1_int, x2_int)
-
-    y = torch.gcd(x1_broadcast, x2_broadcast)
+    y = torch.gcd(x1, x2)
     return y
 ```
 
@@ -118,16 +110,16 @@ def gcd(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x1 = torch.randint(-1000, 1000, (1024, 1024), dtype=torch.int32, device="npu")
 x2 = torch.randint(-1000, 1000, (1024, 1024), dtype=torch.int32, device="npu")
-y = ascend_bench.gcd(x1, x2)
+y = cann_bench.gcd(x1, x2)
 
 # 广播场景
 x1 = torch.randint(-100, 100, (2048, 512), dtype=torch.int16, device="npu")
 x2 = torch.randint(-10, 10, (1, 512), dtype=torch.int16, device="npu")
-y = ascend_bench.gcd(x1, x2)
+y = cann_bench.gcd(x1, x2)
 ```
 
 ### 性能基线参考

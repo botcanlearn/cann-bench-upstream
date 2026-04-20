@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.maximum(Tensor x1, Tensor x2) -> Tensor y
+cann_bench.maximum(Tensor x1, Tensor x2) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -118,21 +118,21 @@ def maximum(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x1 = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
 x2 = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y = ascend_bench.maximum(x1, x2)
+y = cann_bench.maximum(x1, x2)
 
 # 广播场景：标量广播
 x1 = torch.randn(2, 8, 256, 256, dtype=torch.float32, device="npu")
 x2 = torch.tensor([0.0], dtype=torch.float32, device="npu")
-y = ascend_bench.maximum(x1, x2)  # 类似 ReLU
+y = cann_bench.maximum(x1, x2)  # 类似 ReLU
 
 # 整数类型
 x1 = torch.randint(-128, 127, (512, 512, 4), dtype=torch.int8, device="npu")
 x2 = torch.randint(-10, 10, (1, 512, 1), dtype=torch.int8, device="npu")
-y = ascend_bench.maximum(x1, x2)
+y = cann_bench.maximum(x1, x2)
 ```
 
 ### 性能基线参考

@@ -28,7 +28,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.foreach_addcdiv_scalar(Tensor[] x1, Tensor[] x2, Tensor[] x3, float scalar) -> Tensor[] y
+cann_bench.foreach_addcdiv_scalar(Tensor[] x1, Tensor[] x2, Tensor[] x3, float scalar) -> Tensor[] y
 ```
 
 ### 输入参数说明
@@ -111,12 +111,12 @@ def foreach_addcdiv_scalar(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x1 = [torch.randn(1024, 1024, dtype=torch.float32, device="npu")]
 x2 = [torch.randn(1024, 1024, dtype=torch.float32, device="npu")]
 x3 = [torch.rand(1024, 1024, dtype=torch.float32, device="npu") + 0.1]  # 避免除零
-y = ascend_bench.foreach_addcdiv_scalar(x1, x2, x3, scalar=1.0)
+y = cann_bench.foreach_addcdiv_scalar(x1, x2, x3, scalar=1.0)
 ```
 
 ### 性能基线参考

@@ -1,15 +1,15 @@
 operator,case_id,input_shape,dtype,attrs,value_range,baseline_perf_us,note
-ForeachNorm,1,"[[[1024, 1024]]]",['float16'],{'scalar': 1.0},"[-1.0, 1.0]",7.16,float16-L1范数-1M-对齐-对称小值域
-ForeachNorm,2,"[[[2048, 2048]]]",['float32'],{'scalar': 1.0},"[-2.0, 2.0]",6.93,float32-L1范数-4M-对齐-对称小值域
+ForeachNorm,1,"[[[1024, 1024], [1024, 1024]]]",['float16'],{'scalar': 1.0},"[-1.0, 1.0]",14.32,float16-L1范数-TensorList_len=2-对齐-对称小值域
+ForeachNorm,2,"[[[2048, 2048], [2048, 2048], [2048, 2048]]]",['float32'],{'scalar': 1.0},"[-2.0, 2.0]",20.79,float32-L1范数-TensorList_len=3-对齐-对称小值域
 ForeachNorm,3,"[[[4096, 4096]]]",['bfloat16'],{'scalar': 1.0},"[-3.0, 3.0]",7.04,bfloat16-L1范数-16M-对齐-对称小值域
 ForeachNorm,4,"[[[8192, 8192]]]",['float16'],{'scalar': 2.0},"[-10.0, 10.0]",15.92,float16-L2范数-67M-对齐-对称中值域
-ForeachNorm,5,"[[[16384, 16384]]]",['float32'],{'scalar': 3.0},"[-100.0, 100.0]",15.13,float32-L3范数-268M-对齐-对称大值域
+ForeachNorm,5,"[[[16384, 16384], [16384, 16384], [16384, 16384]]]",['float32'],{'scalar': 3.0},"[-100.0, 100.0]",45.39,float32-L3范数-TensorList_len=3-对齐-对称大值域
 ForeachNorm,6,"[[[1023, 1023]]]",['bfloat16'],{'scalar': 0.5},"[-0.1, 0.1]",16.23,bfloat16-L0.5范数-1M-非对齐-对称微小值域
 ForeachNorm,7,"[[[1009, 1021]]]",['float16'],{'scalar': 1.5},"[-1.0, 2.0]",15.92,float16-L1.5范数-1M-质数非对齐-非对称小值域
 ForeachNorm,8,"[[[1537, 769]]]",['float32'],{'scalar': 4.0},"[-5.0, 10.0]",9.27,float32-L4范数-1M-非对齐-非对称中值域
-ForeachNorm,9,"[[[363, 367, 373]]]",['bfloat16'],{'scalar': 2.0},"[-50.0, 100.0]",91.2,bfloat16-L2范数-50M-质数非对齐-非对称大值域-3D
+ForeachNorm,9,"[[[363, 367, 373], [363, 367, 373]]]",['bfloat16'],{'scalar': 2.0},"[-50.0, 100.0]",182.4,bfloat16-L2范数-TensorList_len=2-质数非对齐-非对称大值域-3D
 ForeachNorm,10,"[[[2049, 513]]]",['float16'],{'scalar': 1.0},"[-65504.0, 65504.0]",7.16,float16-L1范数-1M-非对齐-float16边界值
-ForeachNorm,11,"[[[3, 7, 13, 4001]]]",['float32'],{'scalar': 2.0},"[-88.0, 88.0]",7.29,float32-L2范数-1M-质数非对齐-float32边界值-4D
+ForeachNorm,11,"[[[3, 7, 13, 4001], [3, 7, 13, 4001], [3, 7, 13, 4001]]]",['float32'],{'scalar': 2.0},"[-88.0, 88.0]",21.87,float32-L2范数-TensorList_len=3-质数非对齐-float32边界值-4D
 ForeachNorm,12,[[[1000003]]],['bfloat16'],{'scalar': 'inf'},"['-inf', 'inf']",6.71,bfloat16-Linf范数-1M-质数非对齐-inf特殊值-1D
 ForeachNorm,13,"[[[11, 13, 17, 67, 67]]]",['float32'],{'scalar': 'nan'},"['nan', 'nan']",74.46,float32-Lnan范数-10M-质数非对齐-nan特殊值-5D
 ForeachNorm,14,"[[[3, 7, 11, 13, 1009]]]",['float16'],{'scalar': 2.0},"[0, 0]",16.15,float16-L2范数-3M-质数非对齐-零值-5D

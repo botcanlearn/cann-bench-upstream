@@ -36,7 +36,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin, int layout, str rotaryMode) -> (Tensor query_out, Tensor key_out)
+cann_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin, int layout, str rotaryMode) -> (Tensor query_out, Tensor key_out)
 ```
 
 ### 输入参数说明
@@ -215,7 +215,7 @@ def apply_rotary_pos_emb(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 B, S, N, D = 2, 128, 32, 128
 query = torch.randn(B, S, N, D, dtype=torch.float16, device="npu")
@@ -224,12 +224,12 @@ cos = torch.randn(S, D // 2, dtype=torch.float16, device="npu")
 sin = torch.randn(S, D // 2, dtype=torch.float16, device="npu")
 
 # BSND 布局，half 模式
-q_out, k_out = ascend_bench.apply_rotary_pos_emb(query, key, cos, sin, layout=0, rotaryMode="half")
+q_out, k_out = cann_bench.apply_rotary_pos_emb(query, key, cos, sin, layout=0, rotaryMode="half")
 
 # BNSD 布局，interleaved 模式
 query_bnsd = query.transpose(1, 2)
 key_bnsd = key.transpose(1, 2)
-q_out, k_out = ascend_bench.apply_rotary_pos_emb(query_bnsd, key_bnsd, cos, sin, layout=1, rotaryMode="interleaved")
+q_out, k_out = cann_bench.apply_rotary_pos_emb(query_bnsd, key_bnsd, cos, sin, layout=1, rotaryMode="interleaved")
 ```
 
 ### 性能基线参考

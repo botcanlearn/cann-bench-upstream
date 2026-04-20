@@ -49,7 +49,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.apply_adam_w(Tensor var, Tensor grad, Tensor m, Tensor v, float lr, float beta1, float beta2, float weight_decay, float epsilon=1e-8, bool maximize=false) -> Tensor y
+cann_bench.apply_adam_w(Tensor var, Tensor grad, Tensor m, Tensor v, float lr, float beta1, float beta2, float weight_decay, float epsilon=1e-8, bool maximize=false) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -187,15 +187,15 @@ def apply_adam_w(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 var = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
 grad = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
 m = torch.zeros(1024, 1024, dtype=torch.float32, device="npu")
 v = torch.zeros(1024, 1024, dtype=torch.float32, device="npu")
 
-y = ascend_bench.apply_adam_w(var, grad, m, v, lr=0.001, beta1=0.9, beta2=0.999, weight_decay=0.01)
-y = ascend_bench.apply_adam_w(var, grad, m, v, lr=0.001, beta1=0.9, beta2=0.999, weight_decay=0.0, epsilon=1e-8, maximize=True)
+y = cann_bench.apply_adam_w(var, grad, m, v, lr=0.001, beta1=0.9, beta2=0.999, weight_decay=0.01)
+y = cann_bench.apply_adam_w(var, grad, m, v, lr=0.001, beta1=0.9, beta2=0.999, weight_decay=0.0, epsilon=1e-8, maximize=True)
 ```
 
 ### 性能基线参考

@@ -2,7 +2,7 @@ operator:
   name: SwiGLU
   category: Elementwise
   difficulty: L1
-  formula: y = x0 * (x0 * sigmoid(beta * x0)) * x1
+  formula: y = (x0 * sigmoid(beta * x0)) * x1
   description: 采用Swish作为激活函数的GLU变体，输入在第-1维拆分成x0和x1两部分
   shape_support: 单输入，在-1维拆分为两部分
   attrs:

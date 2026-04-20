@@ -43,7 +43,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.gelu(Tensor x, str approximate="none") -> Tensor y
+cann_bench.gelu(Tensor x, str approximate="none") -> Tensor y
 ```
 
 ### 输入参数说明
@@ -121,11 +121,11 @@ def gelu(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
-y = ascend_bench.gelu(x)                          # 精确模式
-y = ascend_bench.gelu(x, approximate="tanh")       # tanh 近似模式
+y = cann_bench.gelu(x)                          # 精确模式
+y = cann_bench.gelu(x, approximate="tanh")       # tanh 近似模式
 ```
 
 ### 性能基线参考

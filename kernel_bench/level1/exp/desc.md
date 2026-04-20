@@ -43,7 +43,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.exp(Tensor x, float base, float scale, float shift) -> Tensor y
+cann_bench.exp(Tensor x, float base, float scale, float shift) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -127,12 +127,12 @@ def exp(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y = ascend_bench.exp(x, base=-1.0, scale=1.0, shift=0.0)  # 自然指数 e^x
-y = ascend_bench.exp(x, base=2.0, scale=1.0, shift=0.0)   # 2^x
-y = ascend_bench.exp(x, base=-1.0, scale=2.0, shift=1.0)  # e^(2x+1)
+y = cann_bench.exp(x, base=-1.0, scale=1.0, shift=0.0)  # 自然指数 e^x
+y = cann_bench.exp(x, base=2.0, scale=1.0, shift=0.0)   # 2^x
+y = cann_bench.exp(x, base=-1.0, scale=2.0, shift=1.0)  # e^(2x+1)
 ```
 
 ### 性能基线参考

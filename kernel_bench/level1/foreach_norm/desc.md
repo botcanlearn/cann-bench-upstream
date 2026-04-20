@@ -38,7 +38,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.foreach_norm(Tensor[] x, float scalar) -> Tensor y
+cann_bench.foreach_norm(Tensor[] x, float scalar) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -117,11 +117,11 @@ def foreach_norm(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 t1 = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
 t2 = torch.randn(2048, 512, dtype=torch.float32, device="npu")
-y = ascend_bench.foreach_norm([t1, t2], scalar=2.0)  # L2 范数
+y = cann_bench.foreach_norm([t1, t2], scalar=2.0)  # L2 范数
 ```
 
 ### 性能基线参考

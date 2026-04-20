@@ -6,7 +6,7 @@ operator:
   description: 计算输入张量中的累积最小值
   shape_support: 输入输出shape相同
   attrs:
-  - name: axis
+  - name: dim
     type: int64
     description: 计算累积最小值的轴
     required: true
@@ -26,4 +26,4 @@ operator:
     - float32
     - int32
     - bfloat16
-  schema: cummin(Tensor x, int axis) -> Tensor y
+  schema: cummin(Tensor x, int dim) -> Tensor y

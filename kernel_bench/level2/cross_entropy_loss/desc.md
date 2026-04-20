@@ -47,7 +47,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.cross_entropy_loss(Tensor x, Tensor target, str reduction, int ignore_index) -> Tensor loss
+cann_bench.cross_entropy_loss(Tensor x, Tensor target, str reduction, int ignore_index) -> Tensor loss
 ```
 
 ### 输入参数说明
@@ -178,14 +178,14 @@ def cross_entropy_loss(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 2048, dtype=torch.float32, device="npu")
 target = torch.randint(0, 2048, (1024,), dtype=torch.int64, device="npu")
 
-loss = ascend_bench.cross_entropy_loss(x, target, reduction="mean", ignore_index=-100)
-loss = ascend_bench.cross_entropy_loss(x, target, reduction="sum", ignore_index=-100)
-loss = ascend_bench.cross_entropy_loss(x, target, reduction="none", ignore_index=-100)
+loss = cann_bench.cross_entropy_loss(x, target, reduction="mean", ignore_index=-100)
+loss = cann_bench.cross_entropy_loss(x, target, reduction="sum", ignore_index=-100)
+loss = cann_bench.cross_entropy_loss(x, target, reduction="none", ignore_index=-100)
 ```
 
 ### 性能基线参考

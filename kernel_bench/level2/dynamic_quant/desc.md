@@ -36,7 +36,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.dynamic_quant(Tensor x, int axis=-1, int dst_type=0) -> Tensor y
+cann_bench.dynamic_quant(Tensor x, int axis=-1, int dst_type=0) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -125,16 +125,16 @@ def dynamic_quant(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y = ascend_bench.dynamic_quant(x, axis=-1, dst_type=0)   # 沿最后一维 per-token 量化
+y = cann_bench.dynamic_quant(x, axis=-1, dst_type=0)   # 沿最后一维 per-token 量化
 
 x = torch.randn(2, 8, 256, 256, dtype=torch.bfloat16, device="npu")
-y = ascend_bench.dynamic_quant(x, axis=-1, dst_type=0)   # 4D 张量 per-token 量化
+y = cann_bench.dynamic_quant(x, axis=-1, dst_type=0)   # 4D 张量 per-token 量化
 
 x = torch.randn(512, 2048, dtype=torch.float16, device="npu")
-y = ascend_bench.dynamic_quant(x, axis=0, dst_type=0)    # 沿第 0 维 per-channel 量化
+y = cann_bench.dynamic_quant(x, axis=0, dst_type=0)    # 沿第 0 维 per-channel 量化
 ```
 
 ### 性能基线参考

@@ -34,7 +34,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.grid_sampler_3d(Tensor x, Tensor grid, str interpolation_mode="bilinear", str padding_mode="zeros", bool align_corners=false) -> Tensor y
+cann_bench.grid_sampler_3d(Tensor x, Tensor grid, str interpolation_mode="bilinear", str padding_mode="zeros", bool align_corners=false) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -126,14 +126,14 @@ def grid_sampler_3d(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(2, 32, 16, 64, 64, dtype=torch.float16, device="npu")
 grid = torch.rand(2, 8, 8, 8, 3, dtype=torch.float16, device="npu") * 2 - 1  # 归一化到 [-1, 1]
-y = ascend_bench.grid_sampler_3d(x, grid, interpolation_mode="bilinear", padding_mode="zeros", align_corners=True)
+y = cann_bench.grid_sampler_3d(x, grid, interpolation_mode="bilinear", padding_mode="zeros", align_corners=True)
 
 # nearest 插值 + border 填充
-y = ascend_bench.grid_sampler_3d(x, grid, interpolation_mode="nearest", padding_mode="border", align_corners=False)
+y = cann_bench.grid_sampler_3d(x, grid, interpolation_mode="nearest", padding_mode="border", align_corners=False)
 ```
 
 ### 性能基线参考

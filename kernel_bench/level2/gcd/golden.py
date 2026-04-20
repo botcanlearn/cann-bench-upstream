@@ -19,16 +19,8 @@ def gcd(
         x2: 第2个输入张量
 
     Returns:
-        输出张量，最大公约数
+        输出张量，最大公约数（dtype 与输入一致）
     """
 
-    # 转换为int64
-    x1_int = x1.to(torch.int64)
-    x2_int = x2.to(torch.int64)
-
-    # torch.gcd不支持自动broadcast，需要手动处理
-    # 先进行broadcast，再计算gcd
-    x1_broadcast, x2_broadcast = torch.broadcast_tensors(x1_int, x2_int)
-
-    y = torch.gcd(x1_broadcast, x2_broadcast)
+    y = torch.gcd(x1, x2)
     return y

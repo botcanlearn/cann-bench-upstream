@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.unsorted_segment_sum(Tensor data, Tensor segment_ids, int num_segments) -> Tensor y
+cann_bench.unsorted_segment_sum(Tensor data, Tensor segment_ids, int num_segments) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -121,21 +121,21 @@ def unsorted_segment_sum(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 data = torch.randn(1048576, dtype=torch.float16, device="npu")
 segment_ids = torch.randint(0, 1024, (1048576,), dtype=torch.int32, device="npu")
-y = ascend_bench.unsorted_segment_sum(data, segment_ids, num_segments=1024)
+y = cann_bench.unsorted_segment_sum(data, segment_ids, num_segments=1024)
 
 # 2D 数据按段求和
 data = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
 segment_ids = torch.randint(0, 256, (1024,), dtype=torch.int32, device="npu")
-y = ascend_bench.unsorted_segment_sum(data, segment_ids, num_segments=256)
+y = cann_bench.unsorted_segment_sum(data, segment_ids, num_segments=256)
 
 # int32 数据类型
 data = torch.randint(-1000, 1000, (2048, 512), dtype=torch.int32, device="npu")
 segment_ids = torch.randint(0, 512, (2048,), dtype=torch.int32, device="npu")
-y = ascend_bench.unsorted_segment_sum(data, segment_ids, num_segments=512)
+y = cann_bench.unsorted_segment_sum(data, segment_ids, num_segments=512)
 ```
 
 ### 性能基线参考

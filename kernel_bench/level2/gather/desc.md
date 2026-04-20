@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.gather(Tensor x, Tensor index, int batch_dims) -> Tensor y
+cann_bench.gather(Tensor x, Tensor index, int batch_dims) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -122,15 +122,15 @@ def gather(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float32, device="npu")
 index = torch.randint(0, 1024, (512, 1024), dtype=torch.int32, device="npu")
-y = ascend_bench.gather(x, index, batch_dims=0)   # 沿第 0 维 gather
+y = cann_bench.gather(x, index, batch_dims=0)   # 沿第 0 维 gather
 
 x = torch.randn(128, 128, 64, dtype=torch.float16, device="npu")
 index = torch.randint(0, 128, (128, 64, 64), dtype=torch.int64, device="npu")
-y = ascend_bench.gather(x, index, batch_dims=1)   # batch_dims=1
+y = cann_bench.gather(x, index, batch_dims=1)   # batch_dims=1
 ```
 
 ### 性能基线参考

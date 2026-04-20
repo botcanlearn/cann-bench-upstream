@@ -38,7 +38,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.resize_bilinear_v2(Tensor x, int[] output_size, bool align_corners=false, float[] scale_factor=null) -> Tensor y
+cann_bench.resize_bilinear_v2(Tensor x, int[] output_size, bool align_corners=false, float[] scale_factor=null) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -136,16 +136,16 @@ def resize_bilinear_v2(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(2, 8, 512, 512, dtype=torch.float16, device="npu")
-y = ascend_bench.resize_bilinear_v2(x, output_size=[256, 256], align_corners=False)  # 下采样
+y = cann_bench.resize_bilinear_v2(x, output_size=[256, 256], align_corners=False)  # 下采样
 
 x = torch.randn(4, 4, 64, 64, dtype=torch.float32, device="npu")
-y = ascend_bench.resize_bilinear_v2(x, output_size=[128, 128], align_corners=True)  # 上采样 + 角点对齐
+y = cann_bench.resize_bilinear_v2(x, output_size=[128, 128], align_corners=True)  # 上采样 + 角点对齐
 
 x = torch.randn(1, 16, 128, 128, dtype=torch.bfloat16, device="npu")
-y = ascend_bench.resize_bilinear_v2(x, output_size=[256, 256])  # bfloat16 上采样
+y = cann_bench.resize_bilinear_v2(x, output_size=[256, 256])  # bfloat16 上采样
 ```
 
 ### 性能基线参考
