@@ -1,0 +1,51 @@
+[cann-bench] Running correctness evaluation
+[cann-bench] Discovered 3 operator(s): ['add', 'sqrt', 'mish']
+[cann-bench] Installing submission wheel: cann_bench_ops-1.0.0-cp38-abi3-linux_aarch64.whl
+[cann-bench] Loaded cann_bench from /usr/local/lib/python3.10/dist-packages/cann_bench/__init__.py
+[cann-bench] Timing-API integrity verified
+[cann-bench] Comparing against baselines for hardware: 910b2
+Evaluating Add (8 cases) → cann_bench.add
+  [ 1] PASS  MERE=0.00e+00 MARE=0.00e+00  float32-1D-1K
+  [ 2] PASS  MERE=0.00e+00 MARE=0.00e+00  float32-2D-1M
+  [ 3] PASS  MERE=4.71e-05 MARE=4.88e-04  float16-2D-1M
+  [ 4] PASS  MERE=0.00e+00 MARE=0.00e+00  float32-2D-对称中值域
+  [ 5] PASS  MERE=9.16e-05 MARE=4.88e-04  float16-4D-图像batch
+  [ 6] PASS  exact match  int32-1D-1K
+  [ 7] PASS  MERE=0.00e+00 MARE=0.00e+00  float32-非对齐-2D
+  [ 8] PASS  MERE=4.69e-05 MARE=4.88e-04  float16-1D-质数非对齐
+  → 8/8 passed, geo_mean=0.000x
+Evaluating Sqrt (8 cases) → cann_bench.sqrt
+  [ 1] PASS  MERE=6.91e-09 MARE=1.19e-07  float32-1D-1K
+  [ 2] PASS  MERE=6.70e-09 MARE=1.19e-07  float32-2D-1M
+  [ 3] PASS  MERE=1.80e-04 MARE=4.88e-04  float16-2D-1M
+  [ 4] PASS  MERE=6.58e-09 MARE=1.19e-07  float32-2D-对称小值域
+  [ 5] PASS  MERE=1.60e-04 MARE=4.60e-04  float16-4D-图像batch
+  [ 6] PASS  MERE=0.00e+00 MARE=0.00e+00  float32-1D-零值
+  [ 7] PASS  MERE=6.71e-09 MARE=1.19e-07  float32-非对齐-2D
+  [ 8] PASS  MERE=1.80e-04 MARE=4.88e-04  float16-1D-质数非对齐
+  → 8/8 passed, geo_mean=0.000x
+Evaluating Mish (20 cases) → cann_bench.mish
+  [ 1] PASS  MERE=1.78e-04 MARE=4.80e-04  float16-1M-对齐-对称小值域
+  [ 2] PASS  MERE=6.31e-08 MARE=8.21e-07  float32-4M-对齐-对称小值域
+  [ 3] PASS  MERE=1.36e-03 MARE=3.42e-03  bfloat16-16M-对齐-对称小值域
+  [ 4] PASS  MERE=1.56e-04 MARE=1.23e-03  float16-67M-对齐-对称中值域-2D扁平
+  [ 5] FAIL  MERE=3.80e-01(limit 1.22e-04) MARE=1.00e+00(limit 1.22e-03)  float32-268M-对齐-对称大值域-2D
+  [ 6] PASS  MERE=1.40e-03 MARE=3.71e-03  bfloat16-1M-非对齐-对称微小值域
+  [ 7] PASS  MERE=1.74e-04 MARE=4.80e-04  float16-1M-质数非对齐-非对称小值域-5D
+  [ 8] PASS  MERE=3.30e-07 MARE=1.40e-05  float32-1M-非对齐-非对称中值域
+  [ 9] FAIL  MERE=2.28e-01(limit 7.81e-03) MARE=1.00e+00(limit 7.81e-02)  bfloat16-50M-质数非对齐-非对称大值域-3D
+  [10] FAIL  MERE=5.78e-04(limit 9.77e-04) MARE=1.00e+00(limit 9.77e-03)  float16-1M-非对齐-float16边界值
+  [11] FAIL  MERE=4.08e-01(limit 1.22e-04) MARE=1.00e+00(limit 1.22e-03)  float32-1M-质数非对齐-float32边界值-4D
+  [12] PASS  MERE=0.00e+00 MARE=0.00e+00  bfloat16-1M-质数非对齐-inf特殊值-1D
+  [13] PASS  all special values matched  float32-10M-质数非对齐-nan特殊值-5D
+  [14] PASS  MERE=0.00e+00 MARE=0.00e+00  float16-3M-质数非对齐-零值-5D
+  [15] PASS  MERE=4.42e-08 MARE=3.34e-07  float32-1M-非对齐-对称微小值域
+  [16] PASS  MERE=1.34e-03 MARE=3.39e-03  bfloat16-2M-非对齐-非对称小值域
+  [17] FAIL  MERE=3.82e-02(limit 9.77e-04) MARE=1.00e+00(limit 9.77e-03)  float16-2M-非对齐-对称大值域
+  [18] PASS  MERE=4.72e-08 MARE=2.98e-07  float32-2M-非对齐-对称微小值域-3D
+  [19] PASS  MERE=1.10e-03 MARE=3.62e-03  bfloat16-2M-非对齐-非对称中值域-3D
+  [20] FAIL  MERE=6.52e-02(limit 1.22e-04) MARE=1.00e+00(limit 1.22e-03)  float32-10M-非对齐-非对称大值域-5D
+  → 14/20 passed, geo_mean=0.000x
+
+[cann-bench] OVERALL: 30/36 cases passed across 3 operators, geo_mean=0.000x
+[cann-bench] Results written to /tmp/runner_sim_job_2164471/output/evaluation_results.json

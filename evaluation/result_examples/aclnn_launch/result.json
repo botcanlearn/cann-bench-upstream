@@ -1,0 +1,28 @@
+{
+  "job_id": "sim-job-1776828185-2179143",
+  "device_id": 3,
+  "final_status": "SUCCEEDED",
+  "stages": {
+    "prepare": {
+      "status": "passed"
+    },
+    "compile": {
+      "status": "passed",
+      "duration_sec": 0,
+      "log": "logs/compile.log"
+    },
+    "correctness": {
+      "status": "passed",
+      "duration_sec": 75,
+      "log": "logs/correctness.log"
+    },
+    "performance": {
+      "status": "passed",
+      "duration_sec": 402,
+      "log": "logs/performance.log"
+    },
+    "archive": {
+      "status": "passed"
+    }
+  }
+}

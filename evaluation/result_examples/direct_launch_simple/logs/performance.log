@@ -1,0 +1,142 @@
+[cann-bench] Running full evaluation (correctness + performance)
+[cann-bench] Discovered 3 operator(s): ['add', 'sqrt', 'mish']
+[cann-bench] Pre-measuring golden baselines for cases missing a yaml baseline (before custom dispatch)
+[cann-bench] Installing submission wheel: cann_bench_ops-1.0.0-cp38-abi3-linux_aarch64.whl
+[cann-bench] Loaded cann_bench from /usr/local/lib/python3.10/dist-packages/cann_bench/__init__.py
+[cann-bench] Timing-API integrity verified
+[cann-bench] Comparing against baselines for hardware: 910b2
+Evaluating Add (8 cases) → cann_bench.add
+[2026-04-22 03:18:28] [INFO] [2165886] profiler.py: Start parsing profiling data: /tmp/cann_prof_bv_7ybrl/5bc119eaab3e_2165542_20260422031827508_ascend_pt
+|/-[2026-04-22 03:18:30] [INFO] [2165895] profiler.py: CANN profiling data parsed in a total time of 0:00:02.026340
+\[2026-04-22 03:18:31] [INFO] [2165886] profiler.py: All profiling data parsed in a total time of 0:00:03.207430
+  [ 1] PASS 8.510x  MERE=0.00e+00 MARE=0.00e+00  float32-1D-1K
+[2026-04-22 03:18:35] [INFO] [2166476] profiler.py: Start parsing profiling data: /tmp/cann_prof_pntds_v6/5bc119eaab3e_2165542_20260422031835229_ascend_pt
+|/-[2026-04-22 03:18:37] [INFO] [2166489] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024431
+\[2026-04-22 03:18:38] [INFO] [2166476] profiler.py: All profiling data parsed in a total time of 0:00:03.234836
+  [ 2] PASS 1.800x  MERE=0.00e+00 MARE=0.00e+00  float32-2D-1M
+[2026-04-22 03:18:43] [INFO] [2166886] profiler.py: Start parsing profiling data: /tmp/cann_prof_ghp1kaks/5bc119eaab3e_2165542_20260422031842719_ascend_pt
+|/-[2026-04-22 03:18:45] [INFO] [2166895] profiler.py: CANN profiling data parsed in a total time of 0:00:02.025154
+\[2026-04-22 03:18:46] [INFO] [2166886] profiler.py: All profiling data parsed in a total time of 0:00:03.286288
+  [ 3] PASS 2.995x  MERE=4.71e-05 MARE=4.88e-04  float16-2D-1M
+[2026-04-22 03:18:50] [INFO] [2167296] profiler.py: Start parsing profiling data: /tmp/cann_prof_64h4t76m/5bc119eaab3e_2165542_20260422031850369_ascend_pt
+|/-[2026-04-22 03:18:53] [INFO] [2167305] profiler.py: CANN profiling data parsed in a total time of 0:00:02.025597
+\[2026-04-22 03:18:54] [INFO] [2167296] profiler.py: All profiling data parsed in a total time of 0:00:03.296923
+  [ 4] PASS 5.370x  MERE=0.00e+00 MARE=0.00e+00  float32-2D-对称中值域
+[2026-04-22 03:18:58] [INFO] [2167702] profiler.py: Start parsing profiling data: /tmp/cann_prof_5mt6gfp_/5bc119eaab3e_2165542_20260422031857810_ascend_pt
+|/-[2026-04-22 03:19:00] [INFO] [2167714] profiler.py: CANN profiling data parsed in a total time of 0:00:02.025100
+\[2026-04-22 03:19:01] [INFO] [2167702] profiler.py: All profiling data parsed in a total time of 0:00:03.320705
+  [ 5] PASS 6.149x  MERE=9.16e-05 MARE=4.88e-04  float16-4D-图像batch
+[2026-04-22 03:19:05] [INFO] [2168107] profiler.py: Start parsing profiling data: /tmp/cann_prof_shispp7l/5bc119eaab3e_2165542_20260422031905202_ascend_pt
+|/-[2026-04-22 03:19:07] [INFO] [2168116] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024132
+\[2026-04-22 03:19:08] [INFO] [2168107] profiler.py: All profiling data parsed in a total time of 0:00:03.270866
+  [ 6] PASS 8.843x  exact match  int32-1D-1K
+[2026-04-22 03:19:13] [INFO] [2168521] profiler.py: Start parsing profiling data: /tmp/cann_prof_mwhtqds_/5bc119eaab3e_2165542_20260422031912795_ascend_pt
+|/-[2026-04-22 03:19:15] [INFO] [2168530] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024688
+\[2026-04-22 03:19:16] [INFO] [2168521] profiler.py: All profiling data parsed in a total time of 0:00:03.287732
+  [ 7] PASS 1.927x  MERE=0.00e+00 MARE=0.00e+00  float32-非对齐-2D
+[2026-04-22 03:19:20] [INFO] [2168923] profiler.py: Start parsing profiling data: /tmp/cann_prof_tyx5o9ri/5bc119eaab3e_2165542_20260422031920264_ascend_pt
+|/-[2026-04-22 03:19:22] [INFO] [2168932] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023226
+\[2026-04-22 03:19:24] [INFO] [2168923] profiler.py: All profiling data parsed in a total time of 0:00:03.334472
+  [ 8] PASS 3.336x  MERE=4.73e-05 MARE=4.88e-04  float16-1D-质数非对齐
+  → 8/8 passed, geo_mean=4.139x
+Evaluating Sqrt (8 cases) → cann_bench.sqrt
+[2026-04-22 03:19:28] [INFO] [2169314] profiler.py: Start parsing profiling data: /tmp/cann_prof_zp53sh02/5bc119eaab3e_2165542_20260422031927543_ascend_pt
+|/-[2026-04-22 03:19:30] [INFO] [2169327] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024143
+\[2026-04-22 03:19:31] [INFO] [2169314] profiler.py: All profiling data parsed in a total time of 0:00:03.313940
+  [ 1] PASS 6.046x  MERE=6.62e-09 MARE=1.19e-07  float32-1D-1K
+[2026-04-22 03:19:35] [INFO] [2169733] profiler.py: Start parsing profiling data: /tmp/cann_prof_c8mlqrfg/5bc119eaab3e_2165542_20260422031935001_ascend_pt
+|/-[2026-04-22 03:19:37] [INFO] [2169745] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023501
+\[2026-04-22 03:19:38] [INFO] [2169733] profiler.py: All profiling data parsed in a total time of 0:00:03.381540
+  [ 2] PASS 2.320x  MERE=6.69e-09 MARE=1.19e-07  float32-2D-1M
+[2026-04-22 03:19:43] [INFO] [2170125] profiler.py: Start parsing profiling data: /tmp/cann_prof_6hgh_ek4/5bc119eaab3e_2165542_20260422031942577_ascend_pt
+|/-[2026-04-22 03:19:45] [INFO] [2170148] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024849
+\[2026-04-22 03:19:46] [INFO] [2170125] profiler.py: All profiling data parsed in a total time of 0:00:03.297222
+  [ 3] PASS 2.526x  MERE=1.80e-04 MARE=4.88e-04  float16-2D-1M
+[2026-04-22 03:19:50] [INFO] [2170546] profiler.py: Start parsing profiling data: /tmp/cann_prof_2jyxiw1g/5bc119eaab3e_2165542_20260422031950111_ascend_pt
+|/-[2026-04-22 03:19:52] [INFO] [2170555] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024060
+\[2026-04-22 03:19:53] [INFO] [2170546] profiler.py: All profiling data parsed in a total time of 0:00:03.302262
+  [ 4] PASS 3.479x  MERE=6.62e-09 MARE=1.19e-07  float32-2D-对称小值域
+[2026-04-22 03:19:58] [INFO] [2170944] profiler.py: Start parsing profiling data: /tmp/cann_prof_4q8lq3g1/5bc119eaab3e_2165542_20260422031957614_ascend_pt
+|/-[2026-04-22 03:20:00] [INFO] [2170964] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024688
+\[2026-04-22 03:20:01] [INFO] [2170944] profiler.py: All profiling data parsed in a total time of 0:00:03.294088
+  [ 5] PASS 4.230x  MERE=1.59e-04 MARE=4.60e-04  float16-4D-图像batch
+[2026-04-22 03:20:05] [INFO] [2171359] profiler.py: Start parsing profiling data: /tmp/cann_prof_xdpbb6fb/5bc119eaab3e_2165542_20260422032004963_ascend_pt
+|/-[2026-04-22 03:20:07] [INFO] [2171370] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024262
+\[2026-04-22 03:20:08] [INFO] [2171359] profiler.py: All profiling data parsed in a total time of 0:00:03.303765
+  [ 6] PASS 12.438x  MERE=0.00e+00 MARE=0.00e+00  float32-1D-零值
+[2026-04-22 03:20:13] [INFO] [2171761] profiler.py: Start parsing profiling data: /tmp/cann_prof_qjgi56f0/5bc119eaab3e_2165542_20260422032012579_ascend_pt
+|/-[2026-04-22 03:20:15] [INFO] [2171781] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023384
+\[2026-04-22 03:20:16] [INFO] [2171761] profiler.py: All profiling data parsed in a total time of 0:00:03.273280
+  [ 7] PASS 2.284x  MERE=6.71e-09 MARE=1.19e-07  float32-非对齐-2D
+[2026-04-22 03:20:20] [INFO] [2172173] profiler.py: Start parsing profiling data: /tmp/cann_prof_xt0xt2df/5bc119eaab3e_2165542_20260422032020041_ascend_pt
+|/-[2026-04-22 03:20:22] [INFO] [2172182] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023047
+\[2026-04-22 03:20:23] [INFO] [2172173] profiler.py: All profiling data parsed in a total time of 0:00:03.289051
+  [ 8] PASS 2.432x  MERE=1.80e-04 MARE=4.88e-04  float16-1D-质数非对齐
+  → 8/8 passed, geo_mean=3.712x
+Evaluating Mish (20 cases) → cann_bench.mish
+[2026-04-22 03:20:28] [INFO] [2172604] profiler.py: Start parsing profiling data: /tmp/cann_prof_lf3jhxr6/5bc119eaab3e_2165542_20260422032027606_ascend_pt
+|/-[2026-04-22 03:20:30] [INFO] [2172627] profiler.py: CANN profiling data parsed in a total time of 0:00:02.025040
+\[2026-04-22 03:20:31] [INFO] [2172604] profiler.py: All profiling data parsed in a total time of 0:00:03.305753
+  [ 1] PASS 4.258x  MERE=1.78e-04 MARE=4.80e-04  float16-1M-对齐-对称小值域
+[2026-04-22 03:20:35] [INFO] [2173025] profiler.py: Start parsing profiling data: /tmp/cann_prof_rdo2e13y/5bc119eaab3e_2165542_20260422032035302_ascend_pt
+|/-[2026-04-22 03:20:38] [INFO] [2173034] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024016
+\[2026-04-22 03:20:39] [INFO] [2173025] profiler.py: All profiling data parsed in a total time of 0:00:03.327524
+  [ 2] PASS 6.270x  MERE=6.32e-08 MARE=8.26e-07  float32-4M-对齐-对称小值域
+[2026-04-22 03:20:44] [INFO] [2173452] profiler.py: Start parsing profiling data: /tmp/cann_prof_5ihwt9ky/5bc119eaab3e_2165542_20260422032044246_ascend_pt
+|/-[2026-04-22 03:20:46] [INFO] [2173466] profiler.py: CANN profiling data parsed in a total time of 0:00:02.025130
+\[2026-04-22 03:20:48] [INFO] [2173452] profiler.py: All profiling data parsed in a total time of 0:00:03.479023
+  [ 3] PASS 0.545x  MERE=1.36e-03 MARE=3.42e-03  bfloat16-16M-对齐-对称小值域
+[2026-04-22 03:20:58] [INFO] [2173958] profiler.py: Start parsing profiling data: /tmp/cann_prof_vlrpl6sx/5bc119eaab3e_2165542_20260422032057683_ascend_pt
+|/-[2026-04-22 03:21:00] [INFO] [2173971] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023424
+\[2026-04-22 03:21:02] [INFO] [2173958] profiler.py: All profiling data parsed in a total time of 0:00:04.139543
+  [ 4] PASS 0.142x  MERE=1.56e-04 MARE=1.23e-03  float16-67M-对齐-对称中值域-2D扁平
+  [ 5] FAIL  MERE=3.80e-01(limit 1.22e-04) MARE=1.00e+00(limit 1.22e-03)  float32-268M-对齐-对称大值域-2D
+[2026-04-22 03:21:18] [INFO] [2174562] profiler.py: Start parsing profiling data: /tmp/cann_prof_nsbgmgr0/5bc119eaab3e_2165542_20260422032118078_ascend_pt
+|/-[2026-04-22 03:21:20] [INFO] [2174574] profiler.py: CANN profiling data parsed in a total time of 0:00:02.029668
+\[2026-04-22 03:21:22] [INFO] [2174562] profiler.py: All profiling data parsed in a total time of 0:00:03.430461
+  [ 6] PASS 4.315x  MERE=1.40e-03 MARE=3.71e-03  bfloat16-1M-非对齐-对称微小值域
+[2026-04-22 03:21:26] [INFO] [2174974] profiler.py: Start parsing profiling data: /tmp/cann_prof_ix06sgyv/5bc119eaab3e_2165542_20260422032125657_ascend_pt
+|/-[2026-04-22 03:21:28] [INFO] [2174983] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023918
+\[2026-04-22 03:21:29] [INFO] [2174974] profiler.py: All profiling data parsed in a total time of 0:00:03.279509
+  [ 7] PASS 36.995x  MERE=1.74e-04 MARE=4.80e-04  float16-1M-质数非对齐-非对称小值域-5D
+[2026-04-22 03:21:33] [INFO] [2175381] profiler.py: Start parsing profiling data: /tmp/cann_prof_iu15z3n8/5bc119eaab3e_2165542_20260422032133258_ascend_pt
+|/-[2026-04-22 03:21:36] [INFO] [2175390] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023104
+\[2026-04-22 03:21:37] [INFO] [2175381] profiler.py: All profiling data parsed in a total time of 0:00:03.298413
+  [ 8] PASS 4.158x  MERE=3.30e-07 MARE=1.39e-05  float32-1M-非对齐-非对称中值域
+  [ 9] FAIL  MERE=2.28e-01(limit 7.81e-03) MARE=1.00e+00(limit 7.81e-02)  bfloat16-50M-质数非对齐-非对称大值域-3D
+  [10] FAIL  MERE=5.84e-04(limit 9.77e-04) MARE=1.00e+00(limit 9.77e-03)  float16-1M-非对齐-float16边界值
+  [11] FAIL  MERE=4.08e-01(limit 1.22e-04) MARE=1.00e+00(limit 1.22e-03)  float32-1M-质数非对齐-float32边界值-4D
+[2026-04-22 03:21:44] [INFO] [2175835] profiler.py: Start parsing profiling data: /tmp/cann_prof_1j7z1bvu/5bc119eaab3e_2165542_20260422032143683_ascend_pt
+|/-[2026-04-22 03:21:46] [INFO] [2175845] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024896
+\[2026-04-22 03:21:47] [INFO] [2175835] profiler.py: All profiling data parsed in a total time of 0:00:03.305784
+  [12] PASS 4.358x  MERE=0.00e+00 MARE=0.00e+00  bfloat16-1M-质数非对齐-inf特殊值-1D
+[2026-04-22 03:21:52] [INFO] [2176264] profiler.py: Start parsing profiling data: /tmp/cann_prof_0w4iewmw/5bc119eaab3e_2165542_20260422032151486_ascend_pt
+|/-[2026-04-22 03:21:54] [INFO] [2176276] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023509
+\[2026-04-22 03:21:55] [INFO] [2176264] profiler.py: All profiling data parsed in a total time of 0:00:03.539962
+  [13] PASS 6.722x  all special values matched  float32-10M-质数非对齐-nan特殊值-5D
+[2026-04-22 03:21:59] [INFO] [2176689] profiler.py: Start parsing profiling data: /tmp/cann_prof_v0enhfsi/5bc119eaab3e_2165542_20260422032159142_ascend_pt
+|/-[2026-04-22 03:22:01] [INFO] [2176700] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023614
+\[2026-04-22 03:22:02] [INFO] [2176689] profiler.py: All profiling data parsed in a total time of 0:00:03.343336
+  [14] PASS 4.023x  MERE=0.00e+00 MARE=0.00e+00  float16-3M-质数非对齐-零值-5D
+[2026-04-22 03:22:07] [INFO] [2177077] profiler.py: Start parsing profiling data: /tmp/cann_prof_yfkeed53/5bc119eaab3e_2165542_20260422032206679_ascend_pt
+|/-[2026-04-22 03:22:09] [INFO] [2177090] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024143
+\[2026-04-22 03:22:10] [INFO] [2177077] profiler.py: All profiling data parsed in a total time of 0:00:03.336175
+  [15] PASS 4.245x  MERE=4.42e-08 MARE=3.24e-07  float32-1M-非对齐-对称微小值域
+[2026-04-22 03:22:14] [INFO] [2177506] profiler.py: Start parsing profiling data: /tmp/cann_prof_eqsa1c2l/5bc119eaab3e_2165542_20260422032214231_ascend_pt
+|/-[2026-04-22 03:22:16] [INFO] [2177515] profiler.py: CANN profiling data parsed in a total time of 0:00:02.023729
+\[2026-04-22 03:22:18] [INFO] [2177506] profiler.py: All profiling data parsed in a total time of 0:00:03.412354
+  [16] PASS 0.493x  MERE=1.34e-03 MARE=3.39e-03  bfloat16-2M-非对齐-非对称小值域
+  [17] FAIL  MERE=3.80e-02(limit 9.77e-04) MARE=1.00e+00(limit 9.77e-03)  float16-2M-非对齐-对称大值域
+[2026-04-22 03:22:22] [INFO] [2177898] profiler.py: Start parsing profiling data: /tmp/cann_prof_w8_3q5ql/5bc119eaab3e_2165542_20260422032221926_ascend_pt
+|/-[2026-04-22 03:22:24] [INFO] [2177907] profiler.py: CANN profiling data parsed in a total time of 0:00:02.024537
+\[2026-04-22 03:22:25] [INFO] [2177898] profiler.py: All profiling data parsed in a total time of 0:00:03.413140
+  [18] PASS 2.763x  MERE=4.72e-08 MARE=2.97e-07  float32-2M-非对齐-对称微小值域-3D
+[2026-04-22 03:22:29] [INFO] [2178319] profiler.py: Start parsing profiling data: /tmp/cann_prof_wdmujp2r/5bc119eaab3e_2165542_20260422032229422_ascend_pt
+|/-[2026-04-22 03:22:32] [INFO] [2178328] profiler.py: CANN profiling data parsed in a total time of 0:00:02.025831
+\[2026-04-22 03:22:33] [INFO] [2178319] profiler.py: All profiling data parsed in a total time of 0:00:03.433739
+  [19] PASS 0.539x  MERE=1.10e-03 MARE=3.62e-03  bfloat16-2M-非对齐-非对称中值域-3D
+  [20] FAIL  MERE=6.52e-02(limit 1.22e-04) MARE=1.00e+00(limit 1.22e-03)  float32-10M-非对齐-非对称大值域-5D
+  → 14/20 passed, geo_mean=2.554x
+
+[cann-bench] OVERALL: 30/36 cases passed across 3 operators, geo_mean=3.398x
+[cann-bench] Results written to /tmp/runner_sim_job_2164471/output/evaluation_results.json
