@@ -36,7 +36,7 @@
 | 版本 | 主要变更 |
 |------|----------|
 | V1.0.0 | 初版，建立基础评测框架|
-| V0.2.0 | 引入Pass@k评测、算子分类体系、三大维度评测 |
+| V0.2.0 | 引入三大维度评测、算子分类体系 |
 | V0.3.0 | 完善算子复杂度定义、规范用例输入输出 |
 | V0.4.0 | 增加评测报告结构、优化评测流程 |
 | V0.5.0 | 规范算子交付件要求 |
@@ -108,7 +108,7 @@
 
 | 评测维度 | 评测内容 | 核心指标 | 输出 |
 |----------|----------|----------|------|
-| 编译正确性 | AI生成的算子代码能否成功编译链接 | Pass@k | 编译通过率 |
+| 编译正确性 | AI生成的算子代码能否成功编译链接 | Pass/Fail | 是否编译通过（二值） |
 | 功能正确性 | 算子输出与Golden结果的精度偏差 | 用例通过数 | 精度通过率 |
 | 性能优化性 | 生成算子与基准性能的比例 | SpeedUp加速比 | 性能评分 |
 
@@ -146,12 +146,12 @@
 ┌────────────┐      ┌────────────┐       ┌────────────┐
 │  编译评测   │────▶│ 功能精度评测 │────▶│  性能评测   │
 └────────────┘      └────────────┘       └────────────┘
-   Pass@k            用例通过率            SpeedUp
+  Pass/Fail          用例通过数            SpeedUp
 ```
 
 | 评测项 | 前置条件 | 输入 | 输出 | 工具 |
 |--------|----------|------|------|------|
-| 编译评测 | 无 | AI生成的算子工程源码 | Pass@k指标 | cmake、bisheng编译器 |
+| 编译评测 | 无 | AI生成的算子工程源码 | 编译是否通过（Pass/Fail） | cmake、bisheng编译器 |
 | 功能精度评测 | 编译通过 | 编译后的算子 + cases.csv + golden.py | 用例通过率 | evaluation框架 |
 | 性能评测 | 功能精度通过 | 通过精度用例的算子 + cases.csv基线数据 | SpeedUp加速比 | msprof/TorchNPU.prof |
 
@@ -206,7 +206,7 @@
 - 量化算子：DynamicQuant
 - 损失函数算子：CrossEntropyLoss
 - 索引操作：Gather、Scatter、UnsortedSegmentSum(仅Int)
-- 插值类：ResizeBilinearV2、GridSampler3D
+- 插值类：ResizeBilinear、GridSampler3D
 - Reduce：ArgMax、Cummin
 - 正则化：Softmax、RMSNorm、GroupNorm
 - Transform类：ApplyRotaryPosEmb
@@ -215,10 +215,9 @@
 - 池化算子：AdaptiveAvgPool3D
 - 张量变换：Transpose、StridedSlice
 - 排序类：TopK、Unique
-- Hash类：EmbeddingHashLookupOrInsert
 - 图像处理：Dilation2D
-- 目标检测：NMSWithMask、ROIAlign、ROIPooling（待删除）
-- MoE类：MoeReRouting、MoeFinalizeRoutingV2、MoeGatingTopKSoftmax
+- 目标检测：NMSWithMask、ROIAlign
+- MoE类：MoeReRouting、MoeFinalizeRouting、MoeGatingTopKSoftmax
 - 矩阵运算：GroupedMatmul
 - MM量化：QuantBatchMatmul、WeightQuantBatchMatmul
 - 卷积：Conv2D、DepthwiseConv2D
@@ -339,44 +338,45 @@ def exp(
 
 ### 4.2 核心评测指标
 
-- **编译正确性**: Pass@k指标
+- **编译正确性**: 是否编译通过（Pass/Fail，二值）
 - **功能正确性**: 精度用例通过数量 
 - **性能优化性**: 相比基准性能的加速比(当前)；相比理论性能的比例(规划)
 ```
-综合评分
-├── 编译正确性 (权重分 Wc=2)
-│   └── Pass@1 (编译通过率)
-├── 功能正确性 (权重分 Wf=3)
-│   └── 用例通过数 (通过精度用例的数量) 
-└── 性能优化性 (权重分 Wp=5)
-    └── 加速比 (验证性能/测试基准性能)
+单算子综合评分
+├── 编译正确性 (权重 Wc=2)
+│   └── compile_pass ∈ {0, 1}（整份提交编译是否通过，与用例数无关）
+├── 功能正确性 (权重 Wf=3)
+│   └── 用例通过数 (通过精度用例的数量)
+└── 性能优化性 (权重 Wp=5)
+    └── 加速比 (验证性能 / 基准性能)
 
 计算方式：
-编译得分：Pass@1 x Wc
-功能得分：Pass@1 x Wf
-性能得分：SpeedUp x Wp
-综合评分 = 编译通过用例数 * 编译得分 + 功能通过用例数 × (功能得分 + 性能得分)
+编译通过得分 = compile_pass × Wc         # 单算子一次，编译 Pass=1 / Fail=0
+单用例功能得分 = case_pass × Wf          # case_pass ∈ {0, 1}，该用例是否通过精度校验
+单用例性能得分 = SpeedUp_i × Wp          # 仅对功能通过的用例计入，SpeedUp_i 为该用例实测
+
+单算子综合评分 = 编译通过得分
+              + Σ_{功能通过的用例 i} ( Wf + SpeedUp_i × Wp )
+
+即：编译项为单算子一次的标量贡献；功能与性能项按该算子"功能通过用例"逐一累加。
 ```
 
-### 4.3 Pass@k评测
+**聚合规则**：
 
-业界标准的代码生成评测方法，生成k个候选代码中至少有1个通过所有测试用例的概率。
+```
+Level-N 得分       = Σ_{op ∈ Level-N} 单算子综合评分
+benchmark 总分     = Σ_{所有算子} 单算子综合评分
+                   = Level1 得分 + Level2 得分 + Level3 得分 + Level4 得分
+```
 
-**简化计算**
-```
-Pass@k = 1 - C(n-c, k) / C(n, k)
-```
-- **n**: 生成的候选代码总数
-- **c**: 通过测试的候选代码数量
-- **k**: 选择的最优候选数量（通常取1、5、10）
+### 4.3 编译评测（Pass/Fail）
 
-**简化计算**
-```
-Pass@1 = c / n
-```
-即：单次生成通过率 = 通过数 / 总生成数
+官方评测中，每个算子只接收一份源码提交，编译评测为**二值结果**：Pass（通过）/ Fail（未通过）。这份源码的编译结果作用于该算子的全部测试用例：
 
-> 官方评测中，由于只要求提供一份源码，因此Pass@1只有可能是0或者1两种取值
+- **编译通过**（`compile_pass = 1`）：所有用例继续进入功能与性能评测；
+- **编译失败**（`compile_pass = 0`）：所有用例的编译得分、功能得分、性能得分均为 0，该算子综合得分直接为 0。
+
+> 早期设计曾沿用业界代码生成评测中的 `Pass@k` 命名，但在"单算子单提交"的官方评测约束下，`n=1、k=1`，该指标实际退化为 pass/fail 二值判断，因此本方案不再使用 `Pass@k` 表述。若未来官方评测放开允许一次提交多份候选代码，再行按标准 Pass@k 公式扩展。
 
 #### 4.4 精度标准
 

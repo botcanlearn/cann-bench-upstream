@@ -17,7 +17,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/.."
-TEST_DIR="${PROJECT_DIR}/test"
+TEST_DIR="${PROJECT_DIR}/tests"
 
 # 默认配置
 DEVICE=""

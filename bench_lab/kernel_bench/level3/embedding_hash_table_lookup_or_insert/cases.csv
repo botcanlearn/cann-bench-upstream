@@ -1,0 +1,21 @@
+operator,case_id,input_shape,dtype,attrs,value_range,baseline_perf_us,note
+EmbeddingHashTableLookupOrInsert,1,"[[5], [1024]]","['int64', 'int64']","{'bucket_size': 1024, 'embedding_dim': 128}","[[0, 0], [0, 1023]]",None,S-int64-小规模-keys1024-bucket1024-emb128
+EmbeddingHashTableLookupOrInsert,2,"[[5], [16384]]","['int64', 'int64']","{'bucket_size': 16384, 'embedding_dim': 256}","[[0, 0], [0, 16383]]",None,M-int64-中规模-keys16384-bucket16384-emb256
+EmbeddingHashTableLookupOrInsert,3,"[[5], [131072]]","['int64', 'int64']","{'bucket_size': 131072, 'embedding_dim': 512}","[[0, 0], [0, 131071]]",None,L-int64-大规模-keys131072-bucket131072-emb512
+EmbeddingHashTableLookupOrInsert,4,"[[5], [8192]]","['int64', 'int64']","{'bucket_size': 8192, 'embedding_dim': 64}","[[0, 0], [0, 8191]]",None,M-int64-emb64-keys8192
+EmbeddingHashTableLookupOrInsert,5,"[[5], [4096]]","['int64', 'int64']","{'bucket_size': 4096, 'embedding_dim': 1024}","[[0, 0], [0, 4095]]",None,M-int64-emb1024-keys4096
+EmbeddingHashTableLookupOrInsert,6,"[[5], [256, 256]]","['int64', 'int64']","{'bucket_size': 65536, 'embedding_dim': 128}","[[0, 0], [0, 65535]]",None,M-int64-2D-keys-bucket65536-emb128
+EmbeddingHashTableLookupOrInsert,7,"[[5], [64, 64, 64]]","['int64', 'int64']","{'bucket_size': 262144, 'embedding_dim': 256}","[[0, 0], [0, 262143]]",None,M-int64-3D-keys-bucket262144-emb256
+EmbeddingHashTableLookupOrInsert,8,"[[5], [2048]]","['int64', 'int64']","{'bucket_size': 4096, 'embedding_dim': 128, 'default_value': 0.5}","[[0, 0], [0, 4095]]",None,S-int64-default_value=0.5
+EmbeddingHashTableLookupOrInsert,9,"[[5], [1024]]","['int64', 'int64']","{'bucket_size': 2048, 'embedding_dim': 256, 'default_value': 1.0}","[[0, 0], [0, 2047]]",None,S-int64-default_value=1.0
+EmbeddingHashTableLookupOrInsert,10,"[[5], [1024]]","['int64', 'int64']","{'bucket_size': 2048, 'embedding_dim': 128, 'filter_key_flag': True, 'filter_key': 100, 'default_value': 0.0}","[[0, 0], [0, 2047]]",None,S-int64-filter_key启用
+EmbeddingHashTableLookupOrInsert,11,"[[5], [4096]]","['int64', 'int64']","{'bucket_size': 8192, 'embedding_dim': 256, 'filter_key_flag': True, 'filter_key': -1}","[[0, 0], [0, 8191]]",None,M-int64-filter_key=-1不生效
+EmbeddingHashTableLookupOrInsert,12,"[[5], [8192]]","['int64', 'int64']","{'bucket_size': 16384, 'embedding_dim': 128, 'default_value': 0.1, 'filter_key_flag': True, 'filter_key': 500}","[[0, 0], [0, 16383]]",None,M-int64-default_value+filter_key组合
+EmbeddingHashTableLookupOrInsert,13,"[[5], [1009]]","['int64', 'int64']","{'bucket_size': 1021, 'embedding_dim': 127}","[[0, 0], [0, 1020]]",None,S-int64-质数bucket1021-keys1009
+EmbeddingHashTableLookupOrInsert,14,"[[5], [2048]]","['int64', 'int64']","{'bucket_size': 4096, 'embedding_dim': 511}","[[0, 0], [0, 4095]]",None,M-int64-质数emb511-keys2048
+EmbeddingHashTableLookupOrInsert,15,"[[5], [64]]","['int64', 'int64']","{'bucket_size': 128, 'embedding_dim': 32}","[[0, 0], [0, 127]]",None,XS-int64-最小规模-keys64-bucket128-emb32
+EmbeddingHashTableLookupOrInsert,16,"[[5], [256]]","['int64', 'int64']","{'bucket_size': 512, 'embedding_dim': 8}","[[0, 0], [0, 511]]",None,XS-int64-最小emb8-keys256
+EmbeddingHashTableLookupOrInsert,17,"[[5], [1024]]","['int64', 'int64']","{'bucket_size': 1048576, 'embedding_dim': 128}","[[0, 0], [0, 1048575]]",None,M-int64-大bucket1M-keys1024
+EmbeddingHashTableLookupOrInsert,18,"[[5], [512]]","['int64', 'int64']","{'bucket_size': 256, 'embedding_dim': 64}","[[0, 0], [0, 255]]",None,S-int64-key重复场景-bucket256-keys512
+EmbeddingHashTableLookupOrInsert,19,"[[5], [262144]]","['int64', 'int64']","{'bucket_size': 262144, 'embedding_dim': 1024}","[[0, 0], [0, 262143]]",None,XL-int64-超大规模-keys262144-emb1024
+EmbeddingHashTableLookupOrInsert,20,"[[5], [524288]]","['int64', 'int64']","{'bucket_size': 524288, 'embedding_dim': 512}","[[0, 0], [0, 524287]]",None,XL-int64-超大规模-keys524288-emb512

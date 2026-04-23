@@ -1,5 +1,0 @@
-[cann-bench] Build step
-[cann-bench] SUBMISSION_DIR=/tmp/runner_sim_job_2371027/input/submission
-[cann-bench] ASCEND_HOME_PATH=/usr/local/Ascend/cann-8.5.0
-[cann-bench] Pre-built wheel found in submission, skipping build
-/tmp/runner_sim_job_2371027/input/submission/cann_bench-1.0.0-cp38-abi3-linux_aarch64.whl

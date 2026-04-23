@@ -1,38 +1,75 @@
-# cann-bench
+# cann-bench: CANN 算子生成评测基准
 
-CANN 评测仓库，用于量化评估 CANN 领域下 AI 生成任务的能力，涵盖算子 kernel 生成等多场景评测，支撑模型选型、训练效果评估，推动 AI 能力在 CANN 领域的持续演进。
+评测AI模型生成Ascend C算子代码的能力，涵盖编译正确性、功能精度、性能优化三大维度，支撑模型选型、训练效果评估，推动AI能力在CANN领域的持续演进。
 
-## 目录结构
+## 👋 Task Description
+
+评测AI模型生成Ascend C算子代码的能力，按算子复杂度分为4个等级：
+
+- **Level 1**: 基础算子 (Element-wise, Activation)
+  单输入单输出、Elewise操作、无特殊优化，如 Add、Exp、Gelu、Sigmoid、Mish
+- **Level 2**: 中级算子 (Normalization, Reduction, Gather/Scatter)
+  多输入、轻量级Broadcast、需Tiling但策略固定，如 Gather、ApplyAdamW、Softmax
+- **Level 3**: 高级算子 (Conv, Pooling, MoE)
+  多维度归约、多Tiling策略可选，如 TopK、Conv2D、Matmul、NMS
+- **Level 4**: 复杂算子 (Attention, RNN)
+  矩阵运算、多算子融合、复杂数据流，如 FlashAttention、LSTM、GRU
+
+## ⚖️ Evaluation
+
+### 三层评测框架
+
+- **数据层**：评测任务集（算子规格描述、Golden实现、测试用例、泛化验证集）
+- **评测层**：评测维度（编译正确性、功能精度、性能优化性）
+- **应用层**：评测报告、CI流水线工程、问题改进、评测结果网站
+
+### 核心评测指标
+
+| 维度 | 指标 | 权重 | 说明 |
+|------|------|------|------|
+| 编译正确性 | Pass/Fail | Wc=2 | 是否编译通过（官方提交单份代码，二值判定） |
+| 功能正确性 | 精度用例通过数 | Wf=3 | 通过精度用例的数量 |
+| 性能优化性 | 加速比 (SpeedUp) | Wp=5 | 验证性能/测试基准性能 |
+
+单算子综合评分 = 编译通过得分 + 功能通过用例数 × (功能得分 + 性能得分)
+  - 编译通过得分 = compile_pass × Wc    # 单算子一次，整份提交的编译结果
+  - 功能得分     = Wf                   # 每个功能通过的用例
+  - 性能得分     = SpeedUp × Wp         # 每个功能通过的用例（按该用例实测）
+
+Level-N 得分 = 该 level 内所有算子综合评分之和
+benchmark 总分 = 所有算子综合评分之和（= Level1 + Level2 + Level3 + Level4）
+
+## 🔍 Directory Structure
 
 ```
 cann-bench/
-├── kernel_bench/               # 算子生成评测任务，按算子任务复杂度分级
-│   ├── level1/                 # 基础算子（Element-wise, Activation）
-│   ├── level2/                 # 中级算子（Normalization, Reduction, Gather/Scatter）
-│   ├── level3/                 # 高级算子（Conv, Pooling, MoE）
-│   └── level4/                 # 复杂算子（Attention, RNN）
-├── bench_lab/                  # 实验室级测试用例
-├── evaluation/                 # 标准化评测流水线（harness + evaluate.py + 工具）
-│   ├── evaluate.py             # 主调度器
-│   ├── harness/                # runner 调用的各阶段脚本
-│   ├── core/                   # evaluate.py 依赖的 Python 内部模块
-│   ├── tools/                  # 开发者/管理员工具：打包、模拟 runner、渲染摘要
-│   ├── submission_examples/    # 三份参考提交样例
-│   │   ├── aclnn_launch_example/         # aclnn 风格
-│   │   ├── direct_launch_example/        # torch.library 直通 AscendC
-│   │   └── direct_launch_simple_example/ # pybind 直通 AscendC
-│   └── result_examples/        # 上述提交在 NPU 上的样例输出
-├── docs/                       # 设计与评测相关文档
-├── requirements.txt            # Python 依赖
-└── README.md
+├── kernel_bench/           # 算子生成评测任务
+│   ├── level1/             # 基础算子
+│   ├── ...                 # 中级算子
+│   └── level4/             # 复杂算子
+├── bench_lab/              # 实验室级测试用例(后续版本会规划进主评测集)
+│   └── kernel_bench/       # 实验室级算子评测任务
+├── examples/               # 示例代码工程
+│   ├── aclnn_launch_example/        # ACLNN 算子工程样例
+│   └── direct_launch_example/       # 直接算子工程样例
+├── docs/                   # 设计文档
+├── scripts/                # 测试脚本
+│   ├── run_test.sh         # 统一测试运行脚本
+│   └── run_evaluation.py   # 评测运行脚本
+├── src/                    # 源代码
+│   └── kernel_eval/        # 算子评测模块
+├── test/                   # 测试代码
+├── requirements.txt        # Python 依赖
+├── LICENSE                 # 许可证文件
+└── README.md               # 项目说明文档
 ```
 
-## 快速开始
+## 🔧 Setup
 
 ### 环境要求
 
 - Python 3.8+
-- PyTorch 2.3+，`torch_npu` 与对应 CANN（推荐 8.5.0）
+- PyTorch 2.3+
 - NumPy 1.21+
 
 ### 安装依赖
@@ -41,56 +78,114 @@ cann-bench/
 pip install -r requirements.txt
 ```
 
-### 提交一个算子进行评测
+## 🚀 Quick Start
 
-本仓库的标准化评测流水线位于 `evaluation/`。详细说明见 [evaluation/README.md](evaluation/README.md)。三份参考提交放在 `evaluation/submission_examples/` 下，任选其一为基础复制并替换 kernel 代码即可：
-
-| 示例 | 风格 | 入口 |
-| --- | --- | --- |
-| `aclnn_launch_example` | 走 ACLNN 框架，算子注册为 opapi | `torch.ops.cann_bench.<op>` |
-| `direct_launch_example` | 通过 `torch.library` 绑定，AscendC kernel 直接由 plugin 启动 | `torch.ops.cann_bench.<op>` |
-| `direct_launch_simple_example` | pybind11 + 简化 tiling，最薄的一层 | `cann_bench.<op>` |
-
-本地构建并在 NPU 上模拟一次 job：
+### 运行测试
 
 ```bash
-# 1. 构建某个示例提交的 wheel
-bash evaluation/submission_examples/direct_launch_simple_example/build.sh
+# 运行所有测试（默认 CPU）
+./scripts/run_test.sh
 
-# 2. 在本地 NPU 上跑完 prepare→compile→correctness→performance 四个阶段
-bash evaluation/tools/simulate_runner.sh \
-    evaluation/submission_examples/direct_launch_simple_example/dist/*.whl \
-    /path/to/benchmark_bundle \
-    my_run
+# 使用 NPU 设备测试
+./scripts/run_test.sh --npu
+
+# 运行指定 level 测试
+./scripts/run_test.sh --level 1
+./scripts/run_test.sh --level 2
+./scripts/run_test.sh --level 3
+./scripts/run_test.sh --level 4
+
+# 运行指定算子测试
+./scripts/run_test.sh --operator gelu
+./scripts/run_test.sh --operator softmax
+
+# 运行指定用例
+./scripts/run_test.sh --operator gelu --case-id 1
+
+# 详细输出
+./scripts/run_test.sh --cpu --level 1 -v
+
+# 启用性能采集（NPU 测试）
+./scripts/run_test.sh --npu --prof
+
+# 查看帮助
+./scripts/run_test.sh --help
 ```
 
-评测结束后，`evaluation/result_examples/my_run/summary.md` 汇总各算子通过率、加速比与每条 case 的 baseline / custom 耗时。
+### 测试结果
 
-## 测试用例结构
+测试结果默认保存在 `test/reports/` 目录：
+
+```bash
+# 查看测试报告
+cat test/reports/test_results.json
+
+# 指定自定义输出路径
+./scripts/run_test.sh --output my_results.json
+
+# 查看性能 trace（NPU 测试 + --prof）
+ls test/reports/traces/
+```
+
+## 📋 Test Case Structure
 
 每个算子目录下包含以下文件：
 
 | 文件 | 说明 |
 |------|------|
-| `cases.yaml` | 测试用例配置，定义输入参数、期望精度阈值以及 `baseline_perf_us` |
-| `cases.csv` | 测试用例的 CSV 形式（可选） |
-| `golden.py` | PyTorch 参考实现，用于精度比对 |
-| `proto.yaml` | 算子原型与 schema |
-| `desc.md` | 算子详细说明 |
+| `cases.csv` | 测试用例 CSV 格式 |
+| `golden.py` | PyTorch 参考实现，用于结果验证 |
+| `proto.yaml` | 算子原型定义 |
+| `desc.md` | 算子详细说明文档 |
 
-## 添加新算子
+### 待评测算子工程样例
 
-1. 在 `kernel_bench/level{N}/<op_name>/` 目录下创建算子文件夹
-2. 创建 `cases.yaml` / `cases.csv` 定义测试用例
-3. 创建 `golden.py`，用 PyTorch 表达参考计算
-4. 创建 `proto.yaml` 声明算子 schema
-5. 创建 `desc.md` 写算子说明
-6. （可选）通过 `evaluation/tools/register_benchmark.py` 打包成 bundle：
+项目提供了多种算子开发示例：
 
-```bash
-python3 evaluation/tools/register_benchmark.py kernel_bench/level1/<op>
+1. **ACNN 算子启动示例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
+2. **直接算子启动示例**：[examples/direct_launch_example/](examples/direct_launch_example/)
+
+这些示例演示如何使用 Ascend C 和 PyTorch Extension 开发自定义 NPU 算子。
+
+使用自定义算子：
+
+```python
+import torch
+import torch_npu
+import cann_bench.kernel_bench
+
+x = torch.randn(10, 32, dtype=torch.float32).npu()
+y = torch.randn(10, 32, dtype=torch.float32).npu()
+result = cann_bench.kernel_bench.add(x, y)
 ```
 
-## 许可证
+## ➕ Add New Operator
 
-见 [LICENSE](LICENSE)。
+在 `bench_lab/{problems}/` 目录下创建算子文件夹
+1. 创建 `proto.yaml` 定义算子原型
+2. 创建 `golden.py` 实现 PyTorch 参考代码
+3. 创建 `desc.md` 编写算子说明文档
+4. 创建 `cases.yaml/cases.csv` 编写测试用例
+
+
+## 🛣️ Roadmap
+
+- 工程平台构建
+  - [ ] 完成剩余 Level3/Level4 算子核对验证, 发布第一版算子评测集合
+  - [ ] 建立持续评测 CI 流水线
+  - [ ] 发布评测结果网站
+
+- 评测集构建
+  - [ ] 增加更多算子类型覆盖
+  - [ ] 根据领域场景分类，算子特征等，构建出更多独立榜单集合，覆盖不同评测场景的需求
+
+- 评测标准构建
+  - [ ] 评测精度标准，精度衡量方法构建
+  - [ ] 评测性能基线，理论性能评估
+  - [ ] 评分算法优化（例如算子复杂度、用例难度），科学评价生成能力
+  - [ ] 算子分级/分类方法
+
+
+## 🪪 License
+
+CANN Open Software License Agreement Version 2.0
