@@ -1,0 +1,90 @@
+import torch
+
+"""
+MLA算子Torch Golden参考实现
+
+多头潜在注意力 (Multi-Head Latent Attention)，仅包含注意力计算部分
+Q 和 K 均分为 nope 和 rope 两部分传入，内部拼接后计算注意力
+V 与 K_nope 共享 d_nope 维度
+支持 BSND 和 BNSD 两种输入 layout
+
+公式:
+    Q = concat(Q_nope, Q_rope)   dim: d_nope + d_rope
+    K = concat(K_nope, K_rope)   dim: d_nope + d_rope
+    y = softmax(Q @ K^T * scaleValue) @ V
+"""
+
+
+def mla(
+    q_nope: torch.Tensor,
+    q_rope: torch.Tensor,
+    k_nope: torch.Tensor,
+    k_rope: torch.Tensor,
+    v: torch.Tensor,
+    numKVHeads: int = 1,
+    scaleValue: float = -1.0,
+    inputLayout: str = "BSND",
+) -> torch.Tensor:
+    """
+    多头潜在注意力 (Multi-Head Latent Attention)
+
+    Args:
+        q_nope: query 的 nope 部分，BSND: [B, S, N_q, d_nope]，BNSD: [B, N_q, S, d_nope]
+        q_rope: query 的 rope 部分，BSND: [B, S, N_q, d_rope]，BNSD: [B, N_q, S, d_rope]
+        k_nope: key 的 nope 部分，BSND: [B, S_kv, N_kv, d_nope]，BNSD: [B, N_kv, S_kv, d_nope]
+        k_rope: key 的 rope 部分，BSND: [B, S_kv, N_kv, d_rope]，BNSD: [B, N_kv, S_kv, d_rope]
+        v: 值张量，BSND: [B, S_kv, N_kv, d_nope]，BNSD: [B, N_kv, S_kv, d_nope]
+        numKVHeads: KV 头数
+        scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(d_nope + d_rope)
+        inputLayout: 输入 layout，"BSND" 或 "BNSD"
+
+    Returns:
+        输出张量，与输入 layout 一致，head dim 为 d_nope
+    """
+    # 统一转为 BSND 内部计算
+    if inputLayout == "BNSD":
+        q_nope = q_nope.permute(0, 2, 1, 3)
+        q_rope = q_rope.permute(0, 2, 1, 3)
+        k_nope = k_nope.permute(0, 2, 1, 3)
+        k_rope = k_rope.permute(0, 2, 1, 3)
+        v = v.permute(0, 2, 1, 3)
+
+    B, S, N_q, d_nope = q_nope.shape
+    d_rope = q_rope.shape[-1]
+    D_qk = d_nope + d_rope
+    S_kv = k_nope.shape[1]
+    N_kv = numKVHeads
+
+    if scaleValue <= 0:
+        scaleValue = 1.0 / (D_qk ** 0.5)
+
+    # 拼接 Q = [Q_nope, Q_rope]: [B, S, N_q, d_nope + d_rope]
+    q = torch.cat([q_nope, q_rope], dim=-1)
+
+    # 拼接 K = [K_nope, K_rope]: [B, S_kv, N_kv, d_nope + d_rope]
+    k = torch.cat([k_nope, k_rope], dim=-1)
+
+    # GQA 扩展: 每个 KV head 复制 N_q // N_kv 次
+    G = N_q // N_kv
+    if G > 1:
+        k = k.unsqueeze(3).expand(B, S_kv, N_kv, G, D_qk).reshape(B, S_kv, N_q, D_qk)
+        v = v.unsqueeze(3).expand(B, S_kv, N_kv, G, d_nope).reshape(B, S_kv, N_q, d_nope)
+
+    # 转置为 [B, N, S, D]
+    q = q.transpose(1, 2)
+    k = k.transpose(1, 2)
+    v = v.transpose(1, 2)
+
+    # 缩放点积注意力
+    scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    attn_weights = torch.nn.functional.softmax(scores, dim=-1)
+    out = torch.matmul(attn_weights, v)  # [B, N_q, S, d_nope]
+
+    # 转回 BSND: [B, S, N_q, d_nope]
+    out = out.transpose(1, 2)
+
+    # 按输入 layout 输出
+    if inputLayout == "BNSD":
+        out = out.permute(0, 2, 1, 3)
+
+    return out

@@ -1,7 +1,7 @@
 import torch
 
 """
-SwiGLU算子Torch Golden参考实现
+SwiGlu算子Torch Golden参考实现
 
 采用Swish作为激活函数的GLU变体，输入在第-1维拆分成x0和x1两部分
 公式: y = swish(x0) * x1 = x0 * sigmoid(beta * x0) * x1

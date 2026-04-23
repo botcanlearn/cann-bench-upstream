@@ -7,23 +7,23 @@ operator:
   shape_support: 'x: [N, C_in, H, W], weight: [C_out, 1, K_h, K_w]'
   attrs:
   - name: kernelSize
-    type: IntArray
+    type: ListInt
     description: 卷积核大小
     required: true
   - name: stride
-    type: IntArray
+    type: ListInt
     description: 步长
     required: true
   - name: padding
-    type: IntArray
+    type: ListInt
     description: 填充
     required: true
-  - name: dilations
-    type: IntArray
+  - name: dilation
+    type: ListInt
     description: 膨胀率
     required: true
   - name: groups
-    type: int
+    type: Int
     description: 分组数
     required: true
   inputs:
@@ -33,21 +33,18 @@ operator:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   - name: weight
     description: 卷积核
     dtype:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   - name: bias
     description: 偏置
     dtype:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   outputs:
   - name: y
     description: 输出特征图
@@ -55,6 +52,5 @@ operator:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   schema: depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize,
-    int[] stride, int[] padding, int[] dilations, int groups) -> Tensor y
+    int[] stride, int[] padding, int[] dilation, int groups) -> Tensor y

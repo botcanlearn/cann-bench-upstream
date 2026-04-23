@@ -28,7 +28,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.unique(Tensor x, bool return_inverse) -> (Tensor y, Tensor inverse)
+cann_bench.unique(Tensor x, bool return_inverse) -> (Tensor y, Tensor inverse)
 ```
 
 ### 输入参数说明
@@ -118,13 +118,13 @@ def unique(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.tensor([1, 2, 3, 2, 1, 4, 3], dtype=torch.int32, device="npu")
-y, inverse = ascend_bench.unique(x, True)  # y=[1,2,3,4], inverse=[0,1,2,1,0,3,2]
+y, inverse = cann_bench.unique(x, True)  # y=[1,2,3,4], inverse=[0,1,2,1,0,3,2]
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y, _ = ascend_bench.unique(x, False)  # 仅返回唯一值
+y, _ = cann_bench.unique(x, False)  # 仅返回唯一值
 ```
 
 ### 性能基线参考

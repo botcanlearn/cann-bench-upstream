@@ -1,41 +1,66 @@
 import torch
 
 """
-WeightQuantBatchMatmul算子Torch Golden参考实现
+WeightQuantBatchMatmul 算子 Torch Golden 参考实现
 
 权重量化批量矩阵乘法算子
-公式: y = quant(dequant(weight) @ x + bias)
+公式: y = x @ ANTIQUANT(weight) + bias
+      ANTIQUANT(weight) = (weight + antiquantOffset) * antiquantScale
 """
 def weight_quant_batch_matmul(
-    weight: torch.Tensor, x: torch.Tensor, bias: torch.Tensor, transpose_x: bool = False, transpose_weight: bool = False
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    antiquantScale: torch.Tensor,
+    antiquantOffset: torch.Tensor = None,
+    bias: torch.Tensor = None
 ) -> torch.Tensor:
     """
     权重量化批量矩阵乘法算子
-    
-    公式: y = quant(dequant(weight) @ x + bias)
-    
+
+    公式: y = x @ ANTIQUANT(weight) + bias
+          ANTIQUANT(weight) = (weight + antiquantOffset) * antiquantScale
+
     Args:
-        weight: 权重矩阵
-        x: 输入矩阵
-        bias: 偏置张量
-        transpose_x: 是否转置x
-        transpose_weight: 是否转置权重
-    
+        x: 左输入矩阵，shape 为 [M, K]，dtype 为 float16/bfloat16
+        weight: 右输入矩阵（量化权重），shape 为 [K, N]，dtype 为 int8/int4
+        antiquantScale: 反量化scale参数，shape 为 [N] 或 [1, N]
+        antiquantOffset: 反量化offset参数（可选），shape 与 antiquantScale 相同
+        bias: 偏置张量（可选），shape 为 [N] 或 [1, N]
+
     Returns:
-        输出张量
+        输出张量，shape 为 [M, N]，dtype 与 x 相同
     """
 
-    weight_adj = weight.transpose(-2, -1) if transpose_weight else weight
-    x_adj = x.transpose(-2, -1) if transpose_x else x
-    
-    if weight.dtype in [torch.int8, torch.int4]:
-        weight_float = weight.float() * 0.1
+    # 反量化 weight: (weight + antiquantOffset) * antiquantScale
+    # weight 是 int8/int4，需要转换为浮点类型进行计算
+    weight_float = weight.float()  # [K, N]
+
+    # antiquantScale shape: [N] 或 [1, N]，需要 broadcast 到 [K, N]
+    scale_float = antiquantScale.float()  # [N] 或 [1, N]
+
+    # 计算 ANTIQUANT(weight)
+    if antiquantOffset is not None:
+        offset_float = antiquantOffset.float()  # [N] 或 [1, N]
+        weight_dequant = (weight_float + offset_float) * scale_float
     else:
-        weight_float = weight.float()
-    
-    matmul_result = torch.matmul(weight_float, x_adj.float())
-    result = matmul_result + bias.float()
-    
-    scale = 127.0 / result.abs().max()
-    y = torch.clamp((result * scale).round(), -128, 127).to(weight.dtype)
+        weight_dequant = weight_float * scale_float
+
+    # weight_dequant shape: [K, N]
+    # x shape: [M, K]
+    # matmul: [M, K] @ [K, N] = [M, N]
+
+    # x 转换为浮点类型
+    x_float = x.float()  # [M, K]
+
+    # 矩阵乘法
+    y_float = torch.matmul(x_float, weight_dequant)  # [M, N]
+
+    # 加偏置（可选）
+    if bias is not None:
+        bias_float = bias.float()  # [N] 或 [1, N]
+        y_float = y_float + bias_float
+
+    # 转换回输入类型
+    y = y_float.to(x.dtype)
+
     return y

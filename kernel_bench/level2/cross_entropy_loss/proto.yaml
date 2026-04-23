@@ -7,8 +7,8 @@ operator:
     或带 weight: L = -weight[target] * log(exp(x[target]) / sum(exp(x)))
   description: 计算交叉熵损失，用于分类任务
   shape_support: |
-    x (input): (N, C) - N=batch size, C=类别数
-    target: (N,) 或 (N, C) (soft labels)
+    x (input): (N, C) 或 (N, C, d1, d2, ...) - channel_first 约定，C 为类别维度
+    target: (N,) 或 (N, d1, d2, ...) 硬标签，或 (N, C) 软标签
   attrs:
   - name: reduction
     type: string

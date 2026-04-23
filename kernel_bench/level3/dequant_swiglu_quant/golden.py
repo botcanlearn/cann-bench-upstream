@@ -18,20 +18,24 @@ def dequant_swiglu_quant(
         x: 输入张量
         activate_left: 是否激活左侧
         quant_mode: 量化模式'
-        dst_type: 目标数据类型 (0:DT_INT8, 1:DT_INT4, 2:DT_FP8)'
+        dst_type: 目标数据类型 (0:DT_INT8)
     
     Returns:
         输出张量
     """
 
     def swiglu(x, activate_left=False):
+        # 截断到偶数维以支持非对齐输入
+        last_dim = x.shape[-1] - (x.shape[-1] % 2)
+        x = x[..., :last_dim]
+        half = x.shape[-1] // 2
         if activate_left:
-            x_left = x[..., :x.shape[-1]//2]
-            x_right = x[..., x.shape[-1]//2:]
+            x_left = x[..., :half]
+            x_right = x[..., half:]
             return x_left * torch.nn.functional.silu(x_right)
         else:
-            x_left = x[..., :x.shape[-1]//2]
-            x_right = x[..., x.shape[-1]//2:]
+            x_left = x[..., :half]
+            x_right = x[..., half:]
             return torch.nn.functional.silu(x_left) * x_right
     
     if x.dtype in [torch.int8, torch.int32]:
@@ -42,14 +46,8 @@ def dequant_swiglu_quant(
     
     result = swiglu(x_float, activate_left)
     
-    if dst_type == 0:
-        scale = 127.0 / result.abs().max()
-        y = torch.clamp((result * scale).round(), -128, 127).to(torch.int8)
-    elif dst_type == 1:
-        scale = 7.0 / result.abs().max()
-        y = torch.clamp((result * scale).round(), -8, 7).to(torch.int8)
-    else:
-        scale = 240.0 / result.abs().max()
-        y = torch.clamp((result * scale).round(), -128, 127).to(torch.float8_e4m3fn)
-    
+    # INT8 量化
+    scale = (127.0 / result.abs().max()).to(torch.float32)
+    y = torch.clamp((result.float() * scale.item()).round(), -128, 127).to(torch.int8)
+
     return y

@@ -7,7 +7,7 @@
 **主要应用场景**：
 - 大语言模型推理中 FFN 层的量化加速
 - 低精度推理流水线中 SwiGLU 激活函数的融合计算
-- INT8/FP8 量化模型中的反量化-激活-重量化一体化操作
+- INT8 量化模型中的反量化-激活-重量化一体化操作
 
 **算子特征**：
 - 难度等级：L3（FusedComposite）
@@ -24,16 +24,16 @@ $$
 
 具体步骤：
 
-1. **反量化**：将 int8/float8 输入转换为浮点数
+1. **反量化**：将 int8 输入转换为浮点数
 2. **SwiGLU 激活**：将最后一维等分为两半，当 activate_left=False 时 $y = \text{SiLU}(x_{left}) \times x_{right}$，当 activate_left=True 时 $y = x_{left} \times \text{SiLU}(x_{right})$
-3. **量化**：根据 dst_type 将结果量化为 INT8 或 FP8
+3. **量化**：将结果量化为 INT8
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-ascend_bench.dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, int dst_type) -> Tensor y
+cann_bench.dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, int dst_type) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -43,46 +43,39 @@ ascend_bench.dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, 
 | x | Tensor | 必选 | 输入张量，任意维度，最后一维 H 必须为偶数 |
 | activate_left | bool | False | 是否激活左侧 |
 | quant_mode | str | "static" | 量化模式 |
-| dst_type | int | 0 | 目标数据类型 (0:DT_INT8, 1:DT_FP8) |
+| dst_type | int | 0 | 目标数据类型 (0:DT_INT8) |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | 除最后一维减半外与输入相同 | int8 / float8 | 输出张量 |
+| y | 除最后一维减半外与输入相同 | int8 | 输出张量 |
 
 ### 数据类型
 
 | 输入 dtype | 输出 dtype |
 |-----------|-----------|
-| float16 | int8 / float8 |
-| bfloat16 | int8 / float8 |
-| int8 | int8 / float8 |
-| float8 | int8 / float8 |
+| float16 | int8 |
+| bfloat16 | int8 |
+| int8 | int8 |
 
 ### 规则与约束
 
 - 输入张量的最后一维 H 必须为偶数，SwiGLU 将其等分为两半分别处理
 - activate_left 控制 SwiGLU 的激活方向：False 时对左半部分应用 SiLU，True 时对右半部分应用 SiLU
 - quant_mode 指定量化模式，默认 "static"
-- dst_type 取值：0 表示 DT_INT8，1 表示 DT_FP8
+- dst_type 取值：0 表示 DT_INT8
 - 当输入为 int8/int32 类型时，先以 scale=0.1 进行反量化转浮点
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+计算结果与 PyTorch Golden 实现逐元素对比：
 
-| 数据类型 | 验证方式 | rtol | atol |
-|---------|---------|------|------|
-| float16 | 相对误差 | 1e-3 | 1e-3 |
-| bfloat16 | 相对误差 | 4e-3 | 4e-3 |
-| int8 | 完全相等 | — | — |
+| 数据类型 | 验证方式 | 阈值 |
+|---------|---------|------|
+| int8（dst_type=0） | 允许量化边界 off-by-1，最大绝对偏差 ≤ 1；off-by-1 元素占比 | < 1e-4 |
 
-**对比公式**：
-
-$$
-|output - golden| \leq atol + rtol \times |golden|
-$$
+**说明**：y = round(SwiGLU(dequant(x)) × scale) 的 int8 输出允许因 float32 累加顺序差异在 round 时舍到相邻整数；出现 |Δ|≥2 的元素直接判负。
 
 ## 5. 标准 Golden 代码
 
@@ -107,7 +100,7 @@ def dequant_swiglu_quant(
         x: 输入张量
         activate_left: 是否激活左侧
         quant_mode: 量化模式'
-        dst_type: 目标数据类型 (0:DT_INT8, 1:DT_INT4, 2:DT_FP8)'
+        dst_type: 目标数据类型 (0:DT_INT8)
     
     Returns:
         输出张量
@@ -131,16 +124,10 @@ def dequant_swiglu_quant(
     
     result = swiglu(x_float, activate_left)
     
-    if dst_type == 0:
-        scale = 127.0 / result.abs().max()
-        y = torch.clamp((result * scale).round(), -128, 127).to(torch.int8)
-    elif dst_type == 1:
-        scale = 7.0 / result.abs().max()
-        y = torch.clamp((result * scale).round(), -8, 7).to(torch.int8)
-    else:
-        scale = 240.0 / result.abs().max()
-        y = torch.clamp((result * scale).round(), -128, 127).to(torch.float8_e4m3fn)
-    
+    # INT8 量化
+    scale = (127.0 / result.abs().max()).to(torch.float32)
+    y = torch.clamp((result.float() * scale.item()).round(), -128, 127).to(torch.int8)
+
     return y
 ```
 
@@ -150,13 +137,13 @@ def dequant_swiglu_quant(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(2, 4096, dtype=torch.float16, device="npu")
-y = ascend_bench.dequant_swiglu_quant(x, activate_left=False, quant_mode='static', dst_type=0)  # INT8 量化
+y = cann_bench.dequant_swiglu_quant(x, activate_left=False, quant_mode='static', dst_type=0)  # INT8 量化
 
 x_int8 = torch.randint(-128, 127, (2, 4096), dtype=torch.int8, device="npu")
-y = ascend_bench.dequant_swiglu_quant(x_int8, activate_left=True, quant_mode='static', dst_type=0)  # 反量化后 SwiGLU 再量化
+y = cann_bench.dequant_swiglu_quant(x_int8, activate_left=True, quant_mode='static', dst_type=0)  # 反量化后 SwiGLU 再量化
 ```
 
 ### 性能基线参考
@@ -167,4 +154,4 @@ y = ascend_bench.dequant_swiglu_quant(x_int8, activate_left=True, quant_mode='st
 
 - **AddRmsNormDynamicQuant**：同为融合算子，包含 Add、RMSNorm 和动态量化
 - **SwiGLU**：L1 级别的 SwiGLU 激活函数算子
-- **MoeFinalizeRoutingV2**：L3 级别的融合复合算子
+- **MoeFinalizeRouting**：L3 级别的融合复合算子

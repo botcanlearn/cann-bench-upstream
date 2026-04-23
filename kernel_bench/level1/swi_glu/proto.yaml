@@ -1,5 +1,5 @@
 operator:
-  name: SwiGLU
+  name: SwiGlu
   category: Elementwise
   difficulty: L1
   formula: y = (x0 * sigmoid(beta * x0)) * x1

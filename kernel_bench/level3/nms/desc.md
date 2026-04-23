@@ -40,7 +40,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.nms(Tensor boxes, Tensor scores, float iou_threshold) -> Tensor keep_indices
+cann_bench.nms(Tensor boxes, Tensor scores, float iou_threshold) -> Tensor keep_indices
 ```
 
 ### 输入参数说明
@@ -158,14 +158,14 @@ def nms(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 boxes = torch.rand(1000, 4, dtype=torch.float32, device="npu") * 100
 scores = torch.rand(1000, dtype=torch.float32, device="npu")
-keep = ascend_bench.nms(boxes, scores, iou_threshold=0.5)
+keep = cann_bench.nms(boxes, scores, iou_threshold=0.5)
 
 # 低 IoU 阈值（更严格的过滤）
-keep = ascend_bench.nms(boxes, scores, iou_threshold=0.3)
+keep = cann_bench.nms(boxes, scores, iou_threshold=0.3)
 ```
 
 ### 性能基线参考

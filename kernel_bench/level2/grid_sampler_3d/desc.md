@@ -142,6 +142,6 @@ y = cann_bench.grid_sampler_3d(x, grid, interpolation_mode="nearest", padding_mo
 
 ### 相关算子
 
-- **ResizeBilinearV2**：使用双线性插值调整图像大小，同为插值类算子
+- **ResizeBilinear**：使用双线性插值调整图像大小，同为插值类算子
 - **Scatter**：按索引更新张量，同涉及坐标映射操作
 - **Gather**：按索引采集数据，与网格采样在概念上相关

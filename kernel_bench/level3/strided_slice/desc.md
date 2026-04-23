@@ -34,7 +34,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.strided_slice(Tensor x, int[] begin, int[] end, int[] strides, int begin_mask, int end_mask, int ellipsis_mask, int shrink_axis_mask, int new_axis_mask) -> Tensor y
+cann_bench.strided_slice(Tensor x, int[] begin, int[] end, int[] strides, int begin_mask, int end_mask, int ellipsis_mask, int shrink_axis_mask, int new_axis_mask) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -106,28 +106,94 @@ def strided_slice(
     shrink_axis_mask: int = 0, new_axis_mask: int = 0
 ) -> torch.Tensor:
     """
-    使用步长对输入张量进行多维切片，提取子张量。支持begin_mask、end_mask控制边界、shrink_axis_mask收缩维度、new_axis_mask插入新维度、ellipsis_mask省略号等功能
-
-    公式: y[i,j,k,...] = x[begin[i]:end[i]:strides[i], begin[j]:end[j]:strides[j], begin[k]:end[k]:strides[k], ...]
+    使用步长对输入张量进行多维切片，对标 TensorFlow strided_slice。
 
     Args:
         x: 输入张量
-        begin: 切片起始位置数组，长度等于输入维度数
-        end: 切片结束位置数组，长度等于输入维度数
-        strides: 切片步长数组，长度等于输入维度数，支持负数步长
-        begin_mask: begin_mask为二进制掩码，位1表示该维度从0开始，位0使用begin值
-        end_mask: end_mask为二进制掩码，位1表示该维度切到末尾，位0使用end值
-        ellipsis_mask: ellipsis_mask为二进制掩码，位1表示该维度使用省略号标记
-        shrink_axis_mask: shrink_axis_mask为二进制掩码，位1表示该维度被收缩掉（维度大小为1）
-        new_axis_mask: new_axis_mask为二进制掩码，位1表示该位置插入大小为1的新维度
+        begin: 切片起始位置数组
+        end: 切片结束位置数组
+        strides: 切片步长数组，支持负数步长
+        begin_mask: 二进制掩码，位1表示该维度从0开始
+        end_mask: 二进制掩码，位1表示该维度切到末尾
+        ellipsis_mask: 二进制掩码，位1表示省略号标记
+        shrink_axis_mask: 二进制掩码，位1表示收缩该维度（取单元素）
+        new_axis_mask: 二进制掩码，位1表示插入新维度
 
     Returns:
         输出张量，切片结果
     """
+    ndim = x.dim()
+    shape = x.shape
 
-    slices = [slice(b, e, s) for b, e, s in zip(begin, end, strides)]
-    y = x[slices]
-    return y
+    # 处理 ellipsis_mask
+    ellipsis_pos = None
+    for i in range(32):
+        if ellipsis_mask & (1 << i):
+            ellipsis_pos = i
+            break
+
+    # 计算 new_axis 数量
+    num_new_axis = 0
+    for i in range(len(begin) if begin else 0):
+        if new_axis_mask & (1 << i):
+            num_new_axis += 1
+
+    indices = []
+    input_dim_idx = 0
+    param_idx = 0
+
+    if ellipsis_pos is not None:
+        num_params = len(begin) if begin else 0
+        num_ellipsis_dims = ndim - (num_params - num_new_axis - 1)
+        if num_ellipsis_dims < 0:
+            num_ellipsis_dims = 0
+
+    while input_dim_idx < ndim or param_idx < (len(begin) if begin else 0):
+        if param_idx < len(begin) and (new_axis_mask & (1 << param_idx)):
+            indices.append(None)
+            param_idx += 1
+            continue
+
+        if ellipsis_pos is not None and param_idx == ellipsis_pos:
+            for _ in range(num_ellipsis_dims):
+                indices.append(slice(None, None, None))
+                input_dim_idx += 1
+            param_idx += 1
+            continue
+
+        if input_dim_idx < ndim and param_idx < len(begin):
+            dim_size = shape[input_dim_idx]
+            b = begin[param_idx] if param_idx < len(begin) else 0
+            e = end[param_idx] if param_idx < len(end) else dim_size
+            s = strides[param_idx] if param_idx < len(strides) else 1
+
+            if b < 0:
+                b = b + dim_size
+            if e < 0:
+                e = e + dim_size
+
+            if begin_mask & (1 << param_idx):
+                b = 0 if s > 0 else dim_size - 1
+
+            if end_mask & (1 << param_idx):
+                e = dim_size if s > 0 else -1
+
+            if shrink_axis_mask & (1 << param_idx):
+                indices.append(b)
+            else:
+                indices.append(slice(b, e, s))
+
+            input_dim_idx += 1
+            param_idx += 1
+        elif input_dim_idx < ndim:
+            indices.append(slice(None, None, None))
+            input_dim_idx += 1
+        else:
+            if param_idx < len(begin) and (new_axis_mask & (1 << param_idx)):
+                indices.append(None)
+            param_idx += 1
+
+    return x[tuple(indices)]
 ```
 
 ## 6. 额外信息
@@ -136,18 +202,28 @@ def strided_slice(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y = ascend_bench.strided_slice(x, [0, 0], [512, 512], [2, 2], 0, 0, 0, 0, 0)
+y = cann_bench.strided_slice(x, [0, 0], [512, 512], [2, 2], 0, 0, 0, 0, 0)
 
 x = torch.randn(2, 8, 256, 256, dtype=torch.float32, device="npu")
-y = ascend_bench.strided_slice(x, [0, 0, 0, 0], [-1, -1, 128, 128], [1, 1, 2, 2], 0, 0, 0, 0, 0)
+y = cann_bench.strided_slice(x, [0, 0, 0, 0], [-1, -1, 128, 128], [1, 1, 2, 2], 0, 0, 0, 0, 0)
 ```
 
 ### 性能基线参考
 
-基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，基线性能尚未测量。测试用例覆盖了 1D 到 4D 的不同维度场景，包含对齐与非对齐 shape、质数维度（如 [363, 367, 373]）、不同步长（1 到 4）、局部切片、float16、float32、bfloat16 等数据类型，以及零值和特殊值范围输入。
+基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，基线性能尚未测量。测试用例覆盖：
+
+**基础切片 (case 1-10)**：1D 到 3D 不同维度，对齐与非对齐 shape、不同步长、多种 dtype（float16/float32/bfloat16/int32/int64）。
+
+**Mask 功能 (case 11-20)**：覆盖 5 种 mask 参数：
+- `begin_mask` (case 11-12)：维度从 0 开始
+- `end_mask` (case 13)：切到末尾
+- `shrink_axis_mask` (case 14-15)：维度收缩
+- `new_axis_mask` (case 16-17)：插入新维度
+- 组合 mask (case 18-19)：多 mask 组合
+- `ellipsis_mask` (case 20)：省略号展开
 
 ### 相关算子
 

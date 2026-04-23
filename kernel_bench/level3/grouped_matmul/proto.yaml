@@ -2,42 +2,45 @@ operator:
   name: GroupedMatmul
   category: Contraction
   difficulty: L4
-  formula: y[i] = x[i] @ weight[i]
-  description: 分组矩阵乘法算子
-  shape_support: 'x: [M, K], weight: [N, K]'
+  formula: y_i = x_i @ weight_i + bias_i
+  description: 分组矩阵乘法算子，每组矩阵乘的维度大小可以不同
+  shape_support: 'x: TensorList of [m_i, k_i], weight: TensorList of [n_i, k_i] or [k_i, n_i]'
   attrs:
   - name: split_item
     type: int
     default: 0
-    description: 分组项
+    description: 输出切分模式，0/1=输出多tensor（每组独立），2/3=输出单tensor（结果连续存放）
     required: false
   - name: transpose_weight
     type: bool
     default: false
-    description: 是否转置权重
+    description: 是否转置权重，false时weight shape为[n_i, k_i]，true时为[k_i, n_i]
     required: false
   inputs:
   - name: x
-    description: 输入矩阵
+    description: 输入矩阵TensorList，每个tensor shape为[m_i, k_i]
     dtype:
     - float16
     - bfloat16
-    - int8
-    - float8
+    - float32
   - name: weight
-    description: 权重矩阵
+    description: 权重矩阵TensorList，每个tensor shape为[n_i, k_i]（transpose_weight=false）或[k_i, n_i]（transpose_weight=true）
     dtype:
     - float16
     - bfloat16
-    - int8
-    - float8
+    - float32
+  - name: bias
+    description: 偏置TensorList（可选），每个tensor shape为[n_i]
+    dtype:
+    - float16
+    - bfloat16
+    - float32
+    optional: true
   outputs:
   - name: y
-    description: 输出张量
+    description: 输出TensorList（split_item=0/1时多tensor）或单tensor（split_item=2/3时），每个tensor shape为[m_i, n_i]
     dtype:
     - float16
     - bfloat16
-    - int8
-    - float8
-  schema: grouped_matmul(Tensor x, Tensor weight, int split_item, bool transpose_weight)
-    -> Tensor y
+    - float32
+  schema: grouped_matmul(TensorList x, TensorList weight, TensorList? bias, int split_item, bool transpose_weight) -> TensorList y

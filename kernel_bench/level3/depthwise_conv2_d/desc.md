@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize, int[] stride, int[] padding, int[] dilations, int groups) -> Tensor y
+cann_bench.depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize, int[] stride, int[] padding, int[] dilation, int groups) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -42,7 +42,7 @@ ascend_bench.depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kerne
 | kernelSize | int[] | 必选 | 卷积核大小 |
 | stride | int[] | 必选 | 步长 |
 | padding | int[] | 必选 | 填充 |
-| dilations | int[] | 必选 | 膨胀率 |
+| dilation | int[] | 必选 | 膨胀率 |
 | groups | int | 必选 | 分组数 |
 
 ### 输出
@@ -58,7 +58,6 @@ ascend_bench.depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kerne
 | float16 | float16 |
 | float32 | float32 |
 | bfloat16 | bfloat16 |
-| hifloat8 | hifloat8 |
 
 ### 规则与约束
 
@@ -68,7 +67,7 @@ ascend_bench.depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kerne
 - kernelSize 指定卷积核大小
 - stride 指定卷积步长
 - padding 指定填充
-- dilations 指定膨胀率
+- dilation 指定膨胀率
 - groups 指定分组数，深度卷积中通常 groups = C_in
 
 ## 4. 精度要求
@@ -99,7 +98,7 @@ DepthwiseConv2D算子Torch Golden参考实现
 公式: y = bias + weight * x
 """
 def depthwise_conv2_d(
-    x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, kernelSize: list, stride: list, padding: list, dilations: list, groups: int
+    x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, kernelSize: list, stride: list, padding: list, dilation: list, groups: int
 ) -> torch.Tensor:
     """
     二维深度卷积运算
@@ -113,7 +112,7 @@ def depthwise_conv2_d(
         kernelSize: 卷积核大小
         stride: 步长
         padding: 填充
-        dilations: 膨胀率
+        dilation: 膨胀率
         groups: 分组数
     
     Returns:
@@ -122,7 +121,7 @@ def depthwise_conv2_d(
 
     stride_val = (stride[0], stride[1])
     padding_val = (padding[0], padding[1])
-    dilation_val = (dilations[0], dilations[1])
+    dilation_val = (dilation[0], dilation[1])
     
     y = torch.nn.functional.conv2d(x, weight, bias, stride=stride_val, padding=padding_val, dilation=dilation_val, groups=groups)
     return y
@@ -134,13 +133,13 @@ def depthwise_conv2_d(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1, 64, 56, 56, dtype=torch.float16, device="npu")
 weight = torch.randn(64, 1, 3, 3, dtype=torch.float16, device="npu")
 bias = torch.randn(64, dtype=torch.float16, device="npu")
 
-y = ascend_bench.depthwise_conv2_d(x, weight, bias, kernelSize=[3, 3], stride=[1, 1], padding=[1, 1], dilations=[1, 1], groups=64)
+y = cann_bench.depthwise_conv2_d(x, weight, bias, kernelSize=[3, 3], stride=[1, 1], padding=[1, 1], dilation=[1, 1], groups=64)
 ```
 
 ### 性能基线参考

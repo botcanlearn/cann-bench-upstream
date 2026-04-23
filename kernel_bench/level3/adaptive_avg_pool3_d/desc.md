@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.adaptive_avg_pool3_d(Tensor x, int output_size) -> Tensor y
+cann_bench.adaptive_avg_pool3_d(Tensor x, list[int] output_size) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -37,7 +37,7 @@ ascend_bench.adaptive_avg_pool3_d(Tensor x, int output_size) -> Tensor y
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入张量，shape 为 [N, C, D, H, W] 的5维张量 |
-| output_size | int | 必选 | 输出尺寸 |
+| output_size | list[int] | 必选 | 输出尺寸，格式为 [output_d, output_h, output_w] |
 
 ### 输出
 
@@ -88,17 +88,17 @@ AdaptiveAvgPool3D算子Torch Golden参考实现
 公式: y = adaptive_avg_pool3d(x, output_size)
 """
 def adaptive_avg_pool3_d(
-    x: torch.Tensor, output_size: int
+    x: torch.Tensor, output_size: tuple[int, int, int]
 ) -> torch.Tensor:
     """
     完成输入张量的3D自适应平均池化计算
-    
+
     公式: y = adaptive_avg_pool3d(x, output_size)
-    
+
     Args:
-        x: 输入张量
-        output_size: 输出尺寸
-    
+        x: 输入张量，shape 为 [N, C, D, H, W]
+        output_size: 输出尺寸，格式为 (output_d, output_h, output_w)
+
     Returns:
         输出张量，池化结果
     """
@@ -113,13 +113,13 @@ def adaptive_avg_pool3_d(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(2, 32, 16, 64, 64, dtype=torch.float16, device="npu")
-y = ascend_bench.adaptive_avg_pool3_d(x, [8, 8, 8])  # 自适应池化到 8x8x8
+y = cann_bench.adaptive_avg_pool3_d(x, [8, 8, 8])  # 自适应池化到 8x8x8
 
 x = torch.randn(2, 64, 32, 128, 128, dtype=torch.float32, device="npu")
-y = ascend_bench.adaptive_avg_pool3_d(x, [1, 1, 1])  # 全局平均池化
+y = cann_bench.adaptive_avg_pool3_d(x, [1, 1, 1])  # 全局平均池化
 ```
 
 ### 性能基线参考

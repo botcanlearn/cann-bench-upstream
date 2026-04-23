@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor idx)
+cann_bench.top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor idx)
 ```
 
 ### 输入参数说明
@@ -46,19 +46,19 @@ ascend_bench.top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
 | y | 与输入相同，但 dim 维大小变为 k | 与输入 x 相同 | 输出张量，topk 值 |
-| idx | 与 y 相同 | 与输入 x 相同 | 输出索引张量 |
+| idx | 与 y 相同 | int64 | 输出索引张量（始终为 int64） |
 
 ### 数据类型
 
 | 输入 dtype | 输出 dtype（y） | 输出 dtype（idx） |
 |-----------|---------------|-----------------|
-| int8 | int8 | int8 |
-| uint8 | uint8 | uint8 |
-| int32 | int32 | int32 |
+| int8 | int8 | int64 |
+| uint8 | uint8 | int64 |
+| int32 | int32 | int64 |
 | int64 | int64 | int64 |
-| float16 | float16 | float16 |
-| float32 | float32 | float32 |
-| bfloat16 | bfloat16 | bfloat16 |
+| float16 | float16 | int64 |
+| float32 | float32 | int64 |
+| bfloat16 | bfloat16 | int64 |
 
 ### 规则与约束
 
@@ -124,13 +124,13 @@ def top_k(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y, idx = ascend_bench.top_k(x, 10, -1, True)  # 每行取最大的10个元素
+y, idx = cann_bench.top_k(x, 10, -1, True)  # 每行取最大的10个元素
 
 x = torch.randn(2, 8, 256, 256, dtype=torch.float32, device="npu")
-y, idx = ascend_bench.top_k(x, 10, -1, False)  # 每行取最小的10个元素
+y, idx = cann_bench.top_k(x, 10, -1, False)  # 每行取最小的10个元素
 ```
 
 ### 性能基线参考

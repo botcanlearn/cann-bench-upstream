@@ -23,7 +23,7 @@ def add_rms_norm_dynamic_quant(
         x2: 第 2 个输入张量
         gamma: 缩放参数
         epsilon: epsilon 值
-        dst_type: 目标数据类型 (0:DT_INT8, 1:DT_INT4, 2:DT_FP8)
+        dst_type: 目标数据类型 (0:DT_INT8, 1:DT_INT4)
 
     Returns:
         y: 量化后的输出张量
@@ -41,14 +41,14 @@ def add_rms_norm_dynamic_quant(
     y_norm = normalized * gamma
 
     # 动态量化
+    # 将 y_norm 转换为 float32 以保证 scale 计算精度和 dtype 正确
+    y_norm_f32 = y_norm.float()
+
     if dst_type == 0:  # INT8
-        scale = 127.0 / y_norm.abs().max()
-        y = torch.clamp((y_norm * scale).round(), -128, 127).to(torch.int8)
-    elif dst_type == 1:  # INT4
-        scale = 7.0 / y_norm.abs().max()
-        y = torch.clamp((y_norm * scale).round(), -8, 7).to(torch.int8)
-    else:  # FP8
-        scale = 240.0 / y_norm.abs().max()
-        y = torch.clamp((y_norm * scale).round(), -128, 127).to(torch.float8_e4m3fn)
+        scale = (127.0 / y_norm_f32.abs().max()).to(torch.float32)
+        y = torch.clamp((y_norm_f32 * scale.item()).round(), -128, 127).to(torch.int8)
+    else:  # INT4 (存储为 int8，值范围 [-8, 7])
+        scale = (7.0 / y_norm_f32.abs().max()).to(torch.float32)
+        y = torch.clamp((y_norm_f32 * scale.item()).round(), -8, 7).to(torch.int8)
 
     return y, xOut, scale

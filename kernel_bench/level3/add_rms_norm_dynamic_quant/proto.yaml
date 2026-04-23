@@ -14,7 +14,7 @@ operator:
   - name: dst_type
     type: int
     default: 0
-    description: 目标数据类型 (0:DT_INT8, 1:DT_INT4, 2:DT_FP8)'
+    description: 目标数据类型 (0:DT_INT8, 1:DT_INT4)
     required: false
   inputs:
   - name: x1
@@ -34,11 +34,9 @@ operator:
     - bfloat16
   outputs:
   - name: y
-    description: 量化后的输出张量
+    description: 量化后的输出张量（INT4 值范围 [-8,7]，存储为 int8 dtype）
     dtype:
     - int8
-    - int4
-    - float8
   - name: xOut
     description: Add 结果，x1 + x2
     dtype:

@@ -2,14 +2,10 @@ operator:
   name: ROIAlign
   category: FusedComposite
   difficulty: L3
-  formula: y = roi_align(x, rois, output_size)
+  formula: y = roi_align(x, boxes, output_size)
   description: 池化层，用于非均匀输入尺寸的特征图
-  shape_support: 'self: [B, C, H, W], rois: [numRois, 4]'
+  shape_support: 'self: [B, C, H, W], boxes: [numBoxes, 5]'
   attrs:
-  - name: mode
-    type: string
-    description: '插值模式 (''bilinear'': 双线性, ''nearest'': 最近邻)'
-    required: true
   - name: outputHeight
     type: int
     description: 输出高度
@@ -20,7 +16,7 @@ operator:
     required: true
   - name: spatial_scale
     type: float
-    description: 空间缩放因子 (用于将ROI坐标映射到输入特征图尺寸)
+    description: 空间缩放因子 (用于将 boxes 坐标映射到输入特征图尺寸)
     required: true
   - name: sampling_ratio
     type: int
@@ -38,16 +34,16 @@ operator:
     dtype:
     - float32
     - float16
-  - name: rois
-    description: ROI框
+  - name: boxes
+    description: ROI 框 [numBoxes, 5] (batch_idx, x1, y1, x2, y2)
     dtype:
     - float32
     - float16
   outputs:
   - name: y
-    description: 输出张量，ROI对齐结果
+    description: 输出张量，ROI 对齐结果
     dtype:
     - float32
     - float16
-  schema: roi_align(Tensor x, Tensor rois, str mode, int outputHeight, int outputWidth,
+  schema: roi_align(Tensor x, Tensor boxes, int outputHeight, int outputWidth,
     float spatial_scale, int sampling_ratio, bool aligned) -> Tensor y

@@ -137,8 +137,8 @@ def cross_entropy_loss(
     计算交叉熵损失
 
     Args:
-        x: 输入 logits 张量，shape (N, C) 或更高维
-           N = batch size, C = 类别数
+        x: 输入 logits 张量，shape (N, C) 或 (N, C, d1, d2, ...)
+           N = batch size, C = 类别数（channel_first 约定）
            注意：输入应为 logits（未经 softmax），内部会自动应用 log_softmax
         target: 目标标签
                - 硬标签：shape (N,) 或 (N, d1, d2, ...)，值为类别索引

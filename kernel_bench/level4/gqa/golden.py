@@ -1,0 +1,52 @@
+import torch
+
+"""
+GQA算子Torch Golden参考实现
+
+分组查询注意力 (Grouped Query Attention)，多个 query head 共享一组 KV head
+公式: 扩展 KV heads 匹配 Q heads，y = softmax(Q @ K^T * scaleValue) @ V
+"""
+
+
+def gqa(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    scaleValue: float = -1.0,
+) -> torch.Tensor:
+    """
+    分组查询注意力 (Grouped Query Attention)
+
+    Args:
+        query: 查询张量 [B, S, N_q, D]（已分头）
+        key: 键张量 [B, S_kv, N_kv, D]（已分头）
+        value: 值张量 [B, S_kv, N_kv, D]（已分头）
+        scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(D)
+
+    Returns:
+        输出张量 [B, S, N_q, D]
+    """
+    B, S, N_q, D = query.shape
+    S_kv = key.shape[1]
+    N_kv = key.shape[2]
+
+    if scaleValue <= 0:
+        scaleValue = 1.0 / (D ** 0.5)
+
+    # 扩展 KV heads 以匹配 Q heads
+    G = N_q // N_kv
+    key = key.unsqueeze(3).expand(B, S_kv, N_kv, G, D).reshape(B, S_kv, N_q, D)
+    value = value.unsqueeze(3).expand(B, S_kv, N_kv, G, D).reshape(B, S_kv, N_q, D)
+
+    # 转置为 [B, N_q, S, D]
+    q = query.transpose(1, 2)
+    k = key.transpose(1, 2)
+    v = value.transpose(1, 2)
+
+    # 缩放点积注意力
+    scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    attn_weights = torch.nn.functional.softmax(scores, dim=-1)
+    attn_output = torch.matmul(attn_weights, v)
+
+    # 转回 [B, S, N_q, D]
+    return attn_output.transpose(1, 2)

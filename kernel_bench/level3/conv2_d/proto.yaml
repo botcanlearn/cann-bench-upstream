@@ -19,8 +19,6 @@ operator:
     default:
     - 1
     - 1
-    - 1
-    - 1
     description: 膨胀率
     required: false
   - name: groups
@@ -35,21 +33,18 @@ operator:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   - name: filter
     description: 卷积核
     dtype:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   - name: bias
     description: 偏置
     dtype:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   outputs:
   - name: y
     description: 输出特征图
@@ -57,6 +52,5 @@ operator:
     - float16
     - float32
     - bfloat16
-    - hifloat8
   schema: conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads,
-    int[] dilations, Int groups) -> Tensor y
+    int[] dilations, int groups) -> Tensor y

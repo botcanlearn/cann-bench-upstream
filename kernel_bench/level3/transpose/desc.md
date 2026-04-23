@@ -28,7 +28,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.transpose(Tensor x, int[] perm) -> Tensor y
+cann_bench.transpose(Tensor x, int[] perm) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -117,15 +117,15 @@ def transpose(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 # 2D 矩阵转置
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y = ascend_bench.transpose(x, [1, 0])
+y = cann_bench.transpose(x, [1, 0])
 
 # 4D NCHW 转 NHWC
 x = torch.randn(2, 8, 256, 256, dtype=torch.float32, device="npu")
-y = ascend_bench.transpose(x, [0, 2, 3, 1])
+y = cann_bench.transpose(x, [0, 2, 3, 1])
 ```
 
 ### 性能基线参考

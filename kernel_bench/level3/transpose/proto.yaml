@@ -7,7 +7,7 @@ operator:
   shape_support: 输入维度<=8维
   attrs:
   - name: perm
-    type: int64[]
+    type: int[]
     description: 维度置换顺序
   inputs:
   - name: x

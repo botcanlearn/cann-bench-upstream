@@ -8,15 +8,15 @@ operator:
   shape_support: 输入维度0-8维
   attrs:
   - name: begin
-    type: int64[]
+    type: int[]
     description: 切片起始位置数组，长度等于输入维度数
     required: true
   - name: end
-    type: int64[]
+    type: int[]
     description: 切片结束位置数组，长度等于输入维度数
     required: true
   - name: strides
-    type: int64[]
+    type: int[]
     description: 切片步长数组，长度等于输入维度数，支持负数步长
     required: true
   - name: begin_mask

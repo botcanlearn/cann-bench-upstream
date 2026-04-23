@@ -2,128 +2,137 @@
 
 ## 1. 算子简介
 
-分组矩阵乘法与SwiGLU及量化的融合算子，将矩阵乘法、反量化、SwiGLU 激活和量化四个步骤融合为一个算子执行，减少中间数据搬运开销。
+分组矩阵乘法（GroupedMatmul / GMM）、反量化、SwiGLU 激活与再量化的融合算子，将四个步骤合并为一次 Kernel 调用以减少中间数据搬运。语义对齐 `torch_npu.npu_grouped_matmul_swiglu_quant_v2` 的默认配置。
 
 **主要应用场景**：
-- 大语言模型中 MoE（Mixture of Experts）结构的 FFN 层融合计算
-- 低精度推理场景下的矩阵乘法与激活函数融合
-- 需要 int8 量化推理的高性能 Transformer 推理
+- 大语言模型中 MoE（Mixture of Experts）结构的 FFN 层前半段（Gate+Up 投影 + SwiGLU + 量化）
+- 量化推理流水线中 GMM → 激活 → 再量化的整体融合
+- 对 token 分组路由后，每组 token 使用独立专家权重的高性能推理
 
 **算子特征**：
 - 难度等级：L4（FusedComposite）
-- 双输入（x, weight）单输出，涉及矩阵乘法、反量化、SwiGLU 激活和再量化多步融合
-- 输入输出均为 int8 类型，中间计算在浮点域进行
+- 多输入、双输出；涉及 GMM、per-token / per-channel 反量化、SwiGLU、再量化
+- 激活与权重均为 int8（x 已完成 per-token 量化），输出为 int8 + float32 scale
 
 ## 2. 算子定义
 
 ### 数学公式
 
 $$
-y = \text{Quant}(\text{SwiGLU}(\text{Dequant}(\text{Matmul}(x, weight))))
+\begin{aligned}
+&\text{对每个专家 } g \in [0, E),\ \text{根据 } group\_list\ (\text{cumsum}) \text{ 取属于该组的 token 行 } rows_g: \\
+&mm_g = x[rows_g] \cdot weight[g] \\
+&deq_g = mm_g \odot x\_scale[rows_g] \odot weight\_scale[g] \\
+&\text{合并所有组得到 } deq \in \mathbb{R}^{M \times N} \\
+&left, right = \text{split}(deq,\ \text{last\_dim}/2) \\
+&act = \text{SiLU}(left) \odot right \\
+&y,\ y\_scale = \text{PerTokenQuant}(act)
+\end{aligned}
 $$
 
-其中各子步骤为：
+### 步骤拆解
 
-1. **矩阵乘法**：$M = x \times weight$
-2. **反量化**：根据 `dequantMode` 选择反量化方式（模式 0 时乘以缩放因子 0.1，否则直接使用）
-3. **SwiGLU 激活**：将反量化结果沿最后一维对半拆分为 $x_{left}$ 和 $x_{right}$，计算 $\text{SiLU}(x_{left}) \times x_{right}$
-4. **量化**：将结果量化回 int8 范围 $[-128, 127]$
+1. **分组矩阵乘法（GMM）**：`group_list` 采用 cumsum 语义，将 `x` 的 `M` 行划分到 `E` 个专家；第 `g` 组的 token 与 `weight[g]` 做矩阵乘。
+2. **反量化（Dequant）**：左 per-token + 右 per-channel，`deq[i, j] = mm[i, j] * x_scale[i] * weight_scale[g(i), j]`。
+3. **SwiGLU**：沿最后一维对半拆分为 `left, right`，计算 `SiLU(left) * right`，输出宽度减半为 `N/2`。
+4. **再量化（Quant）**：per-token，`y_scale[i] = max_j|act[i, j]| / 127`，`y[i, j] = clamp(round(act[i, j] / y_scale[i]), -128, 127)`。
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-ascend_bench.grouped_matmul_swiglu_quant(Tensor x, Tensor weight, int dequantMode, bool isEnableWeightAssistanceMatrix) -> Tensor y
+cann_bench.grouped_matmul_swiglu_quant(
+    Tensor x,
+    Tensor weight,
+    Tensor weight_scale,
+    Tensor x_scale,
+    Tensor group_list,
+) -> (Tensor y, Tensor y_scale)
 ```
 
-### 输入参数说明
+### 输入参数
 
-| 参数 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| x | Tensor | 必选 | 输入矩阵，shape 为 [M, K]，dtype 为 int8 |
-| weight | Tensor | 必选 | 权重矩阵，shape 为 [E, N/32, K/16, 16, 32]，dtype 为 int8 |
-| dequantMode | int | 必选 | 反量化模式 |
-| isEnableWeightAssistanceMatrix | bool | false | 是否启用权重辅助矩阵 |
+| 参数 | 类型 | Shape | 描述 |
+|------|------|-------|------|
+| x | Tensor (int8) | `[M, K]` | 激活矩阵（GMM 左矩阵，已完成 per-token 量化），允许非连续 |
+| weight | Tensor (int8) | `[E, K, N]` | 专家权重（GMM 右矩阵）|
+| weight_scale | Tensor (float32) | `[E, N]` | 权重 per-channel 反量化因子 |
+| x_scale | Tensor (float32) | `[M]` | 激活 per-token 反量化因子 |
+| group_list | Tensor (int32) | `[E]` | 每个专家的 token 累计和（cumsum） |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | 由矩阵乘法及 SwiGLU 拆分决定 | int8 | 融合计算后的量化输出张量 |
+| y | `[M, N/2]` | int8 | SwiGLU 后的 per-token int8 量化结果 |
+| y_scale | `[M]` | float32 | 输出 per-token 反量化因子 |
 
 ### 数据类型
 
 | 输入 dtype | 输出 dtype |
 |-----------|-----------|
-| int8 | int8 |
+| x: int8；weight: int8；*_scale: float32；group_list: int32 | y: int8；y_scale: float32 |
 
 ### 规则与约束
 
-- 输入 `x` 和 `weight` 均为 int8 类型，中间矩阵乘法在 float32 域进行
-- `weight` 的 shape 为 5 维格式 [E, N/32, K/16, 16, 32]，需与 `x` 的 K 维匹配
-- `dequantMode` 为 0 时，矩阵乘法结果乘以缩放因子 0.1；其他模式直接使用原始结果
-- SwiGLU 要求矩阵乘法输出的最后一维为偶数，以便对半拆分
-- 输出量化范围为 $[-128, 127]$，超出范围的值会被截断
+- `x` 的 `K` 维必须与 `weight` 的 `K` 维一致。
+- `weight` 的最后一维 `N` 必须为偶数，以便 SwiGLU 对半拆分。
+- `group_list` 为 cumsum 序列，长度为 `E`，最终累计值不得超过 `M`。
+- 输出 `y` 会被截断到 `[-128, 127]`。
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+计算结果与 PyTorch Golden 实现逐元素对比：
 
-| 数据类型 | 验证方式 | rtol | atol |
-|---------|---------|------|------|
-| int/uint/bool | 完全相等 | — | — |
+| 数据类型 | 验证方式 | 阈值 |
+|---------|---------|------|
+| y (int8) | 允许量化边界 off-by-1，最大绝对偏差 ≤ 1；off-by-1 元素占比 | < 1e-4 |
+| y_scale (float32) | 容差比较：`\|output - golden\| ≤ atol + rtol × \|golden\|` | rtol=1e-3，atol=1e-5 |
 
-**对比公式**：
+**说明**：
 
-$$
-|output - golden| \leq atol + rtol \times |golden|
-$$
+- `y` 的偏差仅允许来自量化边界 rounding（float32 累加顺序差异导致 `round()` 舍到相邻整数）；出现 |Δ|≥2 的元素直接判负。
+- `y_scale` 使用相对+绝对双阈值，覆盖 scale 本身量级差异较大的情形（见 `accuracy_check.py`）。
 
 ## 5. 标准 Golden 代码
 
 ```python
 import torch
+from typing import Tuple
 
-"""
-GroupedMatmulSwigluQuant算子Torch Golden参考实现
 
-分组矩阵乘法与SwiGLU及量化的融合
-公式: y = SwiGLU(Dequant(Matmul(x, weight)))
-"""
 def grouped_matmul_swiglu_quant(
-    x: torch.Tensor, weight: torch.Tensor, dequantMode: int, isEnableWeightAssistanceMatrix: bool = False
-) -> torch.Tensor:
-    """
-    分组矩阵乘法与SwiGLU及量化的融合
-    
-    公式: y = SwiGLU(Dequant(Matmul(x, weight)))
-    
-    Args:
-        x: 输入矩阵
-        weight: 权重矩阵
-        dequantMode: 反量化模式
-        isEnableWeightAssistanceMatrix: 是否启用权重辅助矩阵
-    
-    Returns:
-        输出张量
-    """
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    weight_scale: torch.Tensor,
+    x_scale: torch.Tensor,
+    group_list: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    M, K = x.shape
+    E, _, N = weight.shape
+    N_out = N // 2
+    ends = group_list.to(torch.int64).tolist()
+    starts = [0] + ends[:-1]
 
-    matmul_result = torch.matmul(x.float(), weight.float())
-    
-    if dequantMode == 0:
-        dequant_result = matmul_result * 0.1
-    else:
-        dequant_result = matmul_result
-    
-    half_dim = dequant_result.shape[-1] // 2
-    x_left = dequant_result[..., :half_dim]
-    x_right = dequant_result[..., half_dim:]
-    result = torch.nn.functional.silu(x_left) * x_right
-    
-    scale = 127.0 / result.abs().max()
-    y = torch.clamp((result * scale).round(), -128, 127).to(torch.int8)
-    return y
+    dequant = torch.empty((M, N), dtype=torch.float32, device=x.device)
+    x_scale_f = x_scale.float()
+    for g in range(E):
+        s, e = starts[g], ends[g]
+        if s == e:
+            continue
+        mm = torch.matmul(x[s:e].float(), weight[g].float())
+        xs = x_scale_f[s:e].unsqueeze(1)
+        ws = weight_scale[g].float().unsqueeze(0)
+        dequant[s:e] = mm * xs * ws
+
+    left, right = dequant[..., :N_out], dequant[..., N_out:]
+    act = torch.nn.functional.silu(left) * right
+
+    eps = torch.finfo(torch.float32).tiny
+    y_scale = act.abs().amax(dim=-1).clamp_min(eps) / 127.0
+    y = torch.clamp(torch.round(act / y_scale.unsqueeze(1)), -128, 127).to(torch.int8)
+    return y, y_scale.to(torch.float32)
 ```
 
 ## 6. 额外信息
@@ -132,19 +141,40 @@ def grouped_matmul_swiglu_quant(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
-x = torch.randint(-128, 127, (64, 256), dtype=torch.int8, device="npu")
-weight = torch.randint(-128, 127, (256, 512), dtype=torch.int8, device="npu")
-y = ascend_bench.grouped_matmul_swiglu_quant(x, weight, dequantMode=0, isEnableWeightAssistanceMatrix=False)
+M, K, N, E = 64, 256, 512, 4
+
+x = torch.randint(-128, 127, (M, K), dtype=torch.int8, device="npu")
+weight = torch.randint(-128, 127, (E, K, N), dtype=torch.int8, device="npu")
+weight_scale = torch.rand(E, N, dtype=torch.float32, device="npu") * 0.01
+x_scale = torch.rand(M, dtype=torch.float32, device="npu") * 0.01
+# cumsum 语义：四组累计 16/32/48/64
+group_list = torch.tensor([16, 32, 48, 64], dtype=torch.int32, device="npu")
+
+y, y_scale = cann_bench.grouped_matmul_swiglu_quant(
+    x, weight, weight_scale, x_scale, group_list,
+)
 ```
+
+### 参考文档
+
+- `torch_npu.npu_grouped_matmul_swiglu_quant_v2`：<https://www.hiascend.com/document/detail/zh/Pytorch/730/apiref/torchnpuCustomsapi/docs/context/torch_npu-npu_grouped_matmul_swiglu_quant_v2.md>
 
 ### 性能基线参考
 
-当前暂无测试用例和性能基线数据。
+`cases.csv` 共 20 个代表性 case，`baseline_perf_us` 通过直接调用 `torch_npu.npu_grouped_matmul_swiglu_quant_v2`（W8A8 NZ 路径，FRACTAL_NZ 权重）采集：
+
+- 测试卡：Ascend 910B2（单卡）
+- 测试脚本：`benchmark_baseline_v2.py`，复用 CAKE2 `AdvancedPerformanceEngine`（10240×10240 fp16 matmul + 96×1024×1024 reduce-max 作为频率预热 + L2 cache clear；ACL profiling + msprof 导出；pattern 区间中位数作为稳定耗时）
+- 每个 case：20 次有效采样，剔除冷启动后取中位数
+
+硬件约束（v2 W8A8 NZ 路径）：
+- `K` 需 16 对齐
+- `N` 需 32 对齐；本版本 `N` 上限 10240
 
 ### 相关算子
 
-- **LSTM**：多步融合的循环神经网络算子，同为 L4 级融合算子
-- **MlaProlog**：Multi-Head Latent Attention 前处理，同为多步融合算子
+- **MlaProlog**：Multi-Head Latent Attention 前处理，同为 L4 级多步融合算子
 - **SparseFlashAttention**：稀疏注意力计算，同为 L4 级融合复合算子
+- **LSTM**：循环神经网络融合算子，同为 L4 级融合算子

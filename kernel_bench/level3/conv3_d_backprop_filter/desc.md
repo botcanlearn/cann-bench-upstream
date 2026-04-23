@@ -13,23 +13,38 @@ Conv3D的filter梯度。
 - 难度等级：L3（Contraction）
 - 双输入（输入特征图和输出梯度）单输出（filter 梯度）
 - 输入 x 为 [N, C_in, D, H, W] 5维张量
+- 输入 grad 为 [N, C_out, D_out, H_out, W_out] 5维张量
 
 ## 2. 算子定义
 
 ### 数学公式
 
 $$
-y = \text{conv3d\_filter\_grad}(x, \text{grad})
+y = \text{conv3d\_filter\_grad}(x, \text{grad}, \text{filter\_size})
 $$
 
 计算 Conv3D 操作中卷积核（filter）的梯度。给定前向传播的输入特征图 $x$ 和来自下游的输出梯度 $\text{grad}$，通过反向传播计算得到 filter 的梯度 $y$。
+
+### 输出 shape 计算
+
+输出 filter 梯度的 shape 由 `filter_size` 参数指定：
+
+$$
+\text{shape}(y) = [C_{out}, C_{in}/groups, K_d, K_h, K_w]
+$$
+
+其中 grad 的 spatial 维度需满足：
+
+$$
+D_{out} = \frac{D_{in} + 2 \cdot \text{pad}_d - \text{dilation}_d \cdot (K_d - 1) - 1}{\text{stride}_d} + 1
+$$
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-ascend_bench.conv3_d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] pads, int[] dilations) -> Tensor y
+cann_bench.conv3_d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] pads, int[] dilations, int groups, int[] filter_size) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -37,16 +52,18 @@ ascend_bench.conv3_d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[]
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入特征图，shape 为 [N, C_in, D, H, W] |
-| grad | Tensor | 必选 | 输出梯度 |
-| strides | int[] | 必选 | 步长 |
-| pads | int[] | 必选 | 填充 |
-| dilations | int[] | 必选 | 膨胀率 |
+| grad | Tensor | 必选 | 输出梯度，shape 为 [N, C_out, D_out, H_out, W_out] |
+| strides | int[] | 必选 | 步长，3元素 [stride_d, stride_h, stride_w] |
+| pads | int[] | 必选 | 填充，6元素格式 [D_front, D_back, H_top, H_bottom, W_left, W_right] |
+| dilations | int[] | 必选 | 膨胀率，3元素 [dilation_d, dilation_h, dilation_w] |
+| groups | int | 1 | 分组数 |
+| filter_size | int[] | 必选 | filter的shape [C_out, C_in/groups, K_d, K_h, K_w] |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | 由输入和梯度的 shape 及卷积参数决定 | 与输入 x 相同 | filter梯度 |
+| y | [C_out, C_in/groups, K_d, K_h, K_w] | 与输入 x 相同 | filter梯度 |
 
 ### 数据类型
 
@@ -59,11 +76,14 @@ ascend_bench.conv3_d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[]
 ### 规则与约束
 
 - x 的 shape 格式为 [N, C_in, D, H, W]
+- grad 的 shape 格式为 [N, C_out, D_out, H_out, W_out]
 - x 和 grad 的 dtype 须一致
-- strides 指定 3D 卷积的步长
-- pads 指定填充值
-- dilations 指定膨胀率
-- 输出 y 为 filter 的梯度，shape 由输入尺寸、梯度尺寸和卷积参数共同决定
+- strides 指定 3D 卷积的步长，为 3 元素列表
+- pads 指定填充值，为 6 元素列表 [D_front, D_back, H_top, H_bottom, W_left, W_right]
+- dilations 指定膨胀率，为 3 元素列表
+- groups 指定分组数，C_in 和 C_out 都须能被 groups 整除
+- filter_size 指定输出 filter 梯度的 shape
+- grad 的 spatial 维度必须与 x、filter_size、strides、pads、dilations 计算的输出维度一致
 
 ## 4. 精度要求
 
@@ -85,37 +105,43 @@ $$
 
 ```python
 import torch
+import torch.nn.functional as F
 
 """
 Conv3DBackpropFilter算子Torch Golden参考实现
 
 Conv3D的filter梯度
-公式: y = conv3d_filter_grad(x, grad)
+公式: y = conv3d_filter_grad(x, grad, filter_size)
 """
 def conv3_d_backprop_filter(
-    x: torch.Tensor, grad: torch.Tensor, strides: list, pads: list, dilations: list
+    x: torch.Tensor, grad: torch.Tensor, filter_size: list, strides: list, pads: list, dilations: list, groups: int = 1
 ) -> torch.Tensor:
     """
     Conv3D的filter梯度
-    
-    公式: y = conv3d_filter_grad(x, grad)
-    
+
+    公式: y = conv3d_filter_grad(x, grad, filter_size)
+
     Args:
-        x: 输入特征图
-        grad: 输出梯度
-        strides: 步长
-        pads: 填充
-        dilations: 膨胀率
-    
+        x: 输入特征图，shape为[N, C_in, D, H, W]
+        grad: 输出梯度，shape为[N, C_out, D_out, H_out, W_out]
+        filter_size: filter的shape [C_out, C_in/groups, K_d, K_h, K_w]
+        strides: 步长，3元素 [stride_d, stride_h, stride_w]
+        pads: 填充，6元素 [D_front, D_back, H_top, H_bottom, W_left, W_right]，对称时取front/top/left
+        dilations: 膨胀率，3元素 [dilation_d, dilation_h, dilation_w]
+        groups: 分组数
+
     Returns:
-        filter梯度
+        filter梯度，shape与filter_size相同
     """
 
-    padding = (pads[0], pads[1], pads[2], pads[3], pads[4])
+    # pads 是 6 元素格式，对称 padding 时取 (D_front, H_top, W_left)
+    # 即 pads[0], pads[2], pads[4]
+    padding = (pads[0], pads[2], pads[4])
     stride = (strides[0], strides[1], strides[2])
     dilation = (dilations[0], dilations[1], dilations[2])
-    
-    y = torch.nn.functional.conv3d(x, grad, bias=None, stride=stride, padding=padding, dilation=dilation)
+
+    # 使用 torch.nn.grad.conv3d_weight 计算 filter 梯度
+    y = F.grad.conv3d_weight(x, tuple(filter_size), grad, stride=stride, padding=padding, dilation=dilation, groups=groups)
     return y
 ```
 
@@ -125,12 +151,13 @@ def conv3_d_backprop_filter(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(2, 64, 8, 16, 16, dtype=torch.float32, device="npu")
-grad = torch.randn(2, 128, 8, 16, 16, dtype=torch.float32, device="npu")
+grad = torch.randn(2, 128, 6, 14, 14, dtype=torch.float32, device="npu")
 
-y = ascend_bench.conv3_d_backprop_filter(x, grad, strides=[1, 1, 1], pads=[1, 1, 1, 1, 1], dilations=[1, 1, 1])
+# filter_size: [C_out, C_in/groups, K_d, K_h, K_w]
+y = cann_bench.conv3_d_backprop_filter(x, grad, strides=[1, 1, 1], pads=[1, 1, 1, 1, 1, 1], dilations=[1, 1, 1], groups=1, filter_size=[128, 64, 3, 3, 3])
 ```
 
 ### 性能基线参考

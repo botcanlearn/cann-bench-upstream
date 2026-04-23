@@ -1,170 +1,385 @@
-# =============================================================================
-# [待废弃] 此文件即将废弃，请迁移至 cases.csv 格式
-# =============================================================================
 cases:
-# ==================== 基准场景 (对齐 shape, float16, split_item=0, transpose_weight=false) ====================
 - operator: GroupedMatmul
   case_id: 1
-  input_shape: [[1048576, 512], [1048576, 512]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [1024, 512]
+    - [2048, 512]
+  - - [1024, 512]
+    - [512, 512]
+  - - [1024]
+    - [512]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  - [float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-1, 1], [-1, 1]]
+  value_range:
+  - [-1, 1]
+  - [-1, 1]
+  - [-0.1, 0.1]
   baseline_perf_us: None
-  note: float16-536M-对齐-M=1M-K=N=512-split=0
+  note: float16-多多多-2组-G1:m1=1024-k1=512-n1=1024-G2:m2=2048-k2=512-n2=512-带bias
 - operator: GroupedMatmul
   case_id: 2
-  input_shape: [[2097152, 1024], [2097152, 1024]]
-  dtype: [bfloat16, bfloat16]
+  input_shape:
+  - - [4096, 1024]
+    - [8192, 1024]
+  - - [2048, 1024]
+    - [1024, 1024]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-2, 2], [-2, 2]]
+  value_range:
+  - [-2, 2]
+  - [-2, 2]
   baseline_perf_us: None
-  note: bfloat16-2G-对齐-M=2M-K=N=1024
+  note: bfloat16-多多多-2组-G1:m=4096-k=1024-n=2048-G2:m=8192-k=1024-n=1024-无bias
 - operator: GroupedMatmul
   case_id: 3
-  input_shape: [[4194304, 256], [4194304, 256]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [16384, 256]
+    - [32768, 256]
+    - [65536, 256]
+  - - [512, 256]
+    - [1024, 256]
+    - [2048, 256]
+  - - [512]
+    - [1024]
+    - [2048]
+  dtype:
+  - [float16, float16, float16]
+  - [float16, float16, float16]
+  - [float16, float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-3, 3], [-3, 3]]
+  value_range:
+  - [-3, 3]
+  - [-3, 3]
+  - [-0.3, 0.3]
   baseline_perf_us: None
-  note: float16-1G-对齐-M=4M-K=N=256
-# ==================== split_item/transpose_weight 变化 ====================
+  note: float16-多多多-3组-带bias-大batch
 - operator: GroupedMatmul
   case_id: 4
-  input_shape: [[8388608, 127], [8388608, 127]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 2, transpose_weight: false}
-  value_range: [[-10, 10], [-10, 10]]
+  input_shape:
+  - - [512, 256]
+    - [1024, 512]
+  - - [256, 128]
+    - [512, 256]
+  - - [128]
+    - [256]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  attrs: {split_item: 0, transpose_weight: true}
+  value_range:
+  - [-10, 10]
+  - [-10, 10]
+  - [-1, 1]
   baseline_perf_us: None
-  note: bfloat16-1G-非对齐-split=2
+  note: bfloat16-多多多-transpose-2组-weight[k,n]格式
 - operator: GroupedMatmul
   case_id: 5
-  input_shape: [[16777216, 61], [16777216, 61]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [128, 64]
+    - [256, 128]
+    - [512, 256]
+  - - [64, 32]
+    - [128, 64]
+    - [256, 128]
+  dtype:
+  - [float16, float16, float16]
+  - [float16, float16, float16]
   attrs: {split_item: 0, transpose_weight: true}
-  value_range: [[-100, 100], [-100, 100]]
+  value_range:
+  - [-100, 100]
+  - [-100, 100]
   baseline_perf_us: None
-  note: float16-1G-非对齐-transpose_weight=true
+  note: float16-多多多-transpose-3组-无bias
 - operator: GroupedMatmul
   case_id: 6
-  input_shape: [[33554432, 31], [33554432, 31]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 4, transpose_weight: true}
-  value_range: [[-1000, 1000], [-1000, 1000]]
+  input_shape:
+  - - [256, 128]
+    - [512, 128]
+  - - [1024, 128]
+    - [1024, 128]
+  - - [1024]
+    - [1024]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  attrs: {split_item: 2, transpose_weight: false}
+  value_range:
+  - [-1000, 1000]
+  - [-1000, 1000]
+  - [-10, 10]
   baseline_perf_us: None
-  note: bfloat16-1G-非对齐-split=4-transpose
-# ==================== 非对齐 shape (>= 50%) ====================
+  note: bfloat16-多多单-split=2-N相等=1024-输出合并
 - operator: GroupedMatmul
   case_id: 7
-  input_shape: [[1047553, 511], [1047553, 511]]
-  dtype: [float16, float16]
-  attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-0.1, 0.1], [-0.1, 0.1]]
+  input_shape:
+  - - [512, 256]
+    - [1024, 256]
+  - - [512, 256]
+    - [512, 256]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  attrs: {split_item: 3, transpose_weight: false}
+  value_range:
+  - [-0.1, 0.1]
+  - [-0.1, 0.1]
   baseline_perf_us: None
-  note: float16-500M-非对齐-微小值域
+  note: float16-多多单-split=3-N相等=512-无bias-微小值域
 - operator: GroupedMatmul
   case_id: 8
-  input_shape: [[2096131, 1021], [2096131, 1021]]
-  dtype: [bfloat16, bfloat16]
+  input_shape:
+  - - [511, 127]
+    - [1021, 257]
+  - - [255, 127]
+    - [513, 257]
+  - - [255]
+    - [513]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  - [float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-1, 2], [-1, 2]]
+  value_range:
+  - [-1, 2]
+  - [-1, 2]
+  - [-0.5, 0.5]
   baseline_perf_us: None
-  note: bfloat16-2G-质数非对齐-非对称
+  note: float16-多多多-质数非对齐-带bias
 - operator: GroupedMatmul
   case_id: 9
-  input_shape: [[4193281, 257], [4193281, 257]]
-  dtype: [float16, float16]
-  attrs: {split_item: 2, transpose_weight: true}
-  value_range: [[-5, 10], [-5, 10]]
+  input_shape:
+  - - [769, 61]
+    - [1537, 127]
+  - - [61, 31]
+    - [127, 63]
+  - - [31]
+    - [63]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  attrs: {split_item: 0, transpose_weight: true}
+  value_range:
+  - [-5, 10]
+  - [-5, 10]
+  - [-1, 1]
   baseline_perf_us: None
-  note: float16-1G-非对齐-split=2-transpose
+  note: bfloat16-多多多-transpose-质数非对齐
 - operator: GroupedMatmul
   case_id: 10
-  input_shape: [[503, 4097], [503, 4097]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-50, 100], [-50, 100]]
+  input_shape:
+  - - [4097, 511]
+    - [8193, 1023]
+  - - [1023, 511]
+    - [1023, 1023]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  attrs: {split_item: 2, transpose_weight: false}
+  value_range:
+  - [-50, 100]
+  - [-50, 100]
   baseline_perf_us: None
-  note: bfloat16-2M-质数非对齐-N=4097
-# ==================== 多形态 shape ====================
+  note: float16-多多单-split=2-N相等=1023-质数非对齐
 - operator: GroupedMatmul
   case_id: 11
-  input_shape: [[2097153, 513], [2097153, 513]]
-  dtype: [float16, float16]
-  attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-65504, 65504], [-65504, 65504]]
+  input_shape:
+  - - [256, 64]
+    - [512, 64]
+    - [1024, 64]
+    - [2048, 64]
+  - - [128, 64]
+    - [128, 64]
+    - [128, 64]
+    - [128, 64]
+  dtype:
+  - [float16, float16, float16, float16]
+  - [float16, float16, float16, float16]
+  attrs: {split_item: 2, transpose_weight: false}
+  value_range:
+  - [-65504, 65504]
+  - [-65504, 65504]
   baseline_perf_us: None
-  note: float16-1G-非对齐-float16边界值
+  note: float16-多多单-4组-N相等=128-float16边界值
 - operator: GroupedMatmul
   case_id: 12
-  input_shape: [[4001, 256], [4001, 256]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-88, 88], [-88, 88]]
+  input_shape:
+  - - [128, 32]
+    - [256, 32]
+    - [512, 32]
+  - - [32, 64]
+    - [32, 128]
+    - [32, 256]
+  - - [64]
+    - [128]
+    - [256]
+  dtype:
+  - [bfloat16, bfloat16, bfloat16]
+  - [bfloat16, bfloat16, bfloat16]
+  - [bfloat16, bfloat16, bfloat16]
+  attrs: {split_item: 0, transpose_weight: true}
+  value_range:
+  - [-88, 88]
+  - [-88, 88]
+  - [-8, 8]
   baseline_perf_us: None
-  note: bfloat16-1M-质数非对齐-float32边界值
-# ==================== 特殊值覆盖 ====================
+  note: bfloat16-多多多-transpose-3组-不同N值-带bias
 - operator: GroupedMatmul
   case_id: 13
-  input_shape: [[1000003, 128], [1000003, 128]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [1000, 128]
+    - [2000, 128]
+  - - [256, 128]
+    - [256, 128]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-inf, inf], [-inf, inf]]
+  value_range:
+  - [-inf, inf]
+  - [-inf, inf]
   baseline_perf_us: None
-  note: float16-128M-质数非对齐-inf特殊值
+  note: float16-多多多-2组-inf特殊值
 - operator: GroupedMatmul
   case_id: 14
-  input_shape: [[10007, 64], [10007, 64]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[nan, nan], [nan, nan]]
+  input_shape:
+  - - [100, 64]
+    - [200, 64]
+  - - [64, 128]
+    - [64, 128]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  attrs: {split_item: 0, transpose_weight: true}
+  value_range:
+  - [nan, nan]
+  - [nan, nan]
   baseline_perf_us: None
-  note: bfloat16-600K-质数非对齐-nan特殊值
+  note: bfloat16-多多多-transpose-nan特殊值
 - operator: GroupedMatmul
   case_id: 15
-  input_shape: [[3001, 32], [3001, 32]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [32, 16]
+    - [64, 16]
+  - - [32, 16]
+    - [32, 16]
+  - - [32]
+    - [32]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  - [float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[0, 0], [0, 0]]
+  value_range:
+  - [0, 0]
+  - [0, 0]
+  - [0, 0]
   baseline_perf_us: None
-  note: float16-100K-质数非对齐-零值
-# ==================== 对齐/非对齐 shape 参数变化 ====================
+  note: float16-多多多-带bias-零值
 - operator: GroupedMatmul
   case_id: 16
-  input_shape: [[1048576, 511], [1048576, 511]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [1024, 511]
+    - [2048, 1023]
+  - - [1023, 511]
+    - [511, 1023]
+  - - [1023]
+    - [511]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  - [float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-0.5, 0.5], [-0.5, 0.5]]
+  value_range:
+  - [-0.5, 0.5]
+  - [-0.5, 0.5]
+  - [-0.05, 0.05]
   baseline_perf_us: None
-  note: float16-500M-混合非对齐-N=511-微小值域
+  note: float16-多多多-不同K值-带bias-微小值域
 - operator: GroupedMatmul
   case_id: 17
-  input_shape: [[2047, 1023], [2047, 1023]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 2, transpose_weight: false}
-  value_range: [[-1, 3], [-1, 3]]
+  input_shape:
+  - - [2047, 1023]
+    - [4095, 2047]
+  - - [1023, 2047]
+    - [2047, 4095]
+  - - [2047]
+    - [4095]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  attrs: {split_item: 0, transpose_weight: true}
+  value_range:
+  - [-1, 3]
+  - [-1, 3]
+  - [-0.1, 0.3]
   baseline_perf_us: None
-  note: bfloat16-2M-非对齐-split=2-非对称
+  note: bfloat16-多多多-transpose-质数非对齐-非对称
 - operator: GroupedMatmul
   case_id: 18
-  input_shape: [[4095, 511], [4095, 511]]
-  dtype: [float16, float16]
-  attrs: {split_item: 0, transpose_weight: true}
-  value_range: [[-1000, 1000], [-1000, 1000]]
+  input_shape:
+  - - [65536, 511]
+    - [131072, 1023]
+  - - [1023, 511]
+    - [2047, 1023]
+  - - [1023]
+    - [2047]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  - [float16, float16]
+  attrs: {split_item: 0, transpose_weight: false}
+  value_range:
+  - [-1000, 1000]
+  - [-1000, 1000]
+  - [-100, 100]
   baseline_perf_us: None
-  note: float16-2M-非对齐-transpose-大值域
+  note: float16-多多多-大矩阵-带bias-大值域
 - operator: GroupedMatmul
   case_id: 19
-  input_shape: [[2097152, 63], [2097152, 63]]
-  dtype: [bfloat16, bfloat16]
-  attrs: {split_item: 4, transpose_weight: true}
-  value_range: [[-0.2, 0.2], [-0.2, 0.2]]
+  input_shape:
+  - - [131072, 63]
+    - [262144, 127]
+  - - [63, 127]
+    - [127, 255]
+  - - [127]
+    - [255]
+  dtype:
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  - [bfloat16, bfloat16]
+  attrs: {split_item: 0, transpose_weight: true}
+  value_range:
+  - [-0.2, 0.2]
+  - [-0.2, 0.2]
+  - [-0.02, 0.02]
   baseline_perf_us: None
-  note: bfloat16-128M-对齐-N=63-split=4-微小值域
+  note: bfloat16-多多多-transpose-大batch-微小值域-weight[k,n]格式
 - operator: GroupedMatmul
   case_id: 20
-  input_shape: [[7001, 127], [7001, 127]]
-  dtype: [float16, float16]
+  input_shape:
+  - - [7001, 127]
+    - [14003, 255]
+  - - [255, 127]
+    - [511, 255]
+  - - [255]
+    - [511]
+  dtype:
+  - [float16, float16]
+  - [float16, float16]
+  - [float16, float16]
   attrs: {split_item: 0, transpose_weight: false}
-  value_range: [[-3, 6], [-3, 6]]
+  value_range:
+  - [-3, 6]
+  - [-3, 6]
+  - [-0.3, 0.6]
   baseline_perf_us: None
-  note: float16-800K-质数非对齐-hidden=127-非对称中值域
+  note: float16-多多多-质数非对齐-带bias-非对称中值域

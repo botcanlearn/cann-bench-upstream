@@ -3,30 +3,72 @@ import torch
 """
 SparseFlashAttention算子Torch Golden参考实现
 
-大序列长度推理场景的高效注意力计算
-公式: y = softmax(Q @ K^T / sqrt(d)) @ V
+稀疏注意力，支持 GQA（N1 != N2）、不同 head dim（Dk != Dv）和 BSND/BNSD 布局
+query 仅与 sparseIndices 指定的 KV 子集计算注意力
+公式: mask = scatter(sparseIndices) -> bool[B, N2, S1, S2]
+      scores = Q @ K^T * scaleValue，mask 外位置置 -inf
+      y = softmax(scores) @ V
+假定 sparseIndices 在同一 (b, n2, s1) 下无重复值
 """
+
+
 def sparse_flash_attention(
-    query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, scaleValue: float, sparseBlockSize: int, layoutQuery: str = 'BSND'
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    sparseIndices: torch.Tensor,
+    scaleValue: float,
+    inputLayout: str = "BSND",
 ) -> torch.Tensor:
     """
-    大序列长度推理场景的高效注意力计算
-    
-    公式: y = softmax(Q @ K^T / sqrt(d)) @ V
-    
-    Args:
-        query: 查询张量
-        key: 键张量
-        value: 值张量
-        scaleValue: 缩放因子
-        sparseBlockSize: 稀疏块大小
-        layoutQuery: 查询布局
-    
-    Returns:
-        输出张量
-    """
+    稀疏 FlashAttention，支持 GQA、不同 head dim 和 BSND/BNSD 布局
 
-    scores = torch.matmul(query, key.transpose(-2, -1)) * scaleValue
-    attn_weights = torch.nn.functional.softmax(scores, dim=-1)
-    y = torch.matmul(attn_weights, value)
-    return y
+    Args:
+        query: 查询张量，BSND: [B, S1, N1, Dk]，BNSD: [B, N1, S1, Dk]
+        key: 键张量，BSND: [B, S2, N2, Dk]，BNSD: [B, N2, S2, Dk]
+        value: 值张量，BSND: [B, S2, N2, Dv]，BNSD: [B, N2, S2, Dv]
+        sparseIndices: 稀疏索引（int32），BSND: [B, S1, N2, topK]，BNSD: [B, N2, S1, topK]
+        scaleValue: 缩放因子
+        inputLayout: 张量布局，"BSND" 或 "BNSD"
+
+    Returns:
+        注意力输出，布局与输入一致
+    """
+    # 统一转为 BNSD 内部计算
+    if inputLayout == "BSND":
+        q = query.permute(0, 2, 1, 3)              # [B, N1, S1, Dk]
+        k = key.permute(0, 2, 1, 3)                 # [B, N2, S2, Dk]
+        v = value.permute(0, 2, 1, 3)               # [B, N2, S2, Dv]
+        si = sparseIndices.permute(0, 2, 1, 3)      # [B, N2, S1, topK]
+    else:  # BNSD
+        q, k, v, si = query, key, value, sparseIndices
+
+    B, N1, S1, Dk = q.shape
+    N2 = k.shape[1]
+    S2 = k.shape[2]
+    G = N1 // N2
+
+    # 用 scatter 把稀疏索引转成 bool mask: [B, N2, S1, S2]
+    mask = torch.zeros(B, N2, S1, S2, dtype=torch.bool, device=q.device)
+    mask.scatter_(-1, si.long(), True)
+
+    # GQA: 通过 reshape 把 N1 拆成 (N2, G)，避免物化 K/V 的 head 扩展
+    q_g = q.reshape(B, N2, G, S1, Dk)
+
+    # 计算完整 scores 后用 mask 屏蔽未选位置: [B, N2, G, S1, S2]
+    # 在同一 (b, n2, s1) 下 sparseIndices 无重复，mask 与 gather 语义等价
+    scores = torch.einsum('bngsd,bnkd->bngsk', q_g, k) * scaleValue
+    scores = scores.masked_fill(~mask.unsqueeze(2), float('-inf'))
+
+    # Softmax 在 S2 维上归一化（未选位置贡献 0）
+    attn_weights = torch.softmax(scores, dim=-1)
+
+    # 加权求和: [B, N2, G, S1, Dv] -> [B, N1, S1, Dv]
+    out = torch.einsum('bngsk,bnkd->bngsd', attn_weights, v)
+    out = out.reshape(B, N1, S1, -1)
+
+    # 转回原始布局
+    if inputLayout == "BSND":
+        return out.permute(0, 2, 1, 3)   # [B, S1, N1, Dv]
+    else:
+        return out                        # [B, N1, S1, Dv]

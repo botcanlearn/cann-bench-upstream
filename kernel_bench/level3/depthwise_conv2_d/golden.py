@@ -7,7 +7,7 @@ DepthwiseConv2D算子Torch Golden参考实现
 公式: y = bias + weight * x
 """
 def depthwise_conv2_d(
-    x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, kernelSize: list, stride: list, padding: list, dilations: list, groups: int
+    x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, kernelSize: list, stride: list, padding: list, dilation: list, groups: int
 ) -> torch.Tensor:
     """
     二维深度卷积运算
@@ -21,7 +21,7 @@ def depthwise_conv2_d(
         kernelSize: 卷积核大小
         stride: 步长
         padding: 填充
-        dilations: 膨胀率
+        dilation: 膨胀率
         groups: 分组数
     
     Returns:
@@ -30,7 +30,7 @@ def depthwise_conv2_d(
 
     stride_val = (stride[0], stride[1])
     padding_val = (padding[0], padding[1])
-    dilation_val = (dilations[0], dilations[1])
+    dilation_val = (dilation[0], dilation[1])
     
     y = torch.nn.functional.conv2d(x, weight, bias, stride=stride_val, padding=padding_val, dilation=dilation_val, groups=groups)
     return y

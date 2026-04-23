@@ -20,17 +20,17 @@
 ### 数学公式
 
 $$
-y[b, y, x, c] = \max_{dy, dx} \left( x[b, y + \text{rates}[1] \cdot dy, x + \text{rates}[2] \cdot dx, c] \times \text{filter}[dy, dx, c] \right)
+y[b, y, x, c] = \max_{dy, dx} \left( x[b, y \cdot \text{stride\_h} + \text{rate\_h} \cdot dy, x \cdot \text{stride\_w} + \text{rate\_w} \cdot dx, c] + \text{filter}[dy, dx, c] \right)
 $$
 
-对每个输出位置 $(b, y, x, c)$，在以 rates 确定的空洞采样窗口内，计算输入与结构元素逐元素乘积的最大值。
+对每个输出位置 $(b, y, x, c)$，在以 rates 确定的空洞采样窗口内，计算输入与结构元素逐元素加法，然后取最大值。
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-ascend_bench.dilation2_d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode, int[] pads, bool ceil_mode, str data_format) -> Tensor y
+cann_bench.dilation2_d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode, int[] pads, bool ceil_mode, str data_format) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -39,8 +39,8 @@ ascend_bench.dilation2_d(Tensor x, Tensor filter, int[] strides, int[] rates, st
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入图像 |
 | filter | Tensor | 必选 | 结构元素/卷积核 |
-| strides | int[] | 必选 | 滑动窗口的步长 [1, stride_rows, stride_cols, 1] |
-| rates | int[] | 必选 | 膨胀率 [1, rate_rows, rate_cols, 1]，用于空洞膨胀 |
+| strides | int[] | 必选 | 滑动窗口的步长 [1, stride_h, stride_w, 1]，首尾固定为1 |
+| rates | int[] | 必选 | 膨胀率 [1, rate_h, rate_w, 1]，首尾固定为1，用于空洞膨胀 |
 | padding_mode | str | "SAME" | 填充模式：'SAME' 或 'VALID' |
 | pads | int[] | [0, 0, 0, 0] | 填充值 [pad_top, pad_bottom, pad_left, pad_right] |
 | ceil_mode | bool | False | 是否向上取整计算输出尺寸 |
@@ -95,37 +95,37 @@ Dilation2D 算子 Torch Golden 参考实现
 公式: y[b, y, x, c] = max_{dy,dx} x[b, y + rates[1]*dy, x + rates[2]*dx, c] * filter[dy, dx, c]
 """
 def dilation2_d(
-    x: torch.Tensor, kernel_size: list, strides: list,
-    pads: list = [0, 0, 0, 0], dilations: list = [1, 1],
-    padding_mode: str = 'SAME', ceil_mode: bool = False,
-    data_format: str = 'NHWC'
+    x: torch.Tensor, filter: torch.Tensor, strides: list, rates: list,
+    pads: list = [0, 0, 0, 0], padding_mode: str = 'SAME',
+    ceil_mode: bool = False, data_format: str = 'NHWC'
 ) -> torch.Tensor:
     """
-    2D形态学膨胀操作，使用最大池化在局部邻域内获取最大值
+    2D形态学膨胀操作，对每个位置在膨胀窗口内取 input + filter 的最大值
 
-    公式: y[b, y, x, c] = max_{dy,dx} x[b, y + rates[1]*dy, x + rates[2]*dx, c] * filter[dy, dx, c]
+    公式: y[b, y, x, c] = max_{dy,dx} (x[b, y*stride_h + rate_h*dy, x*stride_w + rate_w*dx, c] + filter[dy, dx, c])
 
     Args:
-        x: 输入图像
-        kernel_size: 卷积核尺寸 [height, width]
-        strides: 步长 [stride_h, stride_w]
+        x: 输入图像，shape 为 [batch, height, width, depth] (NHWC) 或 [batch, depth, height, width] (NCHW)
+        filter: 结构元素/卷积核，shape 为 [filter_h, filter_w, depth]
+        strides: 步长 [1, stride_h, stride_w, 1]，首尾固定为1
+        rates: 膨胀率 [1, rate_h, rate_w, 1]，首尾固定为1
         pads: 填充值 [pad_top, pad_bottom, pad_left, pad_right]
-        dilations: 膨胀率 [dilation_h, dilation_w]
         padding_mode: 填充模式：'SAME' 或 'VALID'
         ceil_mode: 是否向上取整计算输出尺寸
-        data_format: 数据格式，如 'NHWC'
+        data_format: 数据格式，'NHWC' 或 'NCHW'
 
     Returns:
         膨胀后的图像
     """
 
     if data_format == 'NHWC':
-        x = x.permute(0, 3, 1, 2)
+        x = x.permute(0, 3, 1, 2)  # NHWC -> NCHW
+        filter = filter.permute(2, 0, 1)  # [H, W, C] -> [C, H, W]
 
     batch, channels, in_h, in_w = x.shape
-    filter_h, filter_w = kernel_size[0], kernel_size[1]
-    stride_h, stride_w = strides[0], strides[1]
-    rate_h, rate_w = dilations[0], dilations[1]
+    filter_h, filter_w = filter.shape[1], filter.shape[2]
+    stride_h, stride_w = strides[1], strides[2]
+    rate_h, rate_w = rates[1], rates[2]
 
     effective_filter_h = (filter_h - 1) * rate_h + 1
     effective_filter_w = (filter_w - 1) * rate_w + 1
@@ -142,22 +142,24 @@ def dilation2_d(
         pad_bottom = pad_h - pad_top
         pad_left = pad_w // 2
         pad_right = pad_w - pad_left
-        x = torch.nn.functional.pad(x, [pad_left, pad_right, pad_top, pad_bottom])
+        # 形态学膨胀：padding 区域填充负无穷大，使 max 操作忽略这些位置
+        x = torch.nn.functional.pad(x, [pad_left, pad_right, pad_top, pad_bottom], value=float('-inf'))
     elif padding_mode == 'VALID':
+        # VALID 模式不需要 padding（或使用指定 pads）
         if pads and sum(pads) > 0:
-            x = torch.nn.functional.pad(x, [pads[2], pads[3], pads[0], pads[1]])
+            x = torch.nn.functional.pad(x, [pads[2], pads[3], pads[0], pads[1]], value=float('-inf'))
         out_h = (in_h - effective_filter_h + stride_h) // stride_h
         out_w = (in_w - effective_filter_w + stride_w) // stride_w
     else:
         if pads and sum(pads) > 0:
-            x = torch.nn.functional.pad(x, [pads[2], pads[3], pads[0], pads[1]])
+            x = torch.nn.functional.pad(x, [pads[2], pads[3], pads[0], pads[1]], value=float('-inf'))
         out_h = (x.shape[2] - effective_filter_h + stride_h) // stride_h
         out_w = (x.shape[3] - effective_filter_w + stride_w) // stride_w
         if ceil_mode:
             out_h = (x.shape[2] - effective_filter_h + stride_h - 1) // stride_h + 1
             out_w = (x.shape[3] - effective_filter_w + stride_w - 1) // stride_w + 1
 
-    # 形态学膨胀: 使用 unfold 获取 patches，然后取最大值
+    # 形态学膨胀: 使用 unfold 获取 patches
     patches = torch.nn.functional.unfold(
         x,
         kernel_size=(effective_filter_h, effective_filter_w),
@@ -165,13 +167,18 @@ def dilation2_d(
         stride=(stride_h, stride_w)
     )
 
+    # patches shape: [batch, channels * filter_h * filter_w, out_h * out_w]
     patches = patches.view(batch, channels, filter_h, filter_w, out_h, out_w)
 
-    # 形态学膨胀：对每个位置取 filter 全为1情况下的最大值
-    y = patches.max(dim=4)[0].max(dim=3)[0]
+    # 形态学膨胀：input_patch + filter，然后取最大值
+    # filter shape: [C, H, W] -> expand to [batch, C, filter_h, filter_w, out_h, out_w]
+    filter_expanded = filter.unsqueeze(0).unsqueeze(4).unsqueeze(5).expand(batch, -1, -1, -1, out_h, out_w)
+
+    # 对每个 patch 位置，计算 input + filter，然后取最大值
+    y = (patches + filter_expanded).max(dim=4)[0].max(dim=3)[0]
 
     if data_format == 'NHWC':
-        y = y.permute(0, 2, 3, 1)
+        y = y.permute(0, 2, 3, 1)  # NCHW -> NHWC
 
     return y
 ```
@@ -182,12 +189,12 @@ def dilation2_d(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
-x = torch.randn(2, 32, 64, 64, dtype=torch.float16, device="npu")  # NHWC: [N, H, W, C]
+x = torch.randn(2, 64, 64, 64, dtype=torch.float16, device="npu")  # NHWC: [N, H, W, C]
 filter = torch.randn(3, 3, 64, dtype=torch.float16, device="npu")   # [filter_h, filter_w, C]
 
-y = ascend_bench.dilation2_d(x, filter, strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding_mode='SAME', pads=[0, 0, 0, 0], ceil_mode=False, data_format='NHWC')
+y = cann_bench.dilation2_d(x, filter, strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding_mode='SAME', pads=[0, 0, 0, 0], ceil_mode=False, data_format='NHWC')
 ```
 
 ### 性能基线参考

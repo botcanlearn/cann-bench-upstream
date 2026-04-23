@@ -1,0 +1,44 @@
+operator:
+  name: MHA
+  category: FusedComposite
+  difficulty: L4
+  formula: "y = softmax(Q @ K^T * scaleValue) @ V"
+  description: 多头注意力 (Multi-Head Attention)，对已分头的 Q/K/V 执行缩放点积注意力
+  shape_support: "query [B, S, N, D]，key/value [B, S_kv, N, D]"
+  attrs:
+  - name: scaleValue
+    type: float
+    default: -1.0
+    description: 缩放因子，<=0 时自动使用 1/sqrt(D)
+    required: false
+  inputs:
+  - name: query
+    description: 查询张量（已分头）
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    shape: "[B, S, N, D]"
+  - name: key
+    description: 键张量（已分头）
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    shape: "[B, S_kv, N, D]"
+  - name: value
+    description: 值张量（已分头）
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    shape: "[B, S_kv, N, D]"
+  outputs:
+  - name: y
+    description: 注意力输出张量
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+    shape: "[B, S, N, D]"
+  schema: mha(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0) -> Tensor y

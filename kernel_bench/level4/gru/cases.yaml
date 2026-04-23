@@ -1,0 +1,777 @@
+cases:
+- operator: GRU
+  case_id: 1
+  input_shape:
+  - - 10
+    - 4
+    - 64
+  - - 96
+    - 64
+  - - 96
+    - 32
+  - - 96
+  - - 96
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 64
+    hiddenSize: 32
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -0.1
+    - 0.1
+  - &id001
+    - -0.1
+    - 0.1
+  - *id001
+  - &id002
+    - -0.01
+    - 0.01
+  - *id002
+  baseline_perf_us: null
+  note: S-float32-case1
+- operator: GRU
+  case_id: 2
+  input_shape:
+  - - 20
+    - 16
+    - 128
+  - - 192
+    - 128
+  - - 192
+    - 64
+  - - 192
+  - - 192
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 128
+    hiddenSize: 64
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -0.2
+    - 0.2
+  - &id003
+    - -0.2
+    - 0.2
+  - *id003
+  - &id004
+    - -0.02
+    - 0.02
+  - *id004
+  baseline_perf_us: null
+  note: S-float16-case2
+- operator: GRU
+  case_id: 3
+  input_shape:
+  - - 50
+    - 32
+    - 256
+  - - 384
+    - 256
+  - - 384
+    - 128
+  - - 384
+  - - 384
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    inputSize: 256
+    hiddenSize: 128
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -0.30000000000000004
+    - 0.30000000000000004
+  - &id005
+    - -0.30000000000000004
+    - 0.30000000000000004
+  - *id005
+  - &id006
+    - -0.03
+    - 0.03
+  - *id006
+  baseline_perf_us: null
+  note: S-bfloat16-case3
+- operator: GRU
+  case_id: 4
+  input_shape:
+  - - 12
+    - 5
+    - 64
+  - - 192
+    - 64
+  - - 192
+    - 32
+  - - 192
+  - - 192
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 64
+    hiddenSize: 32
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -0.4
+    - 0.4
+  - &id007
+    - -0.4
+    - 0.4
+  - *id007
+  - &id008
+    - -0.04
+    - 0.04
+  - *id008
+  baseline_perf_us: null
+  note: S-float32-case4
+- operator: GRU
+  case_id: 5
+  input_shape:
+  - - 24
+    - 8
+    - 128
+  - - 384
+    - 128
+  - - 384
+    - 64
+  - - 384
+  - - 384
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 128
+    hiddenSize: 64
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -0.5
+    - 0.5
+  - &id009
+    - -0.5
+    - 0.5
+  - *id009
+  - &id010
+    - -0.05
+    - 0.05
+  - *id010
+  baseline_perf_us: null
+  note: S-float16-case5
+- operator: GRU
+  case_id: 6
+  input_shape:
+  - - 8
+    - 8
+    - 96
+  - - 384
+    - 96
+  - - 384
+    - 64
+  - - 384
+  - - 384
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 96
+    hiddenSize: 64
+    numLayers: 2
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -0.6000000000000001
+    - 0.6000000000000001
+  - &id011
+    - -0.5
+    - 0.5
+  - *id011
+  - &id012
+    - -0.05
+    - 0.05
+  - *id012
+  baseline_perf_us: null
+  note: S-float32-case6
+- operator: GRU
+  case_id: 7
+  input_shape:
+  - - 30
+    - 16
+    - 256
+  - - 1152
+    - 256
+  - - 1152
+    - 128
+  - - 1152
+  - - 1152
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 256
+    hiddenSize: 128
+    numLayers: 3
+    bias: true
+    batchFirst: false
+    dropout: 0.1
+    bidirectional: false
+  value_range:
+  - - -0.7000000000000001
+    - 0.7000000000000001
+  - &id013
+    - -0.5
+    - 0.5
+  - *id013
+  - &id014
+    - -0.05
+    - 0.05
+  - *id014
+  baseline_perf_us: null
+  note: S-float16-case7
+- operator: GRU
+  case_id: 8
+  input_shape:
+  - - 16
+    - 6
+    - 96
+  - - 768
+    - 128
+  - - 768
+    - 64
+  - - 768
+  - - 768
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 96
+    hiddenSize: 64
+    numLayers: 2
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -0.8
+    - 0.8
+  - &id015
+    - -0.5
+    - 0.5
+  - *id015
+  - &id016
+    - -0.05
+    - 0.05
+  - *id016
+  baseline_perf_us: null
+  note: S-float32-case8
+- operator: GRU
+  case_id: 9
+  input_shape:
+  - - 15
+    - 12
+    - 128
+  - - 768
+    - 128
+  - - 768
+    - 64
+  - - 768
+  - - 768
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    inputSize: 128
+    hiddenSize: 64
+    numLayers: 2
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -0.9
+    - 0.9
+  - &id017
+    - -0.5
+    - 0.5
+  - *id017
+  - &id018
+    - -0.05
+    - 0.05
+  - *id018
+  baseline_perf_us: null
+  note: S-bfloat16-case9
+- operator: GRU
+  case_id: 10
+  input_shape:
+  - - 6
+    - 8
+    - 64
+  - - 96
+    - 64
+  - - 96
+    - 32
+  - - 96
+  - - 96
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 64
+    hiddenSize: 32
+    numLayers: 1
+    bias: true
+    batchFirst: true
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.0
+    - 1.0
+  - &id019
+    - -0.5
+    - 0.5
+  - *id019
+  - &id020
+    - -0.05
+    - 0.05
+  - *id020
+  baseline_perf_us: null
+  note: S-float32-case10
+- operator: GRU
+  case_id: 11
+  input_shape:
+  - - 14
+    - 10
+    - 128
+  - - 384
+    - 128
+  - - 384
+    - 64
+  - - 384
+  - - 384
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 128
+    hiddenSize: 64
+    numLayers: 1
+    bias: true
+    batchFirst: true
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -1.1
+    - 1.1
+  - &id021
+    - -0.5
+    - 0.5
+  - *id021
+  - &id022
+    - -0.05
+    - 0.05
+  - *id022
+  baseline_perf_us: null
+  note: S-float16-case11
+- operator: GRU
+  case_id: 12
+  input_shape:
+  - - 8
+    - 3
+    - 64
+  - - 96
+    - 64
+  - - 96
+    - 32
+  dtype:
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 64
+    hiddenSize: 32
+    numLayers: 1
+    bias: false
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.2000000000000002
+    - 1.2000000000000002
+  - &id023
+    - -0.5
+    - 0.5
+  - *id023
+  baseline_perf_us: null
+  note: S-float32-case12
+- operator: GRU
+  case_id: 13
+  input_shape:
+  - - 18
+    - 7
+    - 128
+  - - 384
+    - 128
+  - - 384
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    inputSize: 128
+    hiddenSize: 64
+    numLayers: 1
+    bias: false
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -1.3
+    - 1.3
+  - &id024
+    - -0.5
+    - 0.5
+  - *id024
+  baseline_perf_us: null
+  note: S-bfloat16-case13
+- operator: GRU
+  case_id: 14
+  input_shape:
+  - - 100
+    - 8
+    - 256
+  - - 384
+    - 256
+  - - 384
+    - 128
+  - - 384
+  - - 384
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 256
+    hiddenSize: 128
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.4000000000000001
+    - 1.4000000000000001
+  - &id025
+    - -0.5
+    - 0.5
+  - *id025
+  - &id026
+    - -0.05
+    - 0.05
+  - *id026
+  baseline_perf_us: null
+  note: S-float32-case14
+- operator: GRU
+  case_id: 15
+  input_shape:
+  - - 200
+    - 3
+    - 512
+  - - 768
+    - 512
+  - - 768
+    - 256
+  - - 768
+  - - 768
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 512
+    hiddenSize: 256
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.5
+    - 1.5
+  - &id027
+    - -0.5
+    - 0.5
+  - *id027
+  - &id028
+    - -0.05
+    - 0.05
+  - *id028
+  baseline_perf_us: null
+  note: S-float16-case15
+- operator: GRU
+  case_id: 16
+  input_shape:
+  - - 10
+    - 4
+    - 127
+  - - 381
+    - 127
+  - - 381
+    - 127
+  - - 381
+  - - 381
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 127
+    hiddenSize: 127
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.6
+    - 1.6
+  - &id029
+    - -0.5
+    - 0.5
+  - *id029
+  - &id030
+    - -0.05
+    - 0.05
+  - *id030
+  baseline_perf_us: null
+  note: S-float32-case16
+- operator: GRU
+  case_id: 17
+  input_shape:
+  - - 15
+    - 6
+    - 63
+  - - 93
+    - 63
+  - - 93
+    - 31
+  - - 93
+  - - 93
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    inputSize: 63
+    hiddenSize: 31
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.7000000000000002
+    - 1.7000000000000002
+  - &id031
+    - -0.5
+    - 0.5
+  - *id031
+  - &id032
+    - -0.05
+    - 0.05
+  - *id032
+  baseline_perf_us: null
+  note: S-bfloat16-case17
+- operator: GRU
+  case_id: 18
+  input_shape:
+  - - 7
+    - 6
+    - 64
+  - - 96
+    - 64
+  - - 96
+    - 32
+  - - 96
+  - - 96
+  - - 1
+    - 6
+    - 32
+  dtype:
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  - float32
+  attrs:
+    inputSize: 64
+    hiddenSize: 32
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -1.8
+    - 1.8
+  - &id033
+    - -0.5
+    - 0.5
+  - *id033
+  - &id034
+    - -0.05
+    - 0.05
+  - *id034
+  - - -0.1
+    - 0.1
+  baseline_perf_us: null
+  note: S-float32-case18
+- operator: GRU
+  case_id: 19
+  input_shape:
+  - - 22
+    - 10
+    - 128
+  - - 768
+    - 128
+  - - 768
+    - 64
+  - - 768
+  - - 768
+  - - 4
+    - 10
+    - 64
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 128
+    hiddenSize: 64
+    numLayers: 2
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: true
+  value_range:
+  - - -1.9000000000000001
+    - 1.9000000000000001
+  - &id035
+    - -0.5
+    - 0.5
+  - *id035
+  - &id036
+    - -0.05
+    - 0.05
+  - *id036
+  - - -0.1
+    - 0.1
+  baseline_perf_us: null
+  note: S-float16-case19
+- operator: GRU
+  case_id: 20
+  input_shape:
+  - - 5
+    - 2
+    - 32
+  - - 48
+    - 32
+  - - 48
+    - 16
+  - - 48
+  - - 48
+  dtype:
+  - float16
+  - float16
+  - float16
+  - float16
+  - float16
+  attrs:
+    inputSize: 32
+    hiddenSize: 16
+    numLayers: 1
+    bias: true
+    batchFirst: false
+    dropout: 0.0
+    bidirectional: false
+  value_range:
+  - - -2.0
+    - 2.0
+  - &id037
+    - -0.5
+    - 0.5
+  - *id037
+  - &id038
+    - -0.05
+    - 0.05
+  - *id038
+  baseline_perf_us: null
+  note: S-float16-case20

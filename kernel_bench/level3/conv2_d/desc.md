@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations, Int groups) -> Tensor y
+cann_bench.conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations, int groups) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -41,8 +41,8 @@ ascend_bench.conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] 
 | bias | Tensor | 必选 | 偏置 |
 | strides | int[] | 必选 | 步长 |
 | pads | int[] | 必选 | 填充 |
-| dilations | int[] | [1, 1, 1, 1] | 膨胀率 |
-| groups | Int | 1 | 分组数 |
+| dilations | int[] | [1, 1] | 膨胀率 |
+| groups | int | 1 | 分组数 |
 
 ### 输出
 
@@ -57,7 +57,6 @@ ascend_bench.conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] 
 | float16 | float16 |
 | float32 | float32 |
 | bfloat16 | bfloat16 |
-| hifloat8 | hifloat8 |
 
 ### 规则与约束
 
@@ -66,7 +65,7 @@ ascend_bench.conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] 
 - x、filter、bias 的 dtype 须一致
 - strides 指定卷积的步长
 - pads 指定四方向填充 [pad_top, pad_bottom, pad_left, pad_right]
-- dilations 指定膨胀率，默认 [1, 1, 1, 1]
+- dilations 指定膨胀率，默认 [1, 1]
 - groups 指定分组数，C_in 和 C_out 都须能被 groups 整除
 
 ## 4. 精度要求
@@ -97,7 +96,7 @@ Conv2D算子Torch Golden参考实现
 公式: y = CONV(x, filter) + bias
 """
 def conv2_d(
-    x: torch.Tensor, filter: torch.Tensor, bias: torch.Tensor, strides: list, pads: list, dilations: list = [1, 1, 1, 1], groups: Int = 1
+    x: torch.Tensor, filter: torch.Tensor, bias: torch.Tensor, strides: list, pads: list, dilations: list = [1, 1], groups: int = 1
 ) -> torch.Tensor:
     """
     计算2D卷积
@@ -131,13 +130,13 @@ def conv2_d(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
 x = torch.randn(1, 64, 56, 56, dtype=torch.float16, device="npu")
 weight = torch.randn(128, 64, 3, 3, dtype=torch.float16, device="npu")
 bias = torch.randn(128, dtype=torch.float16, device="npu")
 
-y = ascend_bench.conv2_d(x, weight, bias, strides=[1, 1], pads=[1, 1, 1, 1], dilations=[1, 1, 1, 1], groups=1)
+y = cann_bench.conv2_d(x, weight, bias, strides=[1, 1], pads=[1, 1, 1, 1], dilations=[1, 1], groups=1)
 ```
 
 ### 性能基线参考

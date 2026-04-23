@@ -2,7 +2,7 @@
 
 ## 1. 算子简介
 
-MoE 门控网络中 Softmax 和 TopK 的融合算子，先对输入执行 Softmax 归一化，再取 TopK 个最大值。
+MoE 门控网络中 Softmax 和 TopK 的融合算子，先对输入执行 Softmax 归一化，再取 TopK 个最大值，同时输出专家索引和行位置索引。
 
 **主要应用场景**：
 - Mixture of Experts (MoE) 模型中的门控路由选择
@@ -10,60 +10,75 @@ MoE 门控网络中 Softmax 和 TopK 的融合算子，先对输入执行 Softma
 - MoE 层中 token 到专家的路由分配
 
 **算子特征**：
-- 难度等级：L4（FusedComposite）
-- 单输入双输出，支持 2D 或 3D 输入，输出 TopK 结果和完整 Softmax 结果
+- 难度等级：L3（LayoutTransform）
+- 支持 2D 或 3D 输入，输出 TopK 结果、专家索引、行索引三个输出
 
 ## 2. 算子定义
 
 ### 数学公式
 
 $$
-y = \text{TopK}(\text{Softmax}(x), k)
+softmaxOut = softmax(x, axis=-1)
+$$
+
+$$
+yOut, expertIdxOut = topK(softmaxOut, k)
+$$
+
+$$
+rowIdxRange = arange(expertIdxOut.shape[0] \times expertIdxOut.shape[1])
+$$
+
+$$
+rowIdxOut = rowIdxRange.reshape([expertIdxOut.shape[1], expertIdxOut.shape[0]]).transpose(1, 0)
 $$
 
 ### 处理流程
 
-1. 对输入 $x$ 沿最后一维执行 Softmax：$\text{softmax\_out}[i] = \frac{e^{x_i}}{\sum_j e^{x_j}}$
-2. 从 Softmax 结果中选取前 $k$ 个最大值作为输出 $y$
+1. 对输入 $x$ 沿最后一维执行 Softmax：$\text{softmaxOut}[i] = \frac{e^{x_i}}{\sum_j e^{x_j}}$
+2. 从 Softmax 结果中选取前 $k$ 个最大值作为输出 $yOut$，对应索引为 $expertIdxOut$
+3. 计算 $rowIdxOut$，表示展平后的全局位置索引（用于指示每个输出位置在展平数组中的位置）
+4. 如果 `finished` 中对应行为 True，则 $expertIdxOut$ 中填入 $num\_expert$（即 $x$ 的最后一维大小）
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-ascend_bench.moe_gating_top_k_softmax(Tensor x, int k) -> (Tensor y, Tensor softmax_out)
+cann_bench.moe_gating_top_k_softmax(Tensor x, Tensor? finished=None, int k=1) -> (Tensor y, Tensor expert_idx, Tensor row_idx)
 ```
 
 ### 输入参数说明
 
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| x | Tensor | 必选 | 输入张量，支持 2D 或 3D |
-| k | int | 必选 | topK 数量 |
+| x | Tensor | 必选 | 输入张量，支持 2D 或 3D，shape 为 (..., E)，E 为专家数 |
+| finished | Tensor? | None | 可选，标记哪些行参与计算，dtype 为 bool，shape 为 x_shape[:-1] |
+| k | int | 1 | topK 数量，要求 0 < k <= x最后一维大小，且 k <= 1024 |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | (..., k) | 与输入 x 相同 | 输出张量，topK 结果 |
-| softmax_out | 与输入 x 相同 | 与输入 x 相同 | Softmax 输出 |
+| y | (..., k) | 与输入 x 相同 | 输出张量，topK 结果值 |
+| expert_idx | (..., k) | int32 | topK 对应的专家索引 |
+| row_idx | (..., k) | int32 | 展平后的全局位置索引 |
 
 ### 数据类型
 
-| 输入 dtype | 输出 (y) dtype | 输出 (softmax_out) dtype |
-|-----------|--------------|------------------------|
-| float16 | float16 | float16 |
-| bfloat16 | bfloat16 | bfloat16 |
-| float32 | float32 | float32 |
+| 输入 x dtype | 输出 y dtype | 输出 expert_idx dtype | 输出 row_idx dtype |
+|-------------|-------------|---------------------|-------------------|
+| float16 | float16 | int32 | int32 |
+| bfloat16 | bfloat16 | int32 | int32 |
+| float32 | float32 | int32 | int32 |
 
 ### 规则与约束
 
 - 输入 `x` 支持 2D 或 3D 张量
-- `k` 必须为正整数，且不超过输入最后一维的大小
-- Softmax 沿最后一维（dim=-1）计算
-- TopK 同样沿最后一维选取
-- 输出 `y` 的最后一维大小为 `k`，其余维度与输入一致
-- 输出 `softmax_out` 的形状与输入 `x` 完全一致
+- `k` 必须为正整数，且满足 0 < k <= x最后一维大小，k <= 1024
+- `finished` 为可选参数，若提供则 shape 必须为 x_shape[:-1]，dtype 必须为 bool
+- Softmax 和 TopK 均沿最后一维（dim=-1）计算
+- 当 `finished` 中某行为 True 时，该行对应的 `expert_idx` 值会被设为 `num_expert`
 
 ## 4. 精度要求
 
@@ -85,32 +100,71 @@ $$
 
 ```python
 import torch
+import numpy as np
 
 """
 MoeGatingTopKSoftmax算子Torch Golden参考实现
 
-MoE门控网络中Softmax和TopK的融合
-公式: y = TopK(Softmax(x), k)
+公式:
+  softmaxOut = softmax(x, axis=-1)
+  yOut, expertIdxOut = topK(softmaxOut, k)
+  rowIdxRange = arange(expertIdxOut.shape[0] * expertIdxOut.shape[1])
+  rowIdxOut = rowIdxRange.reshape([expertIdxOut.shape[1], expertIdxOut.shape[0]]).transpose(1, 0)
+
+注意: row_idx是展平后的全局位置索引，而非行号
 """
 def moe_gating_top_k_softmax(
-    x: torch.Tensor, k: int
-) -> tuple[torch.Tensor, torch.Tensor]:
+    x: torch.Tensor,
+    finished: torch.Tensor = None,
+    k: int = 1
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     MoE门控网络中Softmax和TopK的融合
     
-    公式: y = TopK(Softmax(x), k)
-    
     Args:
-        x: 输入张量
+        x: 输入张量，shape (..., E)
+        finished: 可选，标记哪些行参与计算，bool类型，shape x_shape[:-1]
         k: topK数量
     
     Returns:
-        y, softmax_out
+        y: topK值，shape (..., k)
+        expert_idx: topK索引（专家序号），shape (..., k)，int32
+        row_idx: 展平后的全局位置索引，shape (..., k)，int32
     """
-
+    # Softmax沿最后一维
     softmax_out = torch.nn.functional.softmax(x, dim=-1)
+    
+    # TopK沿最后一维
     values, indices = torch.topk(softmax_out, k, dim=-1)
-    return values, softmax_out
+    
+    # 计算row_idx，严格对标op-plugin测试代码
+    # 公式: rowIdxRange = arange(shape[0] * shape[1])
+    #       rowIdxOut = rowIdxRange.reshape([shape[1], shape[0]]).transpose(1, 0)
+    # 注意: row_idx是展平后的全局位置索引
+    output_shape = indices.shape
+    
+    if len(output_shape) == 2:
+        # 2D: (N, k)
+        # row_idx = arange(N*k).reshape(k, N).transpose(1, 0) -> (N, k)
+        row_idx_range = torch.arange(output_shape[0] * output_shape[1], dtype=torch.int32)
+        row_idx = row_idx_range.reshape(output_shape[1], output_shape[0]).transpose(0, 1)
+    else:
+        # 3D: (B, N, k)
+        # 先把(B, N)看作整体，计算展平后的索引
+        # row_idx_range = arange(B*N*k)
+        # reshape成(k, B*N)，transpose成(B*N, k)
+        # 再reshape成(B, N, k)
+        row_idx_range = torch.arange(output_shape[0] * output_shape[1] * output_shape[2], dtype=torch.int32)
+        row_idx = row_idx_range.reshape(output_shape[2], output_shape[0] * output_shape[1]).transpose(0, 1)
+        row_idx = row_idx.reshape(output_shape)
+    
+    # 处理finished参数
+    if finished is not None:
+        num_expert = x.shape[-1]
+        finished_expanded = finished.unsqueeze(-1).expand_as(indices)
+        indices = torch.where(finished_expanded, num_expert, indices)
+    
+    return values, indices.to(torch.int32), row_idx.to(torch.int32)
 ```
 
 ## 6. 额外信息
@@ -119,14 +173,19 @@ def moe_gating_top_k_softmax(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
+# 2D 输入
 x = torch.randn(1024, 64, dtype=torch.float16, device="npu")
-y, softmax_out = ascend_bench.moe_gating_top_k_softmax(x, k=8)
+y, expert_idx, row_idx = cann_bench.moe_gating_top_k_softmax(x, k=8)
+
+# 带 finished 参数
+finished = torch.randint(0, 2, (1024,), dtype=torch.bool, device="npu")
+y, expert_idx, row_idx = cann_bench.moe_gating_top_k_softmax(x, finished=finished, k=8)
 
 # 3D 输入
 x_3d = torch.randn(4, 1024, 64, dtype=torch.float32, device="npu")
-y, softmax_out = ascend_bench.moe_gating_top_k_softmax(x_3d, k=4)
+y, expert_idx, row_idx = cann_bench.moe_gating_top_k_softmax(x_3d, k=4)
 ```
 
 ### 性能基线参考
@@ -135,6 +194,6 @@ y, softmax_out = ascend_bench.moe_gating_top_k_softmax(x_3d, k=4)
 
 ### 相关算子
 
-- **MoeFinalizeRoutingV2**：MoE 路由合并算子，使用本算子输出的路由权重对专家输出进行加权求和
+- **MoeInitRouting**：MoE 初始化路由算子，使用本算子输出的路由结果
+- **MoeFinalizeRouting**：MoE 路由合并算子，使用本算子输出的路由权重对专家输出进行加权求和
 - **MoeReRouting**：MoE token 重排算子，根据路由结果重新排列 token
-- **GroupedMatmul**：分组矩阵乘法算子，在 MoE 流程中紧随门控路由之后执行

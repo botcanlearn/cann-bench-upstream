@@ -49,7 +49,7 @@ $$
 ### 算子原型
 
 ```python
-ascend_bench.gru(Tensor x, Tensor weight_ih, Tensor weight_hh, Tensor? bias_ih, Tensor? bias_hh, Tensor? h0, int inputSize, int hiddenSize, int numLayers, bool bias, bool batchFirst, float dropout, bool bidirectional) -> (Tensor y, Tensor hn)
+cann_bench.gru(Tensor x, TensorList weight_ih, TensorList weight_hh, TensorList? bias_ih, TensorList? bias_hh, Tensor? h0, int inputSize, int hiddenSize, int numLayers, bool bias, bool batchFirst, float dropout, bool bidirectional) -> (Tensor y, Tensor hn)
 ```
 
 ### 输入参数说明
@@ -57,18 +57,51 @@ ascend_bench.gru(Tensor x, Tensor weight_ih, Tensor weight_hh, Tensor? bias_ih, 
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入序列张量，shape 为 (S, B, input_size) 或 (B, S, input_size) |
-| weight_ih | Tensor | 必选 | 输入到隐藏层权重，shape 为 (num_layers * 3 * hiddenSize, inputSize) |
-| weight_hh | Tensor | 必选 | 隐藏层到隐藏层权重，shape 为 (num_layers * 3 * hiddenSize, hiddenSize) |
-| bias_ih | Tensor | None | 输入到隐藏层偏置（可选） |
-| bias_hh | Tensor | None | 隐藏层到隐藏层偏置（可选） |
+| weight_ih | TensorList | 必选 | 输入到隐藏层权重列表，每层/每个方向独立 tensor。详见权重列表格式 |
+| weight_hh | TensorList | 必选 | 隐藏层到隐藏层权重列表，每个 tensor shape 为 (3*hiddenSize, hiddenSize) |
+| bias_ih | TensorList | None | 输入到隐藏层偏置列表（可选），每个 tensor shape 为 (3*hiddenSize) |
+| bias_hh | TensorList | None | 隐藏层到隐藏层偏置列表（可选），每个 tensor shape 为 (3*hiddenSize) |
 | h0 | Tensor | None | 初始隐藏状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
 | inputSize | int | 必选 | 输入特征维度 |
 | hiddenSize | int | 必选 | 隐藏状态特征维度 |
 | numLayers | int | 1 | 循环层数 |
 | bias | bool | true | 是否使用偏置 |
-| batchFirst | bool | false | 输入是否为 (batch, seq, feature) 格式 |
+| batchFirst | bool | false | 输入是否为 (B, S, input_size) 格式 |
 | dropout | float | 0.0 | Dropout 概率 |
 | bidirectional | bool | false | 是否双向 GRU |
+
+### 权重列表格式
+
+GRU 有 3 个门（z, r, n），每个门都需要独立的权重矩阵。权重以 TensorList 形式传入，每层、每个方向为独立的 tensor。
+
+**TensorList 长度计算：**
+
+- `len(weight_ih) = numLayers * num_directions`
+- `len(weight_hh) = numLayers * num_directions`
+- `len(bias_ih) = numLayers * num_directions`（如有偏置）
+- `len(bias_hh) = numLayers * num_directions`（如有偏置）
+
+**排列顺序：**
+
+```
+[weight_ih_l0, weight_ih_l0_reverse, weight_ih_l1, weight_ih_l1_reverse, ...]  (bidirectional=true)
+[weight_ih_l0, weight_ih_l1, ...]  (bidirectional=false)
+```
+
+**每个 tensor shape：**
+
+| 参数 | Layer 0 | Layer k (k>0) |
+|------|---------|---------------|
+| weight_ih (单向) | (3*hiddenSize, inputSize) | (3*hiddenSize, hiddenSize) |
+| weight_ih (双向) | (3*hiddenSize, inputSize) | (3*hiddenSize, 2*hiddenSize) |
+| weight_hh | (3*hiddenSize, hiddenSize) | (3*hiddenSize, hiddenSize) |
+| bias_ih/bias_hh | (3*hiddenSize) | (3*hiddenSize) |
+
+**示例：**
+
+- 单层单向: `weight_ih = [tensor(3*H, inputSize)]`, `weight_hh = [tensor(3*H, H)]`
+- 单层双向: `weight_ih = [tensor(3*H, inputSize), tensor(3*H, inputSize)]` (forward + reverse)
+- 两层双向: `weight_ih = [tensor(3*H, inputSize), tensor(3*H, inputSize), tensor(3*H, 2*H), tensor(3*H, 2*H)]`
 
 ### 输出
 
@@ -87,13 +120,14 @@ ascend_bench.gru(Tensor x, Tensor weight_ih, Tensor weight_hh, Tensor? bias_ih, 
 
 ### 规则与约束
 
-- 所有输入 Tensor（x, weight_ih, weight_hh, bias_ih, bias_hh, h0）的 dtype 必须一致
-- `weight_ih` 的 shape 为 (num_layers * 3 * hiddenSize, inputSize)，因 GRU 有 3 个门（z, r, n）
-- `weight_hh` 的 shape 为 (num_layers * 3 * hiddenSize, hiddenSize)
+- 所有输入 Tensor 的 dtype 必须一致
+- GRU 有 3 个门（z, r, n），因此权重矩阵行数为 3*hiddenSize
+- 多层 GRU 时，Layer k 的输入来自前一层的输出，因此 weight_ih 的列维度需要调整
 - 当 `bias=true` 时，`bias_ih` 和 `bias_hh` 必须提供
 - 当 `bidirectional=true` 时，num_directions=2，否则为 1
 - `dropout` 仅在 `numLayers > 1` 时生效，作用于层间（非最后一层）
 - `batchFirst=true` 时，输入 x 的 shape 为 (B, S, input_size)，输出 y 的 shape 为 (B, S, num_directions * hiddenSize)
+- PyTorch GRU 内部使用 float32 计算，float16/bfloat16 输入会转换为 float32 后计算，结果再转回原 dtype
 
 ## 4. 精度要求
 
@@ -115,24 +149,15 @@ $$
 
 ```python
 import torch
+from typing import List, Optional, Tuple
 
-"""
-GRU 算子 Torch Golden 参考实现
-
-Gated Recurrent Unit 循环神经网络
-公式:
-    z_t = σ(W_z @ x_t + U_z @ h_{t-1} + b_z)
-    r_t = σ(W_r @ x_t + U_r @ h_{t-1} + b_r)
-    n_t = tanh(W_n @ x_t + r_t ⊙ (U_n @ h_{t-1} + b_n))
-    h_t = (1 - z_t) ⊙ n_t + z_t ⊙ h_{t-1}
-"""
 def gru(
     x: torch.Tensor,
-    weight_ih: torch.Tensor,
-    weight_hh: torch.Tensor,
-    bias_ih: torch.Tensor | None = None,
-    bias_hh: torch.Tensor | None = None,
-    h0: torch.Tensor | None = None,
+    weight_ih: List[torch.Tensor],
+    weight_hh: List[torch.Tensor],
+    bias_ih: Optional[List[torch.Tensor]] = None,
+    bias_hh: Optional[List[torch.Tensor]] = None,
+    h0: Optional[torch.Tensor] = None,
     inputSize: int = 0,
     hiddenSize: int = 0,
     numLayers: int = 1,
@@ -140,75 +165,40 @@ def gru(
     batchFirst: bool = False,
     dropout: float = 0.0,
     bidirectional: bool = False
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Gated Recurrent Unit 循环神经网络
-
-    Args:
-        x: 输入序列张量 (S, B, input_size) 或 (B, S, input_size) if batch_first
-        weight_ih: 输入到隐藏层权重 (num_layers * 3 * hiddenSize, inputSize)
-        weight_hh: 隐藏层到隐藏层权重 (num_layers * 3 * hiddenSize, hiddenSize)
-        bias_ih: 输入到隐藏层偏置 (可选)
-        bias_hh: 隐藏层到隐藏层偏置 (可选)
-        h0: 初始隐藏状态 (可选)
-        inputSize: 输入特征维度
-        hiddenSize: 隐藏状态特征维度
-        numLayers: 循环层数
-        bias: 是否使用偏置
-        batchFirst: 输入是否为 (batch, seq, feature) 格式
-        dropout: Dropout 概率
-        bidirectional: 是否双向 GRU
-
-    Returns:
-        y: 输出序列
-        hn: 最终隐藏状态
-    """
+) -> Tuple[torch.Tensor, torch.Tensor]:
     num_directions = 2 if bidirectional else 1
-
-    # 使用 torch.nn.GRU 实现
     gru_layer = torch.nn.GRU(
-        input_size=inputSize,
-        hidden_size=hiddenSize,
-        num_layers=numLayers,
-        bias=bias,
-        batch_first=batchFirst,
-        dropout=dropout if numLayers > 1 else 0.0,
-        bidirectional=bidirectional
+        input_size=inputSize, hidden_size=hiddenSize, num_layers=numLayers,
+        bias=bias, batch_first=batchFirst,
+        dropout=dropout if numLayers > 1 else 0.0, bidirectional=bidirectional
     )
+    input_dtype = x.dtype
+    gru_layer = gru_layer.float()
 
-    # 手动设置权重以匹配传入的 weight
-    # PyTorch GRU 权重格式：
-    # weight_ih_l[k]: 输入到隐藏层权重，shape (3*hidden_size, input_size)
-    # weight_hh_l[k]: 隐藏层到隐藏层权重，shape (3*hidden_size, hidden_size)
     with torch.no_grad():
         for layer in range(numLayers):
-            layer_input_size = inputSize if layer == 0 else hiddenSize * num_directions
-            gru_layer.weight_ih_l[layer][:, :layer_input_size].copy_(
-                weight_ih[layer * 3 * hiddenSize:(layer + 1) * 3 * hiddenSize, :layer_input_size]
-            )
-            gru_layer.weight_hh_l[layer].copy_(
-                weight_hh[layer * 3 * hiddenSize:(layer + 1) * 3 * hiddenSize, :]
-            )
-            if bias:
-                gru_layer.bias_ih_l[layer].copy_(
-                    bias_ih[layer * 3 * hiddenSize:(layer + 1) * 3 * hiddenSize]
-                )
-                gru_layer.bias_hh_l[layer].copy_(
-                    bias_hh[layer * 3 * hiddenSize:(layer + 1) * 3 * hiddenSize]
-                )
+            getattr(gru_layer, f'weight_ih_l{layer}').copy_(weight_ih[layer * num_directions].float())
+            getattr(gru_layer, f'weight_hh_l{layer}').copy_(weight_hh[layer * num_directions].float())
+            if bias and bias_ih is not None:
+                getattr(gru_layer, f'bias_ih_l{layer}').copy_(bias_ih[layer * num_directions].float())
+            if bias and bias_hh is not None:
+                getattr(gru_layer, f'bias_hh_l{layer}').copy_(bias_hh[layer * num_directions].float())
+            if bidirectional:
+                getattr(gru_layer, f'weight_ih_l{layer}_reverse').copy_(weight_ih[layer * num_directions + 1].float())
+                getattr(gru_layer, f'weight_hh_l{layer}_reverse').copy_(weight_hh[layer * num_directions + 1].float())
+                if bias and bias_ih is not None:
+                    getattr(gru_layer, f'bias_ih_l{layer}_reverse').copy_(bias_ih[layer * num_directions + 1].float())
+                if bias and bias_hh is not None:
+                    getattr(gru_layer, f'bias_hh_l{layer}_reverse').copy_(bias_hh[layer * num_directions + 1].float())
 
-    # 初始化隐藏状态
+    x_float = x.float()
     if h0 is None:
-        h0 = torch.zeros(
-            numLayers * num_directions,
-            x.shape[1] if not batchFirst else x.shape[0],
-            hiddenSize,
-            dtype=x.dtype,
-            device=x.device
-        )
-
-    y, hn = gru_layer(x, h0)
-    return y, hn
+        batch_size = x.shape[1] if not batchFirst else x.shape[0]
+        h0 = torch.zeros(numLayers * num_directions, batch_size, hiddenSize, dtype=torch.float32)
+    else:
+        h0 = h0.float()
+    y, hn = gru_layer(x_float, h0)
+    return y.to(input_dtype), hn.to(input_dtype)
 ```
 
 ## 6. 额外信息
@@ -217,29 +207,32 @@ def gru(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
-# 单层单向 GRU
+# 单层单向 GRU（TensorList 格式）
 seq_len, batch, input_size, hidden_size = 20, 8, 128, 256
 x = torch.randn(seq_len, batch, input_size, dtype=torch.float32, device="npu")
-weight_ih = torch.randn(3 * hidden_size, input_size, dtype=torch.float32, device="npu")
-weight_hh = torch.randn(3 * hidden_size, hidden_size, dtype=torch.float32, device="npu")
-bias_ih = torch.randn(3 * hidden_size, dtype=torch.float32, device="npu")
-bias_hh = torch.randn(3 * hidden_size, dtype=torch.float32, device="npu")
-y, hn = ascend_bench.gru(x, weight_ih, weight_hh, bias_ih, bias_hh, None,
+weight_ih = [torch.randn(3 * hidden_size, input_size, dtype=torch.float32, device="npu")]
+weight_hh = [torch.randn(3 * hidden_size, hidden_size, dtype=torch.float32, device="npu")]
+bias_ih = [torch.randn(3 * hidden_size, dtype=torch.float32, device="npu")]
+bias_hh = [torch.randn(3 * hidden_size, dtype=torch.float32, device="npu")]
+y, hn = cann_bench.gru(x, weight_ih, weight_hh, bias_ih, bias_hh, None,
                           inputSize=input_size, hiddenSize=hidden_size, numLayers=1,
                           bias=True, batchFirst=False, dropout=0.0, bidirectional=False)
 
-# batch_first 模式
-x_bf = torch.randn(batch, seq_len, input_size, dtype=torch.float32, device="npu")
-y_bf, hn_bf = ascend_bench.gru(x_bf, weight_ih, weight_hh, bias_ih, bias_hh, None,
+# 双向 GRU
+weight_ih_bi = [torch.randn(3 * hidden_size, input_size, dtype=torch.float32, device="npu"),
+                torch.randn(3 * hidden_size, input_size, dtype=torch.float32, device="npu")]
+weight_hh_bi = [torch.randn(3 * hidden_size, hidden_size, dtype=torch.float32, device="npu"),
+                torch.randn(3 * hidden_size, hidden_size, dtype=torch.float32, device="npu")]
+y_bi, hn_bi = cann_bench.gru(x, weight_ih_bi, weight_hh_bi, None, None, None,
                                 inputSize=input_size, hiddenSize=hidden_size, numLayers=1,
-                                bias=True, batchFirst=True, dropout=0.0, bidirectional=False)
+                                bias=False, batchFirst=False, dropout=0.0, bidirectional=True)
 ```
 
 ### 性能基线参考
 
-当前暂无测试用例和性能基线数据。
+基于 cases.yaml 中 20 个测试用例，覆盖单层/多层、单向/双向、不同 dtype、batch_first 等场景。所有用例的 baseline_perf_us 均为 None，性能基线数据尚未测量。
 
 ### 相关算子
 

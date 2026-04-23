@@ -1,8 +1,8 @@
-# SwiGLU 算子 API 描述
+# SwiGlu 算子 API 描述
 
 ## 1. 算子简介
 
-SwiGLU 是采用 Swish 作为激活函数的 GLU（Gated Linear Unit）变体，输入在最后一维拆分成 x0 和 x1 两部分，x0 经 Swish 激活后与 x1 做门控乘法。
+SwiGlu 是采用 Swish 作为激活函数的 GLU（Gated Linear Unit）变体，输入在最后一维拆分成 x0 和 x1 两部分，x0 经 Swish 激活后与 x1 做门控乘法。
 
 **主要应用场景**：
 - LLaMA、PaLM 等大语言模型的前馈网络
@@ -51,7 +51,7 @@ cann_bench.swi_glu(Tensor x, float scalarValue) -> Tensor y
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | 输入 shape 的最后一维除以 2 | 与输入 x 相同 | SwiGLU 门控激活结果 |
+| y | 输入 shape 的最后一维除以 2 | 与输入 x 相同 | SwiGlu 门控激活结果 |
 
 ### 数据类型
 
@@ -135,5 +135,5 @@ y = cann_bench.swi_glu(x, scalarValue=1.0)
 
 ### 相关算子
 
-- **Sigmoid**：$y = 1/(1+e^{-x})$，SwiGLU 内部的 Swish 函数直接依赖 Sigmoid
+- **Sigmoid**：$y = 1/(1+e^{-x})$，SwiGlu 内部的 Swish 函数直接依赖 Sigmoid
 - **Gelu**：$y = x \cdot \Phi(x)$，与 Swish 同为门控激活，常作为对比方案

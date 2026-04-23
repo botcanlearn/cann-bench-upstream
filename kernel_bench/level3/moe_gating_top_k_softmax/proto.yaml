@@ -1,33 +1,49 @@
 operator:
   name: MoeGatingTopKSoftmax
-  category: FusedComposite
-  difficulty: L4
-  formula: y = TopK(Softmax(x), k)
-  description: MoE门控网络中Softmax和TopK的融合
-  shape_support: 'x: 2D或3D'
+  category: LayoutTransform
+  difficulty: L3
+  formula: |
+    softmaxOut = softmax(x, axis=-1)
+    yOut, expertIdxOut = topK(softmaxOut, k)
+    rowIdxRange = arange(expertIdxOut.shape[0] * expertIdxOut.shape[1])
+    rowIdxOut = rowIdxRange.reshape([expertIdxOut.shape[1], expertIdxOut.shape[0]]).transpose(1, 0)
+  description: MoE门控网络中Softmax和TopK的融合，输出topK值、专家索引和行位置索引
+  shape_support: 'x: 2D或3D; finished: x_shape[:-1]; outputs: (..., k)'
   attrs:
   - name: k
     type: int
-    description: topK数量
-    required: true
+    default: "1"
+    description: topK数量，要求0<k<=x最后一维大小，且k<=1024
   inputs:
   - name: x
-    description: 输入张量
+    description: 输入张量，shape为(..., E)，E为专家数
     dtype:
     - float16
     - bfloat16
     - float32
+    shape: '2D或3D'
+  - name: finished
+    description: 可选输入，标记哪些行参与计算，shape为x_shape[:-1]
+    dtype:
+    - bool
+    shape: 'x_shape[:-1]'
+    optional: true
   outputs:
   - name: y
-    description: 输出张量，topK结果
+    description: topK结果值，shape为(..., k)
     dtype:
     - float16
     - bfloat16
     - float32
-  - name: softmax_out
-    description: Softmax输出
+    shape: '(..., k)'
+  - name: expert_idx
+    description: topK对应的专家索引，shape为(..., k)
     dtype:
-    - float16
-    - bfloat16
-    - float32
-  schema: moe_gating_top_k_softmax(Tensor x, int k) -> (Tensor y, Tensor softmax_out)
+    - int32
+    shape: '(..., k)'
+  - name: row_idx
+    description: 行位置索引，shape为(..., k)
+    dtype:
+    - int32
+    shape: '(..., k)'
+  schema: moe_gating_top_k_softmax(Tensor x, Tensor? finished=None, int k=1) -> (Tensor y, Tensor expert_idx, Tensor row_idx)

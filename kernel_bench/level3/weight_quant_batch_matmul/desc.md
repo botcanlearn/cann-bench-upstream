@@ -2,7 +2,7 @@
 
 ## 1. 算子简介
 
-权重量化批量矩阵乘法算子。
+权重量化批量矩阵乘法算子，支持权重的反量化计算。
 
 **主要应用场景**：
 - 大语言模型推理中的权重量化加速
@@ -11,62 +11,66 @@
 
 **算子特征**：
 - 难度等级：L4（Contraction）
-- 三输入（权重 weight、输入 x、偏置 bias）单输出，支持权重反量化后矩阵乘法再量化的完整流程
+- 多输入（x、weight、antiquantScale、可选 antiquantOffset、可选 bias）单输出
+- weight 为量化权重（INT8/INT4），通过反量化参数转换为浮点后参与矩阵乘法
 
 ## 2. 算子定义
 
 ### 数学公式
 
 $$
-y = \text{quant}(\text{dequant}(weight) \times x + bias)
+y = x \times \text{ANTIQUANT}(weight) + bias
 $$
 
-具体步骤：
-1. 对权重矩阵进行反量化（dequant）操作
-2. 执行矩阵乘法 $\text{dequant}(weight) \times x$
-3. 加上偏置 bias
-4. 对结果进行量化（quant）操作
+其中反量化公式：
+
+$$
+\text{ANTIQUANT}(weight) = (weight + \text{antiquantOffset}) \times \text{antiquantScale}
+$$
+
+**计算步骤**：
+1. 对量化权重矩阵进行反量化（ANTIQUANT）操作
+2. 执行矩阵乘法 $x \times \text{ANTIQUANT}(weight)$
+3. 加上偏置 bias（可选）
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-ascend_bench.weight_quant_batch_matmul(Tensor weight, Tensor x, Tensor bias, bool transpose_x, bool transpose_weight) -> Tensor y
+cann_bench.weight_quant_batch_matmul(Tensor x, Tensor weight, Tensor antiquantScale, Tensor antiquantOffset, Tensor bias) -> Tensor y
 ```
 
 ### 输入参数说明
 
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| weight | Tensor | 必选 | 权重矩阵，shape 为 [N, K] |
-| x | Tensor | 必选 | 输入矩阵，shape 为 [M, K] |
-| bias | Tensor | 必选 | 偏置张量 |
-| transpose_x | bool | false | 是否转置 x |
-| transpose_weight | bool | false | 是否转置权重 |
+| x | Tensor | 必选 | 左输入矩阵，shape 为 [M, K]，dtype 为 float16/bfloat16 |
+| weight | Tensor | 必选 | 右输入矩阵（量化权重），shape 为 [K, N]，dtype 为 int8/int4 |
+| antiquantScale | Tensor | 必选 | 反量化scale参数，shape 为 [N] 或 [1, N]，dtype 与 x 相同 |
+| antiquantOffset | Tensor | None | 反量化offset参数（可选），shape 与 antiquantScale 相同 |
+| bias | Tensor | None | 偏置张量（可选），shape 为 [N] 或 [1, N] |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | 由 weight 和 x 的 shape 及 transpose 参数决定 | 与输入 weight 相同 | 输出张量 |
+| y | [M, N] | 与 x 相同 | 输出张量 |
 
 ### 数据类型
 
-| 输入 dtype（weight） | 输入 dtype（x） | 输入 dtype（bias） | 输出 dtype |
-|--------------------|---------------|-----------------|-----------|
-| float16 | float16 | float16 | float16 |
-| bfloat16 | bfloat16 | bfloat16 | bfloat16 |
-| int8 | int8 | int8 | int8 |
-| int4 | int4 | int4 | int4 |
+| x dtype | weight dtype | antiquantScale dtype | 输出 dtype |
+|---------|-------------|---------------------|-----------|
+| float16 | int8/int4 | float16 | float16 |
+| bfloat16 | int8/int4 | bfloat16 | bfloat16 |
 
 ### 规则与约束
 
-- weight 的 shape 为 [N, K]，x 的 shape 为 [M, K]
-- 当 transpose_weight=true 时，对 weight 执行最后两维转置后再参与矩阵乘法
-- 当 transpose_x=true 时，对 x 执行最后两维转置后再参与矩阵乘法
-- 对于 int8/int4 类型的权重，反量化时使用缩放因子进行浮点转换
-- 量化阶段使用动态缩放因子并 clamp 到 [-128, 127] 范围
+- x 的 shape 为 [M, K]，weight 的 shape 为 [K, N]，矩阵乘法要求 K 维度相等
+- antiquantScale 的 shape 为 [N] 或 [1, N]，对应 weight 的 N 维度
+- antiquantOffset（可选）shape 与 antiquantScale 相同
+- bias（可选）shape 为 [N] 或 [1, N]
+- antiquantScale/antiquantOffset/bias 的 dtype 与 x 相同
 
 ## 4. 精度要求
 
@@ -76,7 +80,6 @@ ascend_bench.weight_quant_batch_matmul(Tensor weight, Tensor x, Tensor bias, boo
 |---------|---------|------|------|
 | float16 | 相对误差 | 1e-3 | 1e-3 |
 | bfloat16 | 相对误差 | 4e-3 | 4e-3 |
-| int8/int4 | 完全相等 | — | — |
 
 **对比公式**：
 
@@ -90,43 +93,56 @@ $$
 import torch
 
 """
-WeightQuantBatchMatmul算子Torch Golden参考实现
+WeightQuantBatchMatmul 算子 Torch Golden 参考实现
 
 权重量化批量矩阵乘法算子
-公式: y = quant(dequant(weight) @ x + bias)
+公式: y = x @ ANTIQUANT(weight) + bias
+      ANTIQUANT(weight) = (weight + antiquantOffset) * antiquantScale
 """
 def weight_quant_batch_matmul(
-    weight: torch.Tensor, x: torch.Tensor, bias: torch.Tensor, transpose_x: bool = False, transpose_weight: bool = False
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    antiquantScale: torch.Tensor,
+    antiquantOffset: torch.Tensor = None,
+    bias: torch.Tensor = None
 ) -> torch.Tensor:
     """
     权重量化批量矩阵乘法算子
-    
-    公式: y = quant(dequant(weight) @ x + bias)
-    
+
+    公式: y = x @ ANTIQUANT(weight) + bias
+          ANTIQUANT(weight) = (weight + antiquantOffset) * antiquantScale
+
     Args:
-        weight: 权重矩阵
-        x: 输入矩阵
-        bias: 偏置张量
-        transpose_x: 是否转置x
-        transpose_weight: 是否转置权重
-    
+        x: 左输入矩阵，shape 为 [M, K]，dtype 为 float16/bfloat16
+        weight: 右输入矩阵（量化权重），shape 为 [K, N]，dtype 为 int8/int4
+        antiquantScale: 反量化scale参数，shape 为 [N] 或 [1, N]
+        antiquantOffset: 反量化offset参数（可选），shape 与 antiquantScale 相同
+        bias: 偏置张量（可选），shape 为 [N] 或 [1, N]
+
     Returns:
-        输出张量
+        输出张量，shape 为 [M, N]，dtype 与 x 相同
     """
 
-    weight_adj = weight.transpose(-2, -1) if transpose_weight else weight
-    x_adj = x.transpose(-2, -1) if transpose_x else x
-    
-    if weight.dtype in [torch.int8, torch.int4]:
-        weight_float = weight.float() * 0.1
+    # 反量化 weight: (weight + antiquantOffset) * antiquantScale
+    weight_float = weight.float()  # [K, N]
+    scale_float = antiquantScale.float()  # [N] 或 [1, N]
+
+    if antiquantOffset is not None:
+        offset_float = antiquantOffset.float()
+        weight_dequant = (weight_float + offset_float) * scale_float
     else:
-        weight_float = weight.float()
-    
-    matmul_result = torch.matmul(weight_float, x_adj.float())
-    result = matmul_result + bias.float()
-    
-    scale = 127.0 / result.abs().max()
-    y = torch.clamp((result * scale).round(), -128, 127).to(weight.dtype)
+        weight_dequant = weight_float * scale_float
+
+    # 矩阵乘法: [M, K] @ [K, N] = [M, N]
+    x_float = x.float()
+    y_float = torch.matmul(x_float, weight_dequant)
+
+    # 加偏置（可选）
+    if bias is not None:
+        bias_float = bias.float()
+        y_float = y_float + bias_float
+
+    y = y_float.to(x.dtype)
     return y
 ```
 
@@ -136,12 +152,21 @@ def weight_quant_batch_matmul(
 
 ```python
 import torch
-import ascend_bench
+import cann_bench
 
-weight = torch.randn(256, 512, dtype=torch.float16, device="npu")
-x = torch.randn(512, 128, dtype=torch.float16, device="npu")
-bias = torch.randn(256, 128, dtype=torch.float16, device="npu")
-y = ascend_bench.weight_quant_batch_matmul(weight, x, bias, False, False)
+# x: [M, K] = [16, 32]
+x = torch.randn(16, 32, dtype=torch.float16, device="npu")
+# weight: [K, N] = [32, 64]
+weight = torch.randint(-128, 127, (32, 64), dtype=torch.int8, device="npu")
+# antiquantScale: [N] = [64]
+antiquantScale = torch.randn(64, dtype=torch.float16, device="npu")
+# antiquantOffset: [N] = [64] (可选)
+antiquantOffset = torch.randn(64, dtype=torch.float16, device="npu")
+# bias: [N] = [64] (可选)
+bias = torch.randn(64, dtype=torch.float16, device="npu")
+
+y = cann_bench.weight_quant_batch_matmul(x, weight, antiquantScale, antiquantOffset, bias)
+# y shape: [M, N] = [16, 64]
 ```
 
 ### 性能基线参考
@@ -150,6 +175,6 @@ y = ascend_bench.weight_quant_batch_matmul(weight, x, bias, False, False)
 
 ### 相关算子
 
-- **QuantBatchMatmul**：量化批量矩阵乘法算子，同属量化矩阵运算类别
-- **GroupedMatmul**：分组矩阵乘法算子，同属矩阵运算类别
-- **DequantSwiGLUQuant**：反量化-SwiGLU-量化融合算子，涉及类似的量化/反量化流程
+- **QuantBatchMatmul**：量化批量矩阵乘法算子
+- **GroupedMatmul**：分组矩阵乘法算子
+- **DequantSwiGLUQuant**：反量化-SwiGLU-量化融合算子

@@ -19,7 +19,7 @@ operator:
   - name: dst_type
     type: int
     default: 0
-    description: 目标数据类型 (0:DT_INT8, 1:DT_FP8)'
+    description: 目标数据类型 (0:DT_INT8)
     required: false
   inputs:
   - name: x
@@ -28,12 +28,10 @@ operator:
     - float16
     - bfloat16
     - int8
-    - float8
   outputs:
   - name: y
     description: 输出张量
     dtype:
     - int8
-    - float8
   schema: dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, int dst_type)
     -> Tensor y

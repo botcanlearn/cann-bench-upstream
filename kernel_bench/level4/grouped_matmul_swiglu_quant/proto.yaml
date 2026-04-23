@@ -1,34 +1,53 @@
-# TODO 不需要这些Attr，shape信息也需要再确认下
 operator:
   name: GroupedMatmulSwigluQuant
   category: FusedComposite
   difficulty: L4
-  formula: y = SwiGLU(Dequant(Matmul(x, weight)))
-  description: 分组矩阵乘法与SwiGLU及量化的融合
-  shape_support: 'x: [M, K], weight: [E, N/32, K/16, 16, 32]'
-  attrs:
-  - name: dequantMode
-    type: int
-    description: 反量化模式
-    required: true
-  - name: isEnableWeightAssistanceMatrix
-    type: bool
-    default: false
-    description: 是否启用权重辅助矩阵
-    required: false
+  formula: |
+    对每个专家 g ∈ [0, E):
+      rows_g  = group_list 指定属于第 g 组的 token 行（cumsum 语义）
+      mm_g    = x[rows_g] @ weight[g]
+      deq_g   = mm_g * x_scale[rows_g] * weight_scale[g]   # 反量化
+    left, right = split(deq, last_dim / 2)
+    act = SiLU(left) * right                                # SwiGLU
+    y, y_scale = PerTokenQuant(act)                         # 再量化
+  description: MoE FFN 场景下的分组矩阵乘 + SwiGLU + 量化融合算子，对齐 torch_npu.npu_grouped_matmul_swiglu_quant_v2 默认配置
+  shape_support: 'x: [M, K], weight: [E, K, N], weight_scale: [E, N], x_scale: [M], group_list: [E]; 输出 y: [M, N/2], y_scale: [M]'
   inputs:
   - name: x
-    description: 输入矩阵
+    description: 矩阵乘法左矩阵（激活，已完成 per-token 量化），支持非连续 Tensor
     dtype:
     - int8
+    shape: '[M, K]'
   - name: weight
-    description: 权重矩阵
+    description: 矩阵乘法右矩阵（权重），FRACTAL_NZ 格式
     dtype:
     - int8
+    shape: '[E, K, N]'
+  - name: weight_scale
+    description: 权重反量化因子（per-channel）
+    dtype:
+    - float32
+    shape: '[E, N]'
+  - name: x_scale
+    description: 激活 per-token 反量化因子
+    dtype:
+    - float32
+    shape: '[M]'
+  - name: group_list
+    description: 分组 token 累计和（cumsum 语义）
+    dtype:
+    - int32
+    shape: '[E]'
   outputs:
   - name: y
-    description: 输出张量
+    description: SwiGLU 后的 per-token int8 量化输出
     dtype:
     - int8
-  schema: grouped_matmul_swiglu_quant(Tensor x, Tensor weight, int dequantMode, bool
-    isEnableWeightAssistanceMatrix) -> Tensor y
+    shape: '[M, N/2]'
+  - name: y_scale
+    description: 输出 per-token 反量化因子
+    dtype:
+    - float32
+    shape: '[M]'
+  schema: grouped_matmul_swiglu_quant(Tensor x, Tensor weight, Tensor weight_scale,
+    Tensor x_scale, Tensor group_list) -> (Tensor y, Tensor y_scale)

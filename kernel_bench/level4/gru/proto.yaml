@@ -45,39 +45,48 @@ operator:
     required: false
   inputs:
   - name: x
-    description: 输入序列张量
+    description: 输入序列张量，shape 为 (S, B, input_size) 或 (B, S, input_size) if batch_first
     dtype:
     - float32
     - float16
     - bfloat16
   - name: h0
-    description: 初始隐藏状态 (可选，默认全 0)
+    description: 初始隐藏状态 (可选，默认全 0)，shape 为 (num_layers * num_directions, B, hidden_size)
     dtype:
     - float32
     - float16
     - bfloat16
     optional: true
   - name: weight_ih
-    description: 输入到隐藏层权重 (num_layers * 3 * hiddenSize, inputSize)
+    description: |
+      输入到隐藏层权重列表（TensorList），每层/每个方向独立 tensor:
+      - 单向 numLayers=1: [weight_ih_l0], shape=(3*hiddenSize, inputSize)
+      - 双向 numLayers=1: [weight_ih_l0, weight_ih_l0_reverse], 每个 shape=(3*hiddenSize, inputSize)
+      - 单向 numLayers=2: [weight_ih_l0, weight_ih_l1], shape 分别为 (3*hiddenSize, inputSize), (3*hiddenSize, hiddenSize)
+      - 双向 numLayers=2: [weight_ih_l0, weight_ih_l0_reverse, weight_ih_l1, weight_ih_l1_reverse]
+      列表长度 = numLayers * num_directions
     dtype:
     - float32
     - float16
     - bfloat16
   - name: weight_hh
-    description: 隐藏层到隐藏层权重 (num_layers * 3 * hiddenSize, hiddenSize)
+    description: |
+      隐藏层到隐藏层权重列表（TensorList），每层/每个方向独立 tensor:
+      - 每个 tensor shape: (3*hiddenSize, hiddenSize)
+      列表长度 = numLayers * num_directions
     dtype:
     - float32
     - float16
     - bfloat16
   - name: bias_ih
-    description: 输入到隐藏层偏置 (可选)
+    description: 输入到隐藏层偏置列表（可选），每个 tensor shape: (3*hiddenSize)，列表长度 = numLayers * num_directions
     dtype:
     - float32
     - float16
     - bfloat16
     optional: true
   - name: bias_hh
-    description: 隐藏层到隐藏层偏置 (可选)
+    description: 隐藏层到隐藏层偏置列表（可选），每个 tensor shape: (3*hiddenSize)，列表长度 = numLayers * num_directions
     dtype:
     - float32
     - float16
@@ -96,4 +105,4 @@ operator:
     - float32
     - float16
     - bfloat16
-  schema: gru(Tensor x, Tensor weight_ih, Tensor weight_hh, Tensor? bias_ih, Tensor? bias_hh, Tensor? h0, int inputSize, int hiddenSize, int numLayers, bool bias, bool batchFirst, float dropout, bool bidirectional) -> (Tensor y, Tensor hn)
+  schema: gru(Tensor x, TensorList weight_ih, TensorList weight_hh, TensorList? bias_ih, TensorList? bias_hh, Tensor? h0, int inputSize, int hiddenSize, int numLayers, bool bias, bool batchFirst, float dropout, bool bidirectional) -> (Tensor y, Tensor hn)

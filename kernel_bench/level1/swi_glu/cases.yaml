@@ -1,166 +1,181 @@
 cases:
-# ==================== 基准场景 (对齐 shape, 小值域, scalarValue=1.0) ====================
-- operator: SwiGLU
+- operator: SwiGlu
   case_id: 1
-  input_shape: [[1024, 2048]]
+  input_shape:
+  - [1024, 2048]
   dtype: [float16]
   attrs: {scalarValue: 1.0}
   value_range: [-1, 1]
-  baseline_perf_us: 40.12
-  note: float16-2M-对齐-对称小值域-scalarValue=1.0
-- operator: SwiGLU
+  baseline_perf_us: 38.22
+  note: S-float16-2M-对齐-对称小值域-scalarValue=1.0
+- operator: SwiGlu
   case_id: 2
-  input_shape: [[2048, 4096]]
+  input_shape:
+  - [2048, 4096]
   dtype: [float32]
   attrs: {scalarValue: 1.0}
   value_range: [-2, 2]
-  baseline_perf_us: 29.13
-  note: float32-8M-对齐-对称小值域-scalarValue=1.0
-- operator: SwiGLU
+  baseline_perf_us: 88.19
+  note: M-float32-8M-对齐-对称小值域-scalarValue=1.0
+- operator: SwiGlu
   case_id: 3
-  input_shape: [[4096, 8192]]
+  input_shape:
+  - [4096, 8192]
   dtype: [bfloat16]
   attrs: {scalarValue: 1.0}
   value_range: [-3, 3]
-  baseline_perf_us: 65.84
-  note: bfloat16-33M-对齐-对称小值域-scalarValue=1.0
-# ==================== scalarValue 参数变化 ====================
-- operator: SwiGLU
+  baseline_perf_us: 194.58
+  note: M-bfloat16-33M-对齐-对称小值域-scalarValue=1.0
+- operator: SwiGlu
   case_id: 4
-  input_shape: [[8192, 16384]]
+  input_shape:
+  - [8192, 16384]
   dtype: [float16]
   attrs: {scalarValue: 0.5}
   value_range: [-10, 10]
-  baseline_perf_us: 24.25
-  note: float16-134M-对齐-对称中值域-scalarValue=0.5
-- operator: SwiGLU
+  baseline_perf_us: 1850.79
+  note: L-float16-134M-对齐-对称中值域-scalarValue=0.5
+- operator: SwiGlu
   case_id: 5
-  input_shape: [[2039, 65521]]
+  input_shape:
+  - [2039, 65521]
   dtype: [float32]
   attrs: {scalarValue: 2.0}
   value_range: [-100, 100]
-  baseline_perf_us: 29.44
-  note: float32-132M-质数非对齐-对称大值域-scalarValue=2.0
-# ==================== 非对齐 shape (>= 50%) ====================
-- operator: SwiGLU
+  baseline_perf_us: 3819.22
+  note: L-float32-132M-质数非对齐-对称大值域-scalarValue=2.0
+- operator: SwiGlu
   case_id: 6
-  input_shape: [[1023, 2047]]
+  input_shape:
+  - [1023, 2047]
   dtype: [bfloat16]
   attrs: {scalarValue: 0.1}
   value_range: [-0.1, 0.1]
-  baseline_perf_us: 17.68
-  note: bfloat16-2M-非对齐-对称微小值域-scalarValue=0.1
-- operator: SwiGLU
+  baseline_perf_us: 42.49
+  note: S-bfloat16-2M-非对齐-对称微小值域-scalarValue=0.1
+- operator: SwiGlu
   case_id: 7
-  input_shape: [[1009, 2017]]
+  input_shape:
+  - [1009, 2017]
   dtype: [float16]
   attrs: {scalarValue: 1.0}
   value_range: [-1, 2]
-  baseline_perf_us: 101.05
-  note: float16-2M-质数非对齐-非对称小值域
-- operator: SwiGLU
+  baseline_perf_us: 41.55
+  note: S-float16-2M-质数非对齐-非对称小值域
+- operator: SwiGlu
   case_id: 8
-  input_shape: [[1537, 1537]]
+  input_shape:
+  - [1537, 1537]
   dtype: [float32]
   attrs: {scalarValue: 0.5}
   value_range: [-5, 10]
-  baseline_perf_us: 30.62
-  note: float32-2M-非对齐-非对称中值域-scalarValue=0.5
-- operator: SwiGLU
+  baseline_perf_us: 52.25
+  note: S-float32-2M-非对齐-非对称中值域-scalarValue=0.5
+- operator: SwiGlu
   case_id: 9
-  input_shape: [[363, 367, 15]]
+  input_shape:
+  - [363, 367, 15]
   dtype: [bfloat16]
   attrs: {scalarValue: 1.0}
   value_range: [-50, 100]
-  baseline_perf_us: 885.84
-  note: bfloat16-50M-质数非对齐-非对称大值域-3D
-- operator: SwiGLU
+  baseline_perf_us: 62.17
+  note: S-bfloat16-50M-质数非对齐-非对称大值域-3D
+- operator: SwiGlu
   case_id: 10
-  input_shape: [[2049, 1025]]
+  input_shape:
+  - [2049, 1025]
   dtype: [float16]
   attrs: {scalarValue: 1.5}
   value_range: [-65504, 65504]
-  baseline_perf_us: 32.47
-  note: float16-2M-非对齐-float16边界值-scalarValue=1.5
-# ==================== 特殊值覆盖 ====================
-- operator: SwiGLU
+  baseline_perf_us: 43.43
+  note: S-float16-2M-非对齐-float16边界值-scalarValue=1.5
+- operator: SwiGlu
   case_id: 11
-  input_shape: [[3, 7, 13, 1019]]
+  input_shape:
+  - [3, 7, 13, 1019]
   dtype: [float32]
   attrs: {scalarValue: 1.0}
   value_range: [-88, 88]
-  baseline_perf_us: 34.0
-  note: float32-2M-质数非对齐-float32边界值-4D
-- operator: SwiGLU
+  baseline_perf_us: 33.01
+  note: S-float32-2M-质数非对齐-float32边界值-4D
+- operator: SwiGlu
   case_id: 12
-  input_shape: [[1000003, 2]]
+  input_shape:
+  - [1000003, 2]
   dtype: [bfloat16]
   attrs: {scalarValue: 0.0}
   value_range: [-inf, inf]
-  baseline_perf_us: 50.26
-  note: bfloat16-2M-质数非对齐-scalarValue=0.0-inf特殊值
-- operator: SwiGLU
+  baseline_perf_us: 76.86
+  note: S-bfloat16-2M-质数非对齐-scalarValue=0.0-inf特殊值
+- operator: SwiGlu
   case_id: 13
-  input_shape: [[11, 13, 17, 67]]
+  input_shape:
+  - [11, 13, 17, 67]
   dtype: [float32]
   attrs: {scalarValue: nan}
   value_range: [nan, nan]
-  baseline_perf_us: 118.37
-  note: float32-10M-质数非对齐-scalarValue=nan-nan特殊值-4D
-- operator: SwiGLU
+  baseline_perf_us: 29.25
+  note: S-float32-10M-质数非对齐-scalarValue=nan-nan特殊值-4D
+- operator: SwiGlu
   case_id: 14
-  input_shape: [[3, 7, 11, 13, 1013]]
+  input_shape:
+  - [3, 7, 11, 13, 1013]
   dtype: [float16]
   attrs: {scalarValue: 1.0}
   value_range: [0, 0]
-  baseline_perf_us: 29.64
-  note: float16-3M-质数非对齐-零值-5D
-# ==================== 对齐/非对齐 shape 参数变化 ====================
-- operator: SwiGLU
+  baseline_perf_us: 54.51
+  note: S-float16-3M-质数非对齐-零值-5D
+- operator: SwiGlu
   case_id: 15
-  input_shape: [[512, 4097]]
+  input_shape:
+  - [512, 4097]
   dtype: [float32]
   attrs: {scalarValue: 1.0}
   value_range: [-0.5, 0.5]
-  baseline_perf_us: 29.39
-  note: float32-2M-非对齐-对称微小值域
-- operator: SwiGLU
+  baseline_perf_us: 47.62
+  note: S-float32-2M-非对齐-对称微小值域
+- operator: SwiGlu
   case_id: 16
-  input_shape: [[255, 16383]]
+  input_shape:
+  - [255, 16383]
   dtype: [bfloat16]
   attrs: {scalarValue: 0.5}
   value_range: [-1, 3]
-  baseline_perf_us: 65.84
-  note: bfloat16-4M-非对齐-非对称小值域-scalarValue=0.5
-- operator: SwiGLU
+  baseline_perf_us: 50.59
+  note: S-bfloat16-4M-非对齐-非对称小值域-scalarValue=0.5
+- operator: SwiGlu
   case_id: 17
-  input_shape: [[4097, 1023]]
+  input_shape:
+  - [4097, 1023]
   dtype: [float16]
   attrs: {scalarValue: 2.0}
   value_range: [-1000, 1000]
-  baseline_perf_us: 40.12
-  note: float16-4M-非对齐-对称大值域-scalarValue=2.0
-- operator: SwiGLU
+  baseline_perf_us: 61.46
+  note: S-float16-4M-非对齐-对称大值域-scalarValue=2.0
+- operator: SwiGlu
   case_id: 18
-  input_shape: [[2, 1023, 4097]]
+  input_shape:
+  - [2, 1023, 4097]
   dtype: [float32]
   attrs: {scalarValue: 1.0}
   value_range: [-0.2, 0.2]
-  baseline_perf_us: 29.64
-  note: float32-8M-非对齐-对称微小值域-3D
-- operator: SwiGLU
+  baseline_perf_us: 102.72
+  note: M-float32-8M-非对齐-对称微小值域-3D
+- operator: SwiGlu
   case_id: 19
-  input_shape: [[4, 511, 4097]]
+  input_shape:
+  - [4, 511, 4097]
   dtype: [bfloat16]
   attrs: {scalarValue: 1.5}
   value_range: [-3, 6]
-  baseline_perf_us: 65.84
-  note: bfloat16-8M-非对齐-非对称中值域-3D-scalarValue=1.5
-- operator: SwiGLU
+  baseline_perf_us: 78.36
+  note: M-bfloat16-8M-非对齐-非对称中值域-3D-scalarValue=1.5
+- operator: SwiGlu
   case_id: 20
-  input_shape: [[2, 3, 17, 512, 101]]
+  input_shape:
+  - [2, 3, 17, 512, 101]
   dtype: [float32]
   attrs: {scalarValue: 1.0}
   value_range: [-20, 40]
-  baseline_perf_us: 50.0
-  note: float32-10M-非对齐-非对称大值域-5D
+  baseline_perf_us: 163.58
+  note: M-float32-10M-非对齐-非对称大值域-5D

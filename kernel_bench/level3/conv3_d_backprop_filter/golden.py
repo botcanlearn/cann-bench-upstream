@@ -1,33 +1,39 @@
 import torch
+import torch.nn.functional as F
 
 """
 Conv3DBackpropFilter算子Torch Golden参考实现
 
 Conv3D的filter梯度
-公式: y = conv3d_filter_grad(x, grad)
+公式: y = conv3d_filter_grad(x, grad, filter_size)
 """
 def conv3_d_backprop_filter(
-    x: torch.Tensor, grad: torch.Tensor, strides: list, pads: list, dilations: list
+    x: torch.Tensor, grad: torch.Tensor, filter_size: list, strides: list, pads: list, dilations: list, groups: int = 1
 ) -> torch.Tensor:
     """
     Conv3D的filter梯度
-    
-    公式: y = conv3d_filter_grad(x, grad)
-    
+
+    公式: y = conv3d_filter_grad(x, grad, filter_size)
+
     Args:
-        x: 输入特征图
-        grad: 输出梯度
-        strides: 步长
-        pads: 填充
-        dilations: 膨胀率
-    
+        x: 输入特征图，shape为[N, C_in, D, H, W]
+        grad: 输出梯度，shape为[N, C_out, D_out, H_out, W_out]
+        filter_size: filter的shape [C_out, C_in/groups, K_d, K_h, K_w]
+        strides: 步长，3元素 [stride_d, stride_h, stride_w]
+        pads: 填充，6元素 [D_front, D_back, H_top, H_bottom, W_left, W_right]，对称时取front/top/left
+        dilations: 膨胀率，3元素 [dilation_d, dilation_h, dilation_w]
+        groups: 分组数
+
     Returns:
-        filter梯度
+        filter梯度，shape与filter_size相同
     """
 
-    padding = (pads[0], pads[1], pads[2], pads[3], pads[4])
+    # pads 是 6 元素格式，对称 padding 时取 (D_front, H_top, W_left)
+    # 即 pads[0], pads[2], pads[4]
+    padding = (pads[0], pads[2], pads[4])
     stride = (strides[0], strides[1], strides[2])
     dilation = (dilations[0], dilations[1], dilations[2])
-    
-    y = torch.nn.functional.conv3d(x, grad, bias=None, stride=stride, padding=padding, dilation=dilation)
+
+    # 使用 torch.nn.grad.conv3d_weight 计算 filter 梯度
+    y = F.grad.conv3d_weight(x, tuple(filter_size), grad, stride=stride, padding=padding, dilation=dilation, groups=groups)
     return y

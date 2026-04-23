@@ -42,13 +42,7 @@ operator:
     - float32
     - bfloat16
   - name: idx
-    description: 输出索引张量
+    description: 输出索引张量，始终为 int64 类型
     dtype:
-    - int8
-    - uint8
-    - int32
     - int64
-    - float16
-    - float32
-    - bfloat16
   schema: top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor idx)
