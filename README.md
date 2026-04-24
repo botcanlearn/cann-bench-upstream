@@ -1,10 +1,10 @@
-# cann-bench: CANN 算子生成评测基准
+# cann-bench: CANN 领域评测
 
-评测AI模型生成Ascend C算子代码的能力，涵盖编译正确性、功能精度、性能优化三大维度，支撑模型选型、训练效果评估，推动AI能力在CANN领域的持续演进。
+评测AI再处理CANN领域代码任务的能力，涵盖算子生成、算子优化等领域，支撑模型选型、训练效果评估，统一量化评估标准，识别Agent能力短板，构建CANN领域评测平台，推动AI能力在CANN领域的持续演进。
 
 ## 👋 Task Description
 
-评测AI模型生成Ascend C算子代码的能力，按算子复杂度分为4个等级：
+评测AI模型生成Ascend C算子代码的能力，按算子复杂度分为4个等级，覆盖算子主流开发范式：
 
 - **Level 1**: 基础算子 (Element-wise, Activation)
   单输入单输出、Elewise操作、无特殊优化，如 Add、Exp、Gelu、Sigmoid、Mish
@@ -27,7 +27,7 @@
 
 | 维度 | 指标 | 权重 | 说明 |
 |------|------|------|------|
-| 编译正确性 | Pass/Fail | Wc=2 | 是否编译通过（官方提交单份代码，二值判定） |
+| 编译正确性 | Pass/Fail | Wc=2 | 是否编译通过 |
 | 功能正确性 | 精度用例通过数 | Wf=3 | 通过精度用例的数量 |
 | 性能优化性 | 加速比 (SpeedUp) | Wp=5 | 验证性能/测试基准性能 |
 
@@ -68,68 +68,41 @@ cann-bench/
 
 ### 环境要求
 
-- Python 3.8+
-- PyTorch 2.3+
-- NumPy 1.21+
+- 910B开发环境
 
-### 安装依赖
-
+## 🚀 Quick Start
+### 1. 配置环境
+1. **安装依赖**
+- 确保已安装CANN开发环境 和TorchNpu扩展
+- 确保已安装Ascend C 算子开发工具链。
 ```bash
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-## 🚀 Quick Start
+2. **克隆项目仓库**  
+   ```bash
+   git clone https://github.com/yourusername/cann-bench.git
+   cd cann-bench
+   ```
+### 2. 生成算子代码
+参考 examples 中的算子工程样例，根据算子规格描述生成 Ascend C 算子代码工程（例如generated_project）。
+- **ACNN 算子工程样例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
+- **直接算子工程样例**：[examples/direct_launch_example/](examples/direct_launch_example/)
 
-### 运行测试
+### 3. 运行评测
+1. **准备测试用例**  
+   确保 `kernel_bench` 目录下包含测试用例文件 `cases.csv`、`golden.py`、`proto.yaml`、`desc.md`。
 
-```bash
-# 运行所有测试（默认 CPU）
-./scripts/run_test.sh
-
-# 使用 NPU 设备测试
-./scripts/run_test.sh --npu
-
-# 运行指定 level 测试
-./scripts/run_test.sh --level 1
-./scripts/run_test.sh --level 2
-./scripts/run_test.sh --level 3
-./scripts/run_test.sh --level 4
-
-# 运行指定算子测试
-./scripts/run_test.sh --operator gelu
-./scripts/run_test.sh --operator softmax
-
-# 运行指定用例
-./scripts/run_test.sh --operator gelu --case-id 1
-
-# 详细输出
-./scripts/run_test.sh --cpu --level 1 -v
-
-# 启用性能采集（NPU 测试）
-./scripts/run_test.sh --npu --prof
-
-# 查看帮助
-./scripts/run_test.sh --help
-```
-
-### 测试结果
-
-测试结果默认保存在 `test/reports/` 目录：
-
-```bash
-# 查看测试报告
-cat test/reports/test_results.json
-
-# 指定自定义输出路径
-./scripts/run_test.sh --output my_results.json
-
-# 查看性能 trace（NPU 测试 + --prof）
-ls test/reports/traces/
-```
+2. **运行评测脚本**  
+   ```bash
+   python scripts/run_evaluation.py --task kernel_bench --source-dir generated_project
+   ```
+   评测结果将在 `results/` 目录下生成。
 
 ## 📋 Test Case Structure
 
-每个算子目录下包含以下文件：
+每个算子目录下包含以下文件作为开发算子的输入文件：
 
 | 文件 | 说明 |
 |------|------|
@@ -152,28 +125,51 @@ ls test/reports/traces/
 ```python
 import torch
 import torch_npu
-import cann_bench.kernel_bench
+import cann_bench
 
 x = torch.randn(10, 32, dtype=torch.float32).npu()
 y = torch.randn(10, 32, dtype=torch.float32).npu()
-result = cann_bench.kernel_bench.add(x, y)
+result = cann_bench.add(x, y)
 ```
 
-## ➕ Add New Operator
+## 👥 社区贡献
 
-在 `bench_lab/{problems}/` 目录下创建算子文件夹
-1. 创建 `proto.yaml` 定义算子原型
-2. 创建 `golden.py` 实现 PyTorch 参考代码
-3. 创建 `desc.md` 编写算子说明文档
-4. 创建 `cases.yaml/cases.csv` 编写测试用例
+我们欢迎社区开发者贡献新的评测任务，共同丰富CANN领域的评测体系。以下是贡献新评测任务的详细流程：
 
+### 贡献流程
+
+1. **创建算子目录**  
+   在 `bench_lab/` 目录下创建以任务名（例如 `driver_bench`）+算子名称命名的文件夹（例如 `bench_lab/driver_bench/my_new_op/`）。
+
+2. **准备核心文件**  
+   每个算子目录需包含以下文件作为评测输入：
+
+   | 文件                | 说明                                                                 |
+   |---------------------|----------------------------------------------------------------------|
+   | `proto.yaml`        | 算子原型定义，包括输入输出张量形状、数据类型、属性参数等             |
+   | `golden.py`         | PyTorch参考实现，用于功能正确性验证（需覆盖所有测试用例场景）        |
+   | `desc.md`           | 算子详细说明文档，包括功能描述、数学公式、实现约束、参考资料等       |
+   | `cases.csv` 或 `cases.yaml` | 测试用例定义，包含输入数据、预期输出、性能基线等信息（推荐Yaml格式） |
+
+3. **提交PR**  
+   将算子目录提交至主仓库，PR需包含：
+   - 完整的算子评测文件
+   - 简要的功能说明和测试验证结果
+   - （可选）算子实现难度分级建议（Level 1-4）
+
+### 贡献规范
+
+- **算子原型**：需符合Ascend C算子开发规范，支持动态shape、数据类型兼容性等特性。
+- **参考实现**：需通过PyTorch官方接口实现，确保在CPU/NPU环境可正确运行。
+- **测试用例**：需覆典型场景。
+- **文档描述**：需清晰说明算子功能、适用场景及与同类算子的差异。
 
 ## 🛣️ Roadmap
 
 - 工程平台构建
-  - [ ] 完成剩余 Level3/Level4 算子核对验证, 发布第一版算子评测集合
   - [ ] 建立持续评测 CI 流水线
-  - [ ] 发布评测结果网站
+  - [ ] 发布官方评测网站
+  - [ ] 评测结果可视化展示，用户友好的分析工具
 
 - 评测集构建
   - [ ] 增加更多算子类型覆盖
@@ -181,9 +177,9 @@ result = cann_bench.kernel_bench.add(x, y)
 
 - 评测标准构建
   - [ ] 评测精度标准，精度衡量方法构建
-  - [ ] 评测性能基线，理论性能评估
-  - [ ] 评分算法优化（例如算子复杂度、用例难度），科学评价生成能力
-  - [ ] 算子分级/分类方法
+  - [ ] 理论性能评估方法构建
+  - [ ] 评分算法优化（算子分级/分类方法），科学评价生成能力
+  - [ ] 防作弊体系构建
 
 
 ## 🪪 License
