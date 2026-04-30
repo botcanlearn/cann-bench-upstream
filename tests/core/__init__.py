@@ -11,11 +11,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-# test/core/__init__.py
-"""Core module for operator testing framework."""
+# tests/core/__init__.py
+"""测试执行核心模块 - 测试专用工具"""
 
-from .case_loader import CaseLoader, CaseInfo
-from .device_runner import DeviceRunner, DeviceRunResult
 from .result_recorder import ResultRecorder, TestResult
 
-__all__ = ['CaseLoader', 'CaseInfo', 'DeviceRunner', 'DeviceRunResult', 'ResultRecorder', 'TestResult']
+__all__ = ['ResultRecorder', 'TestResult']
