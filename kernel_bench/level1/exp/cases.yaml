@@ -15,7 +15,7 @@ cases:
   dtype: [float16]
   attrs: {base: -1.0, scale: 1.0, shift: 0.0}
   value_range: [-1, 1]
-  baseline_perf_us: 17.5
+  baseline_perf_us: null
   note: S-float16-1M-对齐-对称小值域-base=-1
 - operator: Exp
   case_id: 2
@@ -24,7 +24,7 @@ cases:
   dtype: [float32]
   attrs: {base: -1.0, scale: 1.5, shift: 0.0}
   value_range: [-2, 2]
-  baseline_perf_us: 38.81
+  baseline_perf_us: null
   note: M-float32-4M-对齐-对称小值域-scale=1.5
 - operator: Exp
   case_id: 3
@@ -33,7 +33,7 @@ cases:
   dtype: [bfloat16]
   attrs: {base: -1.0, scale: 2.0, shift: 0.0}
   value_range: [-3, 3]
-  baseline_perf_us: 67.58
+  baseline_perf_us: null
   note: M-bfloat16-16M-对齐-对称小值域-scale=2
 - operator: Exp
   case_id: 4
@@ -42,7 +42,7 @@ cases:
   dtype: [float16]
   attrs: {base: -1.0, scale: 0.5, shift: 0.0}
   value_range: [-10, 10]
-  baseline_perf_us: 563.17
+  baseline_perf_us: null
   note: L-float16-67M-对齐-对称中值域-scale=0.5
 - operator: Exp
   case_id: 5
@@ -51,7 +51,7 @@ cases:
   dtype: [float32]
   attrs: {base: -1.0, scale: 1.0, shift: 1.0}
   value_range: [-100, 100]
-  baseline_perf_us: 1226.32
+  baseline_perf_us: null
   note: L-float32-268M-对齐-对称大值域-shift=1
 - operator: Exp
   case_id: 6
@@ -60,7 +60,7 @@ cases:
   dtype: [bfloat16]
   attrs: {base: 2.0, scale: 1.0, shift: 0.0}
   value_range: [-0.1, 0.1]
-  baseline_perf_us: 19.72
+  baseline_perf_us: null
   note: S-bfloat16-1M-非对齐-对称微小值域-base=2
 - operator: Exp
   case_id: 7
@@ -69,7 +69,7 @@ cases:
   dtype: [float16]
   attrs: {base: 2.0, scale: 1.5, shift: 0.0}
   value_range: [-1, 2]
-  baseline_perf_us: 21.78
+  baseline_perf_us: null
   note: S-float16-1M-质数非对齐-非对称小值域-base=2-scale=1.5
 - operator: Exp
   case_id: 8
@@ -78,7 +78,7 @@ cases:
   dtype: [float32]
   attrs: {base: 10.0, scale: 1.0, shift: 0.0}
   value_range: [-5, 10]
-  baseline_perf_us: 25.6
+  baseline_perf_us: null
   note: S-float32-1M-非对齐-非对称中值域-base=10
 - operator: Exp
   case_id: 9
@@ -87,7 +87,7 @@ cases:
   dtype: [bfloat16]
   attrs: {base: -1.0, scale: 2.0, shift: 0.5}
   value_range: [-50, 100]
-  baseline_perf_us: 240.28
+  baseline_perf_us: null
   note: M-bfloat16-50M-质数非对齐-非对称大值域-scale=2-shift=0.5
 - operator: Exp
   case_id: 10
@@ -96,7 +96,7 @@ cases:
   dtype: [float16]
   attrs: {base: -1.0, scale: 1.0, shift: 2.0}
   value_range: [-65504, 65504]
-  baseline_perf_us: 18.3
+  baseline_perf_us: null
   note: S-float16-1M-非对齐-float16边界值-shift=2
 - operator: Exp
   case_id: 11
@@ -105,7 +105,7 @@ cases:
   dtype: [float32]
   attrs: {base: 1.0, scale: 2.0, shift: 0.0}
   value_range: [-88, 88]
-  baseline_perf_us: 24.96
+  baseline_perf_us: null
   note: S-float32-1M-质数非对齐-float32边界值-base=1
 - operator: Exp
   case_id: 12
@@ -114,7 +114,7 @@ cases:
   dtype: [bfloat16]
   attrs: {base: -1.0, scale: 0.5, shift: 0.5}
   value_range: [-inf, inf]
-  baseline_perf_us: 14.51
+  baseline_perf_us: null
   note: S-bfloat16-1M-质数非对齐-inf特殊值-scale=0.5-shift=0.5
 - operator: Exp
   case_id: 13
@@ -123,7 +123,7 @@ cases:
   dtype: [float32]
   attrs: {base: 2.0, scale: 1.0, shift: 1.0}
   value_range: [nan, nan]
-  baseline_perf_us: 92.0
+  baseline_perf_us: null
   note: M-float32-10M-质数非对齐-nan特殊值-base=2-shift=1
 - operator: Exp
   case_id: 14
@@ -132,7 +132,7 @@ cases:
   dtype: [float16]
   attrs: {base: -1.0, scale: 2.0, shift: 1.0}
   value_range: [0, 0]
-  baseline_perf_us: 23.83
+  baseline_perf_us: null
   note: S-float16-3M-质数非对齐-零值-scale=2-shift=1
 - operator: Exp
   case_id: 15
@@ -141,7 +141,7 @@ cases:
   dtype: [float32]
   attrs: {base: -1.0, scale: 1.0, shift: 0.5}
   value_range: [-0.5, 0.5]
-  baseline_perf_us: 19.15
+  baseline_perf_us: null
   note: S-float32-1M-非对齐-对称微小值域-shift=0.5
 - operator: Exp
   case_id: 16
@@ -150,7 +150,7 @@ cases:
   dtype: [bfloat16]
   attrs: {base: -1.0, scale: 1.2, shift: 0.0}
   value_range: [-1, 3]
-  baseline_perf_us: 17.68
+  baseline_perf_us: null
   note: S-bfloat16-2M-非对齐-非对称小值域-scale=1.2
 - operator: Exp
   case_id: 17
@@ -159,7 +159,7 @@ cases:
   dtype: [float16]
   attrs: {base: 1.0, scale: 0.5, shift: 0.0}
   value_range: [-1000, 1000]
-  baseline_perf_us: 25.52
+  baseline_perf_us: null
   note: S-float16-2M-非对齐-对称大值域-base=1-scale=0.5
 - operator: Exp
   case_id: 18
@@ -168,7 +168,7 @@ cases:
   dtype: [float32]
   attrs: {base: 2.0, scale: 0.5, shift: 0.0}
   value_range: [-0.2, 0.2]
-  baseline_perf_us: 31.03
+  baseline_perf_us: null
   note: S-float32-2M-非对齐-对称微小值域-base=2-scale=0.5
 - operator: Exp
   case_id: 19
@@ -177,7 +177,7 @@ cases:
   dtype: [bfloat16]
   attrs: {base: 10.0, scale: 0.5, shift: 0.5}
   value_range: [-3, 6]
-  baseline_perf_us: 24.08
+  baseline_perf_us: null
   note: S-bfloat16-2M-非对齐-非对称中值域-base=10-scale=0.5-shift=0.5
 - operator: Exp
   case_id: 20
@@ -186,5 +186,5 @@ cases:
   dtype: [float16]
   attrs: {base: 1.0, scale: 1.5, shift: 1.0}
   value_range: [-20, 40]
-  baseline_perf_us: 62.18
+  baseline_perf_us: null
   note: M-float16-10M-非对齐-非对称大值域-base=1-scale=1.5-shift=1

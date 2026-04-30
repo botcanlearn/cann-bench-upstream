@@ -52,7 +52,7 @@ cases:
   dtype: [float32]
   attrs: {}
   value_range: [-100, 100]
-  baseline_perf_us: 641.85
+  baseline_perf_us: 640.37
   note: L-float32-268M-对齐-对称大值域-2D
 - operator: Mish
   case_id: 6
@@ -160,7 +160,7 @@ cases:
   dtype: [float16]
   attrs: {}
   value_range: [-1000, 1000]
-  baseline_perf_us: 24.12
+  baseline_perf_us: 23.90
   note: S-float16-2M-非对齐-对称大值域
 - operator: Mish
   case_id: 18
@@ -187,5 +187,5 @@ cases:
   dtype: [float32]
   attrs: {}
   value_range: [-20, 40]
-  baseline_perf_us: 102.21
+  baseline_perf_us: 102.10
   note: M-float32-10M-非对齐-非对称大值域-5D

@@ -16,7 +16,7 @@ cases:
   dtype: [float16]
   attrs: {approximate: none}
   value_range: [-1, 1]
-  baseline_perf_us: 7.08
+  baseline_perf_us: 6.78
   note: S-float16-1M-对齐-对称小值域-精确模式
 - operator: Gelu
   case_id: 2
@@ -25,7 +25,7 @@ cases:
   dtype: [float32]
   attrs: {approximate: none}
   value_range: [-2, 2]
-  baseline_perf_us: 21.22
+  baseline_perf_us: 17.30
   note: M-float32-4M-对齐-对称小值域-精确模式
 - operator: Gelu
   case_id: 3
@@ -34,7 +34,7 @@ cases:
   dtype: [bfloat16]
   attrs: {approximate: none}
   value_range: [-3, 3]
-  baseline_perf_us: 62.41
+  baseline_perf_us: 62.32
   note: M-bfloat16-16M-对齐-对称小值域-精确模式
 - operator: Gelu
   case_id: 4
@@ -43,7 +43,7 @@ cases:
   dtype: [float16]
   attrs: {approximate: tanh}
   value_range: [-10, 10]
-  baseline_perf_us: 232.1
+  baseline_perf_us: 232.10
   note: L-float16-67M-对齐-对称中值域-tanh近似
 - operator: Gelu
   case_id: 5
@@ -61,7 +61,7 @@ cases:
   dtype: [bfloat16]
   attrs: {approximate: tanh}
   value_range: [-0.1, 0.1]
-  baseline_perf_us: 6.7
+  baseline_perf_us: 6.70
   note: S-bfloat16-1M-非对齐-对称微小值域-tanh近似
 - operator: Gelu
   case_id: 7
@@ -151,7 +151,7 @@ cases:
   dtype: [bfloat16]
   attrs: {approximate: none}
   value_range: [-1, 3]
-  baseline_perf_us: 11.04
+  baseline_perf_us: 10.66
   note: S-bfloat16-2M-非对齐-非对称小值域-精确模式
 - operator: Gelu
   case_id: 17
@@ -160,7 +160,7 @@ cases:
   dtype: [float16]
   attrs: {approximate: tanh}
   value_range: [-1000, 1000]
-  baseline_perf_us: 10.6
+  baseline_perf_us: 10.60
   note: S-float16-2M-非对齐-对称大值域-tanh近似
 - operator: Gelu
   case_id: 18
@@ -169,7 +169,7 @@ cases:
   dtype: [float32]
   attrs: {approximate: none}
   value_range: [-0.2, 0.2]
-  baseline_perf_us: 10.41
+  baseline_perf_us: 10.12
   note: S-float32-2M-非对齐-对称微小值域-3D-精确模式
 - operator: Gelu
   case_id: 19
@@ -178,7 +178,7 @@ cases:
   dtype: [bfloat16]
   attrs: {approximate: tanh}
   value_range: [-3, 6]
-  baseline_perf_us: 10.85
+  baseline_perf_us: 10.78
   note: S-bfloat16-2M-非对齐-非对称中值域-3D-tanh近似
 - operator: Gelu
   case_id: 20
@@ -187,5 +187,5 @@ cases:
   dtype: [float32]
   attrs: {approximate: none}
   value_range: [-20, 40]
-  baseline_perf_us: 38.48
+  baseline_perf_us: 37.98
   note: M-float32-10M-非对齐-非对称大值域-5D-精确模式

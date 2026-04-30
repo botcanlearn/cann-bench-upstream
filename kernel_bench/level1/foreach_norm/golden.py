@@ -35,6 +35,22 @@ def foreach_norm(
     Returns:
         输出张量列表，每个张量的范数结果
     """
+    # 检测输入 dtype
+    input_dtype = x[0].dtype if x else torch.float32
 
-    y = [torch.norm(tensor, p=scalar) for tensor in x]
+    # FP16/BF16 输入需要升到 FP32 计算以保证精度
+    # FP32/FP64 输入保持原样计算
+    if input_dtype in (torch.float16, torch.bfloat16):
+        compute_dtype = torch.float32
+    else:
+        compute_dtype = input_dtype
+
+    # 转换到计算精度
+    x_compute = [t.to(compute_dtype) for t in x]
+
+    y = [torch.norm(tensor, p=scalar) for tensor in x_compute]
+
+    # 转回原始 dtype
+    if input_dtype in (torch.float16, torch.bfloat16):
+        return [t.to(input_dtype) for t in y]
     return y

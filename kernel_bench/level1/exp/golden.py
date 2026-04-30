@@ -38,7 +38,25 @@ def exp(
     Returns:
         指数计算结果
     """
-    temp = scale * x + shift
+    # 检测输入 dtype
+    input_dtype = x.dtype
+
+    # FP16/BF16 输入需要升到 FP32 计算以保证精度
+    # FP32/FP64 输入保持原样计算
+    if input_dtype in (torch.float16, torch.bfloat16):
+        compute_dtype = torch.float32
+    else:
+        compute_dtype = input_dtype
+
+    # 转换到计算精度
+    x_compute = x.to(compute_dtype)
+
+    temp = scale * x_compute + shift
     if base > 0:
-        temp = temp * torch.log(torch.tensor(base, dtype=x.dtype, device=x.device))
-    return torch.exp(temp)
+        temp = temp * torch.log(torch.tensor(base, dtype=temp.dtype, device=temp.device))
+    y = torch.exp(temp)
+
+    # 转回原始 dtype
+    if input_dtype in (torch.float16, torch.bfloat16):
+        return y.to(input_dtype)
+    return y

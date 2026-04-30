@@ -38,6 +38,10 @@ def swi_glu(
     # 在最后一维拆分为两部分
     last_dim_size = x.shape[-1]
 
+    # FP16需要升高精度到FP32计算
+    out_dtype = x.dtype
+    x = x.to(torch.float)
+
     # 对于奇数维度，只取前偶数个元素进行拆分，确保两部分大小一致
     if last_dim_size % 2 != 0:
         # 取前 floor(n/2)*2 个元素
@@ -47,4 +51,4 @@ def swi_glu(
     x0, x1 = x.chunk(2, dim=-1)
     swish = x0 * torch.sigmoid(scalarValue * x0)
     y = swish * x1
-    return y
+    return y.to(out_dtype)

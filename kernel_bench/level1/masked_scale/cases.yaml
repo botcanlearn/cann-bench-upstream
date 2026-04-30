@@ -19,7 +19,7 @@ cases:
   value_range:
   - [-1, 1]
   - [0, 1]
-  baseline_perf_us: 13.68
+  baseline_perf_us: null
   note: S-float16-int8_mask-1M-对齐-对称小值域
 - operator: MaskedScale
   case_id: 2
@@ -31,7 +31,7 @@ cases:
   value_range:
   - [-2, 2]
   - [0, 1]
-  baseline_perf_us: 35.97
+  baseline_perf_us: null
   note: M-float32-uint8_mask-4M-对齐-对称小值域
 - operator: MaskedScale
   case_id: 3
@@ -43,7 +43,7 @@ cases:
   value_range:
   - [-3, 3]
   - [0, 1]
-  baseline_perf_us: 175.89
+  baseline_perf_us: null
   note: M-bfloat16-float16_mask-16M-对齐-对称小值域
 - operator: MaskedScale
   case_id: 4
@@ -55,7 +55,7 @@ cases:
   value_range:
   - [-10, 10]
   - [0, 1]
-  baseline_perf_us: 944.31
+  baseline_perf_us: null
   note: L-float16-float32_mask-67M-对齐-scale=0.5-对称中值域
 - operator: MaskedScale
   case_id: 5
@@ -67,7 +67,7 @@ cases:
   value_range:
   - [-100, 100]
   - [0, 1]
-  baseline_perf_us: 1333.91
+  baseline_perf_us: null
   note: L-float32-int8_mask-268M-对齐-scale=2.0-对称大值域
 - operator: MaskedScale
   case_id: 6
@@ -79,7 +79,7 @@ cases:
   value_range:
   - [-0.1, 0.1]
   - [0, 1]
-  baseline_perf_us: 11.79
+  baseline_perf_us: null
   note: S-bfloat16-uint8_mask-1M-非对齐-scale=-1.0-对称微小值域
 - operator: MaskedScale
   case_id: 7
@@ -91,7 +91,7 @@ cases:
   value_range:
   - [-1, 2]
   - [0, 127]
-  baseline_perf_us: 10.62
+  baseline_perf_us: null
   note: S-float16-int8_mask-1M-质数非对齐-scale=0.0-非对称小值域
 - operator: MaskedScale
   case_id: 8
@@ -103,7 +103,7 @@ cases:
   value_range:
   - [-5, 10]
   - [0, 1]
-  baseline_perf_us: 15.91
+  baseline_perf_us: null
   note: S-float32-float16_mask-1M-非对齐-scale=10.0-非对称中值域
 - operator: MaskedScale
   case_id: 9
@@ -115,7 +115,7 @@ cases:
   value_range:
   - [-50, 100]
   - [0, 1]
-  baseline_perf_us: 677.6
+  baseline_perf_us: null
   note: L-bfloat16-float32_mask-50M-质数非对齐-scale=1.5-非对称大值域
 - operator: MaskedScale
   case_id: 10
@@ -127,7 +127,7 @@ cases:
   value_range:
   - [-65504, 65504]
   - [0, 255]
-  baseline_perf_us: 14.14
+  baseline_perf_us: null
   note: S-float16-uint8_mask-1M-非对齐-float16边界值-uint8全范围
 - operator: MaskedScale
   case_id: 11
@@ -139,7 +139,7 @@ cases:
   value_range:
   - [-88, 88]
   - [0, 1]
-  baseline_perf_us: 16.82
+  baseline_perf_us: null
   note: S-float32-int8_mask-1M-质数非对齐-float32边界值
 - operator: MaskedScale
   case_id: 12
@@ -151,7 +151,7 @@ cases:
   value_range:
   - [-inf, inf]
   - [0, 1]
-  baseline_perf_us: 10.36
+  baseline_perf_us: null
   note: S-bfloat16-bfloat16_mask-1M-质数非对齐-scale=inf-inf特殊值
 - operator: MaskedScale
   case_id: 13
@@ -163,7 +163,7 @@ cases:
   value_range:
   - [nan, nan]
   - [0, 1]
-  baseline_perf_us: 86.26
+  baseline_perf_us: null
   note: M-float32-float32_mask-10M-质数非对齐-scale=nan-nan特殊值
 - operator: MaskedScale
   case_id: 14
@@ -175,7 +175,7 @@ cases:
   value_range:
   - [0, 0]
   - [0, 1]
-  baseline_perf_us: 21.63
+  baseline_perf_us: null
   note: S-float16-int8_mask-3M-质数非对齐-零值
 - operator: MaskedScale
   case_id: 15
@@ -187,7 +187,7 @@ cases:
   value_range:
   - [-0.5, 0.5]
   - [0, 1]
-  baseline_perf_us: 19.35
+  baseline_perf_us: null
   note: S-float32-uint8_mask-1M-非对齐-对称微小值域
 - operator: MaskedScale
   case_id: 16
@@ -199,7 +199,7 @@ cases:
   value_range:
   - [-1, 3]
   - [0, 1]
-  baseline_perf_us: 16.76
+  baseline_perf_us: null
   note: S-bfloat16-int8_mask-2M-非对齐-非对称小值域-scale=1.2
 - operator: MaskedScale
   case_id: 17
@@ -211,7 +211,7 @@ cases:
   value_range:
   - [-1000, 1000]
   - [0, 1]
-  baseline_perf_us: 18.28
+  baseline_perf_us: null
   note: S-float16-uint8_mask-2M-非对齐-对称大值域-scale=-0.5
 - operator: MaskedScale
   case_id: 18
@@ -223,7 +223,7 @@ cases:
   value_range:
   - [-0.2, 0.2]
   - [0, 1]
-  baseline_perf_us: 24.53
+  baseline_perf_us: null
   note: M-float32-float16_mask-2M-非对齐-对称微小值域-scale=0.75
 - operator: MaskedScale
   case_id: 19
@@ -235,7 +235,7 @@ cases:
   value_range:
   - [-3, 6]
   - [0, 1]
-  baseline_perf_us: 26.81
+  baseline_perf_us: null
   note: M-bfloat16-float32_mask-2M-非对齐-非对称中值域-scale=3.0
 - operator: MaskedScale
   case_id: 20
@@ -247,5 +247,5 @@ cases:
   value_range:
   - [-20, 40]
   - [0, 1]
-  baseline_perf_us: 66.88
+  baseline_perf_us: null
   note: M-float32-int8_mask-10M-非对齐-非对称大值域
