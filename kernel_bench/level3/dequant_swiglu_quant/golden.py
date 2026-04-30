@@ -51,7 +51,7 @@ def dequant_swiglu_quant(
             x_right = x[..., half:]
             return torch.nn.functional.silu(x_left) * x_right
     
-    if x.dtype in [torch.int8, torch.int32]:
+    if x.dtype == torch.int32:
         scale = 0.1
         x_float = x.float() * scale
     else:

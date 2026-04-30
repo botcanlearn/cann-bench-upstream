@@ -21,7 +21,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   - [-1, 1]
-  baseline_perf_us: 4086.52
+  baseline_perf_us: null
   note: L-large-prefill-fp16-int8-hidden=8192
 - operator: AddRmsNormDynamicQuant
   case_id: 2
@@ -35,7 +35,7 @@ cases:
   - [-2, 2]
   - [-2, 2]
   - [-1, 1]
-  baseline_perf_us: 4173.02
+  baseline_perf_us: null
   note: L-mega-batch-bf16-int8-M=32768-N=2048
 - operator: AddRmsNormDynamicQuant
   case_id: 3
@@ -49,7 +49,7 @@ cases:
   - [-3, 3]
   - [-3, 3]
   - [-1, 1]
-  baseline_perf_us: 4037.06
+  baseline_perf_us: null
   note: L-square-large-fp16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 4
@@ -63,7 +63,7 @@ cases:
   - [-10, 10]
   - [-10, 10]
   - [-1, 1]
-  baseline_perf_us: 3630.0
+  baseline_perf_us: null
   note: L-wide-FFN-bf16-int8-Llama3-intermediate=14336
 - operator: AddRmsNormDynamicQuant
   case_id: 5
@@ -77,7 +77,7 @@ cases:
   - [-1000, 1000]
   - [-1000, 1000]
   - [-1, 1]
-  baseline_perf_us: 4156.64
+  baseline_perf_us: null
   note: L-large-int4-bf16-dst_type=1-大值域
 - operator: AddRmsNormDynamicQuant
   case_id: 6
@@ -91,7 +91,7 @@ cases:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
   - [-0.5, 0.5]
-  baseline_perf_us: 4089.69
+  baseline_perf_us: null
   note: L-flat-extreme-fp16-M=524288-N=128-eps=1e-3
 - operator: AddRmsNormDynamicQuant
   case_id: 7
@@ -105,7 +105,7 @@ cases:
   - [-2, 2]
   - [-2, 2]
   - [-1, 1]
-  baseline_perf_us: 713.78
+  baseline_perf_us: null
   note: M-medium-square-fp16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 8
@@ -119,7 +119,7 @@ cases:
   - [-5, 10]
   - [-5, 10]
   - [-1, 1]
-  baseline_perf_us: 739.79
+  baseline_perf_us: null
   note: M-medium-tall-hidden-bf16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 9
@@ -133,7 +133,7 @@ cases:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
   - [-0.5, 0.5]
-  baseline_perf_us: 718.42
+  baseline_perf_us: null
   note: M-medium-tall-M-fp16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 10
@@ -147,7 +147,7 @@ cases:
   - [-1, 3]
   - [-1, 3]
   - [-1, 1]
-  baseline_perf_us: 746.32
+  baseline_perf_us: null
   note: M-medium-small-hidden-bf16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 11
@@ -161,7 +161,7 @@ cases:
   - [-65504, 65504]
   - [-65504, 65504]
   - [-65504, 65504]
-  baseline_perf_us: 698.03
+  baseline_perf_us: null
   note: M-medium-wide-hidden-fp16-int8-float16边界值
 - operator: AddRmsNormDynamicQuant
   case_id: 12
@@ -175,7 +175,7 @@ cases:
   - [-1, 2]
   - [-1, 2]
   - [-1, 2]
-  baseline_perf_us: 761.11
+  baseline_perf_us: null
   note: M-medium-prime-square-bf16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 13
@@ -189,7 +189,7 @@ cases:
   - [-3, 6]
   - [-3, 6]
   - [-3, 6]
-  baseline_perf_us: 422.12
+  baseline_perf_us: null
   note: M-medium-prime-rect-fp16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 14
@@ -203,7 +203,7 @@ cases:
   - [-88, 88]
   - [-88, 88]
   - [-1, 1]
-  baseline_perf_us: 753.87
+  baseline_perf_us: null
   note: M-medium-int4-bf16-dst_type=1
 - operator: AddRmsNormDynamicQuant
   case_id: 15
@@ -217,7 +217,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   - [-1, 1]
-  baseline_perf_us: 127.51
+  baseline_perf_us: null
   note: S-small-smoke-fp16-int8
 - operator: AddRmsNormDynamicQuant
   case_id: 16
@@ -231,7 +231,7 @@ cases:
   - [-0.1, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 163.75
+  baseline_perf_us: null
   note: S-small-prime-bf16-微小值域
 - operator: AddRmsNormDynamicQuant
   case_id: 17
@@ -245,7 +245,7 @@ cases:
   - [-inf, inf]
   - [-inf, inf]
   - [-inf, inf]
-  baseline_perf_us: 116.69
+  baseline_perf_us: null
   note: S-inf-special-fp16
 - operator: AddRmsNormDynamicQuant
   case_id: 18
@@ -259,7 +259,7 @@ cases:
   - [nan, nan]
   - [nan, nan]
   - [nan, nan]
-  baseline_perf_us: 124.8
+  baseline_perf_us: null
   note: S-nan-special-bf16
 - operator: AddRmsNormDynamicQuant
   case_id: 19
@@ -273,7 +273,7 @@ cases:
   - [0, 0]
   - [0, 0]
   - [0, 0]
-  baseline_perf_us: 121.79
+  baseline_perf_us: null
   note: S-zero-special-fp16
 - operator: AddRmsNormDynamicQuant
   case_id: 20
@@ -287,5 +287,5 @@ cases:
   - [-0.2, 0.2]
   - [-0.2, 0.2]
   - [-0.2, 0.2]
-  baseline_perf_us: 155.24
+  baseline_perf_us: null
   note: S-small-int4-bf16-dst_type=1

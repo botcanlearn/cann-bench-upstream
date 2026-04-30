@@ -44,6 +44,13 @@ def add_rms_norm_dynamic_quant(
         scaleOut: 量化使用的 scale 值
     """
 
+    # Promote bf16/fp16 inputs to fp32 for golden computation.
+    # This aligns the golden's scale calculation with the NPU's native
+    # precision, avoiding fp64-vs-bf16 quantization rounding gaps.
+    x1 = x1.to(torch.float32)
+    x2 = x2.to(torch.float32)
+    gamma = gamma.to(torch.float32)
+
     # Add 操作
     xOut = x1 + x2
 
@@ -54,14 +61,11 @@ def add_rms_norm_dynamic_quant(
     y_norm = normalized * gamma
 
     # 动态量化
-    # 将 y_norm 转换为 float32 以保证 scale 计算精度和 dtype 正确
-    y_norm_f32 = y_norm.float()
-
     if dst_type == 0:  # INT8
-        scale = (127.0 / y_norm_f32.abs().max()).to(torch.float32)
-        y = torch.clamp((y_norm_f32 * scale.item()).round(), -128, 127).to(torch.int8)
+        scale = (127.0 / y_norm.abs().max()).to(torch.float32)
+        y = torch.clamp((y_norm * scale.item()).round(), -128, 127).to(torch.int8)
     else:  # INT4 (存储为 int8，值范围 [-8, 7])
-        scale = (7.0 / y_norm_f32.abs().max()).to(torch.float32)
-        y = torch.clamp((y_norm_f32 * scale.item()).round(), -8, 7).to(torch.int8)
+        scale = (7.0 / y_norm.abs().max()).to(torch.float32)
+        y = torch.clamp((y_norm * scale.item()).round(), -8, 7).to(torch.int8)
 
     return y, xOut, scale

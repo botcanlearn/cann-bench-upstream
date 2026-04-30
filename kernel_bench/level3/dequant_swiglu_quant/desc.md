@@ -24,7 +24,7 @@ $$
 
 具体步骤：
 
-1. **反量化**：将 int8 输入转换为浮点数
+1. **反量化**：将 int32 输入转换为浮点数
 2. **SwiGLU 激活**：将最后一维等分为两半，当 activate_left=False 时 $y = \text{SiLU}(x_{left}) \times x_{right}$，当 activate_left=True 时 $y = x_{left} \times \text{SiLU}(x_{right})$
 3. **量化**：将结果量化为 INT8
 
@@ -57,7 +57,7 @@ cann_bench.dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, in
 |-----------|-----------|
 | float16 | int8 |
 | bfloat16 | int8 |
-| int8 | int8 |
+| int32 | int8 |
 
 ### 规则与约束
 
@@ -65,17 +65,34 @@ cann_bench.dequant_swiglu_quant(Tensor x, bool activate_left, str quant_mode, in
 - activate_left 控制 SwiGLU 的激活方向：False 时对左半部分应用 SiLU，True 时对右半部分应用 SiLU
 - quant_mode 指定量化模式，默认 "static"
 - dst_type 取值：0 表示 DT_INT8
-- 当输入为 int8/int32 类型时，先以 scale=0.1 进行反量化转浮点
+- 当输入为 int32 类型时，先以 scale=0.1 进行反量化转浮点
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比：
+采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
 
-| 数据类型 | 验证方式 | 阈值 |
-|---------|---------|------|
-| int8（dst_type=0） | 允许量化边界 off-by-1，最大绝对偏差 ≤ 1；off-by-1 元素占比 | < 1e-4 |
+**误差指标**：
 
-**说明**：y = round(SwiGLU(dequant(x)) × scale) 的 int8 输出允许因 float32 累加顺序差异在 round 时舍到相邻整数；出现 |Δ|≥2 的元素直接判负。
+1. 平均相对误差（MERE）：采样点中相对误差平均值
+
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+2. 最大相对误差（MARE）：采样点中相对误差最大值
+
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过标准**：
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+
+当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+
 
 ## 5. 标准 Golden 代码
 
@@ -116,7 +133,7 @@ def dequant_swiglu_quant(
             x_right = x[..., x.shape[-1]//2:]
             return torch.nn.functional.silu(x_left) * x_right
     
-    if x.dtype in [torch.int8, torch.int32]:
+    if x.dtype == torch.int32:
         scale = 0.1
         x_float = x.float() * scale
     else:
@@ -142,16 +159,6 @@ import cann_bench
 x = torch.randn(2, 4096, dtype=torch.float16, device="npu")
 y = cann_bench.dequant_swiglu_quant(x, activate_left=False, quant_mode='static', dst_type=0)  # INT8 量化
 
-x_int8 = torch.randint(-128, 127, (2, 4096), dtype=torch.int8, device="npu")
-y = cann_bench.dequant_swiglu_quant(x_int8, activate_left=True, quant_mode='static', dst_type=0)  # 反量化后 SwiGLU 再量化
+x_int32 = torch.randint(-128, 127, (2, 4096), dtype=torch.int32, device="npu")
+y = cann_bench.dequant_swiglu_quant(x_int32, activate_left=True, quant_mode='static', dst_type=0)  # 反量化后 SwiGLU 再量化
 ```
-
-### 性能基线参考
-
-基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，性能基线数据尚未测量。
-
-### 相关算子
-
-- **AddRmsNormDynamicQuant**：同为融合算子，包含 Add、RMSNorm 和动态量化
-- **SwiGLU**：L1 级别的 SwiGLU 激活函数算子
-- **MoeFinalizeRouting**：L3 级别的融合复合算子

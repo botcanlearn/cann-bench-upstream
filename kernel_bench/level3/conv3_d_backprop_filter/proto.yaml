@@ -11,7 +11,7 @@
 operator:
   name: Conv3DBackpropFilter
   category: Contraction
-  difficulty: L4
+  difficulty: L3
   formula: y = conv3d_filter_grad(x, grad, filter_size)
   description: Conv3D的filter梯度
   shape_support: 'x: [N, C_in, D, H, W], grad: [N, C_out, D_out, H_out, W_out], filter_size: [C_out, C_in, K_d, K_h, K_w]'

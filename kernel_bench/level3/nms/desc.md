@@ -73,18 +73,30 @@ cann_bench.nms(Tensor boxes, Tensor scores, float iou_threshold) -> Tensor keep_
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
 
-| 数据类型 | 验证方式 | rtol | atol |
-|---------|---------|------|------|
-| float32 | 相对误差 | 1e-4 | 1e-4 |
-| int64 (输出) | 完全相等 | — | — |
+**误差指标**：
 
-**对比公式**：
+1. 平均相对误差（MERE）：采样点中相对误差平均值
 
-$$
-|output - golden| \leq atol + rtol \times |golden|
-$$
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+2. 最大相对误差（MARE）：采样点中相对误差最大值
+
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过标准**：
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+
+当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+
 
 ## 5. 标准 Golden 代码
 
@@ -167,13 +179,3 @@ keep = cann_bench.nms(boxes, scores, iou_threshold=0.5)
 # 低 IoU 阈值（更严格的过滤）
 keep = cann_bench.nms(boxes, scores, iou_threshold=0.3)
 ```
-
-### 性能基线参考
-
-基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均未测量（None）。测试用例覆盖了 50~2000 个候选框、iou_threshold 从 0.1 到 0.9 的不同阈值、float16 和 float32 数据类型、对齐与质数数量框、零值和特殊值（inf/-inf）范围等场景。
-
-### 相关算子
-
-- **EmbeddingHashLookupOrInsert**：同为 L3 级别的索引相关算子
-- **MoeReRouting**：同为 L3 级别的数据选择/重排算子
-- **MoeGatingTopKSoftmax**：同为选择类算子，执行 TopK 选择操作

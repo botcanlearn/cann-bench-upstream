@@ -11,7 +11,7 @@
 operator:
   name: WeightQuantBatchMatmul
   category: Contraction
-  difficulty: L4
+  difficulty: L3
   formula: 'y = x @ ANTIQUANT(weight) + bias, ANTIQUANT(weight) = (weight + antiquantOffset) * antiquantScale'
   description: 权重量化批量矩阵乘法算子，支持权重的反量化计算
   shape_support: 'x: [M, K], weight: [K, N], antiquantScale: [N], y: [M, N]'

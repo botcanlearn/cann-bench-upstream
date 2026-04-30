@@ -27,7 +27,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   - [-0.1, 0.1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-2组-G1:m1=1024-k1=512-n1=1024-G2:m2=2048-k2=512-n2=512-带bias
 - operator: GroupedMatmul
   case_id: 2
@@ -43,7 +43,7 @@ cases:
   value_range:
   - [-2, 2]
   - [-2, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-2组-G1:m=4096-k=1024-n=2048-G2:m=8192-k=1024-n=1024-无bias
 - operator: GroupedMatmul
   case_id: 3
@@ -66,7 +66,7 @@ cases:
   - [-3, 3]
   - [-3, 3]
   - [-0.3, 0.3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-3组-带bias-大batch
 - operator: GroupedMatmul
   case_id: 4
@@ -86,7 +86,7 @@ cases:
   - [-10, 10]
   - [-10, 10]
   - [-1, 1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-transpose-2组-weight[k,n]格式
 - operator: GroupedMatmul
   case_id: 5
@@ -104,7 +104,7 @@ cases:
   value_range:
   - [-100, 100]
   - [-100, 100]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-transpose-3组-无bias
 - operator: GroupedMatmul
   case_id: 6
@@ -124,7 +124,7 @@ cases:
   - [-1000, 1000]
   - [-1000, 1000]
   - [-10, 10]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多单-split=2-N相等=1024-输出合并
 - operator: GroupedMatmul
   case_id: 7
@@ -140,7 +140,7 @@ cases:
   value_range:
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多单-split=3-N相等=512-无bias-微小值域
 - operator: GroupedMatmul
   case_id: 8
@@ -160,7 +160,7 @@ cases:
   - [-1, 2]
   - [-1, 2]
   - [-0.5, 0.5]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-质数非对齐-带bias
 - operator: GroupedMatmul
   case_id: 9
@@ -180,7 +180,7 @@ cases:
   - [-5, 10]
   - [-5, 10]
   - [-1, 1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-transpose-质数非对齐
 - operator: GroupedMatmul
   case_id: 10
@@ -196,7 +196,7 @@ cases:
   value_range:
   - [-50, 100]
   - [-50, 100]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多单-split=2-N相等=1023-质数非对齐
 - operator: GroupedMatmul
   case_id: 11
@@ -216,7 +216,7 @@ cases:
   value_range:
   - [-65504, 65504]
   - [-65504, 65504]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多单-4组-N相等=128-float16边界值
 - operator: GroupedMatmul
   case_id: 12
@@ -239,7 +239,7 @@ cases:
   - [-88, 88]
   - [-88, 88]
   - [-8, 8]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-transpose-3组-不同N值-带bias
 - operator: GroupedMatmul
   case_id: 13
@@ -255,7 +255,7 @@ cases:
   value_range:
   - [-inf, inf]
   - [-inf, inf]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-2组-inf特殊值
 - operator: GroupedMatmul
   case_id: 14
@@ -271,7 +271,7 @@ cases:
   value_range:
   - [nan, nan]
   - [nan, nan]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-transpose-nan特殊值
 - operator: GroupedMatmul
   case_id: 15
@@ -291,7 +291,7 @@ cases:
   - [0, 0]
   - [0, 0]
   - [0, 0]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-带bias-零值
 - operator: GroupedMatmul
   case_id: 16
@@ -311,7 +311,7 @@ cases:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
   - [-0.05, 0.05]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-不同K值-带bias-微小值域
 - operator: GroupedMatmul
   case_id: 17
@@ -331,7 +331,7 @@ cases:
   - [-1, 3]
   - [-1, 3]
   - [-0.1, 0.3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-transpose-质数非对齐-非对称
 - operator: GroupedMatmul
   case_id: 18
@@ -351,7 +351,7 @@ cases:
   - [-1000, 1000]
   - [-1000, 1000]
   - [-100, 100]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-大矩阵-带bias-大值域
 - operator: GroupedMatmul
   case_id: 19
@@ -371,7 +371,7 @@ cases:
   - [-0.2, 0.2]
   - [-0.2, 0.2]
   - [-0.02, 0.02]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: bfloat16-多多多-transpose-大batch-微小值域-weight[k,n]格式
 - operator: GroupedMatmul
   case_id: 20
@@ -391,5 +391,5 @@ cases:
   - [-3, 6]
   - [-3, 6]
   - [-0.3, 0.6]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: float16-多多多-质数非对齐-带bias-非对称中值域

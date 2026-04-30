@@ -11,7 +11,7 @@
 operator:
   name: Conv2D
   category: Contraction
-  difficulty: L4
+  difficulty: L3
   formula: y = CONV(x, filter) + bias
   description: 计算2D卷积
   shape_support: 'x: [N, C_in, H, W], filter: [C_out, C_in, K_h, K_w]'

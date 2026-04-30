@@ -157,7 +157,8 @@ def get_input(
     expert_token_num_per_rank: torch.Tensor,
     per_token_scales: Optional[torch.Tensor] = None,
     expert_token_num_type: int = 1,
-    idx_type: int = 0
+    idx_type: int = 0,
+    **kwargs
 ):
     """
     输入数据预处理函数
@@ -170,12 +171,18 @@ def get_input(
         per_token_scales: 每个 token 对应的 scale，shape (A)，可选
         expert_token_num_type: 输出模式
         idx_type: 索引类型
+        per_token_scales_exist: per_token_scales 是否存在（来自 attrs）
 
     Returns:
         处理后的输入数据列表 [tokens, expert_token_num_per_rank, per_token_scales]
     """
     A = tokens.shape[0]
     N, E = expert_token_num_per_rank.shape
+
+    # 处理 per_token_scales_exist 标志
+    per_token_scales_exist = kwargs.get('per_token_scales_exist', True)
+    if not per_token_scales_exist:
+        per_token_scales = None
     total_cells = N * E
 
     # 计算每个位置的基础值，确保总和等于 A

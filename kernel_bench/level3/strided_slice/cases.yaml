@@ -19,7 +19,7 @@ cases:
     end: [524288]
     strides: [2]
   value_range: [-1, 1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-1M-对齐-1D-stride=2
 - operator: StridedSlice
   case_id: 2
@@ -31,7 +31,7 @@ cases:
     end: [-1, -1]
     strides: [1, 1]
   value_range: [-2, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: M-float32-4M-对齐-2D-全切片
 - operator: StridedSlice
   case_id: 3
@@ -43,7 +43,7 @@ cases:
     end: [2048, 2048]
     strides: [2, 2]
   value_range: [-3, 3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: M-bfloat16-16M-对齐-2D-stride=2
 - operator: StridedSlice
   case_id: 4
@@ -55,7 +55,7 @@ cases:
     end: [-1, -1]
     strides: [1, 2]
   value_range: [-10000, 10000]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-int32-67M-对齐-2D-非对称stride
 - operator: StridedSlice
   case_id: 5
@@ -67,7 +67,7 @@ cases:
     end: [8192, 8192]
     strides: [2, 2]
   value_range: [-100000, 100000]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-int64-268M-对齐-2D-stride=2
 - operator: StridedSlice
   case_id: 6
@@ -79,7 +79,7 @@ cases:
     end: [-1, -1]
     strides: [2, 4]
   value_range: [-1000, 1000]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-float32-1G-对齐-2D-stride=2,4
 - operator: StridedSlice
   case_id: 7
@@ -91,7 +91,7 @@ cases:
     end: [-1, -1]
     strides: [1, 1]
   value_range: [-0.1, 0.1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-1M-非对齐-2D-全切片-微小值域
 - operator: StridedSlice
   case_id: 8
@@ -103,7 +103,7 @@ cases:
     end: [500, 500]
     strides: [2, 2]
   value_range: [-1, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float32-1M-质数非对齐-2D-stride=2-非对称
 - operator: StridedSlice
   case_id: 9
@@ -115,7 +115,7 @@ cases:
     end: [-1, -1]
     strides: [1, 3]
   value_range: [-5, 10]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-bfloat16-1M-非对齐-2D-stride=1,3-非对称
 - operator: StridedSlice
   case_id: 10
@@ -127,7 +127,7 @@ cases:
     end: [100, 100, 100]
     strides: [1, 1, 1]
   value_range: [-50, 100]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-int32-50M-质数非对齐-3D-局部切片
 - operator: StridedSlice
   case_id: 11
@@ -140,7 +140,7 @@ cases:
     strides: [1, 1]
     begin_mask: 1
   value_range: [-1, 1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-1M-2D-begin_mask=1(维度0从0开始)
 - operator: StridedSlice
   case_id: 12
@@ -153,7 +153,7 @@ cases:
     strides: [2, 2]
     begin_mask: 3
   value_range: [-2, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: M-float32-4M-2D-begin_mask=3(维度0,1从0开始)-stride=2
 - operator: StridedSlice
   case_id: 13
@@ -166,7 +166,7 @@ cases:
     strides: [1, 1]
     end_mask: 1
   value_range: [-3, 3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-bfloat16-1M-2D-end_mask=1(维度0切到末尾)
 - operator: StridedSlice
   case_id: 14
@@ -179,7 +179,7 @@ cases:
     strides: [1, 1]
     shrink_axis_mask: 1
   value_range: [-1, 1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-1M-2D-shrink_axis_mask=1(收缩维度0)-输出shape=[1024]
 - operator: StridedSlice
   case_id: 15
@@ -192,7 +192,7 @@ cases:
     strides: [1, 1]
     shrink_axis_mask: 2
   value_range: [-2, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: M-float32-4M-2D-shrink_axis_mask=2(收缩维度1)-输出shape=[2048]
 - operator: StridedSlice
   case_id: 16
@@ -205,7 +205,7 @@ cases:
     strides: [1, 1]
     new_axis_mask: 1
   value_range: [-3, 3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-bfloat16-256K-2D-new_axis_mask=1(在维度0插入新维度)-输出shape=[1,512,512]
 - operator: StridedSlice
   case_id: 17
@@ -218,7 +218,7 @@ cases:
     strides: [1, 1]
     new_axis_mask: 2
   value_range: [-1000, 1000]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-int32-1M-2D-new_axis_mask=2(在维度1插入新维度)-输出shape=[1024,1,1024]
 - operator: StridedSlice
   case_id: 18
@@ -232,7 +232,7 @@ cases:
     shrink_axis_mask: 1
     end_mask: 2
   value_range: [-1, 1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-1M-2D-shrink_axis_mask=1+end_mask=2(收缩维度0+维度1切到末尾)
 - operator: StridedSlice
   case_id: 19
@@ -246,7 +246,7 @@ cases:
     shrink_axis_mask: 1
     new_axis_mask: 2
   value_range: [-2, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float32-256K-2D-shrink_axis_mask=1+new_axis_mask=2(收缩维度0+在维度1插入新维度)
 - operator: StridedSlice
   case_id: 20
@@ -259,5 +259,5 @@ cases:
     strides: [1, 1, 1, 1]
     ellipsis_mask: 1
   value_range: [-3, 3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-bfloat16-64M-4D-ellipsis_mask=1(维度0省略号展开中间维度)

@@ -74,17 +74,30 @@ cann_bench.add_rms_norm_dynamic_quant(Tensor x1, Tensor x2, Tensor gamma, float 
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比：
+采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
 
-| 数据类型 | 验证方式 | 阈值 |
-|---------|---------|------|
-| float16（xOut） | 相对误差：`\|output-golden\| ≤ atol + rtol×\|golden\|` | rtol=1e-3, atol=1e-3 |
-| bfloat16（xOut） | 相对误差：`\|output-golden\| ≤ atol + rtol×\|golden\|` | rtol=4e-3, atol=4e-3 |
-| float32（scaleOut） | 相对误差 | rtol=1e-3, atol=1e-5 |
-| int8（y, dst_type=0） | 允许量化边界 off-by-1，最大绝对偏差 ≤ 1；off-by-1 元素占比 | < 1e-4 |
-| int4（y, dst_type=1，packed 为 int8，值域 [-8,7]） | 允许量化边界 off-by-1，最大绝对偏差 ≤ 1；off-by-1 元素占比 | < 1e-4 |
+**误差指标**：
 
-**说明**：量化输出（int8 / int4）允许因 float32 累加顺序差异在 round 时舍到相邻整数；出现 |Δ|≥2 的元素直接判负。`xOut` 与 `scaleOut` 作为非量化通路，按上面的相对误差规则比较。
+1. 平均相对误差（MERE）：采样点中相对误差平均值
+
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+2. 最大相对误差（MARE）：采样点中相对误差最大值
+
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过标准**：
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+
+当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+
 
 ## 5. 标准 Golden 代码
 
@@ -160,13 +173,3 @@ gamma = torch.ones(4096, dtype=torch.float16, device="npu")
 y, xOut, scaleOut = cann_bench.add_rms_norm_dynamic_quant(x1, x2, gamma, 1e-6, 0)  # INT8 量化
 y, xOut, scaleOut = cann_bench.add_rms_norm_dynamic_quant(x1, x2, gamma, 1e-6, 1)  # INT4 量化
 ```
-
-### 性能基线参考
-
-基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，性能基线数据尚未测量。
-
-### 相关算子
-
-- **DequantSwigluQuant**：同为融合算子，包含反量化、SwiGLU 激活和量化操作
-- **MoeRerouting**：L3 级别的融合复合算子
-- **MoeFinalizeRouting**：L3 级别的融合复合算子

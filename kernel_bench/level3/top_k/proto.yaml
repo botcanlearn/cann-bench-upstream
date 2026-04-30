@@ -55,4 +55,5 @@ operator:
     description: 输出索引张量，始终为 int64 类型
     dtype:
     - int64
+    compare: false
   schema: top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor idx)

@@ -11,7 +11,7 @@
 operator:
   name: DepthwiseConv2D
   category: Contraction
-  difficulty: L4
+  difficulty: L3
   formula: y = bias + weight * x
   description: 二维深度卷积运算
   shape_support: 'x: [N, C_in, H, W], weight: [C_out, 1, K_h, K_w]'

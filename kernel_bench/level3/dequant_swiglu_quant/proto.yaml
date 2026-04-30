@@ -11,7 +11,7 @@
 operator:
   name: DequantSwigluQuant
   category: FusedComposite
-  difficulty: L4
+  difficulty: L3
   formula: y = quantize(SwiGLU(dequantize(x)))
   description: 反量化、SwiGLU和量化的融合
   shape_support: 'x: 任意维度，H必须为偶数'
@@ -37,7 +37,9 @@ operator:
     dtype:
     - float16
     - bfloat16
-    - int8
+    - int32
+  precision_thresholds:
+    int32: 1
   outputs:
   - name: y
     description: 输出张量

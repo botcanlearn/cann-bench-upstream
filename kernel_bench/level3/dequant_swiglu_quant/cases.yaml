@@ -13,143 +13,179 @@ cases:
   case_id: 1
   input_shape:
   - [262144, 512]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-1, 1]
-  baseline_perf_us: 3715.79
+  baseline_perf_us: null
   note: L-float16-536M-对齐-hidden=512-dst_type=int8
 - operator: DequantSwigluQuant
   case_id: 2
   input_shape:
   - [131072, 1024]
-  dtype: [bfloat16]
+  dtype: ['bfloat16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-2, 2]
-  baseline_perf_us: 3797.48
+  baseline_perf_us: null
   note: L-bfloat16-2G-对齐-hidden=1024-dst_type=int8
 - operator: DequantSwigluQuant
   case_id: 3
   input_shape:
   - [524288, 256]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-3, 3]
-  baseline_perf_us: 4001.44
+  baseline_perf_us: null
   note: L-float16-1G-对齐-hidden=256-dst_type=int8
 - operator: DequantSwigluQuant
   case_id: 4
   input_shape:
   - [2097152, 127]
-  dtype: [bfloat16]
+  dtype: ['bfloat16']
   attrs: {activate_left: true, quant_mode: static, dst_type: 0}
   value_range: [-10, 10]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-bfloat16-1G-非对齐-activate_left=true
+- operator: DequantSwigluQuant
+  case_id: 5
+  input_shape:
+  - [262144, 256]
+  dtype: ['int32']
+  attrs: {activate_left: false, quant_mode: static, dst_type: 0}
+  value_range: [-128, 127]
+  baseline_perf_us: null
+  note: M-int32-67M-对齐-hidden=256-int8范围量化输入
+- operator: DequantSwigluQuant
+  case_id: 6
+  input_shape:
+  - [524288, 258]
+  dtype: ['int32']
+  attrs: {activate_left: true, quant_mode: dynamic, dst_type: 0}
+  value_range: [-1024, 1024]
+  baseline_perf_us: null
+  note: L-int32-135M-非对齐-activate_left-quant_mode=dynamic
 - operator: DequantSwigluQuant
   case_id: 7
   input_shape:
   - [523776, 511]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-0.1, 0.1]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-float16-500M-非对齐-微小值域
 - operator: DequantSwigluQuant
   case_id: 8
   input_shape:
   - [262016, 1021]
-  dtype: [bfloat16]
+  dtype: ['bfloat16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-1, 2]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-bfloat16-2G-质数非对齐-非对称
 - operator: DequantSwigluQuant
   case_id: 9
   input_shape:
   - [524160, 257]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: true, quant_mode: dynamic, dst_type: 0}
   value_range: [-5, 10]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-float16-1G-非对齐-activate_left-quant_mode=dynamic
 - operator: DequantSwigluQuant
   case_id: 10
   input_shape:
   - [503, 4097]
-  dtype: [bfloat16]
+  dtype: ['bfloat16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-50, 100]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-bfloat16-2M-质数非对齐-hidden=4097
 - operator: DequantSwigluQuant
   case_id: 11
   input_shape:
   - [262144, 513]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-65504, 65504]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-float16-1G-非对齐-float16边界值
+- operator: DequantSwigluQuant
+  case_id: 12
+  input_shape:
+  - [10007, 64]
+  dtype: ['int32']
+  attrs: {activate_left: false, quant_mode: static, dst_type: 0}
+  value_range: [-2147483648, 2147483647]
+  baseline_perf_us: null
+  note: S-int32-640K-质数非对齐-int32边界值
 - operator: DequantSwigluQuant
   case_id: 13
   input_shape:
   - [1000003, 128]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-inf, inf]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-float16-128M-质数非对齐-inf特殊值
 - operator: DequantSwigluQuant
   case_id: 14
   input_shape:
   - [10007, 64]
-  dtype: [bfloat16]
+  dtype: ['bfloat16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [nan, nan]
-  baseline_perf_us: 7091.94
+  baseline_perf_us: null
   note: S-bfloat16-600K-质数非对齐-nan特殊值
 - operator: DequantSwigluQuant
   case_id: 15
   input_shape:
   - [3001, 32]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [0, 0]
-  baseline_perf_us: 71.9
+  baseline_perf_us: null
   note: S-float16-100K-质数非对齐-零值
 - operator: DequantSwigluQuant
   case_id: 16
   input_shape:
   - [524288, 511]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-0.5, 0.5]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: L-float16-500M-混合非对齐-hidden=511-微小值域
 - operator: DequantSwigluQuant
   case_id: 17
   input_shape:
   - [2047, 1023]
-  dtype: [bfloat16]
+  dtype: ['bfloat16']
   attrs: {activate_left: true, quant_mode: static, dst_type: 0}
   value_range: [-1, 3]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-bfloat16-2M-非对齐-activate_left-非对称
 - operator: DequantSwigluQuant
   case_id: 18
   input_shape:
   - [4095, 511]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: dynamic, dst_type: 0}
   value_range: [-1000, 1000]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-2M-非对齐-quant_mode=dynamic-大值域
+- operator: DequantSwigluQuant
+  case_id: 19
+  input_shape:
+  - [2097152, 64]
+  dtype: ['int32']
+  attrs: {activate_left: true, quant_mode: dynamic, dst_type: 0}
+  value_range: [-10, 10]
+  baseline_perf_us: null
+  note: L-int32-128M-对齐-activate_left-微小值域
 - operator: DequantSwigluQuant
   case_id: 20
   input_shape:
   - [7001, 127]
-  dtype: [float16]
+  dtype: ['float16']
   attrs: {activate_left: false, quant_mode: static, dst_type: 0}
   value_range: [-3, 6]
-  baseline_perf_us: None
+  baseline_perf_us: null
   note: S-float16-800K-质数非对齐-hidden=127-非对称中值域

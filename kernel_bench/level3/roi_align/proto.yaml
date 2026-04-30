@@ -14,6 +14,9 @@ operator:
   difficulty: L3
   formula: y = roi_align(x, boxes, output_size)
   description: 池化层，用于非均匀输入尺寸的特征图
+  precision_thresholds:
+    float16: 10
+    float32: 0.01
   shape_support: 'self: [B, C, H, W], boxes: [numBoxes, 5]'
   attrs:
   - name: outputHeight

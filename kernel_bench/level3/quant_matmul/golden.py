@@ -17,7 +17,7 @@ from typing import Optional, List
 """
 QuantMatmul 算子 Torch Golden 参考实现
 
-对标 torch_npu.npu_quant_matmul:
+计算公式：
     无bias:     out = x1 @ x2 * scale + offset
     int32 bias: out = (x1 @ x2 + bias) * scale + offset
     浮点bias:   out = x1 @ x2 * scale + bias (无offset时)
@@ -36,7 +36,7 @@ def quant_matmul(
     group_sizes: Optional[List[int]] = None,
 ) -> torch.Tensor:
     """
-    量化矩阵乘法，对标 torch_npu.npu_quant_matmul
+    量化矩阵乘法
 
     Args:
         x1: [..., m, k] int8/int32 左矩阵

@@ -88,7 +88,7 @@ cases:
   input_shape:
   - [8192, 512]    # expanded_permuted_rows
   - [2048, 512]    # skip1
-  - [1, 1]         # skip2 placeholder (不使用)
+  - null            # skip2 不使用
   - [16, 512]      # bias
   - [2048, 4]      # scales
   - [8192]         # expanded_src_to_dst_row
@@ -113,10 +113,10 @@ cases:
   - [12288, 256]   # expanded_permuted_rows
   - [1536, 256]    # skip1
   - [1536, 256]    # skip2
-  - [1, 1]         # bias placeholder (不使用)
+  - null            # bias 不使用
   - [1536, 8]      # scales
   - [12288]        # expanded_src_to_dst_row
-  - [1, 1]         # expert_for_source_row placeholder (不使用)
+  - null            # expert_for_source_row 不使用
   dtype: [float32, float32, float32, float32, float32, int32, int32]
   attrs: {drop_pad_mode: 0, bias_exist: false}
   value_range:
@@ -138,7 +138,7 @@ cases:
   - [512, 1024]    # skip1
   - [512, 1024]    # skip2
   - [8, 1024]      # bias (E, H)
-  - [1, 1]         # scales placeholder (不使用，K=1)
+  - null            # scales 不使用（K=1）
   - [512]          # expanded_src_to_dst_row (NUM_ROWS*K=512)
   - [512, 1]       # expert_for_source_row (NUM_ROWS, K)
   dtype: [float16, float16, float16, float16, float16, int32, int32]
@@ -159,8 +159,8 @@ cases:
   case_id: 7
   input_shape:
   - [4096, 256]    # expanded_permuted_rows
-  - [1, 1]         # skip1 placeholder (不使用)
-  - [1, 1]         # skip2 placeholder (不使用)
+  - null            # skip1 不使用
+  - null            # skip2 不使用
   - [16, 256]      # bias
   - [1024, 4]      # scales
   - [4096]         # expanded_src_to_dst_row
