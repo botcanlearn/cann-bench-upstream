@@ -67,22 +67,30 @@ cann_bench.gather(Tensor x, Tensor index, int batch_dims) -> Tensor y
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
 
-| 数据类型 | 验证方式 | rtol | atol |
-|---------|---------|------|------|
-| float16 | 相对误差 | 1e-3 | 1e-3 |
-| float32 | 相对误差 | 1e-4 | 1e-4 |
-| bfloat16 | 相对误差 | 4e-3 | 4e-3 |
-| int8 | 完全相等 | — | — |
-| int32 | 完全相等 | — | — |
-| int64 | 完全相等 | — | — |
+**误差指标**：
 
-**对比公式**：
+1. 平均相对误差（MERE）：采样点中相对误差平均值
 
-$$
-|output - golden| \leq atol + rtol \times |golden|
-$$
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+2. 最大相对误差（MARE）：采样点中相对误差最大值
+
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过标准**：
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+
+当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+
 
 ## 5. 标准 Golden 代码
 
@@ -132,13 +140,3 @@ x = torch.randn(128, 128, 64, dtype=torch.float16, device="npu")
 index = torch.randint(0, 128, (128, 64, 64), dtype=torch.int64, device="npu")
 y = cann_bench.gather(x, index, batch_dims=1)   # batch_dims=1
 ```
-
-### 性能基线参考
-
-基于 cases.yaml 中 20 个测试用例，当前所有用例的 baseline_perf_us 均为 0.0，性能基线数据待补充。
-
-### 相关算子
-
-- **Scatter**：Gather 的逆操作，按索引将值写入目标张量
-- **ArgMax**：取最大值索引，输出常作为 Gather 的索引输入
-- **CrossEntropyLoss**：内部涉及按 target 索引提取 logits 的 gather 操作

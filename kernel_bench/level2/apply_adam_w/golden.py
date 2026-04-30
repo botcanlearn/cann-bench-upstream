@@ -16,17 +16,10 @@ import torch
 """
 ApplyAdamW 算子 Torch Golden 参考实现
 
-AdamW 优化器实现，解耦权重衰减
-公式:
-    m_t = beta1 * m_{t-1} + (1 - beta1) * grad
-    v_t = beta2 * v_{t-1} + (1 - beta2) * grad^2
-    m_hat = m_t / (1 - beta1^t)
-    v_hat = v_t / (1 - beta2^t)
-    var_t = var_{t-1} - lr * (m_hat / (sqrt(v_hat) + eps) + weight_decay * var_{t-1})
-
-注：API 不含 timestep 参数，按单步独立调用处理，t=1，
-故 bias_correction = 1 - beta^1 = 1 - beta
+FP16/BF16 输入升精度到 FP32 计算，FP32/FP64 保持原样计算。
 """
+
+
 def apply_adam_w(
     var: torch.Tensor,
     grad: torch.Tensor,
@@ -39,40 +32,32 @@ def apply_adam_w(
     epsilon: float = 1e-8,
     maximize: bool = False
 ) -> torch.Tensor:
-    """
-    AdamW 优化器实现，解耦权重衰减
+    # 检测输入 dtype
+    input_dtype = var.dtype
 
-    Args:
-        var: 变量张量（需要优化的参数）
-        grad: 梯度张量
-        m: 一阶矩张量（动量）
-        v: 二阶矩张量
-        lr: 学习率
-        beta1: 一阶矩估计的指数衰减率
-        beta2: 二阶矩估计的指数衰减率
-        weight_decay: 权重衰减系数（解耦）
-        epsilon: 数值稳定常数
-        maximize: 是否最大化目标函数
+    # FP16/BF16 输入需要升到 FP32 计算以保证精度
+    # FP32/FP64 输入保持原样计算
+    if input_dtype in (torch.float16, torch.bfloat16):
+        compute_dtype = torch.float32
+    else:
+        compute_dtype = input_dtype
 
-    Returns:
-        更新后的变量
-    """
-    # 更新一阶矩（动量）
-    m.mul_(beta1).add_(grad, alpha=1 - beta1)
-    # 更新二阶矩
-    v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+    # 转换到计算精度
+    var = var.to(compute_dtype)
+    grad = grad.to(compute_dtype)
+    m = m.to(compute_dtype)
+    v = v.to(compute_dtype)
 
-    # 偏差修正（t=1）
-    m_hat = m / (1 - beta1)
-    v_hat = v / (1 - beta2)
-
-    # 计算更新量
+    m_new = beta1 * m + (1 - beta1) * grad
+    v_new = beta2 * v + (1 - beta2) * grad * grad
+    m_hat = m_new / (1 - beta1)
+    v_hat = v_new / (1 - beta2)
     update = m_hat / (v_hat.sqrt() + epsilon)
-
-    # 解耦的权重衰减
     if weight_decay != 0:
-        update.add_(var, alpha=weight_decay)
+        update = update + var * weight_decay
+    result = var + lr * update if maximize else var - lr * update
 
-    # 应用更新
-    y = var + lr * update if maximize else var - lr * update
-    return y
+    # 转回原始 dtype
+    if input_dtype in (torch.float16, torch.bfloat16):
+        return result.to(input_dtype)
+    return result

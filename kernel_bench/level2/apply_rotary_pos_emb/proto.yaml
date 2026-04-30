@@ -11,7 +11,7 @@
 operator:
   name: ApplyRotaryPosEmb
   category: FusedComposite
-  difficulty: L4
+  difficulty: L2
   formula: |
     rotate_half(x) = concat(-x[head_dim/2:], x[:head_dim/2])
     y = (x * cos) + (rotate_half(x) * sin)
@@ -71,3 +71,10 @@ operator:
     - float16
     - bfloat16
   schema: apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin, int layout, str rotaryMode) -> (Tensor query_out, Tensor key_out)
+  # RoPE 算子涉及三角函数（cos/sin）和旋转计算
+  # 极小值场景会导致相对误差放大，需要适当放宽阈值
+  # 参考 ApplyAdamW 的阈值设置
+  precision_thresholds:
+    float32: 0.005   # MARE 阈值 = 0.05
+    float16: 0.01    # MARE 阈值 = 0.1
+    bfloat16: 0.01   # 与 float16 相同

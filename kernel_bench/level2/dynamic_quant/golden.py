@@ -24,18 +24,26 @@ def dynamic_quant(
 ) -> torch.Tensor:
     """
     对输入张量进行per-token对称动态量化
-    
+
     公式: scaleOut = row_max(abs(x)) / dtypeMax, yOut = round(x / scaleOut)
-    
+
     Args:
         x: 输入张量
         axis: 计算scale和zero_point的维度，默认为最后一个维度
         dst_type: 目标数据类型
-    
+
     Returns:
         量化后的张量
     """
+    # FP16/BF16 输入需要升到 FP32 计算以保证精度
+    # FP32/FP64 输入保持原样计算
+    input_dtype = x.dtype
+    if input_dtype in (torch.float16, torch.bfloat16):
+        compute_dtype = torch.float32
+    else:
+        compute_dtype = input_dtype
 
-    scale_out = torch.max(torch.abs(x), dim=axis, keepdim=True)[0] / 127.0
-    y = torch.round(x / scale_out)
+    x_compute = x.to(compute_dtype)
+    scale_out = torch.max(torch.abs(x_compute), dim=axis, keepdim=True)[0] / 127.0
+    y = torch.round(x_compute / scale_out)
     return y

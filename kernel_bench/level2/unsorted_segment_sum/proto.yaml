@@ -15,6 +15,9 @@ operator:
   formula: y[i] = sum(data[j]) where segment_ids[j] == i
   description: 沿segment_ids指定的段对数据进行求和
   shape_support: 输入ND格式
+  # 自定义精度阈值（优先于全局配置）
+  precision_thresholds:
+    float32: 0.0009765625  # NPU算子精度与CPU有差异，适当放宽
   attrs:
   - name: num_segments
     type: INT

@@ -50,6 +50,12 @@ def resize_bilinear(
     else:
         raise ValueError(f"ResizeBilinear requires 3D, 4D, or 5D input, got {dim}D")
 
+    # NPU 对 fp16/bf16 使用 fp32 进行内部计算
+    # Golden 也使用 fp32 计算以保持精度一致
+    orig_dtype = x.dtype
+    if orig_dtype in [torch.float16, torch.bfloat16]:
+        x = x.float()
+
     # 使用 PyTorch 的 interpolate 实现
     y = torch.nn.functional.interpolate(
         x,
@@ -58,4 +64,6 @@ def resize_bilinear(
         mode=mode,
         align_corners=align_corners if dim >= 4 else None
     )
-    return y
+
+    # 转回原始 dtype
+    return y.to(orig_dtype)

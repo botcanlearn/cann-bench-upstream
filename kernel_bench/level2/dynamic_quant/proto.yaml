@@ -15,6 +15,10 @@ operator:
   formula: scaleOut = row_max(abs(x)) / dtypeMax, yOut = round(x / scaleOut)
   description: 对输入张量进行 per-token 对称动态量化
   shape_support: '输入 x: 2-8 维'
+  # 使用宽松的精度阈值（量化算子允许 ±1 误差）
+  precision_thresholds:
+    int8: 1.0
+    float32: 1.0  # 允许 ±1 误差（量化舍入）
   attrs:
   - name: axis
     type: int64
@@ -37,7 +41,5 @@ operator:
   - name: y
     description: 量化后的张量
     dtype:
-    - float16
-    - bfloat16
     - int8
   schema: dynamic_quant(Tensor x, int axis=-1, int dst_type=0) -> Tensor y

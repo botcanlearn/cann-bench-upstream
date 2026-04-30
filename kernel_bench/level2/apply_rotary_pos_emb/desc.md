@@ -10,7 +10,7 @@
 - 支持长序列外推的相对位置编码方案
 
 **算子特征**：
-- 难度等级：L4（FusedComposite）
+- 难度等级：L2（FusedComposite）
 - 四输入（query、key、cos、sin）双输出（query_out、key_out）
 - 支持 BSND 和 BNSD 两种布局，以及 half 和 interleaved 两种旋转模式
 
@@ -75,19 +75,30 @@ cann_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
 
-| 数据类型 | 验证方式 | rtol | atol |
-|---------|---------|------|------|
-| float16 | 相对误差 | 1e-3 | 1e-3 |
-| float32 | 相对误差 | 1e-4 | 1e-4 |
-| bfloat16 | 相对误差 | 4e-3 | 4e-3 |
+**误差指标**：
 
-**对比公式**：
+1. 平均相对误差（MERE）：采样点中相对误差平均值
 
-$$
-|output - golden| \leq atol + rtol \times |golden|
-$$
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+2. 最大相对误差（MARE）：采样点中相对误差最大值
+
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过标准**：
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+
+当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+
 
 ## 5. 标准 Golden 代码
 
@@ -231,13 +242,3 @@ query_bnsd = query.transpose(1, 2)
 key_bnsd = key.transpose(1, 2)
 q_out, k_out = cann_bench.apply_rotary_pos_emb(query_bnsd, key_bnsd, cos, sin, layout=1, rotaryMode="interleaved")
 ```
-
-### 性能基线参考
-
-基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，性能基线数据尚未测量。
-
-### 相关算子
-
-- **ApplyAdamW**：同为 FusedComposite 类别的多输入融合算子
-- **DynamicQuant**：动态量化算子，同为多步融合计算
-- **Gather**：索引提取算子，在注意力机制中常与 RoPE 配合使用

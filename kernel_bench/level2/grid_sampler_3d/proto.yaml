@@ -11,7 +11,7 @@
 operator:
   name: GridSampler3D
   category: FusedComposite
-  difficulty: L3
+  difficulty: L2
   formula: y = grid_sample(x, grid)
   description: 根据 grid 中坐标信息填充输出
   shape_support: 输入 5D (N, C, D, H, W)

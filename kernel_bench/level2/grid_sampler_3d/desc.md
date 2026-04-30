@@ -11,7 +11,7 @@
 - 空间变换网络（STN）中的可微分采样
 
 **算子特征**：
-- 难度等级：L3（FusedComposite）
+- 难度等级：L2（FusedComposite）
 - 双输入单输出，输入为 5D 张量 (N, C, D, H, W) 和采样网格 (N, D, H, W, 3)
 - 支持多种插值模式和填充模式
 
@@ -72,18 +72,30 @@ cann_bench.grid_sampler_3d(Tensor x, Tensor grid, str interpolation_mode="biline
 
 ## 4. 精度要求
 
-计算结果与 PyTorch Golden 实现逐元素对比，需满足以下误差阈值：
+采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
 
-| 数据类型 | 验证方式 | rtol | atol |
-|---------|---------|------|------|
-| float16 | 相对误差 | 1e-3 | 1e-3 |
-| float32 | 相对误差 | 1e-4 | 1e-4 |
+**误差指标**：
 
-**对比公式**：
+1. 平均相对误差（MERE）：采样点中相对误差平均值
 
-$$
-|output - golden| \leq atol + rtol \times |golden|
-$$
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+2. 最大相对误差（MARE）：采样点中相对误差最大值
+
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过标准**：
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+
+当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+
 
 ## 5. 标准 Golden 代码
 
@@ -135,13 +147,3 @@ y = cann_bench.grid_sampler_3d(x, grid, interpolation_mode="bilinear", padding_m
 # nearest 插值 + border 填充
 y = cann_bench.grid_sampler_3d(x, grid, interpolation_mode="nearest", padding_mode="border", align_corners=False)
 ```
-
-### 性能基线参考
-
-基于 cases.yaml 中 20 个测试用例，所有用例的 baseline_perf_us 均为 None，性能基线数据尚未测量。
-
-### 相关算子
-
-- **ResizeBilinear**：使用双线性插值调整图像大小，同为插值类算子
-- **Scatter**：按索引更新张量，同涉及坐标映射操作
-- **Gather**：按索引采集数据，与网格采样在概念上相关

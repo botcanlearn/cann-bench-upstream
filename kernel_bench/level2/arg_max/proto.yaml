@@ -11,7 +11,7 @@
 operator:
   name: ArgMax
   category: SortSelect
-  difficulty: L3
+  difficulty: L2
   formula: y = argmax(x, axis=dimension)
   description: 返回张量在指定维度上的最大值的索引
   shape_support: 输入支持0-8维

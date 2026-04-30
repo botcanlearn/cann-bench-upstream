@@ -11,7 +11,7 @@
 operator:
   name: Cummin
   category: Reduction
-  difficulty: L3
+  difficulty: L2
   formula: y[i] = min(x[0], x[1], ..., x[i]) 沿指定轴
   description: 计算输入张量中的累积最小值
   shape_support: 输入输出shape相同
