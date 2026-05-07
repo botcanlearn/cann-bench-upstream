@@ -26,10 +26,12 @@ operator:
     dtype:
     - float16
     - float32
+    - bfloat16
   outputs:
   - name: y
     description: 输出张量，形状为输入shape除以2
     dtype:
     - float16
     - float32
+    - bfloat16
   schema: swi_glu(Tensor x, float scalarValue) -> Tensor y

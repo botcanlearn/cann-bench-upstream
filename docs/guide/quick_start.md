@@ -1,5 +1,7 @@
 # 快速入门
 
+**文档版本：V0.2.0**
+
 本文档介绍如何使用评测工程进行算子代码生成评测。
 
 ## 前置条件
@@ -22,42 +24,99 @@ pip install -e .
 自动扫描、编译、安装 AI 生成的算子源码：
 
 ```bash
-./scripts/run_evaluation.sh --action eval --source-dir /path/to/ai_ops
+./scripts/run_evaluation.sh --source-dir /path/to/ai_ops
 ```
 
 ### 评测指定算子
 
 ```bash
-# 评测指定级别
-./scripts/run_evaluation.sh --action eval --level 1
+# 评测指定目录
+./scripts/run_evaluation.sh --task-dir kernel_bench/level1
 
-# 评测指定算子
-./scripts/run_evaluation.sh --action eval --operator Exp --level 1
+# 评测单个算子目录
+./scripts/run_evaluation.sh --task-dir kernel_bench/level1/exp
+
+# 按算子名称筛选
+./scripts/run_evaluation.sh --operator Exp
 
 # 评测单个用例
-./scripts/run_evaluation.sh --action eval --operator Exp --level 1 --case-id 1
+./scripts/run_evaluation.sh --operator Exp --case-id 1
+
+# CPU 模式评测
+./scripts/run_evaluation.sh --device cpu --operator Exp
+
+# 设置 warmup/repeat 参数
+./scripts/run_evaluation.sh --operator Exp --warmup 5 --repeat 10
+```
+
+### 多卡并行评测
+
+不指定 `--device-id` 时自动使用全部可用 NPU 卡：
+
+```bash
+# 多卡并行（自动检测）
+./scripts/run_evaluation.sh --operator Exp
+
+# 指定每卡进程数
+./scripts/run_evaluation.sh --operator Exp --processes-per-card 4
+
+# 指定进程超时
+./scripts/run_evaluation.sh --operator Exp --timeout-per-process 600
+```
+
+### 单卡评测
+
+```bash
+# 单卡模式（指定设备 ID）
+./scripts/run_evaluation.sh --device-id 0 --operator Exp
 ```
 
 ### 查看算子信息
 
 ```bash
 # 列出所有算子
-./scripts/run_evaluation.sh --action list
-
-# 列出指定级别的算子
-./scripts/run_evaluation.sh --action list --level 1
+./scripts/run_evaluation.sh -a list
 
 # 查看算子详情
-./scripts/run_evaluation.sh --action info --operator Exp
+./scripts/run_evaluation.sh -a info --operator Exp
+
+# 查看配置
+./scripts/run_evaluation.sh -a config
 ```
 
 ## 高级选项
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `--no-subprocess-isolation` | 关闭子进程隔离 | False（开启） |
+| `--device <type>` | 设备类型 (cpu/npu) | npu |
+| `--device-id <id>` | NPU 设备 ID（不指定则多卡并行） | None |
+| `--processes-per-card <n>` | 每卡进程数（多卡模式） | 2 |
+| `--timeout-per-process <n>` | 单进程超时（秒） | 300 |
+| `--warmup <n>` | 预热次数 | 3 |
+| `--repeat <n>` | 采集次数 | 5 |
+| `--no-perf` | 关闭性能采集（仅精度验证） | False |
+| `--profiler-level <level>` | Profiler 级别 (Level1/Level2) | Level1 |
 | `--op-timeout-sec` | 算子评测超时时间（秒） | 240 |
+| `--no-subprocess-isolation` | 关闭子进程隔离 | False（开启） |
 | `--no-iterative-compile` | 关闭迭代隔离编译 | False（开启） |
+
+## 测试脚本
+
+使用 `tests/run_simple.py` 进行 Golden 验证：
+
+```bash
+# CPU 简单验证
+./scripts/run_test.sh --cpu --operator Exp
+
+# NPU 模拟评测（Golden 伪装成 AI 算子）
+./scripts/run_test.sh --npu --operator Exp
+
+# 指定设备 ID
+./scripts/run_test.sh --npu --device-id 1 --operator Exp
+
+# 多卡并行
+./scripts/run_test.sh --npu --operator Exp
+```
 
 ## 评测报告
 
@@ -73,3 +132,4 @@ pip install -e .
 - [贡献指南](contributing.md)：如何提交新算子评测任务
 - [评测基准规范](../spec/benchmark_spec.md)：算子定义和精度标准
 - [评测工程设计](../design/evaluator_design.md)：评测器架构设计
+- [性能采集设计](../design/perf_collection_design.md)：性能采集机制设计

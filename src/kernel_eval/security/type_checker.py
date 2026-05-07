@@ -25,8 +25,12 @@
 - 使用type(obj) is torch.Tensor严格检查类型
 """
 
-import torch
+import logging
 from typing import Any, Optional, Tuple, List, Union
+
+import torch
+
+logger = logging.getLogger(__name__)
 
 
 def check_output_type(
@@ -59,7 +63,7 @@ def check_output_type(
             )
         return True
     else:
-        #宽松检查：isinstance(obj, torch.Tensor)
+        # 宽松检查：isinstance(obj, torch.Tensor)
         if not isinstance(output, expected_type):
             raise RuntimeError(
                 f"算子返回值类型不匹配: 期望 {expected_type.__name__}, "
@@ -113,11 +117,9 @@ def check_tensor_validity(
         nan_count = torch.isnan(tensor).sum().item()
         inf_count = torch.isinf(tensor).sum().item()
         if nan_count > 0:
-            # NaN不一定是错误，但需要记录
-            pass
+            logger.warning("Tensor contains %d NaN values", nan_count)
         if inf_count > 0:
-            # Inf也不一定是错误，但需要记录
-            pass
+            logger.warning("Tensor contains %d Inf values", inf_count)
 
     return True
 

@@ -15,34 +15,76 @@
 性能评测器
 
 职责：
-1. NPU 模式下使用 torch_npu.profiler 采集 kernel-only 性能数据
+1. NPU 模式下使用 torch_npu.profiler 采集性能数据
 2. 支持 NPU 升频 + L2 cache 清空，保证测量一致性
 3. CPU 模式下使用简单计时
-4. 归档 profiling 中间目录到 reports/prof_data/{level}/{op_name}/{caseid}/
+4. 解析 kernel_details.csv，使用精确形状匹配过滤 warmup kernel
+5. 归档 profiling 中间目录到 reports/prof_data/{rel_path}/{caseid}/
 
 参考evaluation/core/profiler_manager.py
 """
 
+import csv
 import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
-import torch
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from typing import Optional, Dict, Any, Tuple, List, Callable
 from dataclasses import dataclass, field
 
+import torch
+
 from ..utils.device_manager import DeviceManager
-from ..config import get_config
+from ..config import Config, get_config
 from .input_pool import InputPool
 
 
-# Warmup kernels关键词（需要过滤，大小写不敏感）
-# Level0 trace 中 dequeue 事件名为 aclnn API 级（如 aclnnMatmul、aclnnMax），
-# 非详细 kernel 名（如 ReduceMaxAiCore），需同时覆盖两种命名
-_WARMUP_KERNEL_KEYWORDS = ("matmul", "max", "reducemax", "reduced")
+# Warmup kernel 精确形状特征（用于过滤）
+WARMUP_MATMUL_SHAPE = '"10240,10240;10240,10240"'
+WARMUP_REDUCE_SHAPE = '"96,1024,1024;3"'
+
+
+@contextmanager
+def _suppress_profiler_logs():
+    """Suppress torch_npu.profiler parser logs during profiling.
+
+    torch_npu.profiler uses Python logging module to output parser errors.
+    These errors (CANNTimelineParser, RelationParser etc.) are noise when
+    using Level1 profiler because some parsers require Level2 data.
+
+    We temporarily set the profiler logger level to CRITICAL to suppress
+    these INFO/WARNING/ERROR logs from the parser tasks.
+    """
+    import logging
+
+    # Get profiler related loggers
+    profiler_logger = logging.getLogger('torch_npu.profiler')
+    ascend_logger = logging.getLogger('ascend')
+
+    # Save original levels
+    original_profiler_level = profiler_logger.level
+    original_ascend_level = ascend_logger.level
+
+    # Set to CRITICAL to suppress INFO/WARNING/ERROR logs
+    profiler_logger.setLevel(logging.CRITICAL)
+    ascend_logger.setLevel(logging.CRITICAL)
+
+    try:
+        yield
+    finally:
+        # Restore original levels
+        profiler_logger.setLevel(original_profiler_level)
+        ascend_logger.setLevel(original_ascend_level)
+
+
+@contextmanager
+def _null_context():
+    """空上下文管理器"""
+    yield
 
 
 @dataclass
@@ -56,59 +98,33 @@ class PerfResult:
     warmup_used: bool = False      # 是否使用了升频清cache
 
 
-@contextmanager
-def _suppress_cann_profiler_errors():
-    """Suppress CANN profiler's internal parser-failure ERROR messages.
-
-    torch_npu's Level0 profiling collects minimal CANN data — not enough
-    for msprof --export=on to generate MindStudio timeline CSVs.
-    CANNTimelineParser polls for those CSVs in an infinite loop and is
-    eventually marked FAILED by ConcurrentTasksManager, cascading to 8
-    downstream parsers (RelationParser, CANNAnalyzeParser, etc.).  The
-    failures are harmless: CANNExportParser still generates trace_view.json
-    with dequeue events (cat="dequeue") that carry NPU kernel times.
-
-    Because the parsers run in a ProcessPoolExecutor child (forked on
-    Linux), Python-level monkey-patching has no effect — the child gets a
-    fresh interpreter.  Replacing parent fd 1 before the fork is the only
-    reliable way.
-    """
-    saved_fd = os.dup(1)
-    devnull_fd = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull_fd, 1)
-    os.close(devnull_fd)
-    try:
-        yield
-    finally:
-        os.dup2(saved_fd, 1)
-        os.close(saved_fd)
-
-
 class PerfEvaluator:
     """NPU 性能评测器
 
-    使用 torch_npu.profiler 采集 NPU kernel-only 性能数据。
-    通过解析 chrome trace JSON 中的 dequeue 事件获取设备内核时间。
+    使用 torch_npu.profiler 采集 NPU 性能数据。
+    默认使用 Level1（47列CSV），支持 Level2 配置。
+    通过解析 kernel_details.csv 获取设备内核时间，使用精确形状匹配过滤 warmup kernel。
     每次测量前执行 MatMul + ReduceMax 升频并清空 L2 cache。
 
     使用方法：
-        perf_eval = PerfEvaluator(enabled=True, device_manager=device_mgr)
+        config = Config(profiler_level="Level1")
+        perf_eval = PerfEvaluator(config=config, device_manager=device_mgr)
         outputs, perf_result = perf_eval.run_profiled(case_id, func, *args)
     """
 
-    def __init__(self, enabled: bool = False, device_manager: DeviceManager = None,
+    def __init__(self, config: Config = None, device_manager: DeviceManager = None,
                  warmup: int = 3, repeat: int = 5, archive_prof: bool = True,
                  freq_boost: bool = True):
         """
         Args:
-            enabled: 是否启用profiler
+            config: 配置对象（含 profiler_level）
             device_manager: 设备管理器
             warmup: 预热次数
             repeat: 采集次数
             archive_prof: 是否归档profiling数据
             freq_boost: 是否启用NPU升频清cache
         """
-        self.enabled = enabled
+        self.config = config or get_config()
         self.device_manager = device_manager
         self.warmup = warmup
         self.repeat = repeat
@@ -116,8 +132,7 @@ class PerfEvaluator:
         self.freq_boost = freq_boost
 
         # 性能数据归档目录
-        config = get_config()
-        self.prof_data_dir = os.path.join(config.reports_dir, "prof_data")
+        self.prof_data_dir = os.path.join(self.config.reports_dir, "prof_data")
 
         # Warmup tensors（升频清cache）
         self._warmup_tensors: Optional[Tuple] = None
@@ -139,7 +154,7 @@ class PerfEvaluator:
             self._warmup_tensors = (mm1, mm2, reduce_input)
 
     def _boost_freq_and_clear_cache(self):
-        """NPU升频 + 清L2 cache
+        """NPU升频 + 清L2 cache (仅在测量窗口前调用一次)
 
         执行 MatMul + ReduceMax 以：
         1. 提升 NPU 频率到稳定状态
@@ -156,38 +171,63 @@ class PerfEvaluator:
             torch.max(reduce_input)
             torch.npu.synchronize(mm1.device)
 
+    def _clear_cache(self):
+        """清空 L2 cache (在每次测量 step 前调用，保证测量间 cache 状态一致)"""
+        if self._warmup_tensors is not None:
+            _, _, reduce_input = self._warmup_tensors
+            torch.max(reduce_input)
+            torch.npu.synchronize(reduce_input.device)
+
     def _profile(self, fn: Callable, prof_dir: str, warmup: int, repeat: int):
-        """Execute warmup + repeat calls with NPU profiler.  Trace written to
-        prof_dir — caller is responsible for locating trace_view.json and
-        kicking off parsing."""
+        """Execute warmup + repeat calls with NPU profiler.
+
+        使用 config.profiler_level（Level1 或 Level2）采集性能数据。
+        Level1/Level2 产出 kernel_details.csv（47列），包含 Input Shapes 用于精确过滤。
+
+        性能优化：频率提升仅在测量窗口前执行一次（而非每个 step），
+        L2 cache 清理仅在测量 step 前执行（warmup step 跳过）。
+        原先 (warmup+repeat) × (MatMul+ReduceMax) → 1 × (MatMul+ReduceMax) + repeat × ReduceMax。
+        """
         import torch_npu
+
+        # 获取 profiler_level，支持 Level1 和 Level2
+        profiler_level = getattr(self.config, 'profiler_level', 'Level1')
+        level_map = {
+            'Level1': torch_npu.profiler.ProfilerLevel.Level1,
+            'Level2': torch_npu.profiler.ProfilerLevel.Level2,
+        }
+        level = level_map.get(profiler_level, torch_npu.profiler.ProfilerLevel.Level1)
 
         experimental_config = torch_npu.profiler._ExperimentalConfig(
             export_type=[torch_npu.profiler.ExportType.Text],
-            profiler_level=torch_npu.profiler.ProfilerLevel.Level0,
+            profiler_level=level,
             aic_metrics=torch_npu.profiler.AiCMetrics.AiCoreNone,
         )
 
-        with _suppress_cann_profiler_errors():
-            with torch_npu.profiler.profile(
-                activities=[
-                    torch_npu.profiler.ProfilerActivity.CPU,
-                    torch_npu.profiler.ProfilerActivity.NPU,
-                ],
-                schedule=torch_npu.profiler.schedule(
-                    wait=0, warmup=warmup, active=repeat, repeat=1
-                ),
-                on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(prof_dir),
-                record_shapes=False,
-                profile_memory=False,
-                with_stack=False,
-                experimental_config=experimental_config,
-            ) as prof:
-                for _ in range(warmup + repeat):
-                    if self.freq_boost:
-                        self._boost_freq_and_clear_cache()
-                    fn()
-                    prof.step()
+        # 频率提升 + 初始 cache 清理（仅在测量窗口前执行一次）
+        if self.freq_boost:
+            self._boost_freq_and_clear_cache()
+
+        with torch_npu.profiler.profile(
+            activities=[
+                torch_npu.profiler.ProfilerActivity.CPU,
+                torch_npu.profiler.ProfilerActivity.NPU,
+            ],
+            schedule=torch_npu.profiler.schedule(
+                wait=0, warmup=warmup, active=repeat, repeat=1
+            ),
+            on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(prof_dir),
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=False,
+            experimental_config=experimental_config,
+        ) as prof:
+            for i in range(warmup + repeat):
+                # 仅在测量 step (非 warmup) 前清空 L2 cache
+                if self.freq_boost and i >= warmup:
+                    self._clear_cache()
+                fn()
+                prof.step()
 
     def run_profiled(self, case_id: str, func: Callable, *args,
                      warmup: int = None, repeat: int = None,
@@ -195,9 +235,8 @@ class PerfEvaluator:
                      **kwargs) -> Tuple[Any, PerfResult]:
         """Profile func with warmup + repeat steps, return (outputs, result).
 
-        NPU path uses torch_npu.profiler (Level0 kernel-only trace).  CPU
-        fallback measures wall-clock time with ``time.perf_counter()`` when
-        ``self.enabled`` is False.
+        NPU path uses torch_npu.profiler (Level1/Level2)，解析 kernel_details.csv。
+        CPU fallback measures wall-clock time when ``self.config.enable_profiler`` is False.
 
         Args:
             case_id: case identifier (used in PerfResult and archive path).
@@ -217,7 +256,7 @@ class PerfEvaluator:
 
         result = PerfResult(case_id=case_id, _repeat=repeat, warmup_used=self.freq_boost)
 
-        if not self.enabled:
+        if not self.config.enable_profiler:
             self._measure_simple(result, func, inputs, warmup, repeat,
                                  use_input_pool, args, kwargs)
             return None, result
@@ -225,9 +264,9 @@ class PerfEvaluator:
         if self.freq_boost:
             self._prepare_warmup_tensors()
 
-        level, op_name, caseid = self._parse_case_id(case_id)
+        rel_path, caseid = self._parse_case_id(case_id)
         if self.archive_prof:
-            prof_dir = os.path.join(self.prof_data_dir, level, op_name, caseid)
+            prof_dir = os.path.join(self.prof_data_dir, rel_path, caseid)
             os.makedirs(prof_dir, exist_ok=True)
         else:
             prof_dir = tempfile.mkdtemp(prefix="cann_prof_")
@@ -235,6 +274,14 @@ class PerfEvaluator:
         last_outputs = None
 
         try:
+            # 注意：torch_npu.profiler 内部使用全局单例 ProcessPoolExecutor
+            # 多线程并发调用会导致 Bus error，因此：
+            # - 多线程模式应使用 _measure_simple（简单计时）
+            # - 单线程/进程隔离模式可使用 profiler
+            #
+            # 当前实现：当 enable_profiler=True 时使用 profiler（需确保单线程执行）
+            # 多线程并行评测应设置 enable_profiler=False
+            # profiler parser logs 已在 _profile 内部抑制
             if inputs and use_input_pool:
                 pool = InputPool(inputs, warmup + repeat)
                 def _fn():
@@ -254,28 +301,49 @@ class PerfEvaluator:
         except Exception as e:
             result.error = str(e)
 
-        # Locate trace_view.json and parse synchronously.
-        trace_file = None
-        for root, dirs, files in os.walk(prof_dir):
-            for f in files:
-                if f == "trace_view.json":
-                    trace_file = os.path.join(root, f)
-                    break
-            if trace_file:
-                break
+        try:
+            # Locate kernel_details.csv — check common locations first.
+            csv_file = None
 
-        if trace_file:
-            op_times, total_kernel_us = self._parse_trace_file(trace_file)
-            self._normalize_result(result, op_times, total_kernel_us)
-        else:
-            result.error = "no trace_view.json produced"
+            # 1) Directly in prof_dir
+            direct = os.path.join(prof_dir, "kernel_details.csv")
+            if os.path.isfile(direct):
+                csv_file = direct
+            else:
+                # 2) One level down (torch_npu wraps in a timestamped subdir)
+                try:
+                    for entry in os.listdir(prof_dir):
+                        candidate = os.path.join(prof_dir, entry, "kernel_details.csv")
+                        if os.path.isfile(candidate):
+                            csv_file = candidate
+                            break
+                except OSError:
+                    pass
 
-        # Clean up temp dir (non-archive mode).
-        if not self.archive_prof and os.path.isdir(prof_dir):
-            try:
-                shutil.rmtree(prof_dir, ignore_errors=True)
-            except OSError:
-                pass
+                # 3) Fallback: deeper walk (should rarely be needed)
+                if csv_file is None:
+                    for root, dirs, files in os.walk(prof_dir):
+                        for f in files:
+                            if f == "kernel_details.csv":
+                                csv_file = os.path.join(root, f)
+                                break
+                        if csv_file:
+                            break
+
+            if csv_file:
+                op_times, total_kernel_us = self._parse_kernel_details_csv(csv_file)
+                self._normalize_result(result, op_times, total_kernel_us)
+            elif not result.error:
+                # 只在 profiler 未报错时才设置此错误，避免覆盖 profiler 异常信息
+                result.error = "no kernel_details.csv produced"
+
+        finally:
+            # Clean up temp dir (non-archive mode).
+            if not self.archive_prof and os.path.isdir(prof_dir):
+                try:
+                    shutil.rmtree(prof_dir, ignore_errors=True)
+                except OSError:
+                    pass
 
         return last_outputs, result
 
@@ -313,32 +381,39 @@ class PerfEvaluator:
 
         result.elapsed_us = round(sum(times) / len(times), 2) if times else 0
 
-    def _parse_case_id(self, case_id: str) -> Tuple[str, str, str]:
-        """Split a CaseInfo.get_case_id_str() like ``L2_Gcd_5`` into
-        ``("level2", "Gcd", "5")`` for use as the prof_data archive path.
-        Falls back to safe defaults so an unexpected format doesn't crash
-        the profiler — we'd rather lose the archive layout than the run.
+    def _parse_case_id(self, case_id: str) -> Tuple[str, str]:
+        """Parse case_id like ``level2/scatter_1`` into ``(rel_path, case_num)``.
+
+        New format: {rel_path}_{case_num}
+        Old format (fallback): L2_Scatter_1 -> (level2/Scatter, 1)
+
+        Returns:
+            (rel_path, case_num) for prof_data archive path.
         """
+        # Try new format first: rel_path_case_num
+        # e.g., "level2/scatter_1" -> ("level2/scatter", "1")
+        parts = case_id.rsplit('_', 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            return parts[0], parts[1]
+
+        # Fallback: old format L2_Scatter_1 -> level2/Scatter, 1
         m = re.match(r"^L(?P<level>\d+)_(?P<op>.+)_(?P<case>\d+)$", case_id)
-        if not m:
-            return "level_unknown", case_id or "unknown", "0"
-        return f"level{m['level']}", m["op"], m["case"]
+        if m:
+            return f"level{m['level']}/{m['op']}", m["case"]
+
+        return case_id or "unknown", "0"
 
     def _normalize_result(self, result: PerfResult,
                            op_times: Dict[str, Dict[str, float]],
                            total_kernel_us: float):
-        """Normalize op_times by repeat count and populate result."""
-        repeat = result._repeat
-        if repeat > 1:
-            for cat in op_times:
-                for name in op_times[cat]:
-                    op_times[cat][name] = round(op_times[cat][name] / repeat, 2)
-            total_kernel_us = round(total_kernel_us / repeat, 2)
-        else:
-            for cat in op_times:
-                for name in op_times[cat]:
-                    op_times[cat][name] = round(op_times[cat][name], 2)
-            total_kernel_us = round(total_kernel_us, 2)
+        """Normalize op_times and populate result.
+
+        Note: _parse_kernel_details_csv 已经返回中位数，无需再除以 repeat。
+        """
+        for cat in op_times:
+            for name in op_times[cat]:
+                op_times[cat][name] = round(op_times[cat][name], 2)
+        total_kernel_us = round(total_kernel_us, 2)
         result.op_times = op_times
         result.elapsed_us = total_kernel_us
 
@@ -351,67 +426,124 @@ class PerfEvaluator:
             del self._warmup_tensors
             self._warmup_tensors = None
 
-    def _parse_trace_file(self, trace_file: str) -> Tuple[Dict[str, Dict[str, float]], float]:
-        """解析 chrome trace JSON，提取 CANN NPU 执行时间
+    def _parse_kernel_details_csv(self, csv_file: str) -> Tuple[Dict[str, Dict[str, float]], float]:
+        """解析 kernel_details.csv，提取 NPU kernel 执行时间（取中位数）
 
-        依据 CANN 事件分类（cat 字段）：
-        - cat="dequeue" 事件的 dur 字段 = NPU 内核执行时间
-        - cat="cpu_op" 事件 = CPU 侧 API 调用时间（仅供参考）
+        Level1/Level2 产出的 kernel_details.csv 包含 47 列，包括：
+        - Step Id: 步骤ID（warmup阶段可能为空，需要过滤）
+        - Type: 算子类型
+        - Input Shapes: 输入形状（用于精确过滤 warmup kernel）
+        - Duration(us): 执行时间
+
+        Warmup kernel 过滤：
+        1. 排除 Step Id 为空的 kernel（profiler 内部记录）
+        2. 精确形状匹配 MatMulV3/ReduceMax 升频清cache kernel
+
+        性能指标计算：
+        - 对每个 kernel，收集所有 Step 的时间值，取中位数（减少异常值影响）
+        - 总时间为所有 kernel 中位数之和
         """
-        if not trace_file or not os.path.exists(trace_file):
+        if not csv_file or not os.path.exists(csv_file):
             return {}, 0.0
 
-        host_ops: Dict[str, float] = {}
-        device_kernels: Dict[str, float] = {}
-        total_kernel_us = 0.0
+        # 按 Step 分组收集每个 kernel 的时间
+        step_kernel_times: Dict[str, Dict[str, List[float]]] = {}
 
         try:
-            with open(trace_file, 'r') as f:
-                content = f.read()
-
-            # Fix for potentially incomplete JSON (torch_npu profiler sometimes doesn't close the array)
-            content = content.strip()
-            if not content.endswith(']'):
-                content = content + ']'
-
-            data = json.loads(content)
-            events = data if isinstance(data, list) else data.get('traceEvents', [])
-
-            for event in events:
-                if event.get('ph') != 'X':
-                    continue
-
-                dur = event.get('dur', 0)
-                if dur <= 0:
-                    continue
-
-                name = event.get('name', '')
-                if not name:
-                    continue
-
-                # 提取 dequeue 事件（NPU 内核执行时间）
-                # cat="dequeue" 是 CANN 权威分类，不依赖算子命名前缀（aclnn/acl/tbe 等）
-                if event.get('cat') == 'dequeue':
-                    # 过滤warmup kernels（大小写不敏感）
-                    if any(kw in name.lower() for kw in _WARMUP_KERNEL_KEYWORDS):
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # 获取 Step Id，过滤无效/空值（warmup阶段残留）
+                    step_id = row.get('Step Id', '').strip()
+                    if not step_id:
                         continue
 
-                    device_kernels[name] = device_kernels.get(name, 0) + dur
-                    total_kernel_us += dur
-
-                # 可选：记录CPU侧aclnn调用时间
-                elif event.get('cat') == 'cpu_op':
-                    if any(kw in name.lower() for kw in _WARMUP_KERNEL_KEYWORDS):
+                    # 获取执行时间
+                    duration_str = row.get('Duration(us)', '0')
+                    try:
+                        duration = float(duration_str)
+                    except (ValueError, TypeError):
                         continue
-                    host_ops[name] = host_ops.get(name, 0) + dur
+
+                    if duration <= 0:
+                        continue
+
+                    # 获取算子名称和输入形状
+                    op_type = row.get('Type', '')
+                    input_shapes = row.get('Input Shapes', '')
+
+                    # 精确过滤 warmup kernel（升频清cache）
+                    if self._is_warmup_kernel(op_type, input_shapes):
+                        continue
+
+                    # 记录 kernel 名称
+                    name = row.get('Name', op_type)
+
+                    # 按 step 和 kernel 收集时间列表
+                    if step_id not in step_kernel_times:
+                        step_kernel_times[step_id] = {}
+                    if name not in step_kernel_times[step_id]:
+                        step_kernel_times[step_id][name] = []
+                    step_kernel_times[step_id][name].append(duration)
 
         except Exception:
             pass
 
+        if not step_kernel_times:
+            return {}, 0.0
+
+        # 收集每个 kernel 在所有 Step 中的时间，然后取中位数
+        all_kernel_times: Dict[str, List[float]] = {}
+        for step_id, kernels in step_kernel_times.items():
+            for name, times in kernels.items():
+                # 每个 kernel 在该 step 的总时间（可能有多个同名 kernel）
+                step_total = sum(times)
+                if name not in all_kernel_times:
+                    all_kernel_times[name] = []
+                all_kernel_times[name].append(step_total)
+
+        # 计算每个 kernel 的时间中位数
+        device_kernels: Dict[str, float] = {}
+        total_kernel_us = 0.0
+
+        for name, times in all_kernel_times.items():
+            median_time = self._median(times)
+            device_kernels[name] = round(median_time, 2)
+            total_kernel_us += median_time
+
         op_times = {}
-        if host_ops:
-            op_times["host_ops"] = host_ops
         if device_kernels:
             op_times["device_kernels"] = device_kernels
 
         return op_times, total_kernel_us
+
+    def _median(self, values: List[float]) -> float:
+        """计算中位数"""
+        if not values:
+            return 0.0
+        sorted_vals = sorted(values)
+        n = len(sorted_vals)
+        if n % 2 == 1:
+            return sorted_vals[n // 2]
+        else:
+            return (sorted_vals[n // 2 - 1] + sorted_vals[n // 2]) / 2
+
+    def _is_warmup_kernel(self, op_type: str, input_shapes: str) -> bool:
+        """判断是否为 warmup kernel（通过精确形状匹配）
+
+        Warmup kernel 特征：
+        - MatMulV3: Input Shapes = '"10240,10240;10240,10240"'
+        - ReduceMax: Input Shapes = '"96,1024,1024;3"'
+        """
+        if not op_type or not input_shapes:
+            return False
+
+        # 精确匹配 MatMulV3 warmup
+        if op_type == 'MatMulV3' and WARMUP_MATMUL_SHAPE in input_shapes:
+            return True
+
+        # 精确匹配 ReduceMax warmup
+        if op_type == 'ReduceMax' and WARMUP_REDUCE_SHAPE in input_shapes:
+            return True
+
+        return False

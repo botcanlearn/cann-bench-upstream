@@ -45,10 +45,15 @@ class Config:
     # 性能配置
     # NPU 模式下默认启用 profiler 以获取 kernel-only 时间
     enable_profiler: bool = True
+    # Profiler 级别：Level1（默认，47列CSV）或 Level2（更详细AICPU采集）
+    profiler_level: str = "Level1"
 
     # 评测配置
     warmup: int = 3              # 性能评测预热次数
     repeat: int = 5              # 性能评测采集次数
+
+    # 多进程并行配置（统一架构）
+    processes_per_card: int = 2  # 每卡进程数
 
     # 精度配置（采用生态算子开源精度标准）
     # 通过条件: MERE < threshold, MARE < 10 * threshold
@@ -74,14 +79,10 @@ class Config:
     def __post_init__(self):
         """初始化后自动设置默认路径"""
         if not self.kernel_bench_root:
-            # 默认使用项目根目录下的kernel_bench目录
-            project_root = Path(__file__).parent.parent.parent
-            self.kernel_bench_root = str(project_root / "kernel_bench")
+            self.kernel_bench_root = str(get_project_root() / "kernel_bench")
 
         if not self.reports_dir:
-            # 默认报告目录
-            project_root = Path(__file__).parent.parent.parent
-            self.reports_dir = str(project_root / "reports")
+            self.reports_dir = str(get_project_root() / "reports")
 
     def get_kernel_bench_path(self) -> Path:
         """获取kernel_bench数据目录路径"""
@@ -98,6 +99,23 @@ class Config:
 
 # 全局配置实例
 _global_config: Optional[Config] = None
+
+# 项目根目录缓存
+_project_root: Optional[Path] = None
+
+
+def get_project_root() -> Path:
+    """返回项目根目录（向上查找 kernel_bench 或 .git 标记）"""
+    global _project_root
+    if _project_root is not None:
+        return _project_root
+    current = Path(__file__).resolve().parent
+    for _ in range(10):
+        if (current / "kernel_bench").is_dir() or (current / ".git").is_dir():
+            _project_root = current
+            return current
+        current = current.parent
+    raise RuntimeError("Cannot determine project root")
 
 
 def get_config() -> Config:

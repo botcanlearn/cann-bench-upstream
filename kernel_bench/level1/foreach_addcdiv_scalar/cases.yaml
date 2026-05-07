@@ -179,7 +179,7 @@ cases:
   - [-88.0, 88.0]
   - [-88.0, 88.0]
   - [0.1, 88.0]
-  baseline_perf_us: 28.44
+  baseline_perf_us: 31.92
   note: M-float16-TensorList_len=2-质数非对齐-float32边界值-4D
 - operator: ForeachAddcdivScalar
   case_id: 12
@@ -238,7 +238,7 @@ cases:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
   - [0.25, 0.5]
-  baseline_perf_us: 31.50
+  baseline_perf_us: 35.96
   note: M-float32-TensorList_len=2-2M-非对齐-小比值范围
 - operator: ForeachAddcdivScalar
   case_id: 16

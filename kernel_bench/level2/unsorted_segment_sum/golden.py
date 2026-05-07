@@ -39,8 +39,8 @@ def unsorted_segment_sum(
     """
     output_shape = (num_segments,) + data.shape[1:]
 
-    # 只有 FP16 需要转换为 FP32 进行累加以保证精度
-    if data.dtype == torch.float16:
+    # FP16/BF16 输入升精度到 FP32 进行累加以保证精度
+    if data.dtype in (torch.float16, torch.bfloat16):
         y_fp32 = torch.zeros(output_shape, dtype=torch.float32, device=data.device)
         data_fp32 = data.to(torch.float32)
         y_fp32.index_add_(0, segment_ids, data_fp32)

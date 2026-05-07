@@ -119,7 +119,7 @@ def conv2_d(
         filter: 卷积核
         bias: 偏置
         strides: 步长
-        pads: 填充
+        pads: 填充 [pad_top, pad_bottom, pad_left, pad_right]
         dilations: 膨胀率
         groups: 分组数
     
@@ -127,7 +127,16 @@ def conv2_d(
         输出特征图
     """
 
-    padding = (pads[0], pads[1], pads[2], pads[3])
+    # pads 格式: [pad_top, pad_bottom, pad_left, pad_right]
+    # PyTorch conv2d padding 格式: (left, right, top, bottom) 或 (pad_h, pad_w) 对称模式
+    # 检查是否对称填充
+    if pads[0] == pads[1] and pads[2] == pads[3]:
+        # 对称模式: (pad_height, pad_width)
+        padding = (pads[0], pads[2])
+    else:
+        # 非对称模式: (left, right, top, bottom)
+        padding = (pads[2], pads[3], pads[0], pads[1])
+    
     stride = (strides[0], strides[1])
     dilation = (dilations[0], dilations[1])
     

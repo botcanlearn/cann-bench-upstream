@@ -43,12 +43,13 @@ benchmark 总分 = 所有算子综合评分之和（= Level1 + Level2 + Level3 +
 
 ```
 cann-bench/
-├── kernel_bench/           # 算子生成评测任务
-│   ├── level1/             # 基础算子
-│   ├── ...                 # 中级算子
-│   └── level4/             # 复杂算子
+├── tasks/        # 评测任务
+│   ├── ops/      # 算子生成任务
+│   └── models/   # 模型优化任务
+├── community_tasks/    
 ├── bench_lab/              # 实验室级测试用例(后续版本会规划进主评测集)
-│   └── kernel_bench/       # 实验室级算子评测任务
+│   ├── ops/          # 算子优化任务
+│   └── models/       # 模型类任务
 ├── examples/               # 示例代码工程
 │   ├── aclnn_launch_example/        # ACLNN 算子工程样例
 │   └── direct_launch_example/       # 直接算子工程样例

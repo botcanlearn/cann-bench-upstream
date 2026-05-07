@@ -34,19 +34,19 @@ WEIGHT_PERFORMANCE = 5  # 性能得分权重 Wp
 @dataclass
 class ScoreInfo:
     """得分信息"""
-    operator: str
-    level: int
-    pass_rate: float
-    avg_speedup: float
-    function_score: float
-    performance_score: float
-    total_score: float
-    passed_cases: int
+    operator: str = ""
+    rel_path: str = ""
+    pass_rate: float = 0.0
+    avg_speedup: float = 0.0
+    function_score: float = 0.0
+    performance_score: float = 0.0
+    total_score: float = 0.0
+    passed_cases: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             'operator': self.operator,
-            'level': self.level,
+            'rel_path': self.rel_path,
             'pass_rate': self.pass_rate,
             'avg_speedup': self.avg_speedup,
             'function_score': self.function_score,
@@ -94,7 +94,7 @@ class ScoringCalculator:
 
         return ScoreInfo(
             operator=result.operator,
-            level=result.level,
+            rel_path=result.rel_path,
             pass_rate=pass_rate,
             avg_speedup=avg_speedup,
             function_score=function_score,
@@ -123,7 +123,7 @@ class ScoringCalculator:
             ranking.append({
                 'rank': i,
                 'operator': info.operator,
-                'level': info.level,
+                'rel_path': info.rel_path,
                 'score': info.total_score,
                 'pass_rate': info.pass_rate,
                 'avg_speedup': info.avg_speedup,
@@ -137,7 +137,7 @@ class ScoringCalculator:
 
         return {
             'operator': score_info.operator,
-            'level': score_info.level,
+            'rel_path': score_info.rel_path,
             'total_cases': result.total_cases,
             'passed_cases': score_info.passed_cases,
             'pass_rate': score_info.pass_rate,

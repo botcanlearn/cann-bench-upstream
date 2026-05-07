@@ -55,7 +55,7 @@ cases:
   value_range:
   - [-32768, 32767]
   - [-32768, 32767]
-  baseline_perf_us: 703652.20
+  baseline_perf_us: 709541.31
   note: L-int16-67M-对齐-int16全范围
 - operator: Gcd
   case_id: 5
@@ -79,7 +79,7 @@ cases:
   value_range:
   - [-100, 100]
   - [-100, 100]
-  baseline_perf_us: 4062.80
+  baseline_perf_us: 4183.07
   note: M-int64-1M-非对齐-对称小值域
 - operator: Gcd
   case_id: 7
@@ -91,7 +91,7 @@ cases:
   value_range:
   - [-1, 1]
   - [-1, 1]
-  baseline_perf_us: 23.70
+  baseline_perf_us: 23.7
   note: S-int32-1M-质数非对齐-单位值gcd=1
 - operator: Gcd
   case_id: 8
@@ -115,7 +115,7 @@ cases:
   value_range:
   - [-10000, 10000]
   - [-1000, 1000]
-  baseline_perf_us: 23486173.11
+  baseline_perf_us: 27473768.07
   note: L-int64-50M-质数非对齐-非对称大值域-3D
 - operator: Gcd
   case_id: 10
@@ -139,7 +139,7 @@ cases:
   value_range:
   - [-10000, 10000]
   - [-100, 100]
-  baseline_perf_us: 9794.48
+  baseline_perf_us: 9796.28
   note: S-int32-1M-非对齐-尾轴Broadcast
 - operator: Gcd
   case_id: 12
@@ -151,7 +151,7 @@ cases:
   value_range:
   - [-100, 100]
   - [-10, 10]
-  baseline_perf_us: 1920.30
+  baseline_perf_us: 1929.25
   note: M-int16-31M-非对齐-多轴Broadcast-4D
 - operator: Gcd
   case_id: 13
@@ -199,7 +199,7 @@ cases:
   value_range:
   - [-100, 100]
   - [1]
-  baseline_perf_us: null
+  baseline_perf_us: 1530.71
   note: S-int16-3M-质数非对齐-标量Broadcast-5D
 - operator: Gcd
   case_id: 17
@@ -223,7 +223,7 @@ cases:
   value_range:
   - [-1000, 1000]
   - [-100, 100]
-  baseline_perf_us: 7671.11
+  baseline_perf_us: 7687.04
   note: S-int32-2M-非对齐-Broadcast
 - operator: Gcd
   case_id: 19
@@ -235,7 +235,7 @@ cases:
   value_range:
   - [2, 10000]
   - [2, 10000]
-  baseline_perf_us: 33340.33
+  baseline_perf_us: 35037.32
   note: S-int16-2M-非对齐-正数范围-Broadcast
 - operator: Gcd
   case_id: 20
@@ -247,5 +247,5 @@ cases:
   value_range:
   - [-100000, 100000]
   - [-10000, 10000]
-  baseline_perf_us: 146807.37
+  baseline_perf_us: 166385.13
   note: M-int64-10M-非对齐-非对称大值域-5D-Broadcast

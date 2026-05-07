@@ -25,7 +25,10 @@ import traceback
 from typing import Callable, Dict, Optional, Any, List
 from dataclasses import dataclass
 
+import torch
+
 from ..utils.device_manager import DeviceManager
+from ..utils.tensor_utils import tensors_to_fp64_cpu
 from .perf_eval import PerfEvaluator, PerfResult
 
 
@@ -56,7 +59,9 @@ class OpRunner:
             updated_params = self._update_params(params, device_tensors)
 
             # 执行
-            use_profiler = self.perf_evaluator is not None and self.perf_evaluator.enabled and self.device_manager.is_npu_mode()
+            use_profiler = (self.perf_evaluator is not None
+                         and self.perf_evaluator.config.enable_profiler
+                         and self.device_manager.is_npu_mode())
             if use_profiler:
                 # 提取位置参数（保持参数顺序），避免kwargs导致torch_npu profiler解析ERROR
                 args = [updated_params[k] for k in params.keys()]
@@ -107,24 +112,8 @@ class OpRunner:
         on edge cases, which would silently corrupt the reference and flip
         correct AI ops to FAIL. Golden is for correctness, not performance.
         """
-        import torch
         try:
-            def _to_fp64_cpu(t: torch.Tensor) -> torch.Tensor:
-                t = t.cpu()
-                return t.double() if t.is_floating_point() else t
-
-            cpu_tensors: List[Any] = []
-            for item in input_tensors:
-                if isinstance(item, torch.Tensor):
-                    cpu_tensors.append(_to_fp64_cpu(item))
-                elif isinstance(item, (list, tuple)):
-                    cpu_tensors.append([
-                        _to_fp64_cpu(sub) if isinstance(sub, torch.Tensor) else sub
-                        for sub in item
-                    ])
-                else:
-                    cpu_tensors.append(item)
-
+            cpu_tensors = tensors_to_fp64_cpu(input_tensors)
             updated_params = self._update_params(params, cpu_tensors)
 
             t0 = time.perf_counter()
@@ -208,10 +197,17 @@ class OpRunner:
                 while tensor_idx < len(device_tensors) and device_tensors[tensor_idx] is None:
                     tensor_idx += 1
                 if tensor_idx < len(device_tensors):
-                    updated[key] = device_tensors[tensor_idx] if isinstance(device_tensors[tensor_idx], list) else [device_tensors[tensor_idx]]
+                    updated[key] = (
+                        device_tensors[tensor_idx]
+                        if isinstance(device_tensors[tensor_idx], list)
+                        else [device_tensors[tensor_idx]]
+                    )
                     tensor_idx += 1
                 else:
-                    updated[key] = [self.device_manager.to_device(t) if isinstance(t, torch.Tensor) else t for t in value]
+                    updated[key] = [
+                        self.device_manager.to_device(t) if isinstance(t, torch.Tensor) else t
+                        for t in value
+                    ]
             else:
                 updated[key] = value
 

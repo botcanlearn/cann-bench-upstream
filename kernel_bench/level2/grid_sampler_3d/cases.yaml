@@ -19,7 +19,7 @@ cases:
   value_range:
   - [-1, 1]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-2M-对齐-bilinear-zeros-align=false
 - operator: GridSampler3D
   case_id: 2
@@ -31,7 +31,7 @@ cases:
   value_range:
   - [-2, 2]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float32-4M-对齐-bilinear-zeros-align=false
 - operator: GridSampler3D
   case_id: 3
@@ -43,7 +43,7 @@ cases:
   value_range:
   - [-3, 3]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-1M-对齐-nearest-zeros-align=true
 - operator: GridSampler3D
   case_id: 4
@@ -55,7 +55,7 @@ cases:
   value_range:
   - [-10, 10]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: M-float32-16M-对齐-bilinear-border-align=true
 - operator: GridSampler3D
   case_id: 5
@@ -67,7 +67,7 @@ cases:
   value_range:
   - [-100, 100]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: L-float16-67M-对齐-nearest-reflection-align=false
 - operator: GridSampler3D
   case_id: 6
@@ -79,7 +79,7 @@ cases:
   value_range:
   - [-1000, 1000]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: L-float32-134M-对齐-bilinear-border-align=false
 - operator: GridSampler3D
   case_id: 7
@@ -91,7 +91,7 @@ cases:
   value_range:
   - [-0.1, 0.1]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-3M-质数非对齐-bilinear-zeros-align=false
 - operator: GridSampler3D
   case_id: 8
@@ -103,7 +103,7 @@ cases:
   value_range:
   - [-1, 2]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float32-1M-非对齐-nearest-zeros-align=true
 - operator: GridSampler3D
   case_id: 9
@@ -115,7 +115,7 @@ cases:
   value_range:
   - [-5, 10]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-2M-质数非对齐-bilinear-reflection-align=false
 - operator: GridSampler3D
   case_id: 10
@@ -127,7 +127,7 @@ cases:
   value_range:
   - [-50, 100]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: L-float32-50M-质数非对齐-bilinear-zeros-align=true
 - operator: GridSampler3D
   case_id: 11
@@ -139,7 +139,7 @@ cases:
   value_range:
   - [-65504, 65504]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-2M-非对齐-float16边界值-bilinear-border
 - operator: GridSampler3D
   case_id: 12
@@ -151,7 +151,7 @@ cases:
   value_range:
   - [-88, 88]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: M-float32-1M-质数非对齐-float32边界值-nearest
 - operator: GridSampler3D
   case_id: 13
@@ -163,7 +163,7 @@ cases:
   value_range:
   - [-inf, inf]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-2M-非对齐-inf特殊值-bilinear-zeros
 - operator: GridSampler3D
   case_id: 14
@@ -175,7 +175,7 @@ cases:
   value_range:
   - [nan, nan]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float32-100K-质数非对齐-nan特殊值-bilinear
 - operator: GridSampler3D
   case_id: 15
@@ -187,7 +187,7 @@ cases:
   value_range:
   - [0, 0]
   - [0, 0]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: M-float16-12M-非对齐-零值测试-nearest
 - operator: GridSampler3D
   case_id: 16
@@ -199,7 +199,7 @@ cases:
   value_range:
   - [-0.5, 0.5]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: M-float32-2M-混合非对齐-bilinear-zeros-align=false
 - operator: GridSampler3D
   case_id: 17
@@ -211,7 +211,7 @@ cases:
   value_range:
   - [-1, 3]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: L-float16-200M-非对齐-bilinear-reflection-align=true
 - operator: GridSampler3D
   case_id: 18
@@ -223,7 +223,7 @@ cases:
   value_range:
   - [-1000, 1000]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float32-1M-混合非对齐-nearest-border-align=true
 - operator: GridSampler3D
   case_id: 19
@@ -235,7 +235,7 @@ cases:
   value_range:
   - [-0.2, 0.2]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: S-float16-4M-质数非对齐-bilinear-zeros-align=true
 - operator: GridSampler3D
   case_id: 20
@@ -247,5 +247,5 @@ cases:
   value_range:
   - [-3, 6]
   - [-1, 1]
-  baseline_perf_us: null
+  baseline_perf_us: None
   note: L-float32-268M-质数非对齐-bilinear-border-align=true

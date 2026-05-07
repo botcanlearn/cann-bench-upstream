@@ -54,3 +54,5 @@ test/tmp/
 reports
 cann_bench_project/
 .arts
+# OpenCode 配置
+.opencode/

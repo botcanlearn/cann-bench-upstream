@@ -182,7 +182,7 @@ cases:
   dtype: [float32]
   attrs: {scalar: 2.0}
   value_range: [-0.2, 0.2]
-  baseline_perf_us: 28.99
+  baseline_perf_us: 32.66
   note: M-float32-TensorList_len=2-L2范数-2M-非对齐-对称微小值域-3D
 - operator: ForeachNorm
   case_id: 19

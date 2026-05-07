@@ -141,9 +141,9 @@ cases:
   - [11, 13, 17, 67, 67]
   dtype: [float16]
   attrs: {return_inverse: true}
-  value_range: [nan, nan]
+  value_range: ['-inf', 'inf']
   baseline_perf_us: null
-  note: M-float16-10M-质数非对齐-5D-nan特殊值-带逆索引
+  note: M-float16-10M-质数非对齐-5D-inf极值-带逆索引
 - operator: Unique
   case_id: 16
   input_shape:

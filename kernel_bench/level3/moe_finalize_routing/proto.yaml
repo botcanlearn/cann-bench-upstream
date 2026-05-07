@@ -28,6 +28,12 @@ operator:
     - float16
     - bfloat16
     shape: '(NUM_ROWS * K, H) 或 (E, C, H)'
+  - name: expanded_src_to_dst_row
+    description: 行索引映射，保存每个专家处理结果的索引。shape 为 (NUM_ROWS * K)，dtype 为 int32。drop_pad_mode=0/2 时取值范围 [0, NUM_ROWS * K - 1]，drop_pad_mode=1/3 时取值范围 [-1, E * C - 1]
+    dtype:
+    - int32
+    shape: '(NUM_ROWS * K)'
+    optional: true
   - name: skip1
     description: 共享专家1，残差连接。shape 为 (NUM_ROWS, H)，dtype 与 expanded_permuted_rows 一致
     dtype:
@@ -56,11 +62,6 @@ operator:
     - float16
     - bfloat16
     optional: true
-  - name: expanded_src_to_dst_row
-    description: 行索引映射，保存每个专家处理结果的索引。shape 为 (NUM_ROWS * K)，dtype 为 int32。drop_pad_mode=0/2 时取值范围 [0, NUM_ROWS * K - 1]，drop_pad_mode=1/3 时取值范围 [-1, E * C - 1]
-    dtype:
-    - int32
-    shape: '(NUM_ROWS * K)'
   - name: expert_for_source_row
     description: 专家索引，每行处理的专家号。shape 为 (NUM_ROWS, K)，dtype 为 int32，取值范围 [0, E - 1]
     dtype:
@@ -73,4 +74,4 @@ operator:
     - float32
     - float16
     - bfloat16
-  schema: moe_finalize_routing(Tensor expanded_permuted_rows, Tensor? skip1=None, Tensor? skip2=None, Tensor? bias=None, Tensor? scales=None, Tensor expanded_src_to_dst_row, Tensor? expert_for_source_row=None, int drop_pad_mode=0) -> Tensor out
+  schema: moe_finalize_routing(Tensor expanded_permuted_rows, Tensor? expanded_src_to_dst_row=None, Tensor? skip1=None, Tensor? skip2=None, Tensor? bias=None, Tensor? scales=None, Tensor? expert_for_source_row=None, int drop_pad_mode=0) -> Tensor out

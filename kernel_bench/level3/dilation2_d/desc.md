@@ -109,7 +109,7 @@ Dilation2D 算子 Torch Golden 参考实现
 """
 def dilation2_d(
     x: torch.Tensor, filter: torch.Tensor, strides: list, rates: list,
-    pads: list = [0, 0, 0, 0], padding_mode: str = 'SAME',
+    padding_mode: str = 'SAME', pads: list = [0, 0, 0, 0],
     ceil_mode: bool = False, data_format: str = 'NHWC'
 ) -> torch.Tensor:
     """
@@ -122,8 +122,8 @@ def dilation2_d(
         filter: 结构元素/卷积核，shape 为 [filter_h, filter_w, depth]
         strides: 步长 [1, stride_h, stride_w, 1]，首尾固定为1
         rates: 膨胀率 [1, rate_h, rate_w, 1]，首尾固定为1
-        pads: 填充值 [pad_top, pad_bottom, pad_left, pad_right]
         padding_mode: 填充模式：'SAME' 或 'VALID'
+        pads: 填充值 [pad_top, pad_bottom, pad_left, pad_right]
         ceil_mode: 是否向上取整计算输出尺寸
         data_format: 数据格式，'NHWC' 或 'NCHW'
 
@@ -173,9 +173,11 @@ def dilation2_d(
             out_w = (x.shape[3] - effective_filter_w + stride_w - 1) // stride_w + 1
 
     # 形态学膨胀: 使用 unfold 获取 patches
+    # unfold 的 dilation 参数会自动按 rate 步长采样
+    # kernel_size 使用实际的 filter 尺寸，而不是 effective 尺寸
     patches = torch.nn.functional.unfold(
         x,
-        kernel_size=(effective_filter_h, effective_filter_w),
+        kernel_size=(filter_h, filter_w),
         dilation=(rate_h, rate_w),
         stride=(stride_h, stride_w)
     )
@@ -188,7 +190,9 @@ def dilation2_d(
     filter_expanded = filter.unsqueeze(0).unsqueeze(4).unsqueeze(5).expand(batch, -1, -1, -1, out_h, out_w)
 
     # 对每个 patch 位置，计算 input + filter，然后取最大值
-    y = (patches + filter_expanded).max(dim=4)[0].max(dim=3)[0]
+    # patches shape: [batch, C, filter_h, filter_w, out_h, out_w]
+    # 需要在 filter_h (dim=2) 和 filter_w (dim=3) 维度上取 max
+    y = (patches + filter_expanded).amax(dim=(2, 3))  # [batch, C, out_h, out_w]
 
     if data_format == 'NHWC':
         y = y.permute(0, 2, 3, 1)  # NCHW -> NHWC

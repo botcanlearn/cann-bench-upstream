@@ -26,13 +26,13 @@ MoeFinalizeRouting 算子 Torch Golden 参考实现
 
 def moe_finalize_routing(
     expanded_permuted_rows: torch.Tensor,
+    drop_pad_mode: int = 0,
+    expanded_src_to_dst_row: Optional[torch.Tensor] = None,
     skip1: Optional[torch.Tensor] = None,
     skip2: Optional[torch.Tensor] = None,
     bias: Optional[torch.Tensor] = None,
     scales: Optional[torch.Tensor] = None,
-    expanded_src_to_dst_row: Optional[torch.Tensor] = None,
     expert_for_source_row: Optional[torch.Tensor] = None,
-    drop_pad_mode: int = 0
 ):
     """
     MoE Finalize Routing 算子 Torch Golden 参考实现
@@ -41,17 +41,17 @@ def moe_finalize_routing(
 
     Args:
         expanded_permuted_rows: MoE FFN 输出，shape 为 (NUM_ROWS * K, H) 或 (E, C, H)
-        skip1: 共享专家1，shape 为 (NUM_ROWS, H)
-        skip2: 共享专家2，shape 为 (NUM_ROWS, H)
-        bias: 专家偏置，shape 为 (E, H)
-        scales: 路由权重，shape 为 (NUM_ROWS, K)
-        expanded_src_to_dst_row: 行索引映射，shape 为 (NUM_ROWS * K)
-        expert_for_source_row: 专家索引，shape 为 (NUM_ROWS, K)
         drop_pad_mode: 模式选择，取值范围 [0, 3]
             0: drop less, 按列排列
             1: drop pad, 按列排列
             2: drop less, 按行排列
             3: drop pad, 按行排列
+        expanded_src_to_dst_row: 行索引映射，shape 为 (NUM_ROWS * K)
+        skip1: 共享专家1，shape 为 (NUM_ROWS, H)
+        skip2: 共享专家2，shape 为 (NUM_ROWS, H)
+        bias: 专家偏置，shape 为 (E, H)
+        scales: 路由权重，shape 为 (NUM_ROWS, K)
+        expert_for_source_row: 专家索引，shape 为 (NUM_ROWS, K)
 
     Returns:
         输出张量，shape 为 (NUM_ROWS, H)
@@ -59,11 +59,32 @@ def moe_finalize_routing(
     # 确定输入类型（numpy 或 torch）
     is_torch = isinstance(expanded_permuted_rows, torch.Tensor)
 
+    # 低精度类型升到 fp32，避免累积循环中的舍入误差与 fp64 参考值产生偏差
+    original_dtype = None
+    if is_torch:
+        original_dtype = expanded_permuted_rows.dtype
+        _low_prec = original_dtype in (torch.float16, torch.bfloat16)
+        if _low_prec:
+            expanded_permuted_rows = expanded_permuted_rows.float()
+            if skip1 is not None:
+                skip1 = skip1.float()
+            if skip2 is not None:
+                skip2 = skip2.float()
+            if bias is not None:
+                bias = bias.float()
+            if scales is not None:
+                scales = scales.float()
+
     # 确定 K 和 num_rows
-    NK = expanded_src_to_dst_row.shape[0]
-    K = 1
-    if scales is not None:
-        K = scales.shape[1]
+    if expanded_src_to_dst_row is None:
+        # 如果没有提供索引映射，使用默认值
+        NK = expanded_permuted_rows.shape[0]
+        K = 1
+    else:
+        NK = expanded_src_to_dst_row.shape[0]
+        K = 1
+        if scales is not None:
+            K = scales.shape[1]
     num_rows = NK // K
     H = expanded_permuted_rows.shape[-1]
 
@@ -110,7 +131,10 @@ def moe_finalize_routing(
                 index_pos = i * K + k
 
             # 获取行索引值
-            if is_torch:
+            if expanded_src_to_dst_row is None:
+                # 如果没有提供索引映射，直接使用当前位置
+                value = index_pos
+            elif is_torch:
                 value = expanded_src_to_dst_row[index_pos].item()
             else:
                 value = expanded_src_to_dst_row[index_pos]
@@ -142,94 +166,10 @@ def moe_finalize_routing(
             else:
                 out[i, :] += scale_val * dst_row
 
+    if is_torch and original_dtype is not None and _low_prec:
+        out = out.to(original_dtype)
+
     return out
-
-
-def get_input(
-    expanded_permuted_rows,
-    skip1=None,
-    skip2=None,
-    bias=None,
-    scales=None,
-    expanded_src_to_dst_row=None,
-    expert_for_source_row=None,
-    drop_pad_mode=0,
-    skip1_exist=None,
-    skip2_exist=None,
-    bias_exist=None,
-    scales_exist=None,
-    **kwargs
-):
-    """
-    预处理输入数据，将占位符张量 [1,1] 或 None 转换为 None
-
-    返回完整参数列表（包含可能的None值），与原参数顺序一致
-
-    Args:
-        skip1_exist: skip1 是否存在（默认None，从attrs或默认值确定）
-        skip2_exist: skip2 是否存在（默认None，从attrs或默认值确定）
-        bias_exist: bias 是否存在（默认None，从attrs或默认值确定）
-        scales_exist: scales 是否存在（默认None，从attrs或默认值确定）
-
-    Returns:
-        处理后的参数元组（包含None值）
-    """
-    # 从 kwargs 中提取 _exist 标志（来自 case.attrs）
-    # 这些可能被传入为 skip1_exist, skip2_exist 等
-    if skip1_exist is None:
-        skip1_exist = kwargs.get('skip1_exist', True)
-    if skip2_exist is None:
-        skip2_exist = kwargs.get('skip2_exist', True)
-    if bias_exist is None:
-        bias_exist = kwargs.get('bias_exist', True)
-    if scales_exist is None:
-        scales_exist = kwargs.get('scales_exist', True)
-
-    # 将占位符 [1, 1] 或 None 转换为 None
-    if not skip1_exist:
-        skip1 = None
-    elif skip1 is None:
-        skip1 = None
-    elif isinstance(skip1, torch.Tensor) and skip1.shape == (1, 1):
-        skip1 = None
-
-    if not skip2_exist:
-        skip2 = None
-    elif skip2 is None:
-        skip2 = None
-    elif isinstance(skip2, torch.Tensor) and skip2.shape == (1, 1):
-        skip2 = None
-
-    if not bias_exist:
-        bias = None
-    elif bias is None:
-        bias = None
-    elif isinstance(bias, torch.Tensor) and bias.shape == (1, 1):
-        bias = None
-
-    if not scales_exist:
-        scales = None
-    elif scales is None:
-        scales = None
-    elif isinstance(scales, torch.Tensor) and scales.shape == (1, 1):
-        scales = None
-
-    # 检查 expert_for_source_row 是否为占位符或None
-    if expert_for_source_row is None:
-        expert_for_source_row = None
-    elif isinstance(expert_for_source_row, torch.Tensor) and expert_for_source_row.shape == (1, 1):
-        expert_for_source_row = None
-
-    # 返回完整参数列表，包含None值
-    return (
-        expanded_permuted_rows,
-        skip1,
-        skip2,
-        bias,
-        scales,
-        expanded_src_to_dst_row,
-        expert_for_source_row,
-    )
 
 
 def generate_moe_finalize_routing_inputs(

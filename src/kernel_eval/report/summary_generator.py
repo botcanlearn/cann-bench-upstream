@@ -32,15 +32,15 @@ from dataclasses import dataclass
 @dataclass
 class OperatorSummary:
     """算子评测摘要"""
-    operator: str
-    level: int
-    total_cases: int
-    passed_cases: int
-    failed_cases: int
-    pass_rate: float
-    geometric_mean_speedup: float
-    mere_avg: float
-    mare_avg: float
+    operator: str = ""
+    rel_path: str = ""
+    total_cases: int = 0
+    passed_cases: int = 0
+    failed_cases: int = 0
+    pass_rate: float = 0.0
+    geometric_mean_speedup: float = 0.0
+    mere_avg: float = 0.0
+    mare_avg: float = 0.0
     # 可选字段：当算子跑不起来时的原因（编译失败 / 子进程超时或崩溃）。
     # 为 None 时渲染普通的 case 表；非空时在小节头下方优先渲染原因块。
     compilation_error: Optional[str] = None
@@ -94,7 +94,7 @@ def calculate_operator_summary(op_result: Dict[str, Any]) -> OperatorSummary:
         OperatorSummary
     """
     operator = op_result.get("operator", "")
-    level = op_result.get("level", 0)
+    rel_path = op_result.get("rel_path", "")
     total_cases = op_result.get("total_cases", 0)
     passed_cases = op_result.get("passed_cases", 0)
     failed_cases = total_cases - passed_cases
@@ -118,7 +118,7 @@ def calculate_operator_summary(op_result: Dict[str, Any]) -> OperatorSummary:
 
     return OperatorSummary(
         operator=operator,
-        level=level,
+        rel_path=rel_path,
         total_cases=total_cases,
         passed_cases=passed_cases,
         failed_cases=failed_cases,
@@ -211,12 +211,12 @@ def render_summary_markdown(summary: EvaluationSummary) -> str:
     # 各算子结果
     lines.append("## 算子详情")
     lines.append("")
-    lines.append("| 算子 | Level | 用例数 | 通过 | 失败 | 通过率 | 几何平均加速比 | 平均MERE | 平均MARE |")
-    lines.append("|------|-------|--------|------|------|--------|---------------|----------|----------|")
+    lines.append("| 算子 | 路径 | 用例数 | 通过 | 失败 | 通过率 | 几何平均加速比 | 平均MERE | 平均MARE |")
+    lines.append("|------|------|--------|------|------|--------|---------------|----------|----------|")
 
     for op in summary.operators:
         lines.append(
-            f"| {op.operator} | L{op.level} | {op.total_cases} | {op.passed_cases} | "
+            f"| {op.operator} | {op.rel_path} | {op.total_cases} | {op.passed_cases} | "
             f"{op.failed_cases} | {op.pass_rate:.2%} | {op.geometric_mean_speedup:.3f}x | "
             f"{op.mere_avg:.2e} | {op.mare_avg:.2e} |"
         )
@@ -236,7 +236,7 @@ def render_summary_markdown(summary: EvaluationSummary) -> str:
         lines.append("错误摘要（完整日志见 `logs/compile_round_*.log` 或 `build_errors.json`）：")
         lines.append("")
         for op in compile_failed:
-            lines.append(f"### {op.operator}（L{op.level}）")
+            lines.append(f"### {op.operator}（{op.rel_path}）")
             lines.append("")
             lines.append("```")
             lines.append(op.compilation_error.strip())
@@ -249,7 +249,7 @@ def render_summary_markdown(summary: EvaluationSummary) -> str:
         lines.append(f"共 {len(subprocess_failed)} 个算子在子进程隔离评测下异常：")
         lines.append("")
         for op in subprocess_failed:
-            lines.append(f"- **{op.operator}** (L{op.level}): {op.subprocess_failure_reason}")
+            lines.append(f"- **{op.operator}** ({op.rel_path}): {op.subprocess_failure_reason}")
         lines.append("")
 
     # 结论

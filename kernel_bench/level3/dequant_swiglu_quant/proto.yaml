@@ -39,7 +39,7 @@ operator:
     - bfloat16
     - int32
   precision_thresholds:
-    int32: 1
+    int8: 1  # 量化误差允许±1
   outputs:
   - name: y
     description: 输出张量

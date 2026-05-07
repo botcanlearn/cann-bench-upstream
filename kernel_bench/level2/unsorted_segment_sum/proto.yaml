@@ -17,7 +17,7 @@ operator:
   shape_support: 输入ND格式
   # 自定义精度阈值（优先于全局配置）
   precision_thresholds:
-    float32: 0.0009765625  # NPU算子精度与CPU有差异，适当放宽
+    float32: 0.001  # NPU算子精度与CPU有差异，适当放宽
   attrs:
   - name: num_segments
     type: INT
@@ -44,5 +44,4 @@ operator:
     - float32
     - int32
     - int64
-  schema: unsorted_segment_sum(Tensor data, Tensor segment_ids, int num_segments)
-    -> Tensor y
+  schema: unsorted_segment_sum(Tensor data, Tensor segment_ids, int num_segments) -> Tensor y

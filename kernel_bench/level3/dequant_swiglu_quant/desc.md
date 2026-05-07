@@ -124,13 +124,17 @@ def dequant_swiglu_quant(
     """
 
     def swiglu(x, activate_left=False):
+        # 截断到偶数维以支持非对齐输入
+        last_dim = x.shape[-1] - (x.shape[-1] % 2)
+        x = x[..., :last_dim]
+        half = x.shape[-1] // 2
         if activate_left:
-            x_left = x[..., :x.shape[-1]//2]
-            x_right = x[..., x.shape[-1]//2:]
+            x_left = x[..., :half]
+            x_right = x[..., half:]
             return x_left * torch.nn.functional.silu(x_right)
         else:
-            x_left = x[..., :x.shape[-1]//2]
-            x_right = x[..., x.shape[-1]//2:]
+            x_left = x[..., :half]
+            x_right = x[..., half:]
             return torch.nn.functional.silu(x_left) * x_right
     
     if x.dtype == torch.int32:
@@ -142,8 +146,13 @@ def dequant_swiglu_quant(
     result = swiglu(x_float, activate_left)
     
     # INT8 量化
-    scale = (127.0 / result.abs().max()).to(torch.float32)
-    y = torch.clamp((result.float() * scale.item()).round(), -128, 127).to(torch.int8)
+    max_val = result.abs().max()
+    if max_val == 0:
+        # 处理全零情况，避免 scale=inf
+        y = torch.zeros_like(result, dtype=torch.int8)
+    else:
+        scale = (127.0 / max_val).to(torch.float32)
+        y = torch.clamp((result.float() * scale.item()).round(), -128, 127).to(torch.int8)
 
     return y
 ```

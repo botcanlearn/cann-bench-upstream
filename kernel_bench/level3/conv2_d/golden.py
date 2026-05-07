@@ -41,8 +41,14 @@ def conv2_d(
     """
 
     # pads 格式: [pad_top, pad_bottom, pad_left, pad_right]
-    # PyTorch conv2d 接受对称 padding: (pad_h, pad_w)
-    padding = (pads[0], pads[2])
+    # PyTorch conv2d padding 格式: (left, right, top, bottom) 或 (pad_h, pad_w) 对称模式
+    # 检查是否对称填充
+    if pads[0] == pads[1] and pads[2] == pads[3]:
+        # 对称模式: (pad_height, pad_width)
+        padding = (pads[0], pads[2])
+    else:
+        # 非对称模式: (left, right, top, bottom)
+        padding = (pads[2], pads[3], pads[0], pads[1])
     stride = (strides[0], strides[1])
     dilation = (dilations[0], dilations[1])
     

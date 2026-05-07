@@ -53,4 +53,4 @@ operator:
     - float16
     - bfloat16
     - float32
-  schema: grouped_matmul(TensorList x, TensorList weight, TensorList? bias, int split_item, bool transpose_weight) -> TensorList y
+  schema: grouped_matmul(Tensor[] x, Tensor[] weight, Tensor[]? bias=None, int split_item=0, bool transpose_weight=False) -> Tensor[] y

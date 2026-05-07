@@ -110,6 +110,9 @@ def unsorted_segment_sum(
     
     公式: y[i] = sum(data[j]) where segment_ids[j] == i
     
+    对于 FP16/BF16 输入，使用 FP32 进行内部累加以保证精度，
+    其他类型保持原样
+    
     Args:
         data: 输入数据张量
         segment_ids: 段ID张量
@@ -119,10 +122,18 @@ def unsorted_segment_sum(
         输出张量，段求和结果
     """
 
-    y = torch.zeros(num_segments, *data.shape[1:], dtype=data.dtype, device=data.device)
-    for i in range(num_segments):
-        mask = (segment_ids == i)
-        y[i] = data[mask].sum(dim=0)
+    output_shape = (num_segments,) + data.shape[1:]
+    
+    # FP16/BF16 输入升精度到 FP32 进行累加以保证精度
+    if data.dtype in (torch.float16, torch.bfloat16):
+        y_fp32 = torch.zeros(output_shape, dtype=torch.float32, device=data.device)
+        data_fp32 = data.to(torch.float32)
+        y_fp32.index_add_(0, segment_ids, data_fp32)
+        y = y_fp32.to(data.dtype)
+    else:
+        y = torch.zeros(output_shape, dtype=data.dtype, device=data.device)
+        y.index_add_(0, segment_ids, data)
+    
     return y
 ```
 

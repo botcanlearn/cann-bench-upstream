@@ -20,9 +20,12 @@
 3. 处理张量设备迁移
 """
 
-import torch
 from typing import List
 from dataclasses import dataclass
+
+import torch
+
+from ..config import get_config
 
 
 @dataclass
@@ -62,7 +65,13 @@ class DeviceManager:
                 print("[WARN] NPU不可用，回退到CPU")
                 return "cpu"
             else:
-                raise RuntimeError("NPU不可用且未启用自动回退")
+                raise RuntimeError(
+                    "NPU设备不可用。请检查：\n"
+                    "  1. NPU硬件是否已安装\n"
+                    "  2. torch_npu是否正确安装（pip install torch_npu）\n"
+                    "  3. CANN环境是否配置正确\n"
+                    "若当前环境无NPU，可使用 --cpu 模式进行验证"
+                )
         print("[INFO] 使用CPU设备")
         return "cpu"
 
@@ -94,5 +103,6 @@ class DeviceManager:
         """同步设备"""
         if self.is_npu_mode():
             torch.npu.synchronize()
-        else:
+        elif hasattr(torch.cpu, 'synchronize'):
             torch.cpu.synchronize()
+        # PyTorch < 2.1 不支持 torch.cpu.synchronize，跳过即可

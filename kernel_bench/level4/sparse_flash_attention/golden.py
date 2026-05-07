@@ -74,9 +74,14 @@ def sparse_flash_attention(
     scores.masked_fill_(~mask.unsqueeze(2), float('-inf'))
 
     # 原地 softmax，避免同时持有 scores 和 attn_weights 两份张量
-    scores -= scores.max(dim=-1, keepdim=True).values
+    # 处理全 mask 行：当某行全被 mask 时，max 为 -inf，需要特殊处理
+    scores_max = scores.max(dim=-1, keepdim=True).values
+    all_masked = torch.isinf(scores_max) & (scores_max < 0)  # 检测全 -inf 行
+    scores -= scores_max
     scores.exp_()
-    scores /= scores.sum(dim=-1, keepdim=True)
+    scores_sum = scores.sum(dim=-1, keepdim=True)
+    # 全 mask 行保持为 0，不进行除法
+    scores = torch.where(all_masked, torch.zeros_like(scores), scores / scores_sum)
 
     # 加权求和: [B, N2, G, S1, Dv] -> [B, N1, S1, Dv]
     out = torch.einsum('bngsk,bnkd->bngsd', scores, v)

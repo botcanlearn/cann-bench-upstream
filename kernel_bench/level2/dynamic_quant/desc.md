@@ -51,15 +51,15 @@ cann_bench.dynamic_quant(Tensor x, int axis=-1, int dst_type=0) -> Tensor y
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | 与输入 x 相同 | float16 / bfloat16 / int8 | 量化后的张量 |
+| y | 与输入 x 相同 | int8 | 量化后的张量 |
 
 ### 数据类型
 
 | 输入 dtype | 输出 dtype |
 |-----------|-----------|
-| float16 | float16 / int8 |
-| bfloat16 | bfloat16 / int8 |
-| float32 | float32 / int8 |
+| float16 | int8 |
+| bfloat16 | int8 |
+| float32 | int8 |
 
 ### 规则与约束
 
@@ -90,11 +90,15 @@ cann_bench.dynamic_quant(Tensor x, int axis=-1, int dst_type=0) -> Tensor y
 
 **通过标准**：
 
-| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
-|----------|---------|----------|---------|-----------|-------------|-------------|
-| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+**int8 输出特殊阈值**：
 
-当平均相对误差 MERE < Threshold，最大相对误差 MARE < 10 * Threshold 时判定为通过。
+量化算子输出为整数类型，round 操作存在舍入误差，允许 ±1 的绝对误差：
+
+| 输出类型 | 阈值 | 说明 |
+|----------|------|------|
+| int8 | 1.0 | 允许 \|actual - golden\| ≤ 1 |
+
+**通过条件**：`|actual - golden| ≤ threshold`
 
 
 ## 5. 标准 Golden 代码

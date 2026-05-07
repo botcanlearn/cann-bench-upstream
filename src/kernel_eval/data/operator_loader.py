@@ -5,7 +5,7 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
+# Please refer to the License for details. You can not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
@@ -17,14 +17,21 @@
 职责：
 1. 解析 proto.yaml 文件
 2. 提供算子schema、attrs、inputs、outputs信息
-3. 支持按level/operator查询
+3. 支持任意目录结构，递归扫描proto.yaml
 """
 
-import yaml
+import logging
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import yaml
+
+from ..config import get_project_root
+from ..utils.naming import camel_to_snake
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,9 +56,9 @@ class TensorInfo:
 class OperatorInfo:
     """算子定义信息"""
     name: str
-    level: int
+    rel_path: str       # 相对路径，如 "level2/scatter"
     category: str = ""
-    difficulty: str = ""
+    difficulty: str = ""  # 保留难度标识（如"L2"），仅作信息展示
     formula: str = ""
     description: str = ""
     shape_support: str = ""
@@ -75,72 +82,44 @@ class OperatorInfo:
 class OperatorLoader:
     """算子定义加载器"""
 
+    # 算子目录必须包含的文件
+    REQUIRED_FILES = ['proto.yaml', 'cases.yaml', 'golden.py']
+
     def __init__(self, bench_root: str = None):
         if bench_root:
             self.bench_root = Path(bench_root)
         else:
-            # 默认使用项目根目录下的kernel_bench
-            project_root = Path(__file__).parent.parent.parent.parent
-            self.bench_root = project_root / "kernel_bench"
+            self.bench_root = get_project_root() / "kernel_bench"
 
         self._cache: Dict[str, OperatorInfo] = {}
-        self._dir_cache: Dict[int, Dict[str, str]] = {}
 
-    def _camel_to_snake(self, name: str) -> str:
-        """将 PascalCase 名称转换为 snake_case"""
-        s0 = re.sub(r'([0-9])([A-Z])', r'\1_\2', name)
-        s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', s0)
-        return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+    def _is_operator_dir(self, dir_path: Path) -> bool:
+        """检查目录是否为有效的算子目录"""
+        for required_file in self.REQUIRED_FILES:
+            if not (dir_path / required_file).exists():
+                return False
+        return True
 
-    def _get_dir_name(self, level: int, operator: str) -> str:
-        """将算子名解析为实际目录名"""
-        cache_key = f"L{level}_{operator}"
-        if cache_key in self._dir_cache:
-            return self._dir_cache[cache_key]
+    def _find_operator_dirs(self) -> List[Path]:
+        """递归查找所有算子目录"""
+        operator_dirs = []
+        for proto_path in self.bench_root.rglob("proto.yaml"):
+            op_dir = proto_path.parent
+            if self._is_operator_dir(op_dir):
+                operator_dirs.append(op_dir)
+        return sorted(operator_dirs)
 
-        # 尝试多种命名方式
-        level_dir = self.bench_root / f"level{level}"
-        candidates = [
-            operator,           # 原名
-            operator.lower(),   # 小写
-            self._camel_to_snake(operator),  # snake_case
-        ]
+    def get_operator(self, rel_path: str) -> OperatorInfo:
+        """获取算子定义信息
 
-        for candidate in candidates:
-            path = level_dir / candidate
-            if path.exists() and (path / "proto.yaml").exists():
-                self._dir_cache[cache_key] = candidate
-                return candidate
+        Args:
+            rel_path: 相对路径，如 "level2/scatter"
+        """
+        if rel_path in self._cache:
+            return self._cache[rel_path]
 
-        # 扫描目录查找匹配的proto.yaml
-        if level_dir.is_dir():
-            for entry in level_dir.iterdir():
-                if entry.is_dir() and not entry.name.startswith('.'):
-                    proto_path = entry / "proto.yaml"
-                    if proto_path.exists():
-                        try:
-                            with open(proto_path, 'r', encoding='utf-8') as f:
-                                data = yaml.safe_load(f)
-                            if data and 'operator' in data:
-                                op_name = data['operator'].get('name', '')
-                                if op_name == operator:
-                                    self._dir_cache[cache_key] = entry.name
-                                    return entry.name
-                        except Exception:
-                            pass
-
-        # 最终 fallback
-        self._dir_cache[cache_key] = self._camel_to_snake(operator)
-        return self._dir_cache[cache_key]
-
-    def get_operator(self, operator: str, level: int) -> OperatorInfo:
-        """获取算子定义信息"""
-        cache_key = f"L{level}_{operator}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
-        dir_name = self._get_dir_name(level, operator)
-        proto_path = self.bench_root / f"level{level}" / dir_name / "proto.yaml"
+        op_dir = self.bench_root / rel_path
+        proto_path = op_dir / "proto.yaml"
 
         if not proto_path.exists():
             raise FileNotFoundError(f"proto.yaml不存在: {proto_path}")
@@ -152,11 +131,27 @@ class OperatorLoader:
             raise ValueError(f"proto.yaml格式错误: {proto_path}")
 
         op_data = data['operator']
-        op_info = self._parse_operator(op_data, level, dir_name)
-        self._cache[cache_key] = op_info
+        op_info = self._parse_operator(op_data, rel_path, op_dir.name)
+        self._cache[rel_path] = op_info
         return op_info
 
-    def _parse_operator(self, data: Dict, level: int, dir_name: str) -> OperatorInfo:
+    def get_operator_by_name(self, operator: str) -> Optional[OperatorInfo]:
+        """按算子名称获取算子定义（遍历查找）"""
+        for op_dir in self._find_operator_dirs():
+            proto_path = op_dir / "proto.yaml"
+            try:
+                with open(proto_path, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                if data and 'operator' in data:
+                    op_name = data['operator'].get('name', '')
+                    if op_name.lower() == operator.lower():
+                        rel_path = str(op_dir.relative_to(self.bench_root))
+                        return self.get_operator(rel_path)
+            except Exception as e:
+                logger.warning("Failed to parse proto.yaml at %s: %s", proto_path, e)
+        return None
+
+    def _parse_operator(self, data: Dict, rel_path: str, dir_name: str) -> OperatorInfo:
         """解析算子定义"""
         # 解析attrs
         attrs = []
@@ -198,7 +193,7 @@ class OperatorLoader:
 
         return OperatorInfo(
             name=data.get('name', ''),
-            level=level,
+            rel_path=rel_path,
             category=data.get('category', ''),
             difficulty=data.get('difficulty', ''),
             formula=data.get('formula', ''),
@@ -213,49 +208,30 @@ class OperatorLoader:
             dir_name=dir_name
         )
 
-    def list_operators(self, level: int = None) -> List[OperatorInfo]:
-        """列出算子"""
+    def list_operators(self) -> List[OperatorInfo]:
+        """列出所有算子"""
         operators = []
-        levels = [level] if level else [1, 2, 3, 4]
-
-        for lv in levels:
-            level_dir = self.bench_root / f"level{lv}"
-            if not level_dir.is_dir():
-                continue
-
-            for entry in level_dir.iterdir():
-                if entry.is_dir() and not entry.name.startswith('.'):
-                    proto_path = entry / "proto.yaml"
-                    if proto_path.exists():
-                        try:
-                            op_info = self.get_operator_from_path(proto_path, lv, entry.name)
-                            operators.append(op_info)
-                        except Exception:
-                            pass
+        for op_dir in self._find_operator_dirs():
+            proto_path = op_dir / "proto.yaml"
+            try:
+                rel_path = str(op_dir.relative_to(self.bench_root))
+                op_info = self.get_operator(rel_path)
+                operators.append(op_info)
+            except Exception as e:
+                logger.warning("Failed to load operator from %s: %s", proto_path, e)
 
         return operators
 
-    def get_operator_from_path(self, proto_path: Path, level: int, dir_name: str) -> OperatorInfo:
-        """从proto.yaml路径加载算子信息"""
-        with open(proto_path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-
-        if not data or 'operator' not in data:
-            raise ValueError(f"proto.yaml格式错误: {proto_path}")
-
-        return self._parse_operator(data['operator'], level, dir_name)
-
-    def get_statistics(self) -> Dict[int, Dict[str, Any]]:
+    def get_statistics(self) -> Dict[str, Any]:
         """获取算子统计"""
-        stats = {}
-        for level in [1, 2, 3, 4]:
-            operators = self.list_operators(level)
-            stats[level] = {
-                'total': len(operators),
-                'operators': [op.name for op in operators],
-                'categories': {}
-            }
-            for op in operators:
-                cat = op.category or 'Unknown'
-                stats[level]['categories'][cat] = stats[level]['categories'].get(cat, 0) + 1
-        return stats
+        operators = self.list_operators()
+        categories = {}
+        for op in operators:
+            cat = op.category or 'Unknown'
+            categories[cat] = categories.get(cat, 0) + 1
+        return {
+            'total': len(operators),
+            'operators': [op.name for op in operators],
+            'rel_paths': [op.rel_path for op in operators],
+            'categories': categories
+        }

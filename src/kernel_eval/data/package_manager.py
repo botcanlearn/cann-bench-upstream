@@ -77,8 +77,8 @@ class InterfaceInfo:
 class PackageManager:
     """包管理器"""
 
-    def __init__(self):
-        self.config = get_config()
+    def __init__(self, config=None):
+        self.config = config or get_config()
         self._interface_cache: Dict[str, InterfaceInfo] = {}
 
     def scan_source_dir(self, source_dir: str) -> PackageInfo:
@@ -399,12 +399,15 @@ class PackageManager:
         """
         interfaces = []
 
+        # 1. 尝试从 cann_bench 模块扫描
+        cann_bench_imported = False
         try:
             # 重新导入模块（确保使用最新安装的版本）
             if 'cann_bench' in sys.modules:
                 del sys.modules['cann_bench']
 
             import cann_bench
+            cann_bench_imported = True
 
             # 扫描模块属性
             for name in dir(cann_bench):
@@ -425,27 +428,37 @@ class PackageManager:
                         callable=attr,
                         signature=f"{name}{sig}"
                     ))
+        except ImportError:
+            pass
 
-            # 扫描 torch.ops.cann_bench
-            try:
-                import torch
-                if hasattr(torch.ops, 'cann_bench'):
-                    for name in dir(torch.ops.cann_bench):
-                        if name.startswith('_'):
-                            continue
-
-                        op = getattr(torch.ops.cann_bench, name)
+        # 2. 尝试从 torch.ops.cann_bench 扫描
+        # 先尝试导入 cann_bench_golden 以注册 ops
+        try:
+            import cann_bench_golden
+            import torch
+            if hasattr(torch.ops, 'cann_bench'):
+                # torch.library注册的ops不会在dir()中显示，需要从golden_impls获取名称
+                from cann_bench_golden import golden_impls
+                for func_name in dir(golden_impls):
+                    if func_name.startswith('_'):
+                        continue
+                    # 尝试获取对应的op（小写名称）
+                    op_name = func_name.lower()
+                    if hasattr(torch.ops.cann_bench, op_name):
+                        op = getattr(torch.ops.cann_bench, op_name)
                         if callable(op):
                             interfaces.append(InterfaceInfo(
-                                name=name,
+                                name=op_name,
                                 callable=op,
-                                signature=f"torch.ops.cann_bench.{name}"
+                                signature=f"torch.ops.cann_bench.{op_name}"
                             ))
-            except ImportError:
-                pass
+        except ImportError:
+            pass
 
-        except ImportError as e:
-            raise ImportError(f"无法导入 cann_bench 模块: {e}")
+        # 3. 如果两者都没找到，抛出错误
+        if not interfaces:
+            if not cann_bench_imported:
+                raise ImportError("无法导入 cann_bench 模块，且 torch.ops.cann_bench 中无算子")
 
         return interfaces
 
@@ -508,13 +521,18 @@ class PackageManager:
         1. 扫描源码目录
         2. 检查/编译包（iterative_compile=True 时把编译失败的算子隔离并记录，
            False 时任意算子编译失败即 raise）
-        3. 安装包
-        4. 扫描接口
-        5. 返回算子列表
+        3. **安装前 snapshot Timing API**（安全防护）
+        4. 安装包
+        5. 扫描接口
+        6. 返回算子列表
 
         返回: (算子列表, 包信息 — 其 compile_errors 字段在 iterative 模式下
               可能非空，供评测器合成 FAIL 记录)
+
+        注意：APIGuard.verify() 由 Evaluator.evaluate_from_source() 在安装后调用。
         """
+        from ..security.api_guard import APIGuard
+
         print(f"[INFO] 扫描源码目录: {source_dir}")
 
         # Step 1: 扫描源码目录
@@ -540,18 +558,23 @@ class PackageManager:
             print(f"[INFO] 无现有whl包，执行编译...")
             package_info = self.build_packages(source_dir, iterative=iterative_compile)
 
-        # Step 3: 安装包
+        # Step 3: 安装前 snapshot Timing API（安全防护）
+        guard = APIGuard()
+        guard.snapshot()
+        print(f"[INFO] Timing API snapshot 完成")
+
+        # Step 4: 安装包
         if not self.install_packages(package_info):
             raise RuntimeError("包安装失败")
 
-        # Step 4: 扫描接口
+        # Step 5: 扫描接口
         interfaces = self.scan_interfaces()
         self.print_interfaces(interfaces)
 
         if not interfaces:
             raise RuntimeError("未扫描到任何cann_bench接口")
 
-        # Step 5: 匹配算子
+        # Step 6: 匹配算子
         matched_operators = self.match_operators(interfaces)
 
         if not matched_operators:

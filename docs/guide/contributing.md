@@ -359,14 +359,53 @@ cases:
 |------|------|------|------|
 | `operator` | string | 是 | 算子名称，与 `proto.yaml` 中 `name` 一致 |
 | `case_id` | int | 是 | 用例编号，从 1 开始递增 |
-| `input_shape` | list[list[int]] | 是 | 每个输入张量的 shape，顺序与 `proto.yaml` 中 `inputs` 顺序一致 |
-| `dtype` | list[string] | 是 | 每个输入张量的数据类型，数量与 `input_shape` 一致 |
+| `input_shape` | list[list[int] \| null] | 是 | 每个输入张量的 shape，顺序与 `proto.yaml` 中 `inputs` 顺序一致；可选参数用 `null` 表示不使用 |
+| `dtype` | list[string] \| [string] | 是 | 每个输入张量的数据类型；支持单值简写 `[dtype]` 表示所有 tensor 使用相同类型 |
 | `attrs` | dict | 是 | 属性键值对，键名与 `proto.yaml` 中 `attrs[].name` 一致 |
-| `value_range` | list[list] | 是 | 每个输入张量的随机数取值范围 `[min, max]`，数量与 `input_shape` 一致。特殊值：`[-inf, inf]`、`[nan, nan]`、`[0, 0]` |
+| `value_range` | list[list] | 是 | 每个输入张量的随机数取值范围 `[min, max]`，数量与 `input_shape` 一致。特殊值：`[-inf, inf]`、`[nan, nan]`、`[0, 0]`；可选参数对应位置用 `[0, 0]` 或 `null` |
 | `baseline_perf_us` | float / None | 是 | 性能基线（微秒），未测量时填 `None` |
 | `note` | string | 是 | 用例简短描述，建议格式：`<dtype>-<数据规模>-<对齐/非对齐>-<特征>` |
 
-### 4.3 用例设计原则
+### 4.3 input_shape 可选参数处理
+
+当算子有可选输入参数时，用 `null` 表示该参数不使用：
+
+```yaml
+# 可选参数示例：QuantMatmul 的 offset、pertoken_scale、bias 可选
+input_shape:
+- [1024, 3584]      # x（必选）
+- [3584, 3584]      # weight（必选）
+- [3584]            # scale（必选）
+- null              # offset（不使用）
+- null              # pertoken_scale（不使用）
+- null              # bias（不使用）
+dtype: [int8, int8, float32, null, null, null]
+value_range:
+- [-128, 127]
+- [-128, 127]
+- [0.001, 0.01]
+- [0, 0]            # 不使用时填零值范围
+- [0, 0]
+- [0, 0]
+attrs: {offset: null, pertoken_scale: null, bias: null, output_dtype: float16}
+```
+
+### 4.4 dtype 单值简写
+
+当所有输入张量使用相同数据类型时，可使用单值简写：
+
+```yaml
+# 单值简写示例：所有 tensor 都用 float32
+input_shape:
+- [[1024, 1024], [1024, 1024]]   # TensorList x1（2个tensor）
+- [[1024, 1024], [1024, 1024]]   # TensorList x2（2个tensor）
+- [[1024, 1024], [1024, 1024]]   # TensorList x3（2个tensor）
+dtype: [float32]                  # 单值简写，自动展开为6个float32
+```
+
+校验逻辑会自动将单值 dtype 展开为与 input_shape 相同长度的列表。
+
+### 4.5 用例设计原则
 
 结合评测目标，设计用例覆盖场景，例如当前kernel_bench用例覆盖泛化场景（建议 20+ 个用例）：
 **note:当前场景仅供参考**
@@ -379,7 +418,7 @@ cases:
 | **特殊值** | inf、nan、零值、边界值（如 float16 的 65504） |
 | **dtype 覆盖** | float16、float32、bfloat16 至少各有用例 |
 
-### 4.4 value_range 特殊值
+### 4.6 value_range 特殊值
 
 | 取值 | 含义 |
 |------|------|

@@ -121,7 +121,7 @@ Scatter算子Torch Golden参考实现
 公式: y[i] = updates[j] where indices[j] == i
 """
 def scatter(
-    data: torch.Tensor, indices: torch.Tensor, updates: torch.Tensor, dim: int, reduce: str = None
+    data: torch.Tensor, dim: int, indices: torch.Tensor, updates: torch.Tensor, reduce: str = None
 ) -> torch.Tensor:
     """
     将updates按索引indices更新到data中
@@ -130,9 +130,9 @@ def scatter(
 
     Args:
         data: 输入数据张量
+        dim: 沿哪个维度scatter
         indices: 索引张量
         updates: 更新值张量
-        dim: 沿哪个维度scatter
         reduce: 聚合方式
 
     Returns:

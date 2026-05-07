@@ -28,16 +28,16 @@ def gru(
     x: torch.Tensor,
     weight_ih: List[torch.Tensor],
     weight_hh: List[torch.Tensor],
-    bias_ih: Optional[List[torch.Tensor]] = None,
-    bias_hh: Optional[List[torch.Tensor]] = None,
-    h0: Optional[torch.Tensor] = None,
-    inputSize: int = 0,
-    hiddenSize: int = 0,
+    inputSize: int,
+    hiddenSize: int,
     numLayers: int = 1,
     bias: bool = True,
     batchFirst: bool = False,
     dropout: float = 0.0,
-    bidirectional: bool = False
+    bidirectional: bool = False,
+    bias_ih: Optional[List[torch.Tensor]] = None,
+    bias_hh: Optional[List[torch.Tensor]] = None,
+    h0: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     GRU 前向计算（对标 PyTorch torch.nn.GRU）
@@ -46,9 +46,6 @@ def gru(
         x: 输入序列 (S, B, inputSize) 或 (B, S, inputSize) if batch_first
         weight_ih: TensorList，每层每方向一个 [3*hiddenSize, input_dim] tensor
         weight_hh: TensorList，每层每方向一个 [3*hiddenSize, hiddenSize] tensor
-        bias_ih: TensorList?, 每层每方向一个 [3*hiddenSize] tensor
-        bias_hh: TensorList?, 每层每方向一个 [3*hiddenSize] tensor
-        h0: 初始隐藏状态 [numLayers*num_directions, B, hiddenSize]
         inputSize: 输入特征维度
         hiddenSize: 隐藏状态维度
         numLayers: 层数
@@ -56,6 +53,9 @@ def gru(
         batchFirst: 输入格式是否为 (batch, seq, feature)
         dropout: 层间 dropout
         bidirectional: 是否双向
+        bias_ih: TensorList?, 每层每方向一个 [3*hiddenSize] tensor
+        bias_hh: TensorList?, 每层每方向一个 [3*hiddenSize] tensor
+        h0: 初始隐藏状态 [numLayers*num_directions, B, hiddenSize]
 
     Returns:
         y: 输出序列

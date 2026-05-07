@@ -19,10 +19,9 @@
 2. 根据value_range填充数据
 """
 
-import json
-import re
+from typing import Any, List, Union
+
 import torch
-from typing import List, Any, Union
 
 from ..utils.dtype_mapper import str_to_torch_dtype, is_float_dtype, is_int_dtype
 
@@ -31,7 +30,7 @@ class DataGenerator:
     """测试数据生成器"""
 
     def __init__(self, seed: int = None):
-        if seed:
+        if seed is not None:
             torch.manual_seed(seed)
 
     def generate_input_tensor(self, shape: List[int], dtype: str, value_range: Any = None) -> torch.Tensor:
@@ -46,12 +45,13 @@ class DataGenerator:
         min_val, max_val = self._parse_range(value_range, dtype)
 
         if is_float_dtype(dtype):
-            if min_val == max_val:
-                return torch.full(shape, float(min_val), dtype=torch_dtype)
-            # 检查是否为特殊值，如果是则保留字符串形式传递给 _gen_float
-            # 这样 _gen_float 中的 isinstance(str) 检查才能正确触发 _gen_special
+            # 特殊值（NaN/inf）必须优先处理，避免 'nan' == 'nan' 走全量填充路径
             if isinstance(min_val, str) or isinstance(max_val, str):
                 return self._gen_float(shape, torch_dtype, min_val, max_val)
+            if self._is_special_float(min_val) or self._is_special_float(max_val):
+                return self._gen_float(shape, torch_dtype, min_val, max_val)
+            if min_val == max_val:
+                return torch.full(shape, float(min_val), dtype=torch_dtype)
             return self._gen_float(shape, torch_dtype, float(min_val), float(max_val))
         elif is_int_dtype(dtype):
             if min_val == max_val:
@@ -61,21 +61,13 @@ class DataGenerator:
             return torch.zeros(shape, dtype=torch_dtype)
 
     def generate_input_tensors_from_case(self, input_shapes: List, dtypes: List, value_ranges: List) -> List:
-        """根据用例信息生成输入数据"""
-        # 处理 CaseLoader 包装: 单元素列表包含字符串型嵌套结构
-        # 例如 dtypes = ['[[float16, float16], ...]']
-        if isinstance(dtypes, list) and len(dtypes) == 1 and isinstance(dtypes[0], str) and dtypes[0].startswith('['):
-            dtypes = self._maybe_parse_json(dtypes[0])
-        if isinstance(input_shapes, list) and len(input_shapes) == 1 and isinstance(input_shapes[0], str) and input_shapes[0].startswith('['):
-            input_shapes = self._maybe_parse_json(input_shapes[0])
-        if isinstance(value_ranges, list) and len(value_ranges) == 1 and isinstance(value_ranges[0], str) and value_ranges[0].startswith('['):
-            value_ranges = self._maybe_parse_json(value_ranges[0])
+        """根据用例信息生成输入数据
 
-        # 再处理普通字符串
-        input_shapes = self._maybe_parse_json(input_shapes)
-        dtypes = self._maybe_parse_json(dtypes)
-        value_ranges = self._maybe_parse_json(value_ranges)
-
+        假设输入已由 CaseLoader 规范化：
+        - input_shapes: 嵌套列表 [[shape1], [shape2], ...]
+        - dtypes: 列表 [dtype1, dtype2, ...]
+        - value_ranges: 列表 [[min1, max1], [min2, max2], ...]
+        """
         input_tensors = []
         num_inputs = self._count_inputs(input_shapes)
 
@@ -85,11 +77,8 @@ class DataGenerator:
                 dtypes = [dtypes]
             elif not isinstance(dtypes, list):
                 dtypes = ['float32']
-        # 如果 dtypes 是嵌套结构与 input_shapes 维度匹配，直接使用
-        # 否则补齐长度
-        if self._structure_depth(dtypes) != self._structure_depth(input_shapes):
-            if isinstance(dtypes, list) and len(dtypes) < num_inputs:
-                dtypes = dtypes + [dtypes[-1]] * (num_inputs - len(dtypes)) if dtypes else ['float32'] * num_inputs
+        if isinstance(dtypes, list) and len(dtypes) < num_inputs:
+            dtypes = dtypes + [dtypes[-1]] * (num_inputs - len(dtypes)) if dtypes else ['float32'] * num_inputs
 
         # 规范化 value_ranges: 区分单输入 [min, max] 和多输入 [[min1, max1], [min2, max2], ...]
         value_ranges = self._normalize_value_ranges(value_ranges, num_inputs)
@@ -129,6 +118,12 @@ class DataGenerator:
 
         return (value_range, value_range)
 
+    @staticmethod
+    def _is_special_float(val: Any) -> bool:
+        """检测 float NaN/inf 特殊值"""
+        import math
+        return isinstance(val, float) and (math.isnan(val) or math.isinf(val))
+
     def _is_tensor_list(self, shape_item: Any) -> bool:
         """判断是否为张量列表"""
         return (isinstance(shape_item, list) and shape_item and
@@ -137,8 +132,10 @@ class DataGenerator:
 
     def _gen_float(self, shape: List[int], dtype: torch.dtype, min_val: float, max_val: float) -> torch.Tensor:
         """生成浮点张量"""
-        # 处理特殊值
+        # 处理特殊值（字符串形式或 float NaN/inf）
         if isinstance(min_val, str) or isinstance(max_val, str):
+            return self._gen_special(shape, dtype, min_val, max_val)
+        if self._is_special_float(min_val) or self._is_special_float(max_val):
             return self._gen_special(shape, dtype, min_val, max_val)
 
         # 使用 torch.finfo 获取 dtype 的精确范围
@@ -166,7 +163,7 @@ class DataGenerator:
 
     def _gen_special(self, shape: List[int], dtype: torch.dtype, min_val: Any, max_val: Any) -> torch.Tensor:
         """生成包含特殊值的张量"""
-        tensor = torch.randn(shape, dtype=torch.float32).to(dtype)
+        import math
 
         # 转换特殊值字符串
         def to_float(v):
@@ -177,6 +174,15 @@ class DataGenerator:
 
         min_f = to_float(min_val) if isinstance(min_val, str) else min_val
         max_f = to_float(max_val) if isinstance(max_val, str) else max_val
+
+        # 处理 NaN 范围：混合 NaN 与正常随机值，避免全 NaN 触发 kernel 边界 bug
+        if math.isnan(min_f) and math.isnan(max_f):
+            tensor = torch.randn(shape, dtype=torch.float32).to(dtype)
+            nan_mask = torch.rand(shape, dtype=torch.float32) < 0.5
+            tensor[nan_mask] = float('nan')
+            return tensor
+
+        tensor = torch.randn(shape, dtype=torch.float32).to(dtype)
 
         # 在边界填充特殊值
         flat = tensor.flatten()
@@ -189,40 +195,11 @@ class DataGenerator:
 
     # ---- 嵌套结构支持（GroupedMatmul 等算子） ----
 
-    def _maybe_parse_json(self, value: Any) -> Any:
-        """如果是 JSON 格式的字符串，尝试解析为 Python 对象"""
-        if isinstance(value, str) and value.startswith('['):
-            try:
-                return json.loads(value)
-            except (json.JSONDecodeError, ValueError):
-                pass
-            # 处理未加引号的标识符: [float16, float32] → ["float16", "float32"]
-            try:
-                # 将不是数字、布尔值、null 的标识符加上双引号
-                quoted = re.sub(r'(?<!["\'\w])([a-zA-Z_]\w*)(?!["\'\w])', r'"\1"', value)
-                return json.loads(quoted)
-            except (json.JSONDecodeError, ValueError):
-                pass
-        return value
-
     def _count_inputs(self, shapes: Any) -> int:
         """统计输入张量总数（顶层列表长度）"""
         if isinstance(sizes := shapes, list):
             return len(sizes)
         return 1
-
-    def _structure_depth(self, obj: Any) -> int:
-        """估算嵌套结构深度：1=扁平, 2=一层嵌套, 3=两层嵌套"""
-        if not isinstance(obj, list):
-            return 0
-        if not obj:
-            return 1
-        first = obj[0]
-        if isinstance(first, list) and first and isinstance(first[0], list):
-            return 3  # [[[...]]]
-        if isinstance(first, list):
-            return 2  # [[...]]
-        return 1  # [...]
 
     def _generate_tensors(self, shapes, dtypes, value_ranges, output: list):
         """递归生成张量，支持嵌套结构
@@ -237,14 +214,21 @@ class DataGenerator:
 
         # 单个形状 [N, C, H, W] —— 直接生成单个张量
         if shapes and isinstance(shapes[0], int):
-            dtype_item = dtypes if isinstance(dtypes, str) else (dtypes[0] if isinstance(dtypes, list) and dtypes else 'float32')
-            vr_item = value_ranges if isinstance(value_ranges, list) and len(value_ranges) == 2 and not isinstance(value_ranges[0], list) else None
+            dtype_item = dtypes if isinstance(dtypes, str) else (
+                dtypes[0] if isinstance(dtypes, list) and dtypes else 'float32'
+            )
+            vr_item = value_ranges if (
+                isinstance(value_ranges, list) and len(value_ranges) == 2
+                and not isinstance(value_ranges[0], list)
+            ) else None
             output.append(self.generate_input_tensor(shapes, dtype_item, vr_item))
             return
 
         # 判断每个元素是否为 TensorList（嵌套）还是单个 shape
-        # TensorList: [[shape1], [shape2], ...] 其中 shape_i = [dims...] (第一个元素是 int)
-        # 单个 shape: [dims...] (第一个元素是 int)
+        # 关键区分：
+        # - TensorList: [[shape1], [shape2], ...] 其中 shape_i[0] 是 int（如 [[96, 64]]）
+        # - 单个 shape（被错误多层包装）：[dims...] 其中 dims[0] 是 int
+        # - 三层嵌套 TensorList: [[[shape1]], [[shape2]], ...]
         for i, s in enumerate(shapes):
             d = dtypes[i] if isinstance(dtypes, list) and i < len(dtypes) else dtypes
             vr = value_ranges[i] if isinstance(value_ranges, list) and i < len(value_ranges) else value_ranges
@@ -252,12 +236,15 @@ class DataGenerator:
             if s is None:
                 # None 形状占位符
                 output.append(None)
-            elif isinstance(s, list) and s and isinstance(s[0], list):
-                # s 是嵌套列表 [[shape1], [shape2], ...] -> TensorList
-                # 递归生成，保持为 list 结构
+            elif isinstance(s, list) and s and isinstance(s[0], int):
+                # s 是单个 shape [N, C, H, W] -> 单个 tensor
+                dtype_item = d if isinstance(d, str) else (d[0] if isinstance(d, list) and d else 'float32')
+                vr_item = vr if isinstance(vr, list) and len(vr) == 2 and not isinstance(vr[0], list) else None
+                output.append(self.generate_input_tensor(s, dtype_item, vr_item))
+            elif isinstance(s, list) and s and isinstance(s[0], list) and s[0] and isinstance(s[0][0], int):
+                # s 是 TensorList [[shape1], [shape2], ...] 其中 shape_i 是 int list
+                # 递归生成每个元素，保持为 list 结构
                 sub_list = []
-                # dtypes 可能是嵌套的 ['float32', ['float32', 'float32'], ...]
-                # 如果 d 本身是 list，说明是 TensorList 的 dtypes
                 sub_dtypes = d if isinstance(d, list) else d
                 sub_vr = vr if isinstance(vr, list) and not (len(vr) == 2 and isinstance(vr[0], (int, float))) else None
                 for j, sub_shape in enumerate(s):
@@ -268,8 +255,11 @@ class DataGenerator:
                         item_vr = sub_vr
                     sub_list.append(self.generate_input_tensor(sub_shape, sub_d, item_vr))
                 output.append(sub_list)  # 保持为 TensorList
-            elif isinstance(s, list) and s and isinstance(s[0], int):
-                # s 是单个 shape [N, C, H, W] -> 单个 tensor
-                dtype_item = d if isinstance(d, str) else (d[0] if isinstance(d, list) and d else 'float32')
-                vr_item = vr if isinstance(vr, list) and len(vr) == 2 and not isinstance(vr[0], list) else None
-                output.append(self.generate_input_tensor(s, dtype_item, vr_item))
+            elif isinstance(s, list) and s and isinstance(s[0], list) and s[0] and isinstance(s[0][0], list):
+                # 三层嵌套：每个元素本身是 TensorList -> 递归处理
+                sub_list = []
+                for j, sub_item in enumerate(s):
+                    sub_d = d[j] if isinstance(d, list) and j < len(d) else d
+                    sub_vr_item = vr[j] if isinstance(vr, list) and j < len(vr) else vr
+                    self._generate_tensors(sub_item, sub_d, sub_vr_item, sub_list)
+                output.append(sub_list)

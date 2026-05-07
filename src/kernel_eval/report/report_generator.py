@@ -23,24 +23,21 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any, TYPE_CHECKING
-from dataclasses import dataclass, asdict
+from typing import List, Dict, Optional, Any
+from dataclasses import dataclass, asdict, field
 
-from ..config import get_config
+from ..config import Config, get_config
 from ..eval.evaluator import EvalCaseResult, EvalOperatorResult
 from .scoring import ScoringCalculator, ScoreInfo
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass
 class EvalResult:
     """单用例评测结果"""
-    level: int
-    operator: str
-    case_id: int
-    status: str  # success / failed / skipped
+    rel_path: str = ""
+    operator: str = ""
+    case_id: int = 0
+    status: str = ""  # success / failed / skipped
     elapsed_us: float = 0
     op_times: Optional[Dict[str, Dict[str, float]]] = None
     error_msg: Optional[str] = None
@@ -66,7 +63,7 @@ class EvalResult:
     def from_eval_case_result(cls, result: EvalCaseResult) -> "EvalResult":
         """从EvalCaseResult创建"""
         return cls(
-            level=result.level,
+            rel_path=result.rel_path,
             operator=result.operator,
             case_id=result.case_num,
             status="success" if result.success else "failed",
@@ -83,15 +80,15 @@ class EvalResult:
 @dataclass
 class OperatorReport:
     """算子报告"""
-    operator: str
-    level: int
-    total_cases: int
-    passed_cases: int
-    failed_cases: int
-    pass_rate: float
-    avg_speedup: float
-    score: float
-    cases: List[EvalResult]
+    rel_path: str = ""
+    operator: str = ""
+    total_cases: int = 0
+    passed_cases: int = 0
+    failed_cases: int = 0
+    pass_rate: float = 0.0
+    avg_speedup: float = 0.0
+    score: float = 0.0
+    cases: List[EvalResult] = field(default_factory=list)
     # 透传 EvalOperatorResult 上的诊断字段到最终报告；summary_generator
     # 读这两个字段渲染"编译失败"和"子进程失败"的分组。
     compilation_error: Optional[str] = None
@@ -102,8 +99,8 @@ class OperatorReport:
         """从EvalOperatorResult创建"""
         cases = [EvalResult.from_eval_case_result(r) for r in result.results]
         return cls(
+            rel_path=result.rel_path,
             operator=result.operator,
-            level=result.level,
             total_cases=result.total_cases,
             passed_cases=result.passed_cases,
             failed_cases=result.failed_cases,
@@ -152,9 +149,9 @@ class ReportGenerator:
 
     VERSION = "1.0"
 
-    def __init__(self, output_dir: str = None, eval_code: str = None):
-        config = get_config()
-        self.output_dir = Path(output_dir or config.reports_dir)
+    def __init__(self, output_dir: str = None, eval_code: str = None, config: Config = None):
+        self.config = config or get_config()
+        self.output_dir = Path(output_dir or self.config.reports_dir)
         self.eval_code = eval_code or self._generate_eval_code()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.scoring_calculator = ScoringCalculator()
@@ -163,6 +160,12 @@ class ReportGenerator:
     def _generate_eval_code(self) -> str:
         """生成评测代号"""
         return datetime.now().strftime("eval_%Y%m%d_%H%M%S")
+
+    def _get_device_info(self) -> str:
+        """获取设备信息"""
+        device_type = self.config.device_type
+        device_id = self.config.device_id
+        return f"{device_type}:{device_id}" if device_type == "npu" else device_type
 
     def add_operator_result(self, result: EvalOperatorResult):
         """添加算子评测结果"""
@@ -204,7 +207,7 @@ class ReportGenerator:
             version=self.VERSION,
             eval_code=self.eval_code,
             timestamp=datetime.now().isoformat(),
-            device="cpu",  # TODO: 从配置获取实际设备
+            device=self._get_device_info(),
             total_operators=len(self.operator_results),
             total_cases=total_cases,
             passed_cases=passed_cases,
@@ -265,7 +268,7 @@ class ReportGenerator:
 
         for op_report in report.operators:
             lines.extend([
-                f"### {op_report.operator} (L{op_report.level})",
+                f"### {op_report.operator}（{op_report.rel_path}）",
                 f"",
                 f"| 指标 | 数值 |",
                 f"|------|------|",
@@ -293,7 +296,10 @@ class ReportGenerator:
                         accuracy_str = f"{max_diff:.6f}"
                     else:
                         accuracy_str = case.error_msg or "N/A"
-                    lines.append(f"| {case.case_id} | {status_icon} | {case.elapsed_us:.2f} | {speedup_str} | {accuracy_str} |")
+                    lines.append(
+                        f"| {case.case_id} | {status_icon} | {case.elapsed_us:.2f} "
+                        f"| {speedup_str} | {accuracy_str} |"
+                    )
                 lines.append(f"")
 
         return "\n".join(lines)

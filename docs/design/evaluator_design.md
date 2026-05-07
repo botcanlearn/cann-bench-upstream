@@ -1,5 +1,15 @@
 # 算子评测工程设计
 
+**文档版本：V0.2.0**
+
+**V0.2.0 更新说明**（2026-04-30）：
+- 安全层集成：APIGuard 在 evaluate_from_source() 中调用
+- Config 依赖注入：Evaluator 等组件通过构造函数接收 Config
+- 进程隔离简化：取消用例级隔离，保留算子级隔离
+- YAML 校验：CaseLoader 增加 `_validate_case()` 输出 WARNING
+- 算子加载统一化：优先从 `torch.ops.cann_bench` 加载，再尝试 `cann_bench` 模块
+- Profiling 升级：使用 Level1（默认）/ Level2，删除 Level0
+
 ## 目录
 - [1. Context](#1-context)
 - [2. 方案设计](#2-方案设计)
@@ -100,22 +110,23 @@
 src/kernel_eval/
 ├── __init__.py              # 包入口，导出公共API
 ├── cli.py                   # 命令行入口
-├── config.py                # 配置管理（含多硬件baseline）
+├── config.py                # 配置管理（含 profiler_level 等新参数）
 │
 ├── data/                    # 数据层
 │   ├── __init__.py
 │   ├── operator_loader.py   # 算子定义加载（proto.yaml解析）
-│   ├── case_loader.py       # 测试用例加载
+│   ├── case_loader.py       # 测试用例加载（含 YAML 校验）
 │   ├── golden_loader.py     # Golden函数加载
-│   ├── data_generator.py    # 数据生成（含特殊值、tensor list）
+│   ├── golden_packager.py   # Golden 打包器（生成 golden.whl）
+│   ├── data_generator.py    # 数据生成（简化版，假设输入已规范化）
 │   └── package_manager.py   # 包管理（源码扫描、编译、安装、接口扫描）
 │
 ├── eval/                    # 评测层
 │   ├── __init__.py
 │   ├── accuracy_eval.py     # 功能精度评测（CPU fp64 Golden + 二次验证）
-│   ├── perf_eval.py         # 性能评测（Profiler kernel-only + 升频清cache）
+│   ├── perf_eval.py         # 性能评测（Level1/Level2 + kernel_details.csv）
 │   ├── op_runner.py         # 算子执行器（返回值检查）
-│   ├── evaluator.py         # 综合评测调度器
+│   ├── evaluator.py         # 综合评测调度器（Config 依赖注入）
 │   └── input_pool.py        # 输入池管理（防缓存攻击）
 │
 ├── security/                # 安全层
@@ -125,7 +136,7 @@ src/kernel_eval/
 │
 ├── report/                  # 报告层
 │   ├── __init__.py
-│   ├── report_generator.py  # 评测报告生成器（JSON + Markdown）
+│   ├── report_generator.py  # 评测报告生成器（含 device 信息）
 │   ├── summary_generator.py # Summary生成（几何平均加速比）
 │   └── scoring.py           # 评分计算
 │
@@ -133,7 +144,7 @@ src/kernel_eval/
 │   ├── __init__.py
 │   ├── device_manager.py    # 设备管理（CPU/NPU）
 │   ├── dtype_mapper.py      # 数据类型映射
-│   ├── param_builder.py     # 参数构建（函数签名解析）
+│   ├── param_builder.py     # 参数构建（合并后的统一方法）
 │   ├── precision.py         # 精度验证工具（MERE/MARE）
 │   └── baseline_resolver.py # Baseline解析（多硬件支持）
 ```
@@ -145,20 +156,21 @@ src/kernel_eval/
 | 模块 | 职责 |
 |------|------|
 | `operator_loader.py` | 解析proto.yaml，提供算子schema、attrs、inputs、outputs信息 |
-| `case_loader.py` | 扫描cases.yaml，返回CaseInfo数据结构 |
+| `case_loader.py` | 扫描cases.yaml，校验格式并输出WARNING，返回CaseInfo数据结构 |
 | `golden_loader.py` | 动态导入golden函数，支持PascalCase→snake_case转换 |
-| `data_generator.py` | 根据shape/dtype/value_range生成输入张量，支持特殊值 |
-| `package_manager.py` | 扫描源码目录、检查/编译whl/run包、安装包、扫描接口 |
+| `golden_packager.py` | 收集golden函数，生成whl包，注册到torch.ops.cann_bench |
+| `data_generator.py` | 根据shape/dtype/value_range生成输入张量（假设输入已规范化） |
+| `package_manager.py` | 扫描源码目录、检查/编译whl/run包、安装包、扫描接口（支持torch.ops.cann_bench） |
 
 #### 2.2.2 评测层（eval/）
 
 | 模块 | 职责 |
 |------|------|
 | `accuracy_eval.py` | CPU fp64 Golden计算、MERE/MARE精度验证、二次验证 |
-| `perf_eval.py` | Profiler kernel-only测量、NPU升频清L2 cache、Trace解析 |
+| `perf_eval.py` | Level1/Level2 Profiler、kernel_details.csv解析、精确形状匹配过滤warmup |
 | `op_runner.py` | 算子执行、返回值类型检查、设备迁移 |
 | `input_pool.py` | 预分配clone输入池，防止data_ptr缓存攻击 |
-| `evaluator.py` | 综合调度，协调精度和性能评测 |
+| `evaluator.py` | 综合调度，Config依赖注入，算子级进程隔离，安全层集成 |
 
 #### 2.2.3 安全层（security/）
 
@@ -171,7 +183,7 @@ src/kernel_eval/
 
 | 模块 | 职责 |
 |------|------|
-| `report_generator.py` | JSON + Markdown双格式报告生成 |
+| `report_generator.py` | JSON + Markdown双格式报告生成，获取实际 device 信息 |
 | `summary_generator.py` | Summary生成，几何平均加速比计算 |
 | `scoring.py` | 功能得分+性能得分计算 |
 
@@ -332,12 +344,19 @@ if hasattr(torch.ops, 'cann_bench'):
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `--source-dir <dir>` | AI生成的算子源码目录（自动扫描编译安装） | 无 |
+| `--device <type>` | 设备类型 (cpu/npu) | npu |
+| `--device-id <id>` | NPU 设备 ID | 0 |
+| `--warmup <n>` | 预热次数 | 3 |
+| `--repeat <n>` | 采集次数 | 5 |
 | `-l, --level <level>` | 算子难度级别 (1/2/3/4) | 无 |
 | `-o, --operator <name>` | 算子名称 (如 Exp, Softmax) | 无 |
 | `-c, --case-id <id>` | 用例编号 | 无 |
-| `--no-subprocess-isolation` | 关闭子进程隔离（默认开启）。开启后每个算子在独立子进程评测，一个kernel挂死/崩溃不会污染后面的算子 | False |
-| `--op-timeout-sec` | 子进程隔离下 per-op 超时。超时先 SIGTERM，10s 宽限后 SIGKILL | 240秒 |
-| `--no-iterative-compile` | 关闭迭代隔离编译（默认开启）。开启时build.sh失败会自动识别并隔离编译不过的算子到_quarantine/，剩下的算子继续编译和评测 | False |
+| `--reports-dir <dir>` | 报告输出目录 | reports |
+| `--no-subprocess-isolation` | 关闭子进程隔离（默认开启） | False |
+| `--op-timeout-sec` | 子进程隔离下 per-op 超时 | 240秒 |
+| `--no-iterative-compile` | 关闭迭代隔离编译 | False |
+| `--no-perf` | 关闭性能采集 | False |
+| `--profiler-level <level>` | Profiler级别 (Level1/Level2) | Level1 |
 
 当不指定 `--source-dir` 时，默认跳过编译安装，直接使用已安装的cann_bench模块。
 
@@ -385,6 +404,15 @@ if hasattr(torch.ops, 'cann_bench'):
 # 评测单个用例
 ./scripts/run_evaluation.sh --action eval --operator Exp --level 1 --case-id 1
 
+# 使用 Level2 Profiler
+./scripts/run_evaluation.sh --action eval --operator Exp --profiler-level Level2
+
+# CPU 模式评测
+./scripts/run_evaluation.sh --action eval --operator Exp --device cpu
+
+# 设置 warmup/repeat 参数
+./scripts/run_evaluation.sh --action eval --operator Exp --warmup 5 --repeat 10
+
 # 列出所有level 1的算子
 ./scripts/run_evaluation.sh --action list --level 1
 
@@ -421,6 +449,10 @@ if hasattr(torch.ops, 'cann_bench'):
 
 **原理**：在submission代码运行前，快照关键Timing API的身份；安装wheel后验证是否被篡改。
 
+**集成位置**：
+- `APIGuard.snapshot()` 在 `PackageManager.prepare_from_source()` 内部调用（安装前）
+- `APIGuard.verify()` 在 `Evaluator.evaluate_from_source()` 调用 prepare_from_source 后验证（安装后）
+
 **关键API列表**：
 - `torch.npu.Event.elapsed_time`
 - `torch.npu.Event.record`
@@ -430,12 +462,21 @@ if hasattr(torch.ops, 'cann_bench'):
 
 **防护流程**：
 ```python
-api_guard = APIGuard()
-api_guard.snapshot()           # 1. 安装wheel前快照
-install_wheel(path)            # 2. 安装submission
-api_guard.verify()             # 3. 验证完整性
+# package_manager.py - prepare_from_source() 内部
+from ..security.api_guard import APIGuard
+guard = APIGuard()
+guard.snapshot()           # 1. 安装wheel前快照
+install_wheel(path)        # 2. 安装submission
+
+# evaluator.py - evaluate_from_source() 外部
+matched_operators, package_info = self.package_manager.prepare_from_source(...)
+guard = APIGuard()
+try:
+    guard.verify()         # 3. 验证完整性
+except RuntimeError as e:
+    # 为所有算子合成 FAIL 记录
+    results = self._synthesize_security_failure(...)
 # ... 执行评测 ...
-api_guard.restore()            # 4. 程序退出前恢复
 ```
 
 #### 4.1.2 返回值类型检查
@@ -510,69 +551,61 @@ def verify_accuracy(actual, golden, dtype):
 
 ### 4.3 性能评测设计
 
-#### 4.3.1 Profiler Kernel-Only测量
+#### 4.3.1 Profiler Level1/Level2 测量
 
-**原理**：使用 `torch_npu.profiler` 采集NPU端chrome trace，使用 `ProfilerLevel.Level0` 采集最小开销的 kernel 执行时间。通过解析 `cat="dequeue"` 事件获取 NPU 内核执行时间，自动过滤升频用的 MatMul/ReduceMax kernel。
+**原理**：使用 `torch_npu.profiler` 采集NPU端性能数据，默认使用 Level1，可选 Level2。
 
 ```python
-def measure_kernel_us(fn, warmup=3, repeat=5, freq_boost=True):
-    import torch_npu
-    
-    experimental_config = torch_npu.profiler._ExperimentalConfig(
-        export_type=[torch_npu.profiler.ExportType.Text],
-        profiler_level=torch_npu.profiler.ProfilerLevel.Level0,
-        aic_metrics=torch_npu.profiler.AiCMetrics.AiCoreNone,
-    )
-    
-    with torch_npu.profiler.profile(
-        activities=[
-            torch_npu.profiler.ProfilerActivity.CPU,
-            torch_npu.profiler.ProfilerActivity.NPU,
-        ],
-        schedule=torch_npu.profiler.schedule(
-            wait=0, warmup=warmup, active=repeat, repeat=1
-        ),
-        on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(prof_dir),
-        experimental_config=experimental_config,
-    ) as prof:
-        for _ in range(warmup + repeat):
-            if freq_boost:
-                boost_freq_and_clear_cache()  # 升频清cache
-            fn()
-            prof.step()
-    
-    # 解析trace，提取 cat="dequeue" 事件（NPU内核执行时间）
-    # 过滤 warmup kernels (matmul, max, reducemax, reduced)
-    return parse_trace_dequeue_events(trace_file) / repeat
+import torch_npu
+
+profiler_level = torch_npu.profiler.ProfilerLevel.Level1  # 默认
+if config.profiler_level == "Level2":
+    profiler_level = torch_npu.profiler.ProfilerLevel.Level2
+
+experimental_config = torch_npu.profiler._ExperimentalConfig(
+    export_type=[torch_npu.profiler.ExportType.Text],
+    profiler_level=profiler_level,
+    aic_metrics=torch_npu.profiler.AiCMetrics.AicPipeUtilization,
+)
+
+with torch_npu.profiler.profile(
+    activities=[
+        torch_npu.profiler.ProfilerActivity.CPU,
+        torch_npu.profiler.ProfilerActivity.NPU,
+    ],
+    schedule=torch_npu.profiler.schedule(
+        wait=0, warmup=warmup, active=repeat, repeat=1
+    ),
+    on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(prof_dir),
+    experimental_config=experimental_config,
+) as prof:
+    for _ in range(warmup + repeat):
+        boost_freq_and_clear_cache()  # 升频清cache
+        fn()
+        prof.step()
 ```
 
-**Trace解析逻辑**：
+**CSV解析**：使用 kernel_details.csv（47列）提取 NPU kernel 执行时间：
 
 ```python
-# Warmup kernel关键词（需过滤）
-warmup_keywords = ("matmul", "max", "reducemax", "reduced")
-
-for event in events:
-    if event.get('ph') != 'X':
-        continue
-    dur = event.get('dur', 0)
-    if dur <= 0:
-        continue
-    name = event.get('name', '')
+def _parse_kernel_details_csv(csv_file):
+    import pandas as pd
+    df = pd.read_csv(csv_file)
     
-    # cat="dequeue" 是 CANN 权威分类，表示 NPU 内核执行时间
-    if event.get('cat') == 'dequeue':
-        # 过滤 warmup kernels
-        if any(kw in name.lower() for kw in warmup_keywords):
-            continue
-        device_kernels[name] = device_kernels.get(name, 0) + dur
-        total_kernel_us += dur
+    # 精确形状匹配过滤 warmup
+    WARMUP_MATMUL_SHAPE = '"10240,10240;10240,10240"'
+    WARMUP_REDUCE_SHAPE = '"96,1024,1024;3"'
     
-    # cat="cpu_op" 表示 CPU 侧 API 调用时间（仅供参考）
-    elif event.get('cat') == 'cpu_op':
-        if any(kw in name.lower() for kw in warmup_keywords):
+    durations = []
+    for row in df.itertuples():
+        op_type = getattr(row, 'OP Type', '')
+        input_shapes = getattr(row, 'Input Shapes', '')
+        if _is_warmup_kernel(op_type, input_shapes):
             continue
-        host_ops[name] = host_ops.get(name, 0) + dur
+        durations.append(getattr(row, 'Task Duration (us)', 0))
+    
+    # 中位数统计
+    return median(durations)
 ```
 
 #### 4.3.2 NPU升频与L2清空

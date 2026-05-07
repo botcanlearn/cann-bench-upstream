@@ -3,7 +3,7 @@
 
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# This program is free software; you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
@@ -19,58 +19,23 @@
 2. 支持源码目录扫描、编译、安装
 3. 实现评测任务筛选（level/operator/case_id）
 4. 生成评测结果
+
+重构说明：
+- 数据类移至 results.py
+- 失败结果合成移至 failure_synthesizer.py
+- 算子匹配移至 operator_matcher.py
+- 子进程执行移至 subprocess_runner.py
 """
 
-import gc
 import os
-import re
-import sys
 import traceback
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Any
-from dataclasses import dataclass
+from inspect import Parameter, signature
 
+import torch
 
-def _snake_case_candidates(name: str) -> List[str]:
-    """Generate plausible snake_case forms of a CamelCase operator name.
-
-    The reference ``cann_bench`` module is inconsistent: some ops use
-    ``pool3_d`` (digit glued to preceding letters, underscore before the
-    trailing letter) while others use ``sampler_3d`` (underscore before
-    the digit, digit glued to the trailing letter). Acronyms like
-    ``ROIAlign`` → ``roi_align`` and ``NMS`` → ``nms`` also don't survive
-    a naive "insert _ before every capital" pass. Emit the reasonable
-    variants in order and let the caller ``hasattr`` the first that hits.
-    """
-    cands: List[str] = []
-    # V1: naive — underscore before every uppercase letter.
-    # Covers plain CamelCase like MaskedScale → masked_scale and weird
-    # digit-suffix ops like AdaptiveAvgPool3D → adaptive_avg_pool3_d.
-    v1 = re.sub(r"([A-Z])", r"_\1", name).lower().lstrip("_")
-    v1 = re.sub(r"_{2,}", "_", v1)
-    cands.append(v1)
-    # V2: acronym-aware — keep runs of capitals together, then split
-    # camelCase / letter-or-digit-then-capital boundaries. Covers
-    # ROIAlign → roi_align, NMS → nms, TopK → top_k.
-    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
-    s = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", s)
-    v2 = s.lower()
-    if v2 not in cands:
-        cands.append(v2)
-    # V3: V2 plus an underscore between a lowercase letter and a digit —
-    # grid_sampler3_d → grid_sampler_3_d.
-    v3 = re.sub(r"([a-z])(\d)", r"\1_\2", s).lower()
-    if v3 not in cands:
-        cands.append(v3)
-    # V4: V3 but re-joining digit_<letter> so trailing units stick
-    # together — grid_sampler_3_d → grid_sampler_3d (the convention
-    # GridSampler3D actually uses in cann_bench).
-    v4 = re.sub(r"(\d)_([a-z])", r"\1\2", v3)
-    if v4 not in cands:
-        cands.append(v4)
-    return cands
-
-from ..config import Config, get_config
+from ..config import Config, get_config, get_project_root
 from ..data.case_loader import CaseLoader, CaseInfo
 from ..data.golden_loader import GoldenLoader
 from ..data.data_generator import DataGenerator
@@ -78,109 +43,14 @@ from ..data.operator_loader import OperatorLoader, OperatorInfo
 from ..data.package_manager import PackageManager, PackageInfo
 from ..utils.device_manager import DeviceManager, DeviceConfig
 from ..utils.param_builder import ParamBuilder
-from ..eval.op_runner import OpRunner, OpRunResult
-from ..eval.accuracy_eval import AccuracyEvaluator, AccuracyResult
-from ..eval.perf_eval import PerfEvaluator, PerfResult
-
-
-@dataclass
-class EvalCaseResult:
-    """单用例评测结果"""
-    case_id: str
-    level: int
-    operator: str
-    case_num: int
-    success: bool
-    accuracy_result: Optional[AccuracyResult] = None
-    perf_result: Optional[PerfResult] = None
-    golden_run_result: Optional[OpRunResult] = None
-    ai_run_result: Optional[OpRunResult] = None
-    error_msg: Optional[str] = None
-    baseline_perf_us: float = 0.0
-
-    def get_speedup(self) -> float:
-        """计算加速比"""
-        if self.perf_result and self.baseline_perf_us > 0:
-            return self.baseline_perf_us / self.perf_result.elapsed_us if self.perf_result.elapsed_us > 0 else 0.0
-        return 0.0
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'case_id': self.case_id,
-            'level': self.level,
-            'operator': self.operator,
-            'case_num': self.case_num,
-            'success': self.success,
-            'accuracy': self.accuracy_result.to_dict() if self.accuracy_result else None,
-            'perf': {
-                'elapsed_us': self.perf_result.elapsed_us if self.perf_result else 0,
-                'speedup': self.get_speedup(),
-                'op_times': self.perf_result.op_times if self.perf_result else {},
-            } if self.perf_result else None,
-            'golden_elapsed_us': self.golden_run_result.elapsed_us if self.golden_run_result else 0,
-            'ai_elapsed_us': self.ai_run_result.elapsed_us if self.ai_run_result else 0,
-            'error_msg': self.error_msg,
-            'baseline_perf_us': self.baseline_perf_us,
-        }
-
-
-@dataclass
-class EvalOperatorResult:
-    """算子评测结果"""
-    operator: str
-    level: int
-    total_cases: int
-    passed_cases: int
-    failed_cases: int
-    skipped_cases: int
-    results: List[EvalCaseResult]
-    pass_rate: float
-    avg_speedup: float
-    # 当算子跑不起来时附带的诊断信息：
-    #   - compilation_error: build.sh 阶段隔离出来的算子，每条 case 都标记
-    #     为 FAIL。PackageManager 的迭代编译 populate 到 package_info，再
-    #     由 evaluate_from_source 合成。
-    #   - subprocess_failure_reason: 开启子进程隔离后，该算子的 subprocess
-    #     超时 / 崩溃 / 返回非零 / 输出异常。evaluator._run_operator_subprocess
-    #     在异常路径下 populate。
-    # 两个字段都是 Optional，常规路径下为 None 不写入 JSON。
-    compilation_error: Optional[str] = None
-    subprocess_failure_reason: Optional[str] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        d = {
-            'operator': self.operator,
-            'level': self.level,
-            'total_cases': self.total_cases,
-            'passed_cases': self.passed_cases,
-            'failed_cases': self.failed_cases,
-            'skipped_cases': self.skipped_cases,
-            'pass_rate': self.pass_rate,
-            'avg_speedup': self.avg_speedup,
-            'results': [r.to_dict() for r in self.results],
-        }
-        if self.compilation_error:
-            d['compilation_error'] = self.compilation_error
-        if self.subprocess_failure_reason:
-            d['subprocess_failure_reason'] = self.subprocess_failure_reason
-        return d
-
-
-@dataclass
-class EvalSessionResult:
-    """评测会话结果"""
-    operators: List[EvalOperatorResult]
-    package_info: Optional[PackageInfo] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'operators': [op.to_dict() for op in self.operators],
-            'package_info': {
-                'source_dir': self.package_info.source_dir if self.package_info else '',
-                'whl_path': self.package_info.whl_path if self.package_info else '',
-                'run_path': self.package_info.run_path if self.package_info else '',
-            } if self.package_info else None,
-        }
+from ..utils.tensor_utils import tensors_to_cpu
+from .op_runner import OpRunner, OpRunResult
+from .accuracy_eval import AccuracyEvaluator, AccuracyResult
+from .perf_eval import PerfEvaluator, PerfResult
+from .results import EvalCaseResult, EvalOperatorResult, EvalSessionResult
+from .failure_synthesizer import FailureSynthesizer
+from .operator_matcher import OperatorMatcher
+from .subprocess_runner import SubprocessRunner
 
 
 class Evaluator:
@@ -199,11 +69,11 @@ class Evaluator:
 
         # 初始化性能评测器
         self.perf_evaluator = PerfEvaluator(
-            enabled=self.config.enable_profiler and self.device_manager.is_npu_mode(),
+            config=self.config,
             device_manager=self.device_manager,
             warmup=self.config.warmup,
             repeat=self.config.repeat,
-            archive_prof=False,  # 使用临时目录避免 torch_npu 解析旧数据产生的 ERROR 日志
+            archive_prof=True,
         )
 
         # 初始化算子执行器
@@ -220,46 +90,21 @@ class Evaluator:
         self.param_builder = ParamBuilder(self.golden_loader)
 
         # 初始化包管理器
-        self.package_manager = PackageManager()
+        self.package_manager = PackageManager(config=self.config)
 
-        # AI算子模块缓存
-        self._ai_op_cache: Dict[str, Callable] = {}
+        # 初始化拆分模块
+        self.operator_matcher = OperatorMatcher(self.operator_loader)
+        self.failure_synthesizer = FailureSynthesizer(self.case_loader)
+        kernel_eval_root = str(get_project_root() / "src")
+        self.subprocess_runner = SubprocessRunner(
+            failure_synthesizer=self.failure_synthesizer,
+            device_id=self.config.device_id,
+            kernel_eval_root=kernel_eval_root,
+        )
 
     def load_ai_operator(self, operator_name: str) -> Callable:
-        """加载AI生成的算子函数"""
-        cache_key = operator_name.lower()
-        if cache_key in self._ai_op_cache:
-            return self._ai_op_cache[cache_key]
-
-        try:
-            import cann_bench
-
-            candidates = _snake_case_candidates(operator_name) + [
-                operator_name.lower(),
-                operator_name,
-            ]
-            for name in candidates:
-                if hasattr(cann_bench, name):
-                    func = getattr(cann_bench, name)
-                    self._ai_op_cache[cache_key] = func
-                    return func
-
-            # 尝试 torch.ops.cann_bench
-            try:
-                import torch
-                if hasattr(torch.ops, 'cann_bench'):
-                    for name in candidates:
-                        if hasattr(torch.ops.cann_bench, name):
-                            func = getattr(torch.ops.cann_bench, name)
-                            self._ai_op_cache[cache_key] = func
-                            return func
-            except Exception:
-                pass
-
-            raise AttributeError(f"无法找到算子 {operator_name} 在 cann_bench 模块中")
-
-        except ImportError as e:
-            raise ImportError(f"无法导入 cann_bench 模块: {e}")
+        """加载AI生成的算子函数（委托给 OperatorMatcher）"""
+        return self.operator_matcher.load_ai_operator(operator_name)
 
     def evaluate_case(self, case: CaseInfo, ai_op_func: Callable = None) -> EvalCaseResult:
         """评测单个用例"""
@@ -267,7 +112,7 @@ class Evaluator:
 
         try:
             # 1. 获取golden函数
-            golden_func = self.golden_loader.get_golden_function(case.level, case.operator)
+            golden_func = self.golden_loader.get_golden_function(case.rel_path)
 
             # 2. 生成输入数据
             input_tensors = self.data_generator.generate_input_tensors_from_case(
@@ -277,30 +122,154 @@ class Evaluator:
             )
 
             # 2.5 调用 get_input 预处理（如果存在）
-            get_input_func = self.golden_loader.get_input_function(case.level, case.operator)
+            get_input_func = self.golden_loader.get_input_function(case.rel_path)
             if get_input_func is not None:
-                params_for_get_input = self.param_builder.build_call_params(golden_func, case, input_tensors)
-                # 将 case.attrs 中的 _exist 标志也传递给 get_input
+                # get_input 期望 proto.yaml 顺序：x, h0, weights, biases
+                # 但 cases.yaml 可能省略 optional 参数，顺序为：x, weights, biases (或 x, weights, biases, h0)
+
+                # 获取 proto.yaml inputs 信息
+                op_info = self.operator_loader.get_operator(case.rel_path)
+
+                # 统计 proto.yaml tensor inputs 数量
+                proto_tensor_count = len([i for i in op_info.inputs if 'Tensor' in str(i.dtype) or isinstance(i.dtype, list)])
+                actual_tensor_count = len(input_tensors)
+
+                # 如果实际 tensor 数量少于 proto tensor 数量，说明有 optional 参数被省略
+                # 检测情况：cases.yaml 省略了 h0 (单 tensor)，但提供了所有 TensorList (weights/biases)
+
+                params_for_get_input = {}
+
+                # 检查是否有 optional h0/c0 参数
+                has_optional_h0 = any(i.name in ['h0', 'c0'] for i in op_info.inputs)
+
+                # 情况1: input_tensors 数量少于 proto tensor 数量
+                # 根据格式匹配来判断哪些 proto inputs 对应哪些 input_tensors
+                # 策略：按顺序匹配，单 tensor → 单 tensor input，TensorList → TensorList input
+                if actual_tensor_count < proto_tensor_count:
+                    params_for_get_input = {}
+                    tensor_idx = 0
+
+                    # 先处理 x (总是第一个)
+                    params_for_get_input['x'] = input_tensors[0] if len(input_tensors) > 0 else None
+                    tensor_idx = 1 if len(input_tensors) > 0 else 0
+
+                    # proto.yaml 第二个是 h0/c0 (optional)，如果 cases.yaml 没有单独的 h0 tensor，设为 None
+                    # 检查 input_tensors 中是否有单独的 h0 tensor（最后一个 tensor）
+                    last_val = input_tensors[-1] if input_tensors else None
+                    has_separate_h0 = isinstance(last_val, torch.Tensor) and actual_tensor_count > 3
+
+                    if has_separate_h0:
+                        params_for_get_input['h0'] = last_val
+                        # 剩余 tensors: input_tensors[1:-1]
+                        remaining_tensors = input_tensors[1:-1]
+                    else:
+                        params_for_get_input['h0'] = None
+                        remaining_tensors = input_tensors[1:]
+
+                    # 映射剩余 proto inputs (weight_ih, weight_hh, bias_ih, bias_hh)
+                    remaining_proto_inputs = [i for i in op_info.inputs if i.name not in ['x', 'h0', 'c0']]
+                    for proto_input in remaining_proto_inputs:
+                        if remaining_tensors:
+                            params_for_get_input[proto_input.name] = remaining_tensors[0]
+                            remaining_tensors = remaining_tensors[1:]
+                        else:
+                            params_for_get_input[proto_input.name] = None
+
+                # 情况2: input_tensors 数量 = proto tensor 数量 - 1，且 proto 有 optional h0/c0
+                # 此时 cases.yaml 顺序可能是：x, weights, biases (省略 h0)
+                elif has_optional_h0 and actual_tensor_count == proto_tensor_count - 1:
+                    # cases.yaml 省略了 h0/c0
+                    # 按 cases.yaml 实际顺序映射：x, weights, biases
+                    tensor_idx = 0
+                    for input_info in op_info.inputs:
+                        if input_info.name in ['h0', 'c0']:
+                            # optional tensor 未提供
+                            params_for_get_input[input_info.name] = None
+                        elif tensor_idx < len(input_tensors):
+                            params_for_get_input[input_info.name] = input_tensors[tensor_idx]
+                            tensor_idx += 1
+                        else:
+                            params_for_get_input[input_info.name] = None
+
+                # 情况2: input_tensors 数量 = proto tensor 数量
+                # 此时 cases.yaml 可能包含 h0/c0，但顺序可能不同
+                elif actual_tensor_count == proto_tensor_count:
+                    # 检查 input_tensors 最后一个是否是单 tensor (h0/c0 candidate)
+                    last_val = input_tensors[-1] if input_tensors else None
+                    last_is_single_tensor = isinstance(last_val, torch.Tensor)
+
+                    if last_is_single_tensor and has_optional_h0:
+                        # cases.yaml 顺序：x, weights, biases, h0
+                        # proto.yaml 顺序：x, h0, weights, biases
+                        tensor_idx = 0
+                        for input_info in op_info.inputs:
+                            if input_info.name in ['h0', 'c0']:
+                                # h0 在 cases.yaml 最后
+                                params_for_get_input[input_info.name] = input_tensors[-1]
+                            elif tensor_idx < len(input_tensors) - 1:  # 排除最后一个是 h0
+                                params_for_get_input[input_info.name] = input_tensors[tensor_idx]
+                                tensor_idx += 1
+                            else:
+                                params_for_get_input[input_info.name] = None
+                    else:
+                        # 完全按 proto.yaml 顺序
+                        for i, input_info in enumerate(op_info.inputs):
+                            if i < len(input_tensors):
+                                params_for_get_input[input_info.name] = input_tensors[i]
+                            else:
+                                params_for_get_input[input_info.name] = None
+
+                else:
+                    # 其他情况，按 proto.yaml 顺序映射
+                    for i, input_info in enumerate(op_info.inputs):
+                        if i < len(input_tensors):
+                            params_for_get_input[input_info.name] = input_tensors[i]
+                        else:
+                            params_for_get_input[input_info.name] = None
+
+                # 添加 attrs
                 case_attrs = getattr(case, 'attrs', None) or {}
                 for attr_key, attr_val in case_attrs.items():
                     if attr_key not in params_for_get_input:
                         params_for_get_input[attr_key] = attr_val
-                # 确保 skip2_exist 被传递
                 if 'skip2_exist' not in params_for_get_input:
                     params_for_get_input['skip2_exist'] = case_attrs.get('skip2_exist', True)
+
                 input_tensors = get_input_func(**params_for_get_input)
                 if isinstance(input_tensors, tuple):
                     input_tensors = list(input_tensors)
 
             # 3. 构建调用参数
-            params = self.param_builder.build_call_params(golden_func, case, input_tensors)
+            golden_sig = signature(golden_func)
+            if get_input_func is not None:
+                # get_input 已重新排序，input_tensors 现在按 golden 签名顺序排列
+                # 直接按位置构建参数
+                params = {}
+                tensor_idx = 0
+                for param_name, param in golden_sig.parameters.items():
+                    annotation = str(param.annotation) if param.annotation != Parameter.empty else ""
+                    # 检查是否是 tensor 参数
+                    if 'Tensor' in annotation:
+                        if tensor_idx < len(input_tensors):
+                            val = input_tensors[tensor_idx]
+                            params[param_name] = val
+                            tensor_idx += 1
+                        else:
+                            params[param_name] = None
+                    # attrs 参数从 case_attrs 获取
+                    elif param_name in case_attrs:
+                        params[param_name] = case_attrs[param_name]
+                    elif param.default != Parameter.empty:
+                        params[param_name] = param.default
+            else:
+                params = self.param_builder.build_call_params(golden_func, case, input_tensors)
 
             # 4. 执行Golden函数获取参考结果
             golden_result = self.op_runner.run_golden(golden_func, params, case_id_str, input_tensors)
             if not golden_result.success:
                 return EvalCaseResult(
                     case_id=case_id_str,
-                    level=case.level,
+                    rel_path=case.rel_path,
                     operator=case.operator,
                     case_num=case.case_id,
                     success=False,
@@ -309,25 +278,37 @@ class Evaluator:
                     baseline_perf_us=case.baseline_perf_us,
                 )
 
-            # 5. 如果没有AI算子，只返回Golden结果（用于测试Golden正确性）
-            if ai_op_func is None:
-                return EvalCaseResult(
-                    case_id=case_id_str,
-                    level=case.level,
-                    operator=case.operator,
-                    case_num=case.case_id,
-                    success=True,
-                    golden_run_result=golden_result,
-                    accuracy_result=AccuracyResult(passed=True, dtype=case.dtypes[0] if case.dtypes else 'float32', threshold=0, mere=0, mare=0),
-                    baseline_perf_us=case.baseline_perf_us,
-                )
+            # 5. 如果没有传入AI算子函数，尝试加载
+            actual_ai_func = ai_op_func
+            if actual_ai_func is None:
+                try:
+                    actual_ai_func = self.operator_matcher.load_ai_operator(case.operator)
+                except Exception:
+                    return EvalCaseResult(
+                        case_id=case_id_str,
+                        rel_path=case.rel_path,
+                        operator=case.operator,
+                        case_num=case.case_id,
+                        success=True,
+                        golden_run_result=golden_result,
+                        accuracy_result=AccuracyResult(
+                            passed=True,
+                            dtype=case.dtypes[0] if case.dtypes else 'float32',
+                            threshold=0, mere=0, mare=0,
+                        ),
+                        baseline_perf_us=case.baseline_perf_us,
+                    )
 
-            # 6. 精度验证：先执行AI算子（不开profiler，只跑一次），确认精度通过后再采集性能
-            ai_result = self.op_runner.run_ai_op(ai_op_func, params, case_id_str, input_tensors, enable_perf=False)
+            # 6. 执行AI算子（profiler 一次运行同时提供输出和性能数据，避免跑两遍）
+            use_profiler = (self.perf_evaluator is not None
+                        and self.perf_evaluator.config.enable_profiler)
+            ai_result = self.op_runner.run_ai_op(actual_ai_func, params, case_id_str,
+                                                  input_tensors, enable_perf=use_profiler)
             if not ai_result.success:
+                self._cleanup_memory()
                 return EvalCaseResult(
                     case_id=case_id_str,
-                    level=case.level,
+                    rel_path=case.rel_path,
                     operator=case.operator,
                     case_num=case.case_id,
                     success=False,
@@ -337,57 +318,33 @@ class Evaluator:
                     baseline_perf_us=case.baseline_perf_us,
                 )
 
-            # 7. 精度对比
-            import torch
-            # 优先使用AI算子输出的dtype
-            dtype = None
-            if isinstance(ai_result.outputs, torch.Tensor):
-                dtype = str(ai_result.outputs.dtype).replace('torch.', '')
-            elif isinstance(ai_result.outputs, (list, tuple)) and ai_result.outputs:
-                first_out = ai_result.outputs[0]
-                if isinstance(first_out, torch.Tensor):
-                    dtype = str(first_out.dtype).replace('torch.', '')
+            # 7. 精度对比（使用与性能采集同一次运行的输出）
+            dtype = self._determine_dtype(ai_result, case)
+            merged_thresholds = self._get_merged_thresholds(case.rel_path)
 
-            # 如果无法从AI output确定dtype，使用case中定义的输出dtype
-            if dtype is None:
-                try:
-                    op_info = self.operator_loader.get_operator(case.operator, case.level)
-                    if op_info and op_info.outputs and op_info.outputs[0].dtype:
-                        output_dtype_list = op_info.outputs[0].dtype
-                        if isinstance(output_dtype_list, list):
-                            dtype = output_dtype_list[0]
-                        else:
-                            dtype = output_dtype_list
-                except Exception:
-                    pass
-
-            # 最后使用case的输入dtype作为后备
-            if dtype is None:
-                dtype = case.dtypes[0] if case.dtypes else 'float32'
-
-            # 获取算子自定义精度阈值（如果有）
-            merged_thresholds = self._get_merged_thresholds(case.operator, case.level)
-
-            # 计算 CPU 同精度输出（用于小值域比较）
-            # 使用原始 dtype 的输入调用 golden_fn
-            cpu_inputs = []
-            for item in input_tensors:
-                if isinstance(item, torch.Tensor):
-                    cpu_inputs.append(item.cpu())
-                elif isinstance(item, (list, tuple)):
-                    cpu_inputs.append([sub.cpu() if isinstance(sub, torch.Tensor) else sub for sub in item])
-                else:
-                    cpu_inputs.append(item)
-
-            cpu_params = self.param_builder.build_call_params(golden_func, case, cpu_inputs)
+            # CPU 同精度输出
+            cpu_inputs = tensors_to_cpu(input_tensors)
+            if get_input_func is not None:
+                # get_input 已重新排序，直接按位置构建参数
+                golden_sig = signature(golden_func)
+                cpu_params = {}
+                tensor_idx = 0
+                for param_name, param in golden_sig.parameters.items():
+                    annotation = str(param.annotation) if param.annotation != Parameter.empty else ""
+                    if 'Tensor' in annotation:
+                        if tensor_idx < len(cpu_inputs):
+                            cpu_params[param_name] = cpu_inputs[tensor_idx]
+                            tensor_idx += 1
+                    elif param_name in case_attrs:
+                        cpu_params[param_name] = case_attrs[param_name]
+                    elif param.default != Parameter.empty:
+                        cpu_params[param_name] = param.default
+            else:
+                cpu_params = self.param_builder.build_call_params(golden_func, case, cpu_inputs)
             with torch.no_grad():
                 cpu_out = golden_func(**cpu_params)
 
-            # 保留多输出格式，不做截断
-            # cpu_out 可能是 tuple/list（多输出）或 Tensor（单输出）
-
-            # 获取需要跳过的输出索引
-            ignore_output_indices = self._get_ignore_output_indices(case.operator, case.level)
+            ignore_output_indices = self._get_ignore_output_indices(case.rel_path)
 
             accuracy_result = self.accuracy_evaluator.evaluate(
                 ai_output=ai_result.outputs,
@@ -398,40 +355,30 @@ class Evaluator:
                 ignore_output_indices=ignore_output_indices,
             )
 
-            # 8. 精度通过后才采集性能（避免对精度不合格的算子浪费profiling时间）
-            perf_result = None
-            if accuracy_result.passed and self.perf_evaluator and self.perf_evaluator.enabled:
-                ai_perf_result = self.op_runner.run_ai_op(
-                    ai_op_func, params, case_id_str, input_tensors, enable_perf=True
-                )
-                if ai_perf_result.success:
-                    perf_result = ai_perf_result.perf_result
-                    if perf_result is None and ai_perf_result.elapsed_us > 0:
-                        perf_result = PerfResult(
-                            case_id=case_id_str,
-                            elapsed_us=ai_perf_result.elapsed_us,
-                        )
-            elif accuracy_result.passed:
-                # 关闭性能采集时用simple timing作为参考耗时
-                if ai_result.elapsed_us > 0:
-                    perf_result = PerfResult(
-                        case_id=case_id_str,
-                        elapsed_us=ai_result.elapsed_us,
-                    )
+            # 8. 性能数据已在上面的 profiler 运行中采集，直接提取
+            if accuracy_result.passed:
+                if ai_result.perf_result is not None:
+                    perf_result = ai_result.perf_result
+                elif ai_result.elapsed_us > 0:
+                    perf_result = PerfResult(case_id=case_id_str, elapsed_us=ai_result.elapsed_us)
+                else:
+                    perf_result = None
+                error_msg = None
             else:
-                # 精度不通过，用simple timing兜底
-                if ai_result.elapsed_us > 0:
-                    perf_result = PerfResult(
-                        case_id=case_id_str,
-                        elapsed_us=ai_result.elapsed_us,
-                    )
+                perf_result = None
+                error_msg = (
+                    f"精度不达标: MARE={accuracy_result.mare:.6f}, "
+                    f"MERE={accuracy_result.mere:.6f}, "
+                    f"阈值={accuracy_result.threshold}, "
+                    f"最大差值={accuracy_result.max_diff:.6f}, "
+                    f"不匹配比例={accuracy_result.mismatch_ratio:.4f}"
+                )
 
-            # 清理内存
             self._cleanup_memory()
 
             return EvalCaseResult(
                 case_id=case_id_str,
-                level=case.level,
+                rel_path=case.rel_path,
                 operator=case.operator,
                 case_num=case.case_id,
                 success=accuracy_result.passed,
@@ -439,104 +386,73 @@ class Evaluator:
                 perf_result=perf_result,
                 golden_run_result=golden_result,
                 ai_run_result=ai_result,
+                error_msg=error_msg,
                 baseline_perf_us=case.baseline_perf_us,
             )
 
         except Exception as e:
             tb_str = traceback.format_exc()
+            self._cleanup_memory()
             return EvalCaseResult(
                 case_id=case_id_str,
-                level=case.level,
+                rel_path=case.rel_path,
                 operator=case.operator,
                 case_num=case.case_id,
                 success=False,
                 error_msg=f"评测异常: {e}",
             )
 
-    def evaluate_operator(
-        self,
-        operator: str,
-        level: int,
-        ai_op_func: Callable = None,
-        case_filter: Dict = None,
-    ) -> EvalOperatorResult:
-        """
-        评测单个算子
-
-        Args:
-            operator: 算子名称
-            level: 难度级别
-            ai_op_func: AI算子函数（可选，如果不提供则只测试Golden）
-            case_filter: 用例筛选条件（可选）
-
-        Returns:
-            EvalOperatorResult: 算子评测结果
-        """
-        # 加载用例
-        cases = self.case_loader.scan_by_operator(level, operator)
-
-        # 应用筛选条件
+    def evaluate_operator(self, operator: str, rel_path: str, case_filter: Dict = None) -> EvalOperatorResult:
+        """评测单个算子"""
+        cases = self.case_loader.scan_by_operator(operator)
         if case_filter:
             cases = self._filter_cases(cases, case_filter)
 
         if not cases:
             return EvalOperatorResult(
-                operator=operator,
-                level=level,
-                total_cases=0,
-                passed_cases=0,
-                failed_cases=0,
-                skipped_cases=0,
-                results=[],
-                pass_rate=0.0,
-                avg_speedup=0.0,
+                rel_path=rel_path, operator=operator, total_cases=0,
+                passed_cases=0, failed_cases=0, skipped_cases=0,
+                results=[], pass_rate=0.0, avg_speedup=0.0,
             )
 
-        # 清空AI算子缓存（确保使用最新加载的函数）
-        self._ai_op_cache.clear()
-
-        # 逐个评测
+        self.operator_matcher.clear_cache()
         results = []
-        print(f"[INFO] 评测算子 {operator} (L{level}), 用例数: {len(cases)}")
+        print(f"[INFO] 评测算子 {operator} ({rel_path}), 用例数: {len(cases)}")
+
         for i, case in enumerate(cases, 1):
             case_id_str = case.get_case_id_str()
-            result = self.evaluate_case(case, ai_op_func)
+            result = self.evaluate_case(case)
             results.append(result)
 
-            # 打印进度
             status_icon = "✅" if result.success else "❌"
-            if result.success and result.perf_result and result.perf_result.elapsed_us > 0:
-                elapsed_str = f"{result.perf_result.elapsed_us:.2f}μs"
-            elif result.ai_run_result and result.ai_run_result.elapsed_us > 0:
-                elapsed_str = f"{result.ai_run_result.elapsed_us:.2f}μs"
-            else:
-                elapsed_str = "N/A"
+            elapsed_str = self._format_elapsed(result)
             speedup_str = f"{result.get_speedup():.2f}x" if result.get_speedup() > 0 else "N/A"
-            if result.success:
+
+            # 添加精度信息
+            if result.success and result.accuracy_result:
+                acc = result.accuracy_result
+                mare_str = f"MARE={acc.mare:.6f}" if acc.mare is not None else ""
+                mere_str = f"MERE={acc.mere:.6f}" if acc.mere is not None else ""
+                acc_str = f", {mare_str}, {mere_str}" if mare_str or mere_str else ""
+                print(
+                    f"[{i}/{len(cases)}] {case_id_str}: {status_icon} "
+                    f"(耗时: {elapsed_str}, 加速比: {speedup_str}{acc_str})"
+                )
+            elif result.success:
                 print(f"[{i}/{len(cases)}] {case_id_str}: {status_icon} (耗时: {elapsed_str}, 加速比: {speedup_str})")
             else:
-                print(f"[{i}/{len(cases)}] {case_id_str}: {status_icon}")
+                error_hint = result.error_msg[:50] if result.error_msg else ""
+                print(f"[{i}/{len(cases)}] {case_id_str}: {status_icon} {error_hint}")
 
-        # 性能解析已在 op_runner.run 中完成，无需额外等待
-        # self.perf_evaluator.wait_all()
-
-        # 计算统计
         passed = sum(1 for r in results if r.success)
-        failed = sum(1 for r in results if not r.success and r.accuracy_result is not None)
-        skipped = sum(1 for r in results if not r.success and r.accuracy_result is None)
-
-        # 计算平均加速比（只考虑通过的用例）
+        failed = sum(1 for r in results if not r.success)
         speedups = [r.get_speedup() for r in results if r.success and r.get_speedup() > 0]
         avg_speedup = sum(speedups) / len(speedups) if speedups else 0.0
 
         return EvalOperatorResult(
-            operator=operator,
-            level=level,
-            total_cases=len(cases),
-            passed_cases=passed,
-            failed_cases=failed,
-            skipped_cases=skipped,
-            results=results,
+            rel_path=rel_path, operator=operator,
+            total_cases=len(cases), passed_cases=passed, failed_cases=failed,
+            skipped_cases=0, results=results,
             pass_rate=passed / len(cases) if len(cases) > 0 else 0.0,
             avg_speedup=avg_speedup,
         )
@@ -549,106 +465,86 @@ class Evaluator:
         verbose: bool = False,
         subprocess_isolation: bool = True,
         op_timeout_sec: int = 240,
+        case_timeout_sec: int = None,
+        case_subprocess_isolation: bool = True,
         iterative_compile: bool = True,
     ) -> EvalSessionResult:
-        """
-        从源码目录执行完整评测
-
-        流程：
-        1. 扫描源码目录 + **迭代编译**（失败算子被隔离到 _quarantine/，
-           错误摘要带到 package_info.compile_errors）
-        2. 安装包
-        3. 扫描接口
-        4. 为每个"编译失败"的算子合成 FAIL 记录
-        5. 逐个评测剩下的算子（默认每个算子跑在独立子进程里，一个算子
-           挂死 AI Core 不会污染后面）
-        6. 返回评测结果
-
-        Args:
-            source_dir: 源码目录路径
-            operator_filter: 算子筛选列表
-            case_filter: 用例筛选条件
-            verbose: 详细输出
-            subprocess_isolation: 每个算子 fork 子进程评测（默认 True）
-            op_timeout_sec: 子进程隔离下的 per-op 超时（默认 240 秒）
-
-        Returns:
-            EvalSessionResult: 评测会话结果（包含运行正常的算子 +
-            编译失败的算子 + 子进程异常的算子）
-        """
+        """从源码目录执行完整评测"""
         print("")
         print("=" * 60)
         print("开始评测")
         print("=" * 60)
 
-        # 1. 准备环境（编译安装）—— 迭代模式下失败算子会被隔离，错误摘要
-        #    落到 package_info.compile_errors；关闭迭代（老行为）则 build.sh
-        #    首次失败即 raise，整个评测停在这一步。
+        # 1. 准备环境（编译安装）
         matched_operators, package_info = self.package_manager.prepare_from_source(
-            source_dir,
-            verbose=verbose,
-            iterative_compile=iterative_compile,
+            source_dir, verbose=verbose, iterative_compile=iterative_compile,
         )
 
-        # 给 kernel_bench 里有对应定义的"编译失败"算子合成 FAIL 记录，让它们
-        # 不至于从报告里消失。matched_operators 不含这些（因为 cann_bench 里
-        # 没有它们的函数），这里从 compile_errors 反向查找算子定义。
+        # 2. APIGuard 验证
+        from ..security.api_guard import APIGuard
+        guard = APIGuard()
+        try:
+            guard.verify()
+        except RuntimeError as e:
+            print(f"[ERROR] APIGuard 检测到 Timing API 篡改: {e}")
+            results = []
+            for operator_name in matched_operators:
+                op_info = self.operator_matcher.find_operator_info(operator_name)
+                if op_info:
+                    result = self.failure_synthesizer.synthesize_security_failure(
+                        op_info, str(e), case_filter, self._filter_cases,
+                    )
+                    results.append(result)
+            for snake_op_name, err in (package_info.compile_errors or {}).items():
+                op_info = self.operator_matcher.find_operator_info_by_snake(snake_op_name)
+                if op_info and (not operator_filter or op_info.name in operator_filter):
+                    results.append(self.failure_synthesizer.synthesize_compile_failure(
+                        op_info, err, case_filter, self._filter_cases,
+                    ))
+            return EvalSessionResult(operators=results, package_info=package_info)
+
+        # 3. 合成编译失败结果
         compile_failed_results: List[EvalOperatorResult] = []
         for snake_op_name, err in (package_info.compile_errors or {}).items():
-            op_info = self._find_operator_info_by_snake(snake_op_name)
+            op_info = self.operator_matcher.find_operator_info_by_snake(snake_op_name)
             if op_info is None:
-                # kernel_bench 里没这个算子，静默丢弃（和"submission 多出"情况对齐）
                 continue
             if operator_filter and op_info.name not in operator_filter:
                 continue
             compile_failed_results.append(
-                self._synthesize_compile_failure(op_info, err, case_filter)
+                self.failure_synthesizer.synthesize_compile_failure(op_info, err, case_filter, self._filter_cases),
             )
 
         if not matched_operators and not compile_failed_results:
-            return EvalSessionResult(
-                operators=[],
-                package_info=package_info,
-            )
+            return EvalSessionResult(operators=[], package_info=package_info)
 
-        # 2. 应用算子筛选
+        # 4. 应用算子筛选
         if operator_filter:
             matched_operators = [op for op in matched_operators if op in operator_filter]
             print(f"[INFO] 筛选后算子: {matched_operators}")
 
-        # 3. 逐个评测算子（先把编译失败合成结果合入，再跑可运行的算子）
+        # 5. 逐个评测算子
         results: List[EvalOperatorResult] = list(compile_failed_results)
         print(f"[INFO] 编译失败: {len(compile_failed_results)} 个算子 | 可运行: "
               f"{len(matched_operators)} 个算子 "
               f"({'subprocess-per-op' if subprocess_isolation else 'in-process'})")
+
         for operator_name in matched_operators:
-            # 获取算子信息（确定level）
-            op_info = self._find_operator_info(operator_name)
+            op_info = self.operator_matcher.find_operator_info(operator_name)
             if not op_info:
                 print(f"[WARN] 算子 {operator_name} 未找到定义，跳过")
                 continue
 
             if subprocess_isolation:
-                result = self._run_operator_subprocess(
-                    operator_name, op_info.level, source_dir, case_filter, op_timeout_sec
+                result = self.subprocess_runner.run_operator_subprocess(
+                    operator_name, rel_path=op_info.rel_path,
+                    source_dir=source_dir, case_filter=case_filter,
+                    timeout_sec=op_timeout_sec, filter_func=self._filter_cases,
                 )
                 results.append(result)
                 continue
 
-            # 加载AI算子函数
-            try:
-                ai_op_func = self.load_ai_operator(operator_name)
-            except Exception as e:
-                print(f"[ERROR] 加载算子 {operator_name} 失败: {e}")
-                continue
-
-            # 执行评测
-            result = self.evaluate_operator(
-                operator=operator_name,
-                level=op_info.level,
-                ai_op_func=ai_op_func,
-                case_filter=case_filter,
-            )
+            result = self.evaluate_operator(operator=operator_name, rel_path=op_info.rel_path, case_filter=case_filter)
             results.append(result)
 
         print("")
@@ -656,65 +552,48 @@ class Evaluator:
         print("评测完成")
         print("=" * 60)
 
-        return EvalSessionResult(
-            operators=results,
-            package_info=package_info,
-        )
+        return EvalSessionResult(operators=results, package_info=package_info)
 
     def evaluate_skip_build(
         self,
         operator_filter: List[str] = None,
         case_filter: Dict = None,
+        operator_subprocess_isolation: bool = True,
     ) -> EvalSessionResult:
-        """
-        跳过编译安装，直接评测已安装的cann_bench
-
-        Args:
-            operator_filter: 算子筛选列表
-            case_filter: 用例筛选条件
-
-        Returns:
-            EvalSessionResult: 评测会话结果
-        """
+        """跳过编译安装，直接评测已安装的cann_bench"""
         print("")
         print("=" * 60)
         print("开始评测（跳过编译安装）")
         print("=" * 60)
 
-        # 扫描已安装的cann_bench接口
         matched_operators = self.package_manager.prepare_skip_build()
-
         if not matched_operators:
             return EvalSessionResult(operators=[])
 
-        # 应用算子筛选
         if operator_filter:
             matched_operators = [op for op in matched_operators if op in operator_filter]
             print(f"[INFO] 筛选后算子: {matched_operators}")
 
-        # 逐个评测算子
         results = []
+        print(f"[INFO] 可运行算子: {len(matched_operators)} "
+              f"({'subprocess-per-op' if operator_subprocess_isolation else 'in-process'})")
+
         for operator_name in matched_operators:
-            # 获取算子信息（确定level）
-            op_info = self._find_operator_info(operator_name)
+            op_info = self.operator_matcher.find_operator_info(operator_name)
             if not op_info:
                 print(f"[WARN] 算子 {operator_name} 未找到定义，跳过")
                 continue
 
-            # 加载AI算子函数
-            try:
-                ai_op_func = self.load_ai_operator(operator_name)
-            except Exception as e:
-                print(f"[ERROR] 加载算子 {operator_name} 失败: {e}")
+            if operator_subprocess_isolation:
+                result = self.subprocess_runner.run_operator_subprocess_simple(
+                    operator_name, rel_path=op_info.rel_path,
+                    case_filter=case_filter, timeout_sec=240,
+                    filter_func=self._filter_cases,
+                )
+                results.append(result)
                 continue
 
-            # 执行评测
-            result = self.evaluate_operator(
-                operator=operator_name,
-                level=op_info.level,
-                ai_op_func=ai_op_func,
-                case_filter=case_filter,
-            )
+            result = self.evaluate_operator(operator=operator_name, rel_path=op_info.rel_path, case_filter=case_filter)
             results.append(result)
 
         print("")
@@ -724,248 +603,40 @@ class Evaluator:
 
         return EvalSessionResult(operators=results)
 
-    def evaluate_golden_only(
-        self,
-        operator: str,
-        level: int,
-        case_filter: Dict = None,
-    ) -> EvalOperatorResult:
-        """
-        仅执行Golden验证（不安装whl包）
+    def evaluate_golden_only(self, operator: str, rel_path: str, case_filter: Dict = None) -> EvalOperatorResult:
+        """仅执行Golden验证"""
+        return self.evaluate_operator(operator=operator, rel_path=rel_path, case_filter=case_filter)
 
-        Args:
-            operator: 算子名称
-            level: 难度级别
-            case_filter: 用例筛选条件
+    # ---- 辅助方法 ----
 
-        Returns:
-            EvalOperatorResult: 算子评测结果
-        """
-        return self.evaluate_operator(
-            operator=operator,
-            level=level,
-            ai_op_func=None,  # 不加载AI算子
-            case_filter=case_filter,
-        )
+    def _determine_dtype(self, ai_result, case) -> str:
+        """确定 dtype"""
+        dtype = None
+        if isinstance(ai_result.outputs, torch.Tensor):
+            dtype = str(ai_result.outputs.dtype).replace('torch.', '')
+        elif isinstance(ai_result.outputs, (list, tuple)) and ai_result.outputs:
+            first_out = ai_result.outputs[0]
+            if isinstance(first_out, torch.Tensor):
+                dtype = str(first_out.dtype).replace('torch.', '')
 
-    def _find_operator_info(self, operator_name: str) -> Optional[OperatorInfo]:
-        """查找算子定义信息"""
-        operators = self.operator_loader.list_operators()
-        for op_info in operators:
-            if op_info.name == operator_name:
-                return op_info
-        return None
-
-    def _find_operator_info_by_snake(self, snake_name: str) -> Optional[OperatorInfo]:
-        """通过 snake_case 名称（build_submission 里的 op 目录名）反查 OperatorInfo。
-        与 load_ai_operator 的 CamelCase→snake_case 规则保持一致。"""
-        target = snake_name.lower()
-        operators = self.operator_loader.list_operators()
-        for op_info in operators:
-            if target in _snake_case_candidates(op_info.name):
-                return op_info
-        return None
-
-    def _synthesize_compile_failure(
-        self,
-        op_info: OperatorInfo,
-        error_excerpt: str,
-        case_filter: Optional[Dict] = None,
-    ) -> EvalOperatorResult:
-        """为编译失败的算子生成一条 all-FAIL 的 EvalOperatorResult，
-        这样它仍然出现在 session 结果里，summary.md / 报告看得到原因。"""
-        from ..data.case_loader import CaseInfo as _CI  # 避免循环导入
-        try:
-            cases = self.case_loader.scan_by_operator(op_info.level, op_info.name)
-            if case_filter:
-                cases = self._filter_cases(cases, case_filter)
-        except Exception:
-            cases = []
-
-        # 取错误摘要的第一行做 case-level detail（大段错误单独放在 op-level 字段里）
-        first_line = (error_excerpt.strip().splitlines() or ["(no detail)"])[0]
-        reason_short = f"compile failed: {first_line[:180]}"
-
-        case_results: List[EvalCaseResult] = []
-        for c in cases:
-            case_results.append(EvalCaseResult(
-                case_id=str(getattr(c, "case_id", 0)),
-                level=op_info.level,
-                operator=op_info.name,
-                case_num=int(getattr(c, "case_id", 0) or 0),
-                success=False,
-                error_msg=reason_short,
-            ))
-
-        return EvalOperatorResult(
-            operator=op_info.name,
-            level=op_info.level,
-            total_cases=len(case_results),
-            passed_cases=0,
-            failed_cases=len(case_results),
-            skipped_cases=0,
-            results=case_results,
-            pass_rate=0.0,
-            avg_speedup=0.0,
-            compilation_error=error_excerpt,
-        )
-
-    def _synthesize_subprocess_failure(
-        self,
-        operator_name: str,
-        level: int,
-        reason: str,
-        case_filter: Optional[Dict] = None,
-    ) -> EvalOperatorResult:
-        """子进程超时 / 崩溃时合成 all-FAIL 的 EvalOperatorResult。"""
-        try:
-            cases = self.case_loader.scan_by_operator(level, operator_name)
-            if case_filter:
-                cases = self._filter_cases(cases, case_filter)
-        except Exception:
-            cases = []
-
-        short = f"subprocess failed: {reason}"
-        case_results: List[EvalCaseResult] = []
-        for c in cases:
-            case_results.append(EvalCaseResult(
-                case_id=str(getattr(c, "case_id", 0)),
-                level=level,
-                operator=operator_name,
-                case_num=int(getattr(c, "case_id", 0) or 0),
-                success=False,
-                error_msg=short,
-            ))
-
-        return EvalOperatorResult(
-            operator=operator_name,
-            level=level,
-            total_cases=len(case_results),
-            passed_cases=0,
-            failed_cases=len(case_results),
-            skipped_cases=0,
-            results=case_results,
-            pass_rate=0.0,
-            avg_speedup=0.0,
-            subprocess_failure_reason=reason,
-        )
-
-    def _run_operator_subprocess(
-        self,
-        operator_name: str,
-        level: int,
-        source_dir: str,
-        case_filter: Optional[Dict],
-        timeout_sec: int,
-    ) -> EvalOperatorResult:
-        """Fork 一个子进程运行单个算子的评测。子进程用 --skip-install
-        +  --no-subprocess-isolation 避免重复安装和无限递归；超时先 SIGTERM
-        给 finally 块做 NPU 清理的机会，10s 宽限后 SIGKILL。成功则 load 子
-        进程写出的 JSON，lift 出这个算子的 EvalOperatorResult；异常则合成
-        一条 subprocess_failure_reason 记录。"""
-        import json as _json
-        import subprocess as _sp
-        import tempfile as _tf
-
-        fd, frag_path = _tf.mkstemp(suffix=".json", prefix="cannbench_child_")
-        os.close(fd)
-        try:
-            # 子进程通过 `python -m kernel_eval.cli eval --source-dir X
-            # --operator <name> --skip-install --no-subprocess-isolation
-            # --child-json-output <frag>` 的形式被调起。skip-install 走
-            # prepare_skip_build 路径（wheel 已安装，不用再跑 build）。
-            cmd = [
-                sys.executable, "-m", "kernel_eval.cli", "eval",
-                "--source-dir", str(source_dir),
-                "--operator", operator_name,
-                "--child-json-output", frag_path,
-                "--no-subprocess-isolation",
-                "--skip-install",
-            ]
-            if case_filter and "case_id" in case_filter:
-                cmd += ["--case-id", str(case_filter["case_id"])]
-
-            print(f"[INFO] {operator_name}: subprocess (timeout {timeout_sec}s)")
-            # 确保子进程能找到 kernel_eval 模块：将当前模块所在目录（src/）添加到 PYTHONPATH
-            env = os.environ.copy()
-            kernel_eval_root = str(Path(__file__).parent.parent.parent)  # evaluator.py -> eval -> kernel_eval -> src
-            existing_pythonpath = env.get("PYTHONPATH", "")
-            if existing_pythonpath:
-                # 避免重复添加
-                paths = existing_pythonpath.split(":")
-                if kernel_eval_root not in paths:
-                    env["PYTHONPATH"] = f"{kernel_eval_root}:{existing_pythonpath}"
-            else:
-                env["PYTHONPATH"] = kernel_eval_root
-            proc = _sp.Popen(cmd, start_new_session=True, env=env)
+        if dtype is None:
             try:
-                rc = proc.wait(timeout=timeout_sec)
-                if rc != 0:
-                    return self._synthesize_subprocess_failure(
-                        operator_name, level,
-                        f"subprocess exited rc={rc}", case_filter,
-                    )
-            except _sp.TimeoutExpired:
-                print(f"[WARN] {operator_name} 超过 {timeout_sec}s — SIGTERM")
-                proc.terminate()
-                try:
-                    proc.wait(timeout=10)
-                except _sp.TimeoutExpired:
-                    print(f"[WARN] {operator_name} 宽限后仍未退出 — SIGKILL")
-                    proc.kill()
-                    proc.wait()
-                return self._synthesize_subprocess_failure(
-                    operator_name, level,
-                    f"exceeded {timeout_sec}s timeout — killed", case_filter,
-                )
-
-            if not os.path.exists(frag_path) or os.path.getsize(frag_path) == 0:
-                return self._synthesize_subprocess_failure(
-                    operator_name, level,
-                    "subprocess produced no output", case_filter,
-                )
-            try:
-                data = _json.loads(Path(frag_path).read_text())
-            except Exception as e:
-                return self._synthesize_subprocess_failure(
-                    operator_name, level,
-                    f"parse child JSON: {e}", case_filter,
-                )
-            ops = data.get("operators", [])
-            if not ops:
-                return self._synthesize_subprocess_failure(
-                    operator_name, level,
-                    "subprocess output had no operators", case_filter,
-                )
-            # rehydrate EvalOperatorResult from dict — 最小必要字段
-            op_d = ops[0]
-            case_results: List[EvalCaseResult] = []
-            for r in op_d.get("results", []):
-                case_results.append(EvalCaseResult(
-                    case_id=str(r.get("case_id", "")),
-                    level=r.get("level", level),
-                    operator=r.get("operator", operator_name),
-                    case_num=int(r.get("case_num", r.get("case_id", 0) or 0)),
-                    success=bool(r.get("success", False)),
-                    error_msg=r.get("error_msg"),
-                    baseline_perf_us=r.get("baseline_perf_us", 0.0),
-                ))
-            return EvalOperatorResult(
-                operator=op_d.get("operator", operator_name),
-                level=op_d.get("level", level),
-                total_cases=op_d.get("total_cases", len(case_results)),
-                passed_cases=op_d.get("passed_cases", 0),
-                failed_cases=op_d.get("failed_cases", len(case_results)),
-                skipped_cases=op_d.get("skipped_cases", 0),
-                results=case_results,
-                pass_rate=op_d.get("pass_rate", 0.0),
-                avg_speedup=op_d.get("avg_speedup", 0.0),
-            )
-        finally:
-            try:
-                os.unlink(frag_path)
-            except OSError:
+                op_info = self.operator_loader.get_operator(case.rel_path)
+                if op_info and op_info.outputs and op_info.outputs[0].dtype:
+                    output_dtype_list = op_info.outputs[0].dtype
+                    dtype = output_dtype_list[0] if isinstance(output_dtype_list, list) else output_dtype_list
+            except Exception:
                 pass
+
+        return dtype or (case.dtypes[0] if case.dtypes else 'float32')
+
+    def _format_elapsed(self, result) -> str:
+        """格式化耗时"""
+        if result.success and result.perf_result and result.perf_result.elapsed_us > 0:
+            return f"{result.perf_result.elapsed_us:.2f}μs"
+        elif result.ai_run_result and result.ai_run_result.elapsed_us > 0:
+            return f"{result.ai_run_result.elapsed_us:.2f}μs"
+        return "N/A"
 
     def _filter_cases(self, cases: List[CaseInfo], filter_dict: Dict) -> List[CaseInfo]:
         """筛选用例"""
@@ -976,21 +647,19 @@ class Evaluator:
             result = [c for c in result if filter_dict['dtype'].lower() in [d.lower() for d in c.dtypes]]
         return result
 
-    def _get_merged_thresholds(self, operator: str, level: int) -> Dict[str, float]:
-        """获取合并后的精度阈值（全局 + 自定义，自定义优先）"""
-        # 从proto.yaml获取自定义阈值
-        op_info = self.operator_loader.get_operator(operator, level)
+    def _get_merged_thresholds(self, rel_path: str) -> Dict[str, float]:
+        """获取合并后的精度阈值"""
+        op_info = self.operator_loader.get_operator(rel_path)
         if op_info and op_info.precision_thresholds:
-            # 合并：全局阈值为基础，自定义阈值覆盖
             merged = dict(self.config.precision_thresholds)
             merged.update(op_info.precision_thresholds)
             return merged
         return self.config.precision_thresholds
 
-    def _get_ignore_output_indices(self, operator: str, level: int) -> List[int]:
-        """获取需要忽略对比的输出索引列表"""
+    def _get_ignore_output_indices(self, rel_path: str) -> List[int]:
+        """获取需要忽略对比的输出索引"""
         ignore_indices = []
-        op_info = self.operator_loader.get_operator(operator, level)
+        op_info = self.operator_loader.get_operator(rel_path)
         if op_info and op_info.outputs:
             for idx, output in enumerate(op_info.outputs):
                 if not output.compare:
@@ -998,21 +667,19 @@ class Evaluator:
         return ignore_indices
 
     def _cleanup_memory(self):
-        """清理内存"""
-        gc.collect()
+        """清理 NPU cache（不触发完整 GC，引用计数足以处理大多数情况）
+
+        注意：当 NPU 设备因 AICPU 异常进入错误状态后，
+        torch_npu.npu.empty_cache() 会因设备同步失败而抛出 RuntimeError。
+        必须静默处理，避免掩盖原始算子错误。
+        """
         try:
-            import torch
-            if hasattr(torch, 'cuda') and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            try:
-                import torch_npu
-                if hasattr(torch_npu, 'npu'):
-                    torch_npu.npu.empty_cache()
-            except ImportError:
-                pass
+            import torch_npu
+            if hasattr(torch_npu, 'npu') and torch.npu.is_available():
+                torch_npu.npu.empty_cache()
         except Exception:
             pass
 
     def shutdown(self):
-        """关闭评测器，释放资源"""
+        """关闭评测器"""
         self.perf_evaluator.shutdown()

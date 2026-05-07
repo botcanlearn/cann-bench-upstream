@@ -26,11 +26,13 @@
 参考evaluation/core/precision_checker.py
 """
 
-import torch
 from typing import Any, Dict, List, Optional, Union, Tuple, Callable
 from dataclasses import dataclass
 
+import torch
+
 from ..utils.precision import compare_tensors, CompareResult, PRECISION_THRESHOLDS
+from ..utils.tensor_utils import tensors_to_fp64_cpu, tensors_to_cpu, tensors_to_device
 from ..security.type_checker import check_output_type, check_multi_output
 
 
@@ -111,26 +113,8 @@ class AccuracyEvaluator:
         Returns:
             Golden输出Tensor
         """
-        # 转换输入到CPU fp64 —— 只对浮点 tensor 做 upcast，整型/bool 保持原 dtype。
-        # 否则像 GCD（int16/int32 输入）、CrossEntropyLoss（int64 target）这类
-        # 算子的 golden 会在 CPU 上因为 dtype 错误报错，例如：
-        #   "gcd_cpu not implemented for 'Double'"
-        #   "expected scalar type Long but found Double"
-        def _to_fp64_golden(t: torch.Tensor) -> torch.Tensor:
-            t = t.cpu()
-            return t.double() if t.is_floating_point() else t
-
-        fp64_inputs = []
-        for item in inputs:
-            if isinstance(item, torch.Tensor):
-                fp64_inputs.append(_to_fp64_golden(item))
-            elif isinstance(item, (list, tuple)):
-                fp64_inputs.append([
-                    _to_fp64_golden(sub) if isinstance(sub, torch.Tensor) else sub
-                    for sub in item
-                ])
-            else:
-                fp64_inputs.append(item)
+        # 转换输入到CPU fp64 —— 只对浮点 tensor 做 upcast，整型/bool 保持原 dtype
+        fp64_inputs = tensors_to_fp64_cpu(inputs)
 
         # 构建调用参数
         params = param_builder.build_call_params(golden_fn, case, fp64_inputs)
@@ -299,15 +283,7 @@ class AccuracyEvaluator:
 
             # CPU 原精度计算 - 用于小值域比较
             # 使用原始 dtype 的输入直接调用 golden_fn
-            cpu_inputs = []
-            for item in inputs:
-                if isinstance(item, torch.Tensor):
-                    cpu_inputs.append(item.cpu())
-                elif isinstance(item, (list, tuple)):
-                    cpu_inputs.append([sub.cpu() if isinstance(sub, torch.Tensor) else sub for sub in item])
-                else:
-                    cpu_inputs.append(item)
-
+            cpu_inputs = tensors_to_cpu(inputs)
             cpu_params = param_builder.build_call_params(golden_fn, case, cpu_inputs)
             with torch.no_grad():
                 cpu_out = golden_fn(**cpu_params)
@@ -317,14 +293,7 @@ class AccuracyEvaluator:
 
             # Custom算子计算（NPU或CPU）
             if device.startswith('npu'):
-                npu_inputs = []
-                for item in inputs:
-                    if isinstance(item, torch.Tensor):
-                        npu_inputs.append(item.to(device))
-                    elif isinstance(item, (list, tuple)):
-                        npu_inputs.append([sub.to(device) if isinstance(sub, torch.Tensor) else sub for sub in item])
-                    else:
-                        npu_inputs.append(item)
+                npu_inputs = tensors_to_device(inputs, device)
                 flat_inputs = [t if isinstance(t, torch.Tensor) else t[0] for t in npu_inputs]
             else:
                 flat_inputs = [t if isinstance(t, torch.Tensor) else t[0] for t in inputs]

@@ -28,13 +28,13 @@ kernel_eval 评测工程包
 
     # 加载算子信息
     from kernel_eval.data.operator_loader import OperatorLoader
-    loader = OperatorLoader()
-    op_info = loader.get_operator("Exp", level=1)
+    loader = OperatorLoader("kernel_bench")
+    op_info = loader.get_operator("level1/Exp")
 
     # 执行评测
     from kernel_eval.eval.evaluator import Evaluator
     evaluator = Evaluator()
-    results = evaluator.evaluate_operator("Exp", level=1)
+    results = evaluator.evaluate_operator(operator="Exp", rel_path="level1/Exp")
 """
 
 __version__ = "0.1.0"

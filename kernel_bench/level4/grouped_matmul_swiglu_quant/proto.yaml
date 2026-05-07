@@ -21,7 +21,17 @@ operator:
     act = SiLU(left) * right                                # SwiGLU
     y, y_scale = PerTokenQuant(act)                         # 再量化
   description: MoE FFN 场景下的分组矩阵乘 + SwiGLU + 量化融合算子，对齐 torch_npu.npu_grouped_matmul_swiglu_quant_v2 默认配置
-  shape_support: 'x: [M, K], weight: [E, K, N], weight_scale: [E, N], x_scale: [M], group_list: [E]; 输出 y: [M, N/2], y_scale: [M]'
+  shape_support: 'x: [M, K], weight: [E, K, N], weight_scale: [E, N], x_scale: [M]; 输出 y: [M, N/2], y_scale: [M]'
+  # int8 量化输出允许 ±1 的差异（量化过程中的浮点舍入差异）
+  # y_scale (float32) 使用正常精度阈值
+  precision_thresholds:
+    int8: 1        # 允许 ±1 的量化差异
+    float32: 0.001  # y_scale 使用标准精度
+  attrs:
+  - name: group_list
+    type: List[int]
+    description: 分组 token 累计和（cumsum 语义），长度为 E，值为每组的 token 结束边界
+    required: true
   inputs:
   - name: x
     description: 矩阵乘法左矩阵（激活，已完成 per-token 量化），支持非连续 Tensor
@@ -43,11 +53,6 @@ operator:
     dtype:
     - float32
     shape: '[M]'
-  - name: group_list
-    description: 分组 token 累计和（cumsum 语义）
-    dtype:
-    - int32
-    shape: '[E]'
   outputs:
   - name: y
     description: SwiGLU 后的 per-token int8 量化输出
@@ -59,5 +64,4 @@ operator:
     dtype:
     - float32
     shape: '[M]'
-  schema: grouped_matmul_swiglu_quant(Tensor x, Tensor weight, Tensor weight_scale,
-    Tensor x_scale, Tensor group_list) -> (Tensor y, Tensor y_scale)
+  schema: grouped_matmul_swiglu_quant(Tensor x, Tensor weight, Tensor weight_scale, Tensor x_scale, int[] group_list) -> (Tensor y, Tensor y_scale)

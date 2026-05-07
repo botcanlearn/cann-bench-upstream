@@ -60,7 +60,12 @@ def dequant_swiglu_quant(
     result = swiglu(x_float, activate_left)
     
     # INT8 量化
-    scale = (127.0 / result.abs().max()).to(torch.float32)
-    y = torch.clamp((result.float() * scale.item()).round(), -128, 127).to(torch.int8)
+    max_val = result.abs().max()
+    if max_val == 0:
+        # 处理全零情况，避免 scale=inf
+        y = torch.zeros_like(result, dtype=torch.int8)
+    else:
+        scale = (127.0 / max_val).to(torch.float32)
+        y = torch.clamp((result.float() * scale.item()).round(), -128, 127).to(torch.int8)
 
     return y

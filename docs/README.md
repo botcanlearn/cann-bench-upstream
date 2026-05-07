@@ -1,8 +1,16 @@
 # CANN 算子代码生成评测文档
 
-**文档版本：V0.1.1**
+**文档版本：V0.2.0**
 
 本目录包含算子代码生成评测体系的完整文档，按主题分类组织。
+
+**V0.2.0 更新说明**（2026-04-30）：
+- Profiling 升级为 Level1/Level2（删除 Level0）
+- 安全层 APIGuard 系统性集成
+- Config 依赖注入（支持多实例并行评测）
+- 进程隔离简化（取消用例级，保留算子级）
+- YAML 格式校验（WARNING 输出）
+- CLI 参数增强（--device、--warmup、--repeat、--profiler-level）
 
 ## 文档索引
 
@@ -21,7 +29,8 @@
 
 | 文档 | 说明 |
 |------|------|
-| [evaluator_design.md](design/evaluator_design.md) | 评测工程设计：评测器架构、安全防护、性能采集、报告生成 |
+| [evaluator_design.md](design/evaluator_design.md) | 评测工程设计：评测器架构、安全防护、报告生成 |
+| [perf_collection_design.md](design/perf_collection_design.md) | 性能采集设计：NPU Profiler、Trace 解析、升频清 Cache |
 
 ### 指南类文档 (guide/)
 

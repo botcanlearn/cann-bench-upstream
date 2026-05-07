@@ -16,7 +16,7 @@ cases:
   dtype: [float16]
   attrs: {dim: -1}
   value_range: [-1, 1]
-  baseline_perf_us: 19.12
+  baseline_perf_us: 20.26
   note: S-float16-1M-对齐-对称小值域-dim=-1
 - operator: Softmax
   case_id: 2
@@ -25,7 +25,7 @@ cases:
   dtype: [float32]
   attrs: {dim: -1}
   value_range: [-2, 2]
-  baseline_perf_us: 37.60
+  baseline_perf_us: 37.6
   note: M-float32-4M-对齐-对称小值域-dim=-1
 - operator: Softmax
   case_id: 3
@@ -34,7 +34,7 @@ cases:
   dtype: [bfloat16]
   attrs: {dim: -1}
   value_range: [-3, 3]
-  baseline_perf_us: 92.42
+  baseline_perf_us: 92.52
   note: M-bfloat16-16M-对齐-对称小值域-dim=-1
 - operator: Softmax
   case_id: 4
@@ -43,7 +43,7 @@ cases:
   dtype: [float16]
   attrs: {dim: 0}
   value_range: [-10, 10]
-  baseline_perf_us: 1297.45
+  baseline_perf_us: 1306.65
   note: L-float16-67M-对齐-对称中值域-dim=0
 - operator: Softmax
   case_id: 5
@@ -70,7 +70,7 @@ cases:
   dtype: [float16]
   attrs: {dim: -1}
   value_range: [-0.1, 0.1]
-  baseline_perf_us: 19.98
+  baseline_perf_us: 20.02
   note: S-float16-2M-非对齐-对称微小值域-dim=-1
 - operator: Softmax
   case_id: 8
@@ -106,7 +106,7 @@ cases:
   dtype: [float32]
   attrs: {dim: 1}
   value_range: [-50, 100]
-  baseline_perf_us: 1067.96
+  baseline_perf_us: 1068.19
   note: L-float32-51M-质数非对齐-3D-dim=1
 - operator: Softmax
   case_id: 12
@@ -115,7 +115,7 @@ cases:
   dtype: [bfloat16]
   attrs: {dim: -1}
   value_range: [-3, 6]
-  baseline_perf_us: 62.60
+  baseline_perf_us: 62.6
   note: M-bfloat16-9M-质数非对齐-4D-dim=-1
 - operator: Softmax
   case_id: 13
@@ -124,7 +124,7 @@ cases:
   dtype: [float16]
   attrs: {dim: -1}
   value_range: [-inf, inf]
-  baseline_perf_us: 194.28
+  baseline_perf_us: 220.9
   note: S-float16-2M-质数非对齐-inf特殊值
 - operator: Softmax
   case_id: 14
@@ -151,7 +151,7 @@ cases:
   dtype: [float16]
   attrs: {dim: 0}
   value_range: [-0.5, 0.5]
-  baseline_perf_us: 41.74
+  baseline_perf_us: 43.36
   note: S-float16-1M-非对齐-dim=0
 - operator: Softmax
   case_id: 17
@@ -160,7 +160,7 @@ cases:
   dtype: [float32]
   attrs: {dim: 1}
   value_range: [-1000, 1000]
-  baseline_perf_us: 18.96
+  baseline_perf_us: 19.69
   note: S-float32-2M-非对齐-对称大值域-dim=1
 - operator: Softmax
   case_id: 18
@@ -169,7 +169,7 @@ cases:
   dtype: [bfloat16]
   attrs: {dim: -1}
   value_range: [-0.2, 0.2]
-  baseline_perf_us: 20.10
+  baseline_perf_us: 20.1
   note: S-bfloat16-2M-非对齐-对称微小值域-3D
 - operator: Softmax
   case_id: 19
@@ -178,7 +178,7 @@ cases:
   dtype: [float16]
   attrs: {dim: 1}
   value_range: [-65504, 65504]
-  baseline_perf_us: 52.90
+  baseline_perf_us: 53.81
   note: S-float16-2M-非对齐-float16边界值-dim=1
 - operator: Softmax
   case_id: 20

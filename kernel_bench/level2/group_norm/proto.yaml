@@ -19,6 +19,10 @@ operator:
     x (input): (N, C, ...) - N=batch size, C=通道数，后续为空间维度
     gamma (weight): (C,) - 缩放参数
     beta (bias): (C,) - 偏置参数
+  precision_thresholds:
+    float16: 0.005  # float16归一化累积误差
+    float32: 0.005  # float32归一化累积误差
+    bfloat16: 0.01  # bfloat16归一化累积误差较大
   attrs:
   - name: num_groups
     type: int

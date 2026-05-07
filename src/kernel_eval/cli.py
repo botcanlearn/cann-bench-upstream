@@ -30,11 +30,17 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-from .config import Config, get_config, set_config
+from .config import Config, get_config, get_project_root, set_config
 from .data.operator_loader import OperatorLoader
 from .data.case_loader import CaseLoader
 from .eval.evaluator import Evaluator
 from .report.report_generator import ReportGenerator
+
+# 尝试导入 cann_bench_golden，触发 torch.ops.cann_bench 注册
+try:
+    import cann_bench_golden
+except ImportError:
+    pass
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -50,14 +56,30 @@ def create_parser() -> argparse.ArgumentParser:
     eval_parser = subparsers.add_parser('eval', help='执行评测')
     eval_parser.add_argument('--source-dir', type=str, default=None,
                              help='AI生成的算子源码目录（不指定则使用已安装的cann_bench）')
+    eval_parser.add_argument('--task-dir', type=str, default=None,
+                             help='评测目录（bench根目录或算子目录），替代 --level。'
+                                  '支持: kernel_bench, kernel_bench/level1, kernel_bench/level1/exp 等')
     eval_parser.add_argument('--operator', type=str, default=None,
                              help='算子名称（如 Exp, Softmax）')
     eval_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
-                             help='难度级别筛选')
+                             help='难度级别筛选（已废弃，建议使用 --task-dir）')
     eval_parser.add_argument('--case-id', type=int, default=None,
                              help='用例编号筛选')
-    eval_parser.add_argument('--device-id', type=int, default=0,
-                             help='NPU 设备 ID（默认: 0）')
+    eval_parser.add_argument('--device-id', type=int, default=None,
+                             help='NPU 设备 ID（单卡模式）。不指定则自动使用全部可用卡（多卡并行）')
+    eval_parser.add_argument('--device', type=str, default='npu',
+                             choices=['cpu', 'npu'],
+                             help='设备类型（默认: npu）')
+    eval_parser.add_argument('--processes-per-card', type=int, default=2,
+                             help='每卡进程数（多卡并行模式，默认: 2）')
+    eval_parser.add_argument('--timeout-per-process', type=int, default=300,
+                             help='单进程超时（秒，多卡并行模式，默认: 300）')
+    eval_parser.add_argument('--warmup', type=int, default=3,
+                             help='预热次数（默认: 3）')
+    eval_parser.add_argument('--repeat', type=int, default=5,
+                             help='采集次数（默认: 5）')
+    eval_parser.add_argument('--reports-dir', type=str, default='reports',
+                             help='报告输出目录（默认: reports）')
     eval_parser.add_argument('--output', type=str, default=None,
                              help='报告输出目录')
     eval_parser.add_argument('--eval-code', type=str, default=None,
@@ -77,6 +99,10 @@ def create_parser() -> argparse.ArgumentParser:
                                   '提交直接判定为失败，用于想要严格"全过或全挂"的场景。')
     eval_parser.add_argument('--no-perf', action='store_true',
                              help='关闭性能采集，仅做精度验证')
+    eval_parser.add_argument('--profiler-level', type=str, default='Level1',
+                             choices=['Level1', 'Level2'],
+                             help='Profiler 级别（默认: Level1）。Level1 产出 47 列 CSV，'
+                                  'Level2 增加更详细的 AICPU 采集。')
     # 内部开关：子进程模式下由父进程传入，不要手工设置
     eval_parser.add_argument('--skip-install', action='store_true',
                              help=argparse.SUPPRESS)
@@ -106,32 +132,121 @@ def create_parser() -> argparse.ArgumentParser:
     config_parser.add_argument('--reports-dir', type=str, default=None,
                                help='设置报告输出目录')
 
+    # eval-process 命令（进程池子进程专用）
+    eval_process_parser = subparsers.add_parser('eval-process', help='进程池子进程执行')
+    eval_process_parser.add_argument('--process-id', type=int, required=True,
+                                      help='进程 ID')
+    eval_process_parser.add_argument('--card-id', type=int, required=True,
+                                      help='NPU 卡 ID')
+    eval_process_parser.add_argument('--output', type=str, required=True,
+                                      help='结果输出文件路径')
+    eval_process_parser.add_argument('--operators', type=str, default=None,
+                                      help='算子列表（逗号分隔，operator_parallel 模式）')
+    eval_process_parser.add_argument('--rel-paths', type=str, default=None,
+                                      help='算子相对路径列表（逗号分隔，rel_path_parallel 模式）')
+    eval_process_parser.add_argument('--cases-file', type=str, default=None,
+                                      help='用例数据文件（case_parallel 模式）')
+    eval_process_parser.add_argument('--warmup', type=int, default=3,
+                                      help='预热次数')
+    eval_process_parser.add_argument('--repeat', type=int, default=5,
+                                      help='采集次数')
+    eval_process_parser.add_argument('--enable-profiler', action='store_true',
+                                      help='启用 profiler 性能采集')
+
     return parser
+
+
+def _resolve_operator_info(operator_name: str, config):
+    """按算子名称查找 OperatorInfo，返回 None 若未找到"""
+    try:
+        from .data.operator_loader import OperatorLoader
+        loader = OperatorLoader(config.kernel_bench_root)
+        return loader.get_operator_by_name(operator_name)
+    except Exception:
+        return None
+
+
+def _resolve_dir_arg(dir_arg: str, project_root: Path) -> tuple:
+    """解析 --task-dir 参数，确定 bench_root 和筛选路径
+
+    Args:
+        dir_arg: 用户指定的目录路径
+        project_root: 项目根目录
+
+    Returns:
+        (bench_root, filter_prefix 或 None)
+        filter_prefix: 用于筛选算子的路径前缀，如 "level1" 或 "level2/scatter"
+    """
+    if dir_arg is None:
+        return str(project_root / "kernel_bench"), None
+
+    dir_path = Path(dir_arg)
+    if not dir_path.exists():
+        dir_path = project_root / dir_arg
+        if not dir_path.exists():
+            raise ValueError(f"目录不存在: {dir_arg}")
+
+    bench_root = dir_path
+    while bench_root.name != 'kernel_bench' and bench_root != project_root:
+        bench_root = bench_root.parent
+
+    if bench_root == project_root:
+        bench_root = dir_path
+        filter_prefix = None
+    else:
+        try:
+            filter_prefix = str(dir_path.relative_to(bench_root))
+        except ValueError:
+            filter_prefix = None
+
+    if filter_prefix == ".":
+        filter_prefix = None
+
+    return str(bench_root), filter_prefix
 
 
 def cmd_eval(args):
     """执行评测命令"""
+    project_root = get_project_root()
+
+    # 解析 --task-dir 参数
+    bench_root, filter_prefix = _resolve_dir_arg(args.task_dir, project_root)
+
     # 创建配置
     config = Config()
+    config.kernel_bench_root = bench_root
 
-    if getattr(args, 'kernel_bench_root', None):
-        config.kernel_bench_root = args.kernel_bench_root
+    if getattr(args, 'reports_dir', None):
+        config.reports_dir = args.reports_dir
     if args.output:
         config.reports_dir = args.output
     if args.source_dir:
         config.source_dir = args.source_dir
-    if hasattr(args, 'device_id'):
-        config.device_id = args.device_id
+
+    # 设备配置
+    if args.device == 'cpu':
+        config.device_type = 'cpu'
+        config.device_id = 0
+    else:
+        config.device_type = 'npu'
+        config.device_id = getattr(args, 'device_id', None) or 0
+
+    if hasattr(args, 'warmup'):
+        config.warmup = args.warmup
+    if hasattr(args, 'repeat'):
+        config.repeat = args.repeat
     if getattr(args, 'no_perf', False):
         config.enable_profiler = False
+    if hasattr(args, 'profiler_level'):
+        config.profiler_level = args.profiler_level
 
     set_config(config)
 
-    # 初始化评测器
-    evaluator = Evaluator(config)
+    # 初始化报告生成器
     report_generator = ReportGenerator(
-        output_dir=args.output,
+        output_dir=config.reports_dir,
         eval_code=args.eval_code,
+        config=config,
     )
 
     # 构建筛选条件
@@ -143,13 +258,93 @@ def cmd_eval(args):
 
     subprocess_isolation = not getattr(args, 'no_subprocess_isolation', False)
     op_timeout_sec = getattr(args, 'op_timeout_sec', 240)
+    case_timeout_sec = getattr(args, 'case_timeout_sec', None)
+    case_subprocess_isolation = True
     skip_install = getattr(args, 'skip_install', False)
     child_json_output = getattr(args, 'child_json_output', None)
     iterative_compile = not getattr(args, 'no_iterative_compile', False)
 
-    # 确定评测方式
-    if args.source_dir and not skip_install:
-        # 从源码目录评测（自动扫描、迭代编译、安装、并行评测）
+    # 判断是否使用多卡并行模式
+    # 多卡模式条件：NPU 设备 + 未指定 device_id + 未指定 source_dir（Golden 模式）
+    use_multi_card = (
+        args.device == 'npu'
+        and getattr(args, 'device_id', None) is None
+        and not args.source_dir
+    )
+
+    if use_multi_card:
+        # 多卡并行模式（使用 ProcessPoolCoordinator）
+        from .eval.process_pool import ProcessPoolCoordinator, ProcessConfig
+        from .data.case_loader import CaseLoader
+        import time
+
+        processes_per_card = getattr(args, 'processes_per_card', 2)
+        timeout_per_process = getattr(args, 'timeout_per_process', 300)
+
+        loader = CaseLoader(bench_root)
+        all_cases = loader.scan_all_cases()
+
+        if filter_prefix:
+            all_cases = [
+                c for c in all_cases
+                if c.rel_path.startswith(filter_prefix + '/') or c.rel_path == filter_prefix
+            ]
+
+        if args.operator:
+            all_cases = [c for c in all_cases if c.operator.lower() == args.operator.lower()]
+
+        if args.case_id:
+            all_cases = [c for c in all_cases if c.case_id == args.case_id]
+
+        if not all_cases:
+            print("[WARN] 无匹配用例")
+            return 0
+
+        rel_paths = list(set(c.rel_path for c in all_cases))
+
+        print(f"\n[INFO] 多卡并行模式")
+        print(f"[INFO] Bench目录: {bench_root}")
+        if filter_prefix:
+            print(f"[INFO] 筛选路径: {filter_prefix}")
+        print(f"[INFO] 算子数: {len(rel_paths)}, 用例数: {len(all_cases)}")
+        print(f"[INFO] 每卡进程数: {processes_per_card}")
+        print(f"[INFO] 进程超时: {timeout_per_process}s")
+        print(f"[INFO] Warmup/Repeat: {args.warmup}/{args.repeat}")
+        if args.no_perf:
+            print("[INFO] 性能采集: 关闭")
+
+        process_config = ProcessConfig(
+            processes_per_card=processes_per_card,
+            timeout_per_process=timeout_per_process,
+            enable_profiler=not args.no_perf,
+        )
+
+        coordinator = ProcessPoolCoordinator(
+            base_config=config,
+            process_config=process_config,
+            device_id=None,
+        )
+
+        if coordinator.card_count == 0:
+            print("[ERROR] 无可用 NPU 卡")
+            return 1
+
+        print(f"[INFO] 使用 {coordinator.total_processes} 个进程并行")
+
+        start_time = time.time()
+        all_results = coordinator.evaluate_operators(rel_paths=rel_paths)
+        total_time = time.time() - start_time
+
+        for op_result in all_results:
+            report_generator.add_operator_result(op_result)
+
+        print(f"\n[效率] 总耗时: {total_time:.2f}s")
+        coordinator.shutdown()
+
+    elif args.source_dir and not skip_install:
+        # 从源码目录评测
+        evaluator = Evaluator(config)
+
         session_result = evaluator.evaluate_from_source(
             source_dir=args.source_dir,
             operator_filter=operator_filter,
@@ -157,39 +352,55 @@ def cmd_eval(args):
             verbose=args.verbose,
             subprocess_isolation=subprocess_isolation,
             op_timeout_sec=op_timeout_sec,
+            case_timeout_sec=case_timeout_sec,
+            case_subprocess_isolation=case_subprocess_isolation,
             iterative_compile=iterative_compile,
         )
         for op_result in session_result.operators:
             report_generator.add_operator_result(op_result)
+        evaluator.shutdown()
 
     elif args.source_dir and skip_install:
-        # --skip-install：子进程模式下父进程已经装好 wheel，这里只要扫描
-        # 已安装的 cann_bench 跑指定算子即可（内部不再 fork 子进程）
-        session_result = evaluator.evaluate_skip_build(
-            operator_filter=operator_filter,
-            case_filter=case_filter,
-        )
-        for op_result in session_result.operators:
-            report_generator.add_operator_result(op_result)
+        evaluator = Evaluator(config)
 
-    else:
-        # 不指定source-dir，使用已安装的cann_bench评测
-        if operator_filter and args.level:
-            # 仅执行Golden验证（不安装whl包）
-            result = evaluator.evaluate_golden_only(
+        if args.operator:
+            op_info = _resolve_operator_info(args.operator, config)
+            result = evaluator.evaluate_operator(
                 operator=args.operator,
-                level=args.level,
+                rel_path=op_info.rel_path if op_info else args.operator,
                 case_filter=case_filter,
             )
             report_generator.add_operator_result(result)
         else:
-            # 评测已安装的cann_bench所有匹配的算子
+            session_result = evaluator.evaluate_skip_build(
+                operator_filter=operator_filter,
+                case_filter=case_filter,
+                operator_subprocess_isolation=subprocess_isolation,
+            )
+            for op_result in session_result.operators:
+                report_generator.add_operator_result(op_result)
+        evaluator.shutdown()
+
+    else:
+        # 单卡 Golden 模式
+        evaluator = Evaluator(config)
+
+        if args.operator:
+            op_info = _resolve_operator_info(args.operator, config)
+            result = evaluator.evaluate_golden_only(
+                operator=args.operator,
+                rel_path=op_info.rel_path if op_info else args.operator,
+                case_filter=case_filter,
+            )
+            report_generator.add_operator_result(result)
+        else:
             session_result = evaluator.evaluate_skip_build(
                 operator_filter=operator_filter,
                 case_filter=case_filter,
             )
             for op_result in session_result.operators:
                 report_generator.add_operator_result(op_result)
+        evaluator.shutdown()
 
     # 生成报告
     report = report_generator.generate()
@@ -224,27 +435,26 @@ def cmd_list(args):
         # 列出用例
         case_loader = CaseLoader(config.kernel_bench_root)
 
-        if args.level and args.operator:
-            cases = case_loader.scan_by_operator(args.level, args.operator)
-        elif args.level:
-            cases = case_loader.scan_by_level(args.level)
+        if args.operator:
+            cases = case_loader.scan_by_operator(args.operator)
         else:
             cases = case_loader.scan_all_cases()
 
         print(f"\n共 {len(cases)} 个用例:")
         for case in cases[:50]:  # 限制显示数量
-            print(f"  L{case.level}_{case.operator}_{case.case_id}: {case.dtypes}")
+            print(f"  {case.rel_path}_{case.operator}_{case.case_id}: {case.dtypes}")
         if len(cases) > 50:
             print(f"  ... 还有 {len(cases) - 50} 个用例")
 
     else:
         # 列出算子
         operator_loader = OperatorLoader(config.kernel_bench_root)
-        operators = operator_loader.list_operators(args.level)
+        operators = operator_loader.list_operators()
 
         print(f"\n共 {len(operators)} 个算子:")
         for op in operators:
-            print(f"  {op.name} (L{op.level}): {op.category} - {op.description[:50]}")
+            diff_info = f" ({op.difficulty})" if op.difficulty else ""
+            print(f"  {op.name}{diff_info}: {op.category} - {op.description[:50]}")
 
     return 0
 
@@ -254,27 +464,14 @@ def cmd_info(args):
     config = get_config()
     operator_loader = OperatorLoader(config.kernel_bench_root)
 
-    # 查找算子
-    level = args.level
-    if level is None:
-        # 在所有level中查找
-        for lv in [1, 2, 3, 4]:
-            try:
-                op_info = operator_loader.get_operator(args.operator, lv)
-                level = lv
-                break
-            except FileNotFoundError:
-                continue
-
-    if level is None:
+    op_info = operator_loader.get_operator_by_name(args.operator)
+    if op_info is None:
         print(f"[ERROR] 算子 {args.operator} 不存在")
         return 1
 
-    op_info = operator_loader.get_operator(args.operator, level)
-
     print(f"\n算子信息:")
     print(f"  名称: {op_info.name}")
-    print(f"  级别: L{op_info.level}")
+    print(f"  路径: {op_info.rel_path}")
     print(f"  类别: {op_info.category}")
     print(f"  难度: {op_info.difficulty}")
     print(f"  公式: {op_info.formula}")
@@ -295,7 +492,7 @@ def cmd_info(args):
 
     # 显示用例统计
     case_loader = CaseLoader(config.kernel_bench_root)
-    cases = case_loader.scan_by_operator(level, args.operator)
+    cases = case_loader.scan_by_operator(args.operator)
     print(f"\n用例数: {len(cases)}")
 
     return 0
@@ -331,6 +528,311 @@ def cmd_config(args):
     return 0
 
 
+def cmd_eval_process(args):
+    """进程池子进程执行评测
+
+    由 ProcessPoolCoordinator 通过 subprocess 调用，
+    执行分配到的 operators 或 cases，结果写入 JSON 文件。
+    """
+    import os
+    import logging
+
+    # 抑制 torch_npu.profiler 的噪音日志
+    # 这些 parser error 是因为 Level1 profiler 数据不完整
+    for name in ['torch', 'torch_npu', 'torch_npu.profiler', 'ascend', ' profiler']:
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+    import torch
+    import torch_npu
+
+    # 初始化 NPU 设备
+    # 注意：必须先初始化 NPU，再设置编译模式
+    torch.npu.set_device(args.card_id)
+
+    # 关闭 JIT 编译模式
+    # 某些算子（如 ForeachNorm）在脚本模式下首次调用时
+    # JIT 编译会因内部状态未初始化而失败
+    try:
+        torch.npu.set_compile_mode(jit_compile=False)
+    except Exception as e:
+        print(f"[Process {args.process_id}] set_compile_mode failed: {e}")
+
+    # 设置环境变量
+    kernel_bench_root = os.environ.get('KERNEL_BENCH_ROOT', '')
+    if kernel_bench_root:
+        config = get_config()
+        config.kernel_bench_root = kernel_bench_root
+        set_config(config)
+
+    # 创建配置
+    config = Config()
+    config.device_type = "npu"
+    config.device_id = args.card_id
+    config.auto_fallback = False
+    config.enable_profiler = args.enable_profiler
+    config.warmup = args.warmup
+    config.repeat = args.repeat
+    set_config(config)
+
+    # 打印进程信息
+    print(f"[Process {args.process_id}] Card {args.card_id} 开始执行")
+    print(f"[Process {args.process_id}] Profiler: {args.enable_profiler}")
+
+    from .eval.evaluator import Evaluator
+    from .eval.results import EvalOperatorResult, EvalCaseResult
+    from .data.case_loader import CaseLoader, CaseInfo
+    from .data.golden_loader import GoldenLoader
+
+    evaluator = Evaluator(config)
+    results = []
+
+    try:
+        if getattr(args, 'rel_paths', None):
+            # rel_path_parallel 模式
+            rel_paths = args.rel_paths.split(',')
+
+            print(f"[Process {args.process_id}] 评测算子: {rel_paths}")
+
+            for rel_path in rel_paths:
+                print(f"[Process {args.process_id}] 开始评测算子 {rel_path}")
+                # 获取算子信息
+                from .data.operator_loader import OperatorLoader
+                op_loader = OperatorLoader(config.kernel_bench_root)
+                try:
+                    op_info = op_loader.get_operator(rel_path)
+                    operator_name = op_info.name
+                except Exception:
+                    operator_name = Path(rel_path).name
+
+                # 加载该算子的用例并评测
+                case_loader = CaseLoader(config.kernel_bench_root)
+                cases = case_loader.scan_by_rel_path(rel_path)
+
+                if not cases:
+                    print(f"[Process {args.process_id}] {rel_path}: 无用例")
+                    continue
+
+                # 评测每个用例
+                golden_loader = GoldenLoader(config.kernel_bench_root)
+                case_results = []
+                for i, case in enumerate(cases, 1):
+                    case_id_str = case.get_case_id_str()
+                    print(f"[Process {args.process_id}] [{i}/{len(cases)}] {case_id_str}")
+
+                    golden_func = golden_loader.get_golden_function(case.rel_path)
+                    result = evaluator.evaluate_case(case, golden_func)
+                    case_results.append(result)
+
+                    status = "✅" if result.success else "❌"
+                    elapsed = result.perf_result.elapsed_us if result.perf_result else 0
+                    speedup = result.get_speedup()
+                    # 精度信息
+                    acc_info = ""
+                    if result.accuracy_result:
+                        mare = result.accuracy_result.mare
+                        max_diff = result.accuracy_result.max_diff
+                        acc_info = f"MARE={mare:.6f}, max_diff={max_diff:.6f}"
+                    # speedup 信息
+                    speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
+                    error_hint = result.error_msg[:80] if result.error_msg else ""
+                    print(
+                        f"[Process {args.process_id}] [{i}/{len(cases)}] "
+                        f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
+                    )
+
+                # 合并为算子结果
+                passed = sum(1 for r in case_results if r.success)
+                failed = sum(1 for r in case_results if not r.success and r.accuracy_result is not None)
+                skipped = sum(1 for r in case_results if not r.success and r.accuracy_result is None)
+                speedups = [r.get_speedup() for r in case_results if r.success and r.get_speedup() > 0]
+                avg_speedup = sum(speedups) / len(speedups) if speedups else 0.0
+
+                op_result = EvalOperatorResult(
+                    rel_path=rel_path,
+                    operator=operator_name,
+                    total_cases=len(cases),
+                    passed_cases=passed,
+                    failed_cases=failed,
+                    skipped_cases=skipped,
+                    results=case_results,
+                    pass_rate=passed / len(cases) if len(cases) > 0 else 0.0,
+                    avg_speedup=avg_speedup,
+                )
+                results.append(op_result.to_dict())
+                print(f"[Process {args.process_id}] {rel_path}: 通过 {passed}/{len(cases)}")
+
+        elif args.operators:
+            # operator_parallel 模式（旧模式，兼容）
+            operators = args.operators.split(',')
+
+            print(f"[Process {args.process_id}] 评测算子: {operators}")
+
+            for operator in operators:
+                # 查找算子的 rel_path
+                from .data.operator_loader import OperatorLoader
+                op_loader = OperatorLoader(config.kernel_bench_root)
+                op_info = op_loader.get_operator_by_name(operator)
+                if op_info:
+                    rel_path = op_info.rel_path
+                else:
+                    print(f"[Process {args.process_id}] ERROR: 算子 {operator} 未找到")
+                    continue
+
+                print(f"[Process {args.process_id}] 开始评测算子 {operator} ({rel_path})")
+
+                # 加载用例并评测
+                case_loader = CaseLoader(config.kernel_bench_root)
+                cases = case_loader.scan_by_operator(operator)
+
+                if not cases:
+                    print(f"[Process {args.process_id}] {operator}: 无用例")
+                    continue
+
+                golden_loader = GoldenLoader(config.kernel_bench_root)
+                case_results = []
+                for i, case in enumerate(cases, 1):
+                    case_id_str = case.get_case_id_str()
+                    print(f"[Process {args.process_id}] [{i}/{len(cases)}] {case_id_str}")
+
+                    golden_func = golden_loader.get_golden_function(case.rel_path)
+                    result = evaluator.evaluate_case(case, golden_func)
+                    case_results.append(result)
+
+                    status = "✅" if result.success else "❌"
+                    elapsed = result.perf_result.elapsed_us if result.perf_result else 0
+                    speedup = result.get_speedup()
+                    # 精度信息
+                    acc_info = ""
+                    if result.accuracy_result:
+                        mare = result.accuracy_result.mare
+                        max_diff = result.accuracy_result.max_diff
+                        acc_info = f"MARE={mare:.6f}, max_diff={max_diff:.6f}"
+                    # speedup 信息
+                    speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
+                    error_hint = result.error_msg[:80] if result.error_msg else ""
+                    print(
+                        f"[Process {args.process_id}] [{i}/{len(cases)}] "
+                        f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
+                    )
+
+                passed = sum(1 for r in case_results if r.success)
+                failed = sum(1 for r in case_results if not r.success and r.accuracy_result is not None)
+                skipped = sum(1 for r in case_results if not r.success and r.accuracy_result is None)
+                speedups = [r.get_speedup() for r in case_results if r.success and r.get_speedup() > 0]
+                avg_speedup = sum(speedups) / len(speedups) if speedups else 0.0
+
+                op_result = EvalOperatorResult(
+                    rel_path=rel_path,
+                    operator=operator,
+                    total_cases=len(cases),
+                    passed_cases=passed,
+                    failed_cases=failed,
+                    skipped_cases=skipped,
+                    results=case_results,
+                    pass_rate=passed / len(cases) if len(cases) > 0 else 0.0,
+                    avg_speedup=avg_speedup,
+                )
+                results.append(op_result.to_dict())
+                print(f"[Process {args.process_id}] {operator}: 通过 {passed}/{len(cases)}")
+
+        elif args.cases_file:
+            # case_parallel 模式
+            with open(args.cases_file, 'r') as f:
+                cases_data = json.load(f)
+
+            # 重建 CaseInfo 对象
+            cases = []
+            for c in cases_data:
+                case = CaseInfo(
+                    rel_path=c['rel_path'],
+                    operator=c['operator'],
+                    case_id=c['case_id'],
+                    input_shapes=c['input_shapes'],
+                    dtypes=c['dtypes'],
+                    value_ranges=c['value_ranges'],
+                    attrs=c.get('attrs', {}),
+                    note=c.get('note', ''),
+                    yaml_path=c.get('yaml_path', ''),
+                )
+                if 'baseline_perf_us' in c:
+                    case.baseline_perf_us = c['baseline_perf_us']
+                cases.append(case)
+
+            operator = cases[0].operator if cases else 'unknown'
+            rel_path = cases[0].rel_path if cases else 'unknown'
+
+            print(f"[Process {args.process_id}] 评测用例: {len(cases)} 个 ({operator})")
+
+            # 获取 golden 函数
+            golden_loader = GoldenLoader(config.kernel_bench_root)
+
+            case_results = []
+            for i, case in enumerate(cases, 1):
+                case_id_str = case.get_case_id_str()
+                print(f"[Process {args.process_id}] [{i}/{len(cases)}] {case_id_str}")
+
+                # 使用 golden 作为 AI 算子（模拟评测）
+                golden_func = golden_loader.get_golden_function(case.rel_path)
+
+                result = evaluator.evaluate_case(case, golden_func)
+                case_results.append(result)
+
+                status = "✅" if result.success else "❌"
+                elapsed = result.perf_result.elapsed_us if result.perf_result else 0
+                speedup = result.get_speedup()
+                # 精度信息
+                acc_info = ""
+                if result.accuracy_result:
+                    mare = result.accuracy_result.mare
+                    max_diff = result.accuracy_result.max_diff
+                    acc_info = f"MARE={mare:.6f}, max_diff={max_diff:.6f}"
+                # speedup 信息
+                speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
+                error_hint = result.error_msg[:80] if result.error_msg else ""
+                print(
+                    f"[Process {args.process_id}] [{i}/{len(cases)}] "
+                    f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
+                )
+
+            # 合并为算子结果
+            passed = sum(1 for r in case_results if r.success)
+            failed = sum(1 for r in case_results if not r.success and r.accuracy_result is not None)
+            skipped = sum(1 for r in case_results if not r.success and r.accuracy_result is None)
+            speedups = [r.get_speedup() for r in case_results if r.success and r.get_speedup() > 0]
+            avg_speedup = sum(speedups) / len(speedups) if speedups else 0.0
+
+            op_result = EvalOperatorResult(
+                rel_path=rel_path,
+                operator=operator,
+                total_cases=len(cases),
+                passed_cases=passed,
+                failed_cases=failed,
+                skipped_cases=skipped,
+                results=case_results,
+                pass_rate=passed / len(cases) if len(cases) > 0 else 0.0,
+                avg_speedup=avg_speedup,
+            )
+            results.append(op_result.to_dict())
+
+        else:
+            print(f"[Process {args.process_id}] ERROR: 未指定任务")
+
+    except Exception as e:
+        print(f"[Process {args.process_id}] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        evaluator.shutdown()
+
+    # 写入结果文件
+    output_data = {"results": results, "process_id": args.process_id}
+    Path(args.output).write_text(json.dumps(output_data, ensure_ascii=False, indent=2))
+
+    print(f"[Process {args.process_id}] 完成，结果写入 {args.output}")
+
+    return 0
+
+
 def main():
     """主入口"""
     parser = create_parser()
@@ -340,8 +842,7 @@ def main():
         parser.print_help()
         return 0
 
-    # 获取项目根目录
-    project_root = Path(__file__).parent.parent.parent
+    project_root = get_project_root()
 
     # 设置默认kernel_bench路径
     config = get_config()
@@ -360,6 +861,8 @@ def main():
             ret = cmd_info(args)
         elif args.command == 'config':
             ret = cmd_config(args)
+        elif args.command == 'eval-process':
+            ret = cmd_eval_process(args)
         else:
             parser.print_help()
             ret = 0

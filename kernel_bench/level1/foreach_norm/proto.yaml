@@ -35,4 +35,4 @@ operator:
     - float32
     - float16
     - bfloat16
-  schema: foreach_norm(Tensor[] x, float scalar) -> Tensor y
+  schema: foreach_norm(Tensor[] x, float scalar) -> Tensor[] y

@@ -27,9 +27,10 @@
 参考evaluation/evaluate.py中的clone pool机制
 """
 
-import torch
 from typing import List, Any, Optional
 from dataclasses import dataclass
+
+import torch
 
 
 @dataclass

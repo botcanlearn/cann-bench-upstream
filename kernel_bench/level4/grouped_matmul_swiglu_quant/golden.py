@@ -5,14 +5,14 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
+# Please refer to the License for details. You can not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import Tuple
+from typing import Tuple, List, Union
 
 """
 GroupedMatmulSwigluQuant 算子 Torch Golden 参考实现
@@ -34,7 +34,7 @@ def grouped_matmul_swiglu_quant(
     weight: torch.Tensor,
     weight_scale: torch.Tensor,
     x_scale: torch.Tensor,
-    group_list: torch.Tensor,
+    group_list,  # List[int] from attrs, 不加 annotation 避免 param_builder 分类错误
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     分组矩阵乘法 + SwiGLU + 量化 融合算子的 Golden 实现。
@@ -44,7 +44,7 @@ def grouped_matmul_swiglu_quant(
         weight:       [E, K, N] 权重，int8
         weight_scale: [E, N] 权重反量化因子（per-channel），float32
         x_scale:      [M] 激活 per-token 反量化因子，float32
-        group_list:   [E] cumsum 语义的累计 token 数，int32
+        group_list:   cumsum 语义的累计 token 数列表（长度 E），从 attrs 传入
 
     Returns:
         y:       [M, N/2] int8，SwiGLU 后的 per-token int8 量化结果
@@ -57,7 +57,12 @@ def grouped_matmul_swiglu_quant(
     assert N % 2 == 0, "N must be even so SwiGLU can split the last dim in half"
     N_out = N // 2
 
-    ends = group_list.to(torch.int64).tolist()
+    # group_list 从 attrs 传入，可以是 List[int] 或 Tensor
+    if isinstance(group_list, torch.Tensor):
+        ends = group_list.to(torch.int64).tolist()
+    else:
+        ends = list(group_list)  # 确保是列表
+
     assert len(ends) == E and ends[-1] <= M, "group_list must be cumsum of length E and not exceed M"
     starts = [0] + ends[:-1]
 

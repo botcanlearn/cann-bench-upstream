@@ -33,9 +33,10 @@
 """
 
 import math
-import torch
 from typing import Union, Tuple, Dict, Any, Optional, List
 from dataclasses import dataclass
+
+import torch
 
 
 # 精度阈值表（采用生态算子开源精度标准）
@@ -443,7 +444,7 @@ def _compare_single_tensor(
             )
 
         # 不完全相等时，检查差值是否在容差范围内
-        diff = torch.abs(output.int() - golden.int())
+        diff = torch.abs(output.long() - golden.long())
         mismatch_mask = diff > max(threshold, 0)
         mismatch_count = int(mismatch_mask.sum())
 
@@ -715,12 +716,19 @@ def _compare_single_tensor(
     # 最终通过条件: 正常值域通过 且 小值域通过 且 相消位置通过
     passed = normal_passed and small_value_passed and cancel_passed
 
+    # 返回的 mere/mare 应与判定是否通过的指标一致
+    # 使用排除小值域和相消位置后的值，让用户看到的指标与通过判定一致
+    # 如果存在正常值域位置，使用 normal_mere/normal_mare
+    # 如果所有位置都在小值域/相消位置，则 mere/mare 为 0（通过判定已由小值域/相消标准处理）
+    display_mere = normal_mere if len(normal_relative_error) > 0 else 0.0
+    display_mare = normal_mare if len(normal_relative_error) > 0 else 0.0
+
     return CompareResult(
         passed=passed,
         dtype=dtype,
         threshold=threshold,
-        mere=mere,
-        mare=mare,
+        mere=display_mere,
+        mare=display_mare,
         max_diff=max_diff,
         mean_diff=mean_diff,
         mismatch_count=mismatch_count,

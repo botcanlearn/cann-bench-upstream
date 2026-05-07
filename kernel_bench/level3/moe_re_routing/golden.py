@@ -169,9 +169,6 @@ def get_input(
         tokens: 待重新排布的 token，shape (A, H)
         expert_token_num_per_rank: 每张卡上各个专家处理的 token 数，shape (N, E)
         per_token_scales: 每个 token 对应的 scale，shape (A)，可选
-        expert_token_num_type: 输出模式
-        idx_type: 索引类型
-        per_token_scales_exist: per_token_scales 是否存在（来自 attrs）
 
     Returns:
         处理后的输入数据列表 [tokens, expert_token_num_per_rank, per_token_scales]
@@ -179,31 +176,17 @@ def get_input(
     A = tokens.shape[0]
     N, E = expert_token_num_per_rank.shape
 
-    # 处理 per_token_scales_exist 标志
-    per_token_scales_exist = kwargs.get('per_token_scales_exist', True)
-    if not per_token_scales_exist:
-        per_token_scales = None
-    total_cells = N * E
-
     # 计算每个位置的基础值，确保总和等于 A
+    total_cells = N * E
     base_value = A // total_cells
     remainder = A % total_cells
 
     # 生成新的 expert_token_num_per_rank
     if isinstance(expert_token_num_per_rank, torch.Tensor):
         new_expert_token_num = torch.full((N, E), base_value, dtype=expert_token_num_per_rank.dtype)
-        # 将剩余的 token 分配到最后一个位置
         new_expert_token_num[-1, -1] += remainder
     else:
         new_expert_token_num = np.full((N, E), base_value, dtype=expert_token_num_per_rank.dtype)
         new_expert_token_num[-1, -1] += remainder
-
-    # 调整 per_token_scales 的形状（如果需要）
-    if per_token_scales is not None and per_token_scales.shape[0] != A:
-        if isinstance(per_token_scales, torch.Tensor):
-            new_scales = torch.randn(A, dtype=per_token_scales.dtype)
-        else:
-            new_scales = np.random.randn(A).astype(per_token_scales.dtype)
-        per_token_scales = new_scales
 
     return [tokens, new_expert_token_num, per_token_scales]
