@@ -18,6 +18,11 @@
 - 融合稀疏索引 gather、缩放点积注意力与 softmax 计算
 - 支持 GQA（N1 ≥ N2，N1 % N2 == 0）和不同 head dim（Dk、Dv）
 - 支持 BSND 和 BNSD 两种张量布局
+- 支持 `is_causal` 因果掩码：在稀疏 gather 之上再叠加 [S1, S2] attention 矩阵的右下角对角线掩码，sparseIndices 选中但落在对角线之上（即 KV 序列位置满足 idx > s1 + (S2 - S1)）的条目在 softmax 前置 -inf
+- **value 与 key 在数值上同源**（MLA 推理 latent KV cache 语义）：
+  - 当 `Dk == Dv` 时，`value == key`（K 与 V 完全相同）
+  - 当 `Dk > Dv`（典型 MLA: Dk=576=512_nope+64_rope, Dv=512），`value == key[..., :Dv]`（V 是 K 的前 Dv 维前缀切片）
+  - 接口保留 value 为独立入参以兼容通用 attention API，调用方需保证此关系
 
 ## 2. 算子定义
 
@@ -45,8 +50,9 @@ $$
    - $V_{sel}$ 同理，shape `[B, N2, S1, topK, Dv]`
 2. **GQA 扩展**：将 `K_sel` 和 `V_sel` 沿 head 维度复制 G=N1/N2 次，扩展到 `[B, N1, S1, topK, ...]`
 3. **缩放点积**：$\text{scores} = Q \cdot K_{sel}^T \times \text{scaleValue}$，shape `[B, N1, S1, topK]`
-4. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$，在 topK 维上归一化
-5. **加权求和**：$y = \text{attn\_weights} \times V_{sel}$
+4. **因果掩码（可选）**：当 `is_causal=True` 时，对每个 query 位置 `s1` 和每个 topK 槽位 `i`，若 `sparseIndices[..., s1, i] > s1 + (S2 - S1)`（即所选 KV 位置落在 [S1, S2] attention 矩阵右下角对角线之上），则该位置 scores 置为 $-\infty$
+5. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$，在 topK 维上归一化
+6. **加权求和**：$y = \text{attn\_weights} \times V_{sel}$
 
 ### 布局说明
 
@@ -71,7 +77,7 @@ $$
 ### 算子原型
 
 ```python
-sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndices, float scaleValue, str inputLayout="BSND") -> Tensor y
+sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndices, float scaleValue, str inputLayout="BSND", bool is_causal=False) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -80,10 +86,11 @@ sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndi
 |------|------|------|-------|-------|------|
 | query | Tensor | 是 | float16/bfloat16 | BSND: [B, S1, N1, Dk]；BNSD: [B, N1, S1, Dk] | 查询张量 |
 | key | Tensor | 是 | float16/bfloat16 | BSND: [B, S2, N2, Dk]；BNSD: [B, N2, S2, Dk] | 键张量，head dim 与 query 一致 |
-| value | Tensor | 是 | float16/bfloat16 | BSND: [B, S2, N2, Dv]；BNSD: [B, N2, S2, Dv] | 值张量，head dim 可与 key 不同 |
+| value | Tensor | 是 | float16/bfloat16 | BSND: [B, S2, N2, Dv]；BNSD: [B, N2, S2, Dv] | 值张量，head dim 可与 key 不同。语义上要求 `value == key[..., :Dv]`（同一份 latent KV cache 的前缀视图，Dk==Dv 时退化为 `value == key`） |
 | sparseIndices | Tensor | 是 | int32 | BSND: [B, S1, N2, topK]；BNSD: [B, N2, S1, topK] | 按 KV 头分组的稀疏索引，前三维布局与 inputLayout 一致 |
 | scaleValue | float | 是 | - | 标量 | 缩放因子，通常为 1/sqrt(Dk) |
 | inputLayout | str | 否 | - | - | 张量布局格式，"BSND"（默认）或 "BNSD" |
+| is_causal | bool | 否 | - | - | 是否启用因果掩码（右下角对齐），默认 False。True 时在稀疏 gather 之上额外屏蔽 `sparseIndices[..., s1, i] > s1 + (S2 - S1)` 的位置 |
 
 ### 输出
 
@@ -107,6 +114,8 @@ sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndi
 - topK（每个 query 关注的 KV 数量）可任意取值，1 ≤ topK ≤ S2
 - scaleValue 通常设置为 $1/\sqrt{Dk}$
 - inputLayout 必须为 "BSND" 或 "BNSD"，所有张量（含 sparseIndices 和输出）的布局保持一致
+- `is_causal=True` 时要求 $S1 \le S2$；若某个 query 行的全部 topK 槽位都被因果掩码屏蔽（极端情况），该行 softmax 输出按全 0 处理
+- **语义约束 `value == key[..., :Dv]`**：value 必须等于 key 的前 Dv 维前缀（同一份 latent KV cache 的不同视图）。当 `Dk == Dv` 时退化为 `value == key`；当 `Dk == Dv + 64`（MLA 典型 Dk=576/Dv=512）时 value 即 key_nope。算子接口保留 value 为独立入参以兼容通用 attention API，调用方有责任保证此关系；本规范的 Golden 实现不强制检查
 
 ## 4. 精度要求
 
@@ -148,17 +157,25 @@ def sparse_flash_attention(
     sparseIndices: torch.Tensor,
     scaleValue: float,
     inputLayout: str = "BSND",
+    is_causal: bool = False,
 ) -> torch.Tensor:
     """
     稀疏 FlashAttention，支持 GQA、不同 head dim 和 BSND/BNSD 布局
 
+    语义约束: value 与 key 在数值上同源 (MLA latent KV cache):
+        - Dk == Dv 时: value == key
+        - Dk >  Dv 时: value == key[..., :Dv]   (典型 MLA: Dk=576, Dv=512)
+        本 Golden 不做强制检查，调用方需保证此关系。
+
     Args:
         query: 查询张量，BSND: [B, S1, N1, Dk]，BNSD: [B, N1, S1, Dk]
         key: 键张量，BSND: [B, S2, N2, Dk]，BNSD: [B, N2, S2, Dk]
-        value: 值张量，BSND: [B, S2, N2, Dv]，BNSD: [B, N2, S2, Dv]
+        value: 值张量，BSND: [B, S2, N2, Dv]，BNSD: [B, N2, S2, Dv]；语义上等于 key[..., :Dv]
         sparseIndices: 稀疏索引（int32），BSND: [B, S1, N2, topK]，BNSD: [B, N2, S1, topK]
         scaleValue: 缩放因子
         inputLayout: 张量布局，"BSND" 或 "BNSD"
+        is_causal: 是否启用因果掩码（右下角对齐），True 时在稀疏 gather 之上额外屏蔽
+            sparseIndices[..., s1, i] > s1 + (S2 - S1) 的位置
 
     Returns:
         注意力输出，布局与输入一致
@@ -194,7 +211,16 @@ def sparse_flash_attention(
 
     # Attention: Q @ K_sel^T -> softmax -> @ V_sel
     scores = torch.einsum('bnsd,bnskd->bnsk', q, k_sel) * scaleValue
+    if is_causal:
+        # 右下角对齐：sparseIndices 选中的 KV 位置 idx > s1 + (S2 - S1) 时需屏蔽
+        s1_idx = torch.arange(S1, device=scores.device).view(1, 1, S1, 1)  # [1,1,S1,1]
+        # si 已为 [B, N2, S1, topK]；需扩展到 N1
+        si_n1 = si.unsqueeze(2).expand(-1, -1, G, -1, -1).reshape(B, N1, S1, topK)
+        causal_mask = si_n1 > (s1_idx + (S2 - S1))
+        scores = scores.masked_fill(causal_mask, float('-inf'))
     attn_weights = torch.softmax(scores, dim=-1)
+    # 处理整行全 -inf 导致的 NaN：置 0
+    attn_weights = torch.nan_to_num(attn_weights, nan=0.0)
     out = torch.einsum('bnsk,bnskd->bnsd', attn_weights, v_sel)  # [B, N1, S1, Dv]
 
     # 转回原始布局
@@ -222,6 +248,7 @@ sparseIndices = torch.stack([
 ]).reshape(B, S1, N2, topK).to(dtype=torch.int32, device="npu")
 y = sparse_flash_attention(query, key, value, sparseIndices,
                             scaleValue=1.0 / (Dk ** 0.5),
-                            inputLayout="BSND")
+                            inputLayout="BSND",
+                            is_causal=False)
 # y.shape: [B, S1, N1, Dv]
 ```

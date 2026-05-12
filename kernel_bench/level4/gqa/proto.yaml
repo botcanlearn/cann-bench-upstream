@@ -23,26 +23,28 @@ operator:
     default: -1.0
     description: 缩放因子，<=0 时自动使用 1/sqrt(D)
     required: false
+  - name: is_causal
+    type: bool
+    default: false
+    description: 是否启用因果掩码（右下角对齐），True 时仅计算 attention 矩阵中 j <= i + (S_kv - S) 的位置
+    required: false
   inputs:
   - name: query
     description: 查询张量（已分头），N_q 个 query head
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "[B, S, N_q, D]"
   - name: key
     description: 键张量（已分头），N_kv 个 KV head
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "[B, S_kv, N_kv, D]"
   - name: value
     description: 值张量（已分头），N_kv 个 KV head
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "[B, S_kv, N_kv, D]"
   outputs:
@@ -50,7 +52,6 @@ operator:
     description: 注意力输出张量
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "[B, S, N_q, D]"
-  schema: gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0) -> Tensor y
+  schema: gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0, bool is_causal=False) -> Tensor y

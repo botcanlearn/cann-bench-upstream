@@ -14,6 +14,7 @@
 - 多输入（query, key, value）单输出，执行分组缩放点积注意力
 - 输入为已分头的张量，不包含 QKV 投影和输出投影步骤
 - N_q 必须能被 N_kv 整除，每个 KV head 被 N_q/N_kv 个 query head 共享
+- 支持 `is_causal` 因果掩码：仅计算 attention 矩阵 [S, S_kv] 中从右下角向左上方延伸 45° 对角线及其下方部分（其余位置在 softmax 前置 -inf）
 
 ## 2. 算子定义
 
@@ -35,15 +36,16 @@ $$
 具体子步骤：
 1. **KV head 扩展**：将每个 KV head 重复 $N_q / N_{kv}$ 次以匹配 query head 数
 2. **缩放点积**：$\text{scores} = Q_i \times K_{g(i)}^T \times \text{scaleValue}$
-3. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$
-4. **加权求和**：$y_i = \text{attn\_weights} \times V_{g(i)}$
+3. **因果掩码（可选）**：当 `is_causal=True` 时，对 `scores[..., i, j]` 满足 $j > i + (S_{kv} - S)$ 的位置置为 $-\infty$（即仅保留从右下角向左上方 45° 延伸的对角线及其下方部分），$S=S_{kv}$ 时退化为标准下三角掩码
+4. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$
+5. **加权求和**：$y_i = \text{attn\_weights} \times V_{g(i)}$
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-cann_bench.gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0) -> Tensor y
+cann_bench.gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0, bool is_causal=False) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -54,6 +56,7 @@ cann_bench.gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0) ->
 | key | Tensor | 必选 | 键张量（已分头），shape 为 [B, S_kv, N_kv, D] |
 | value | Tensor | 必选 | 值张量（已分头），shape 为 [B, S_kv, N_kv, D] |
 | scaleValue | float | -1.0 | 缩放因子，<=0 时自动使用 1/sqrt(D) |
+| is_causal | bool | False | 是否启用因果掩码。False 时全计算；True 时仅计算 [S, S_kv] attention 矩阵中从右下角向左上方 45° 延伸的对角线及其下方部分（即满足 $j \le i + (S_{kv} - S)$ 的位置），上方部分在 softmax 前置 -inf |
 
 ### 输出
 
@@ -66,7 +69,6 @@ cann_bench.gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0) ->
 | 输入 dtype | 输出 dtype |
 |-----------|-----------|
 | float16 | float16 |
-| float32 | float32 |
 | bfloat16 | bfloat16 |
 
 ### 规则与约束
@@ -77,6 +79,7 @@ cann_bench.gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0) ->
 - 当 N_kv == N_q 时退化为标准多头注意力 (MHA)
 - 当 N_kv == 1 时退化为多查询注意力 (MQA)
 - `scaleValue` 通常设置为 $1/\sqrt{D}$，当 <= 0 时自动使用该值
+- `is_causal=True` 时要求 $S \le S_{kv}$（否则 mask 会将部分 query 行全部屏蔽，导致 softmax 出现 NaN）
 
 ## 4. 精度要求
 
@@ -123,6 +126,7 @@ def gqa(
     key: torch.Tensor,
     value: torch.Tensor,
     scaleValue: float = -1.0,
+    is_causal: bool = False,
 ) -> torch.Tensor:
     """
     分组查询注意力 (Grouped Query Attention)
@@ -132,6 +136,7 @@ def gqa(
         key: 键张量 [B, S_kv, N_kv, D]（已分头）
         value: 值张量 [B, S_kv, N_kv, D]（已分头）
         scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(D)
+        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足 j > i + (S_kv - S) 的位置置 -inf
 
     Returns:
         输出张量 [B, S, N_q, D]
@@ -155,6 +160,11 @@ def gqa(
 
     # 缩放点积注意力
     scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    if is_causal:
+        i = torch.arange(S, device=scores.device).unsqueeze(-1)
+        j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
+        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：mask out 对角线以上的位置
+        scores = scores.masked_fill(causal_mask, float('-inf'))
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
     attn_output = torch.matmul(attn_weights, v)
 
@@ -175,5 +185,5 @@ N_q, N_kv = 32, 8
 query = torch.randn(B, S, N_q, D, dtype=torch.float16, device="npu")
 key = torch.randn(B, S_kv, N_kv, D, dtype=torch.float16, device="npu")
 value = torch.randn(B, S_kv, N_kv, D, dtype=torch.float16, device="npu")
-y = cann_bench.gqa(query, key, value, scaleValue=-1.0)
+y = cann_bench.gqa(query, key, value, scaleValue=-1.0, is_causal=False)
 ```

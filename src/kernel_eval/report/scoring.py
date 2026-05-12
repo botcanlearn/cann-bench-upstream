@@ -47,7 +47,7 @@ class ScoreInfo:
     function_score: float = 0.0
     performance_score: float = 0.0
     total_score: float = 0.0  # 单算子综合得分，[0, 100]
-    # 调试用：每个用例的 SOL 分数，None 表示数据不全或未通过功能门
+    # 调试用：每个用例的 hardware-anchored 分数，None 表示数据不全或未通过功能门
     per_case_scores: List[Optional[float]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:

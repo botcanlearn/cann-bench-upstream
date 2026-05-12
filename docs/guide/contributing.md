@@ -54,7 +54,7 @@ operator:
       dtype:
         - float16
         - float32
-  schema: conv2_d(Tensor x, ...) -> Tensor y   # API 签名（见 1.6）
+  schema: conv_2d(Tensor x, ...) -> Tensor y   # API 签名（见 1.6）
 ```
 
 ### 1.2 顶层字段
@@ -156,7 +156,7 @@ op_name(Tensor input1, Tensor input2, attr1 type1, attr2 type2, ...) -> Tensor o
 示例：
 
 ```
-conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations=[1,1], int groups=1) -> Tensor y
+conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations=[1,1], int groups=1) -> Tensor y
 ```
 
 ---
@@ -365,7 +365,7 @@ cases:
 | `attrs` | dict | 是 | 属性键值对，键名与 `proto.yaml` 中 `attrs[].name` 一致 |
 | `value_range` | list[list] | 是 | 每个输入张量的随机数取值范围 `[min, max]`，数量与 `input_shape` 一致。特殊值：`[-inf, inf]`、`[nan, nan]`、`[0, 0]`；可选参数对应位置用 `[0, 0]` 或 `null` |
 | `baseline_perf_us` | float / None | 是 | 性能基线（微秒），PyTorch 参考实现在目标 NPU 上的实测时间，未测量时填 `None` |
-| `t_hw_us` | float / None | 是 | 硬件下界 T_HW（微秒），用于 SOL-anchored 性能评分，未给出时填 `None` |
+| `t_hw_us` | float / None | 是 | 硬件下界 T_HW（微秒），用于 hardware-anchored 性能评分，未给出时填 `None` |
 | `note` | string | 是 | 用例简短描述，建议格式：`<dtype>-<数据规模>-<对齐/非对齐>-<特征>` |
 
 ### 4.3 input_shape 可选参数处理

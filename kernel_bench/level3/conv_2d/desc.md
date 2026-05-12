@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.conv2_d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations, int groups) -> Tensor y
+cann_bench.conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations, int groups) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -106,7 +106,7 @@ Conv2D算子Torch Golden参考实现
 计算2D卷积
 公式: y = CONV(x, filter) + bias
 """
-def conv2_d(
+def conv_2d(
     x: torch.Tensor, filter: torch.Tensor, bias: torch.Tensor, strides: list, pads: list, dilations: list = [1, 1], groups: int = 1
 ) -> torch.Tensor:
     """
@@ -156,5 +156,5 @@ x = torch.randn(1, 64, 56, 56, dtype=torch.float16, device="npu")
 weight = torch.randn(128, 64, 3, 3, dtype=torch.float16, device="npu")
 bias = torch.randn(128, dtype=torch.float16, device="npu")
 
-y = cann_bench.conv2_d(x, weight, bias, strides=[1, 1], pads=[1, 1, 1, 1], dilations=[1, 1], groups=1)
+y = cann_bench.conv_2d(x, weight, bias, strides=[1, 1], pads=[1, 1, 1, 1], dilations=[1, 1], groups=1)
 ```

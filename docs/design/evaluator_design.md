@@ -820,7 +820,7 @@ def geometric_mean_speedup(speedups):
 ```
 权重: w_c = 0.2, w_f = 0.3, w_p = 0.5  (sum = 1, 单算子满分 100)
 
-单用例 SOL-anchored 性能得分 (Eq. 3):
+单用例 hardware-anchored 性能得分 (Eq. 3):
   score_i = (T_baseline - T_HW) / ((T_cand - T_HW) + (T_baseline - T_HW))
 
   T_HW    = cases.yaml 中 t_hw_us (硬件下界)

@@ -37,7 +37,7 @@ def camel_to_snake(name: str) -> str:
         Mish -> mish
         GridSampler3D -> grid_sampler_3d
         ROIAlign -> roi_align
-        AdaptiveAvgPool3D -> adaptive_avg_pool3_d
+        AdaptiveAvgPool3D -> adaptive_avg_pool_3d
     """
     # 处理字母+数字的边界: er3D -> er_3D
     s = re.sub(r'([a-zA-Z])([0-9])', r'\1_\2', name)
@@ -67,7 +67,7 @@ def snake_case_candidates(name: str) -> List[str]:
     candidates: List[str] = []
 
     # V1: naive - 每个大写字母前插入下划线
-    # Mish -> mish, AdaptiveAvgPool3D -> adaptive_avg_pool3_d
+    # Mish -> mish, AdaptiveAvgPool3D -> adaptive_avg_pool_3d
     v1 = re.sub(r"([A-Z])", r"_\1", name).lower().lstrip("_")
     v1 = re.sub(r"_{2,}", "_", v1)
     candidates.append(v1)

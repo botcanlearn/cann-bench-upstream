@@ -26,6 +26,7 @@ def gqa(
     key: torch.Tensor,
     value: torch.Tensor,
     scaleValue: float = -1.0,
+    is_causal: bool = False,
 ) -> torch.Tensor:
     """
     分组查询注意力 (Grouped Query Attention)
@@ -35,6 +36,8 @@ def gqa(
         key: 键张量 [B, S_kv, N_kv, D]（已分头）
         value: 值张量 [B, S_kv, N_kv, D]（已分头）
         scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(D)
+        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足
+            j > i + (S_kv - S) 的位置在 softmax 前置为 -inf。要求 S <= S_kv。
 
     Returns:
         输出张量 [B, S, N_q, D]
@@ -58,6 +61,11 @@ def gqa(
 
     # 缩放点积注意力
     scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    if is_causal:
+        i = torch.arange(S, device=scores.device).unsqueeze(-1)
+        j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
+        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf
+        scores = scores.masked_fill(causal_mask, float('-inf'))
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
     attn_output = torch.matmul(attn_weights, v)
 

@@ -18,12 +18,17 @@ MLA算子Torch Golden参考实现
 
 多头潜在注意力 (Multi-Head Latent Attention)，仅包含注意力计算部分
 Q 和 K 均分为 nope 和 rope 两部分传入，内部拼接后计算注意力
-V 与 K_nope 共享 d_nope 维度
 支持 BSND 和 BNSD 两种输入 layout
+
+语义约束:
+    v 与 k_nope 在数值上完全相同 (共享同一份 latent KV cache)。
+    算子接口为兼容通用 attention API 保留独立入参；调用方需保证两者
+    一致，本 Golden 实现不做强制检查。
 
 公式:
     Q = concat(Q_nope, Q_rope)   dim: d_nope + d_rope
     K = concat(K_nope, K_rope)   dim: d_nope + d_rope
+    V = K_nope                    dim: d_nope     (语义上等价)
     y = softmax(Q @ K^T * scaleValue) @ V
 """
 
@@ -37,6 +42,7 @@ def mla(
     numKVHeads: int = 1,
     scaleValue: float = -1.0,
     inputLayout: str = "BSND",
+    is_causal: bool = False,
 ) -> torch.Tensor:
     """
     多头潜在注意力 (Multi-Head Latent Attention)
@@ -50,6 +56,8 @@ def mla(
         numKVHeads: KV 头数
         scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(d_nope + d_rope)
         inputLayout: 输入 layout，"BSND" 或 "BNSD"
+        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足
+            j > i + (S_kv - S) 的位置在 softmax 前置为 -inf。要求 S <= S_kv。
 
     Returns:
         输出张量，与输入 layout 一致，head dim 为 d_nope
@@ -90,6 +98,11 @@ def mla(
 
     # 缩放点积注意力
     scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    if is_causal:
+        i = torch.arange(S, device=scores.device).unsqueeze(-1)
+        j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
+        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf
+        scores = scores.masked_fill(causal_mask, float('-inf'))
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
     out = torch.matmul(attn_weights, v)  # [B, N_q, S, d_nope]
 

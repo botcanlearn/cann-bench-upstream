@@ -12,73 +12,83 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import List, Optional
+from typing import List, Optional, Union
 
 """
 GroupedMatmul 算子 Torch Golden 参考实现
 
-分组矩阵乘法算子，每组矩阵乘的维度大小可以不同
-公式: y_i = x_i @ weight_i + bias_i (for each group i)
+分组矩阵乘法算子，x 沿 M 轴合并、weight 按 expert 维堆叠。
+公式：对每个专家 g ∈ [0, E)，根据 group_list（cumsum）取属于该组的 token 行 rows_g：
+        y[rows_g] = x[rows_g] @ weight[g] (+ bias[g])
 """
+
+
 def grouped_matmul(
-    x: List[torch.Tensor],
-    weight: List[torch.Tensor],
-    bias: Optional[List[torch.Tensor]] = None,
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Optional[torch.Tensor] = None,
+    group_list=None,  # List[int]，cumsum 语义；不加 type annotation 避免 param_builder 误判
     split_item: int = 0,
-    transpose_weight: bool = False
-) -> List[torch.Tensor]:
+    transpose_weight: bool = False,
+) -> Union[torch.Tensor, List[torch.Tensor]]:
     """
     分组矩阵乘法算子
 
-    对每个分组执行独立的矩阵乘法：y_i = x_i @ weight_i + bias_i
-
     Args:
-        x: 输入矩阵TensorList，每个tensor shape为[m_i, k_i]
-        weight: 权重矩阵TensorList，每个tensor shape为[k_i, n_i]（transpose_weight=false）
-               或[n_i, k_i]（transpose_weight=true）
-        bias: 偏置TensorList（可选），每个tensor shape为[n_i]
+        x: 激活矩阵 [M, K]，所有组沿 M 轴合并
+        weight: 专家权重，按 expert 维堆叠
+                - transpose_weight=false: [E, K, N]，直接 matmul
+                - transpose_weight=true:  [E, N, K]，需在最后两维 transpose 后 matmul
+        bias: 偏置（可选） [E, N]
+        group_list: 累计 token 数列表（长度 E），cumsum 语义；最后一个值等于 M
         split_item: 输出切分模式
-                   - 0/1: 输出多tensor（每组独立），返回TensorList
-                   - 2/3: 输出单tensor（结果连续存放），返回合并后的单tensor
-        transpose_weight: 是否转置权重
-                         - false: weight shape为[k_i, n_i]，matmul为x[m,k] @ weight[k,n]
-                         - true: weight shape为[n_i, k_i]，matmul为x[m,k] @ weight[n,k]^T
+                    - 0/1: 输出 List[Tensor] 长度 E，按 group_list 切回每组 [m_i, N]
+                    - 2/3: 输出单 tensor [M, N]
+        transpose_weight: 是否转置权重（见上）
 
     Returns:
-        输出TensorList（split_item=0/1）或单tensor（split_item=2/3）
-        每组输出shape为[m_i, n_i]
+        split_item ∈ {0, 1}: List[Tensor] 长度 E，每个 [m_i, N]
+        split_item ∈ {2, 3}: 单 tensor [M, N]
     """
-    num_groups = len(weight)
-    results = []
+    assert x.dim() == 2, "x must be 2D [M, K]"
+    assert weight.dim() == 3, "weight must be 3D [E, K, N] or [E, N, K]"
 
-    for i in range(num_groups):
-        x_i = x[i].float()  # [m_i, k_i]
-        weight_i = weight[i].float()
-
-        if transpose_weight:
-            # weight shape: [n_i, k_i]
-            # 需要转置: [n_i, k_i]^T = [k_i, n_i]
-            # matmul: [m_i, k_i] @ [k_i, n_i] = [m_i, n_i]
-            y_i = torch.matmul(x_i, weight_i.transpose(-2, -1))
-        else:
-            # weight shape: [k_i, n_i]
-            # matmul: [m_i, k_i] @ [k_i, n_i] = [m_i, n_i]
-            y_i = torch.matmul(x_i, weight_i)
-
-        # 加偏置（可选）
-        if bias is not None and bias[i] is not None:
-            bias_i = bias[i].float()  # [n_i]
-            y_i = y_i + bias_i.unsqueeze(0)  # broadcast to [m_i, n_i]
-
-        # 转换回输入dtype
-        y_i = y_i.to(x[i].dtype)
-        results.append(y_i)
-
-    # 根据 split_item 决定输出格式
-    if split_item in [0, 1]:
-        # 输出多tensor（TensorList）
-        return results
+    M, K = x.shape
+    E = weight.shape[0]
+    if transpose_weight:
+        # weight: [E, N, K]
+        assert weight.shape[2] == K, f"K mismatch: x has {K}, weight (transposed) has {weight.shape[2]}"
+        N = weight.shape[1]
     else:
-        # split_item in [2, 3]: 输出单tensor（连续存放）
-        # 将所有结果沿 M 轴合并
-        return [torch.cat(results, dim=0)]
+        # weight: [E, K, N]
+        assert weight.shape[1] == K, f"K mismatch: x has {K}, weight has {weight.shape[1]}"
+        N = weight.shape[2]
+
+    if isinstance(group_list, torch.Tensor):
+        ends = group_list.to(torch.int64).tolist()
+    else:
+        ends = list(group_list)
+    assert len(ends) == E, f"group_list length {len(ends)} != E {E}"
+    assert ends[-1] == M, f"group_list last value {ends[-1]} must equal M {M}"
+    starts = [0] + ends[:-1]
+
+    y = torch.zeros((M, N), dtype=x.dtype, device=x.device)
+    x_f = x.float()
+    for g in range(E):
+        s, e = starts[g], ends[g]
+        if s == e:
+            continue
+        w_g = weight[g].float()
+        if transpose_weight:
+            # [m_i, K] @ [N, K]^T = [m_i, N]
+            mm = torch.matmul(x_f[s:e], w_g.transpose(-2, -1))
+        else:
+            # [m_i, K] @ [K, N] = [m_i, N]
+            mm = torch.matmul(x_f[s:e], w_g)
+        if bias is not None:
+            mm = mm + bias[g].float().unsqueeze(0)
+        y[s:e] = mm.to(x.dtype)
+
+    if split_item in (0, 1):
+        return [y[starts[g]:ends[g]] for g in range(E)]
+    return y

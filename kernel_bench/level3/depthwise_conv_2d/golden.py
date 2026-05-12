@@ -14,26 +14,36 @@
 import torch
 
 """
-AdaptiveAvgPool3D算子Torch Golden参考实现
+DepthwiseConv2D算子Torch Golden参考实现
 
-完成输入张量的3D自适应平均池化计算
-公式: y = adaptive_avg_pool3d(x, output_size)
+二维深度卷积运算
+公式: y = bias + weight * x
 """
-def adaptive_avg_pool3_d(
-    x: torch.Tensor, output_size: tuple[int, int, int]
+def depthwise_conv_2d(
+    x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, kernelSize: list, stride: list, padding: list, dilation: list, groups: int
 ) -> torch.Tensor:
     """
-    完成输入张量的3D自适应平均池化计算
-
-    公式: y = adaptive_avg_pool3d(x, output_size)
-
+    二维深度卷积运算
+    
+    公式: y = bias + weight * x
+    
     Args:
-        x: 输入张量，shape 为 [N, C, D, H, W]
-        output_size: 输出尺寸，格式为 (output_d, output_h, output_w)
-
+        x: 输入特征图
+        weight: 卷积核
+        bias: 偏置
+        kernelSize: 卷积核大小
+        stride: 步长
+        padding: 填充
+        dilation: 膨胀率
+        groups: 分组数
+    
     Returns:
-        输出张量，池化结果
+        输出特征图
     """
 
-    y = torch.nn.functional.adaptive_avg_pool3d(x, output_size)
+    stride_val = (stride[0], stride[1])
+    padding_val = (padding[0], padding[1])
+    dilation_val = (dilation[0], dilation[1])
+    
+    y = torch.nn.functional.conv2d(x, weight, bias, stride=stride_val, padding=padding_val, dilation=dilation_val, groups=groups)
     return y

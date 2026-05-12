@@ -19,7 +19,7 @@ Conv2D算子Torch Golden参考实现
 计算2D卷积
 公式: y = CONV(x, filter) + bias
 """
-def conv2_d(
+def conv_2d(
     x: torch.Tensor, filter: torch.Tensor, bias: torch.Tensor, strides: list, pads: list, dilations: list = [1, 1], groups: int = 1
 ) -> torch.Tensor:
     """

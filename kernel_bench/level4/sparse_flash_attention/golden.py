@@ -18,9 +18,17 @@ SparseFlashAttention算子Torch Golden参考实现
 
 稀疏注意力，支持 GQA（N1 != N2）、不同 head dim（Dk != Dv）和 BSND/BNSD 布局
 query 仅与 sparseIndices 指定的 KV 子集计算注意力
+
+语义约束:
+    value 与 key 在数值上同源 (MLA latent KV cache):
+      - Dk == Dv 时: value == key (完全相同)
+      - Dk >  Dv 时: value == key[..., :Dv] (前缀切片，典型 MLA Dk=576 Dv=512)
+    接口保留独立入参以兼容通用 attention API；调用方需保证此关系，
+    本 Golden 实现不做强制检查。
+
 公式: mask = scatter(sparseIndices) -> bool[B, N2, S1, S2]
       scores = Q @ K^T * scaleValue，mask 外位置置 -inf
-      y = softmax(scores) @ V
+      y = softmax(scores) @ V          (V 语义上等于 K[..., :Dv])
 假定 sparseIndices 在同一 (b, n2, s1) 下无重复值
 """
 
@@ -32,17 +40,25 @@ def sparse_flash_attention(
     sparseIndices: torch.Tensor,
     scaleValue: float,
     inputLayout: str = "BSND",
+    is_causal: bool = False,
 ) -> torch.Tensor:
     """
     稀疏 FlashAttention，支持 GQA、不同 head dim 和 BSND/BNSD 布局
 
+    语义约束: value 与 key 在数值上同源 (MLA latent KV cache):
+        - Dk == Dv 时: value == key
+        - Dk >  Dv 时: value == key[..., :Dv]   (典型 MLA: Dk=576, Dv=512)
+        本 Golden 不做强制检查，调用方需保证此关系。
+
     Args:
         query: 查询张量，BSND: [B, S1, N1, Dk]，BNSD: [B, N1, S1, Dk]
         key: 键张量，BSND: [B, S2, N2, Dk]，BNSD: [B, N2, S2, Dk]
-        value: 值张量，BSND: [B, S2, N2, Dv]，BNSD: [B, N2, S2, Dv]
+        value: 值张量，BSND: [B, S2, N2, Dv]，BNSD: [B, N2, S2, Dv]；语义上等于 key[..., :Dv]
         sparseIndices: 稀疏索引（int32），BSND: [B, S1, N2, topK]，BNSD: [B, N2, S1, topK]
         scaleValue: 缩放因子
         inputLayout: 张量布局，"BSND" 或 "BNSD"
+        is_causal: 是否启用因果掩码（右下角对齐），True 时在稀疏选择之上额外屏蔽
+            KV 序列位置 idx > s1 + (S2 - S1) 的条目。要求 S1 <= S2。
 
     Returns:
         注意力输出，布局与输入一致
@@ -64,6 +80,13 @@ def sparse_flash_attention(
     # 用 scatter 把稀疏索引转成 bool mask: [B, N2, S1, S2]
     mask = torch.zeros(B, N2, S1, S2, dtype=torch.bool, device=q.device)
     mask.scatter_(-1, si.long(), True)
+
+    # 因果掩码（右下角对齐）：j > i + (S2 - S1) 的列从可选集合中剔除
+    if is_causal:
+        s1_idx = torch.arange(S1, device=q.device).unsqueeze(-1)  # [S1, 1]
+        s2_idx = torch.arange(S2, device=q.device).unsqueeze(0)   # [1, S2]
+        causal_keep = s2_idx <= (s1_idx + (S2 - S1))               # [S1, S2]
+        mask = mask & causal_keep  # 广播到 [B, N2, S1, S2]
 
     # GQA: 通过 reshape 把 N1 拆成 (N2, G)，避免物化 K/V 的 head 扩展
     q_g = q.reshape(B, N2, G, S1, Dk)

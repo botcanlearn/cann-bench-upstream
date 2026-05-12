@@ -2,44 +2,39 @@
 
 ## 1. 算子简介
 
-分组矩阵乘法算子，每组矩阵乘的维度大小可以不同。基本功能为矩阵乘，如 $y_i[m_i,n_i]=x_i[m_i,k_i] \times weight_i[k_i,n_i], i=1...g$，其中 g 为分组个数，$m_i/k_i/n_i$ 为对应 shape。
+分组矩阵乘法算子。激活 `x` 沿 `M` 轴合并为单 tensor `[M, K]`；权重 `weight` 按 expert 维堆叠为 `[E, K, N]`（或 `[E, N, K]`）；通过 `group_list`（cumsum 语义）描述每组 token 在 `M` 轴上的边界。
 
 **主要应用场景**：
 - MoE（Mixture of Experts）模型中多专家的并行矩阵运算
 - 多头注意力机制中的分组线性变换
-- 批量处理不同大小矩阵的乘法运算
+- 批量处理同一 K、N 维度、按 M 切分多组的矩阵乘法
 
 **算子特征**：
 - 难度等级：L3（Contraction）
-- TensorList 输入输出，每组数据维度可不同
-- 支持多 tensor 和单 tensor 输出模式（split_item 控制）
+- 输入 / 输出容器与 `level4/grouped_matmul_swiglu_quant` 对齐：`x` 单 tensor + `weight` 堆叠 + `group_list` 切组
+- 所有组的 `K` 与 `N` 在 expert 维上一致，仅 `M` 各组可不同
 
 ## 2. 算子定义
 
 ### 数学公式
 
 $$
-y_i = x_i \times weight_i + bias_i, \quad i = 1, ..., g
+\begin{aligned}
+&\text{对每个专家 } g \in [0, E),\ \text{根据 } group\_list\ (\text{cumsum}) \text{ 取属于该组的 token 行 } rows_g: \\
+&y[rows_g] = x[rows_g] \cdot weight[g] \ (+\ bias[g])
+\end{aligned}
 $$
 
 其中：
-- $x_i$ shape 为 $[m_i, k_i]$
-- $weight_i$ shape 为 $[k_i, n_i]$（transpose_weight=false）或 $[n_i, k_i]$（transpose_weight=true）
-- $bias_i$ shape 为 $[n_i]$
-- $y_i$ shape 为 $[m_i, n_i]$
+- `x` shape 为 `[M, K]`，所有组沿 `M` 轴合并
+- `weight` shape 为 `[E, K, N]`（`transpose_weight=false`）或 `[E, N, K]`（`transpose_weight=true`）
+- `bias` shape 为 `[E, N]`（可选）
+- `group_list` 长度 `E`，cumsum 语义，最后一个值等于 `M`
+- `y` shape 为 `[M, N]`
 
-### 支持场景
+### group_list 语义
 
-根据 x、weight、y 的 Tensor 数量支持如下 4 种场景：
-
-| 支持场景 | 描述 | split_item |
-|---------|------|------------|
-| 多多多 | x、weight、y 都为 TensorList（每组数据独立） | 0/1 |
-| 单多单 | x、y 为单 tensor（所有分组在 M 轴合并），weight 为 TensorList | 2/3 |
-| 单多多 | x 为单 tensor，weight、y 为 TensorList | 0/1 |
-| 多多单 | x、weight 为 TensorList，y 为单 tensor（结果连续存放） | 2/3 |
-
-**说明**：单 tensor 指一个 tensor list 中所有分组的 tensor 在 M 轴上合并为 1 个；否则为多 tensor。
+`group_list = [c_0, c_1, ..., c_{E-1}]`，表示前 g+1 个 expert 累计接收 `c_g` 个 token。每组的行范围为 `[c_{g-1}, c_g)`（约定 `c_{-1} = 0`）。允许 `c_g == c_{g-1}`，表示该 expert 为空组（跳过计算）。
 
 ## 3. 接口规范
 
@@ -47,48 +42,56 @@ $$
 
 ```python
 cann_bench.grouped_matmul(
-    TensorList x, 
-    TensorList weight, 
-    TensorList? bias, 
-    int split_item, 
-    bool transpose_weight
-) -> TensorList y
+    Tensor x,
+    Tensor weight,
+    Tensor? bias,
+    int[] group_list,
+    int split_item = 0,
+    bool transpose_weight = False,
+) -> Tensor y
 ```
 
-### 输入参数说明
+### 输入参数
 
-| 参数 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| x | TensorList | 必选 | 输入矩阵 TensorList，每个 tensor shape 为 $[m_i, k_i]$ |
-| weight | TensorList | 必选 | 权重矩阵 TensorList，每个 tensor shape 为 $[k_i, n_i]$（transpose_weight=false）或 $[n_i, k_i]$（transpose_weight=true） |
-| bias | TensorList | None | 偏置 TensorList（可选），每个 tensor shape 为 $[n_i]$ |
-| split_item | int | 0 | 输出切分模式，0/1=输出多 tensor，2/3=输出单 tensor（结果连续存放） |
-| transpose_weight | bool | false | 是否转置权重 |
+| 参数 | 类型 | Shape | 描述 |
+|------|------|-------|------|
+| x | Tensor | `[M, K]` | 激活矩阵，所有组沿 `M` 合并 |
+| weight | Tensor | `[E, K, N]` 或 `[E, N, K]` | 专家权重，按 expert 维堆叠 |
+| bias | Tensor?（可选） | `[E, N]` | 偏置 |
+| group_list | List[int] | 长度 `E` | 累计 token 数（cumsum），最后值等于 `M` |
+| split_item | int | — | 输出切分模式（详见下） |
+| transpose_weight | bool | — | 是否转置权重 |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | TensorList（split_item=0/1）或单 tensor（split_item=2/3） | 与 x 相同 | 每组输出 shape 为 $[m_i, n_i]$ |
+| y | `[M, N]`（split_item=2/3）或 List[Tensor] 长度 E（0/1） | 与 x 相同 | 每组 `[m_i, N]` |
 
 ### 数据类型
 
 | 输入 (x) dtype | 输入 (weight) dtype | 输入 (bias) dtype | 输出 (y) dtype |
 |---------------|-------------------|-----------------|---------------|
 | float16 | float16 | float16 | float16 |
-| bfloat16 | bfloat16 | bfloat16 / float32 | bfloat16 |
+| bfloat16 | bfloat16 | bfloat16 | bfloat16 |
 | float32 | float32 | float32 | float32 |
+
+### split_item 取值
+
+| split_item | 输出形式 | 说明 |
+|------------|---------|------|
+| 0 / 1 | `List[Tensor]` 长度 E | 按 `group_list` 把 `y` 切回每组 `[m_i, N]`；空组返回长度 0 的 `[0, N]` 张量 |
+| 2 / 3 | 单 Tensor `[M, N]` | 直接返回沿 M 轴拼接好的结果 |
 
 ### 规则与约束
 
-- **TensorList 长度**：x、weight、bias（如有）的 TensorList 长度必须一致，最大支持 128 个
-- **split_item 使用**：
-  - split_item=0/1：输出为多 tensor（TensorList），每组独立
-  - split_item=2/3：输出为单 tensor，所有组的结果沿 M 轴合并
-- **多多单场景约束**：当 split_item=2/3 且 y 为单 tensor 时，weight 中每个 tensor 的 N 轴必须相等
+- **K 一致性**：`x.shape[1]` 必须等于 `weight` 中 K 维（`weight.shape[1]` 或 `weight.shape[2]`，由 `transpose_weight` 决定）
+- **N 一致性**：所有 expert 共享同一 `N`
+- **group_list**：长度等于 `E`，严格非递减，最后一个值等于 `M`
+- **空组**：允许 `group_list[i] == group_list[i-1]`，对应 expert `i` 不参与计算
 - **transpose_weight**：
-  - false：weight shape 为 $[k_i, n_i]$，直接参与 matmul
-  - true：weight shape 为 $[n_i, k_i]$，需转置后参与 matmul
+  - false：weight 形状 `[E, K, N]`，每片 `weight[g]` 直接参与 matmul
+  - true：weight 形状 `[E, N, K]`，每片 `weight[g]` 需 transpose 最后两维后参与 matmul
 - **维度限制**：每维大小在 32 字节对齐后应小于 int32 最大值
 
 ## 4. 精度要求
@@ -122,76 +125,56 @@ cann_bench.grouped_matmul(
 
 ```python
 import torch
-from typing import List, Optional
+from typing import List, Optional, Union
 
 """
 GroupedMatmul 算子 Torch Golden 参考实现
 
-分组矩阵乘法算子，每组矩阵乘的维度大小可以不同
-公式: y_i = x_i @ weight_i + bias_i (for each group i)
+分组矩阵乘法算子，x 沿 M 轴合并、weight 按 expert 维堆叠。
+公式：对每个专家 g ∈ [0, E)，根据 group_list（cumsum）取属于该组的 token 行 rows_g：
+        y[rows_g] = x[rows_g] @ weight[g] (+ bias[g])
 """
+
+
 def grouped_matmul(
-    x: List[torch.Tensor],
-    weight: List[torch.Tensor],
-    bias: Optional[List[torch.Tensor]] = None,
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Optional[torch.Tensor] = None,
+    group_list=None,
     split_item: int = 0,
-    transpose_weight: bool = False
-) -> List[torch.Tensor]:
-    """
-    分组矩阵乘法算子
-
-    对每个分组执行独立的矩阵乘法：y_i = x_i @ weight_i + bias_i
-
-    Args:
-        x: 输入矩阵TensorList，每个tensor shape为[m_i, k_i]
-        weight: 权重矩阵TensorList，每个tensor shape为[k_i, n_i]（transpose_weight=false）
-               或[n_i, k_i]（transpose_weight=true）
-        bias: 偏置TensorList（可选），每个tensor shape为[n_i]
-        split_item: 输出切分模式
-                   - 0/1: 输出多tensor（每组独立），返回TensorList
-                   - 2/3: 输出单tensor（结果连续存放），返回合并后的单tensor
-        transpose_weight: 是否转置权重
-                         - false: weight shape为[k_i, n_i]，matmul为x[m,k] @ weight[k,n]
-                         - true: weight shape为[n_i, k_i]，matmul为x[m,k] @ weight[n,k]^T
-
-    Returns:
-        输出TensorList（split_item=0/1）或单tensor（split_item=2/3）
-        每组输出shape为[m_i, n_i]
-    """
-    num_groups = len(weight)
-    results = []
-
-    for i in range(num_groups):
-        x_i = x[i].float()  # [m_i, k_i]
-        weight_i = weight[i].float()
-
-        if transpose_weight:
-            # weight shape: [n_i, k_i]
-            # 需要转置: [n_i, k_i]^T = [k_i, n_i]
-            # matmul: [m_i, k_i] @ [k_i, n_i] = [m_i, n_i]
-            y_i = torch.matmul(x_i, weight_i.transpose(-2, -1))
-        else:
-            # weight shape: [k_i, n_i]
-            # matmul: [m_i, k_i] @ [k_i, n_i] = [m_i, n_i]
-            y_i = torch.matmul(x_i, weight_i)
-
-        # 加偏置（可选）
-        if bias is not None and bias[i] is not None:
-            bias_i = bias[i].float()  # [n_i]
-            y_i = y_i + bias_i.unsqueeze(0)  # broadcast to [m_i, n_i]
-
-        # 转换回输入dtype
-        y_i = y_i.to(x[i].dtype)
-        results.append(y_i)
-
-    # 根据 split_item 决定输出格式
-    if split_item in [0, 1]:
-        # 输出多tensor（TensorList）
-        return results
+    transpose_weight: bool = False,
+) -> Union[torch.Tensor, List[torch.Tensor]]:
+    M, K = x.shape
+    E = weight.shape[0]
+    if transpose_weight:
+        N = weight.shape[1]
     else:
-        # split_item in [2, 3]: 输出单tensor（连续存放）
-        # 将所有结果沿 M 轴合并
-        return [torch.cat(results, dim=0)]
+        N = weight.shape[2]
+
+    if isinstance(group_list, torch.Tensor):
+        ends = group_list.to(torch.int64).tolist()
+    else:
+        ends = list(group_list)
+    starts = [0] + ends[:-1]
+
+    y = torch.zeros((M, N), dtype=x.dtype, device=x.device)
+    x_f = x.float()
+    for g in range(E):
+        s, e = starts[g], ends[g]
+        if s == e:
+            continue
+        w_g = weight[g].float()
+        if transpose_weight:
+            mm = torch.matmul(x_f[s:e], w_g.transpose(-2, -1))
+        else:
+            mm = torch.matmul(x_f[s:e], w_g)
+        if bias is not None:
+            mm = mm + bias[g].float().unsqueeze(0)
+        y[s:e] = mm.to(x.dtype)
+
+    if split_item in (0, 1):
+        return [y[starts[g]:ends[g]] for g in range(E)]
+    return y
 ```
 
 ## 6. 额外信息
@@ -202,24 +185,22 @@ def grouped_matmul(
 import torch
 import cann_bench
 
-# 多多多场景：x、weight、y 都为 TensorList
-x = [torch.randn(1024, 512, dtype=torch.float16, device="npu"),
-     torch.randn(2048, 512, dtype=torch.float16, device="npu")]
-# transpose_weight=False：weight shape 为 [k_i, n_i]，直接参与 matmul
-weight = [torch.randn(512, 1024, dtype=torch.float16, device="npu"),
-          torch.randn(512, 512, dtype=torch.float16, device="npu")]
-bias = [torch.randn(1024, dtype=torch.float16, device="npu"),
-        torch.randn(512, dtype=torch.float16, device="npu")]
+M, K, N, E = 128, 256, 512, 4
 
-y = cann_bench.grouped_matmul(x, weight, bias, split_item=0, transpose_weight=False)
-# y 是 TensorList：[tensor[1024, 1024], tensor[2048, 512]]
+x = torch.randn(M, K, dtype=torch.float16, device="npu")
+weight = torch.randn(E, K, N, dtype=torch.float16, device="npu")
+bias = torch.randn(E, N, dtype=torch.float16, device="npu")
+group_list = [32, 64, 96, 128]   # cumsum 语义，最后值 = M
 
-# transpose_weight=True 示例：weight shape 为 [n_i, k_i]，需转置后参与 matmul
-weight_t = [torch.randn(1024, 512, dtype=torch.float16, device="npu"),
-            torch.randn(512, 512, dtype=torch.float16, device="npu")]
-y = cann_bench.grouped_matmul(x, weight_t, bias, split_item=0, transpose_weight=True)
+# split_item=2: 输出单 tensor [M, N]
+y = cann_bench.grouped_matmul(x, weight, bias, group_list, split_item=2, transpose_weight=False)
+# y shape: [128, 512]
 
-# 多多单场景：输出合并为单 tensor
-y_merged = cann_bench.grouped_matmul(x, weight, bias, split_item=2, transpose_weight=False)
-# y_merged 是单 tensor：[tensor[3072, N]]（N 必须各组相等）
+# split_item=0: 输出 List[Tensor] 长度 E
+y_list = cann_bench.grouped_matmul(x, weight, bias, group_list, split_item=0, transpose_weight=False)
+# y_list = [Tensor[32,512], Tensor[32,512], Tensor[32,512], Tensor[32,512]]
+
+# transpose_weight=True: weight 形状 [E, N, K]，需 transpose 后 matmul
+weight_t = torch.randn(E, N, K, dtype=torch.float16, device="npu")
+y = cann_bench.grouped_matmul(x, weight_t, bias, group_list, split_item=2, transpose_weight=True)
 ```

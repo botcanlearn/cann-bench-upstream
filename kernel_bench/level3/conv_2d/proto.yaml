@@ -9,29 +9,58 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: AdaptiveAvgPool3D
-  category: Reduction
+  name: Conv2D
+  category: Contraction
   difficulty: L3
-  formula: y = adaptive_avg_pool3d(x, output_size)
-  description: 完成输入张量的3D自适应平均池化计算
-  shape_support: 输入[N, C, D, H, W] 5维张量
+  formula: y = CONV(x, filter) + bias
+  description: 计算2D卷积
+  shape_support: 'x: [N, C_in, H, W], filter: [C_out, C_in, K_h, K_w]'
   attrs:
-  - name: output_size
-    type: List[int]
-    description: 输出尺寸，格式为 [output_d, output_h, output_w]
+  - name: strides
+    type: ListInt
+    description: 步长
     required: true
+  - name: pads
+    type: ListInt
+    description: 填充
+    required: true
+  - name: dilations
+    type: ListInt
+    default:
+    - 1
+    - 1
+    description: 膨胀率
+    required: false
+  - name: groups
+    type: Int
+    default: 1
+    description: 分组数
+    required: false
   inputs:
   - name: x
-    description: 输入张量
+    description: 输入特征图
     dtype:
-    - float32
     - float16
+    - float32
+    - bfloat16
+  - name: filter
+    description: 卷积核
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+  - name: bias
+    description: 偏置
+    dtype:
+    - float16
+    - float32
     - bfloat16
   outputs:
   - name: y
-    description: 输出张量，池化结果
+    description: 输出特征图
     dtype:
-    - float32
     - float16
+    - float32
     - bfloat16
-  schema: adaptive_avg_pool3_d(Tensor x, int[] output_size) -> Tensor y
+  schema: conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads,
+    int[] dilations, int groups) -> Tensor y

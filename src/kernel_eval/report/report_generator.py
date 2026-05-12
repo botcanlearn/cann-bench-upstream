@@ -47,7 +47,7 @@ class EvalResult:
     speedup: float = 0.0
     baseline_perf_us: float = 0.0
     t_hw_us: float = 0.0
-    perf_score: Optional[float] = None  # bench.tex Eq. 3: per-case SOL score
+    perf_score: Optional[float] = None  # bench.tex Eq. 3: per-case hardware-anchored score
     _perf_result: Any = None
 
     def resolve_profiling(self):

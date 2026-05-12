@@ -288,7 +288,7 @@ Exp,2,"[[2048, 2048]]",["float32"],"{""base"": -1.0, ""scale"": 1.5, ""shift"": 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `baseline_perf_us` | float / 空 | PyTorch 参考实现在目标 NPU 上的实测时间 |
-| `t_hw_us` | float / 空 | 硬件下界 T_HW（微秒），用于 SOL-anchored 性能评分 |
+| `t_hw_us` | float / 空 | 硬件下界 T_HW（微秒），用于 hardware-anchored 性能评分 |
 
 ### 3.4 Golden脚本
 
@@ -333,7 +333,7 @@ def exp(
 |------|------|----------|----------|----------|
 | 编译正确性 | w_c = 0.2 | 编译通过 | cmake、gtest | δ_pass ∈ {0, 1} |
 | 功能正确性 | w_f = 0.3 | 通过测试用例Golden对比 | cmake、gtest | δ_acc,i ∈ {0, 1} |
-| 性能优化性 | w_p = 0.5 | SOL-anchored 分数（见 §4.2）| msprof、cannsim | score_i ∈ [0, ≥1] |
+| 性能优化性 | w_p = 0.5 | hardware-anchored 分数（见 §4.2）| msprof、cannsim | score_i ∈ [0, ≥1] |
 
 权重之和 = 1，单算子满分 100。
 
@@ -341,9 +341,9 @@ def exp(
 
 - **编译正确性**: 整份提交是否编译通过 (δ_pass ∈ {0, 1})
 - **功能正确性**: 单用例是否通过精度门 (δ_acc,i ∈ {0, 1})
-- **性能优化性**: SOL-anchored 分数 score_i
+- **性能优化性**: hardware-anchored 分数 score_i
 
-**单用例 SOL-anchored 性能得分** (bench.tex Eq. 3)：
+**单用例 hardware-anchored 性能得分** (bench.tex Eq. 3)：
 
 $$
 \text{score}_i = \frac{T_{\text{baseline},i} - T_{\text{HW},i}}{(T_{\text{cand},i} - T_{\text{HW},i}) + (T_{\text{baseline},i} - T_{\text{HW},i})}
@@ -364,7 +364,7 @@ EachOperatorScore = [ w_c · δ_pass + Σ_i δ_acc,i · (w_f + w_p · score_i) /
 其中：
   δ_pass ∈ {0, 1}: 整份提交编译是否通过（与用例数无关）
   δ_acc,i ∈ {0, 1}: 用例 i 是否通过精度校验，δ_pass = 0 时 δ_acc,i ≡ 0
-  score_i: 单用例 SOL-anchored 性能得分
+  score_i: 单用例 hardware-anchored 性能得分
   N = len(cases)
 ```
 
@@ -484,7 +484,7 @@ $$
 **性能指标计算**：
 
 - **Kernel时间** (`T_cand`)：通过解析 chrome trace 中 `cat="dequeue"` 事件获取 NPU 内核执行时间
-- **SOL-anchored 性能得分** (评分主指标，参见 §4.1 公式)：
+- **hardware-anchored 性能得分** (评分主指标，参见 §4.1 公式)：
   - `score_i = (T_baseline - T_HW) / ((T_cand - T_HW) + (T_baseline - T_HW))`
 - **加速比** (诊断保留)：`SpeedUp = baseline_perf_us / kernel_perf_us`
 - **几何平均加速比** (诊断保留)：对多个用例的加速比取几何平均

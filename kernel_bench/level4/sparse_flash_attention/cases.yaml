@@ -36,12 +36,13 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 24.03
-  note: float16-BSND-GQA-B2S256Skv4096N32Nkv8Dk128-top512
+  note: "float16-BSND-GQA-B2S256Skv4096N32Nkv8Dk128-top512-causal"
 - operator: SparseFlashAttention
   case_id: 2
   input_shape:
@@ -69,12 +70,13 @@ cases:
   attrs:
     scaleValue: 0.07217
     inputLayout: BSND
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 29.49
-  note: float16-BSND-GQA-Dk192Dv128-top512
+  note: "float16-BSND-GQA-Dk192Dv128-top512"
 - operator: SparseFlashAttention
   case_id: 3
   input_shape:
@@ -102,12 +104,13 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BNSD
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 100.66
-  note: bfloat16-BNSD-GQA-top1024
+  baseline_perf_us:
+  t_hw_us: 123.03
+  note: "bfloat16-BNSD-GQA-top1024-causal"
 - operator: SparseFlashAttention
   case_id: 4
   input_shape:
@@ -135,12 +138,13 @@ cases:
   attrs:
     scaleValue: 0.07217
     inputLayout: BNSD
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 37.14
-  note: float16-BNSD-GQA-Dk192-top512
+  note: "float16-BNSD-GQA-Dk192-top512"
 - operator: SparseFlashAttention
   case_id: 5
   input_shape:
@@ -168,12 +172,13 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 13.11
-  note: float16-BSND-GQA-N64Nkv8-top512
+  baseline_perf_us:
+  t_hw_us: 15.38
+  note: "float16-BSND-GQA-N64Nkv8-top512-causal"
 - operator: SparseFlashAttention
   case_id: 6
   input_shape:
@@ -201,12 +206,13 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BSND
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 279.83
-  note: float16-BSND-GQA-B16S1-decode-top512
+  baseline_perf_us:
+  t_hw_us: 17.68
+  note: "float16-BSND-GQA-B16S1-decode-top512"
 - operator: SparseFlashAttention
   case_id: 7
   input_shape:
@@ -234,12 +240,13 @@ cases:
   attrs:
     scaleValue: 0.07217
     inputLayout: BNSD
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 699.8
-  note: bfloat16-BNSD-GQA-B32S1-decode-Dk192-top1024
+  baseline_perf_us:
+  t_hw_us: 88.13
+  note: "bfloat16-BNSD-GQA-B32S1-decode-Dk192-top1024"
 - operator: SparseFlashAttention
   case_id: 8
   input_shape:
@@ -267,12 +274,13 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 70.45
-  note: float16-BSND-GQA-B8S4-MTP-top512
+  baseline_perf_us:
+  t_hw_us: 35.50
+  note: "float16-BSND-GQA-B8S4-MTP-top512-causal"
 - operator: SparseFlashAttention
   case_id: 9
   input_shape:
@@ -300,12 +308,13 @@ cases:
   attrs:
     scaleValue: 0.04419
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us: 115.52
   t_hw_us: 48.53
-  note: float16-BSND-MLA-Dk512Dv512-top512
+  note: "float16-BSND-MLA-Dk512Dv512-top512-causal | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 10
   input_shape:
@@ -333,12 +342,13 @@ cases:
   attrs:
     scaleValue: 0.04167
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 51.56
-  note: float16-BSND-MLA-Dk576Dv512-top512
+  note: "float16-BSND-MLA-Dk576Dv512-top512-causal"
 - operator: SparseFlashAttention
   case_id: 11
   input_shape:
@@ -366,12 +376,13 @@ cases:
   attrs:
     scaleValue: 0.04419
     inputLayout: BNSD
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 194.12
-  note: bfloat16-BNSD-MLA-Dk512-top512
+  note: "bfloat16-BNSD-MLA-Dk512-top512-causal"
 - operator: SparseFlashAttention
   case_id: 12
   input_shape:
@@ -399,12 +410,13 @@ cases:
   attrs:
     scaleValue: 0.04167
     inputLayout: BNSD
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 103.13
-  note: float16-BNSD-MLA-Dk576-top512
+  note: "float16-BNSD-MLA-Dk576-top512"
 - operator: SparseFlashAttention
   case_id: 13
   input_shape:
@@ -432,12 +444,13 @@ cases:
   attrs:
     scaleValue: 0.04419
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
+  baseline_perf_us: 104.12
   t_hw_us: 48.53
-  note: float16-BSND-MLA-top512-long
+  note: "float16-BSND-MLA-top512-long-causal | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 14
   input_shape:
@@ -465,12 +478,13 @@ cases:
   attrs:
     scaleValue: 0.04419
     inputLayout: BSND
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 140.92
-  note: float16-BSND-MLA-B16S1-decode-top512
+  baseline_perf_us: 48.18
+  t_hw_us: 9.85
+  note: "float16-BSND-MLA-B16S1-decode-top512 | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 15
   input_shape:
@@ -498,12 +512,13 @@ cases:
   attrs:
     scaleValue: 0.04167
     inputLayout: BNSD
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 298.39
-  note: bfloat16-BNSD-MLA-B32S1-decode-Dk576-top1024
+  baseline_perf_us:
+  t_hw_us: 38.43
+  note: "bfloat16-BNSD-MLA-B32S1-decode-Dk576-top1024"
 - operator: SparseFlashAttention
   case_id: 16
   input_shape:
@@ -531,12 +546,13 @@ cases:
   attrs:
     scaleValue: 0.04419
     inputLayout: BSND
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 37.17
-  note: float16-BSND-MLA-B8S4-MTP-top512
+  baseline_perf_us: 59.90
+  t_hw_us: 19.69
+  note: "float16-BSND-MLA-B8S4-MTP-top512 | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 17
   input_shape:
@@ -564,12 +580,13 @@ cases:
   attrs:
     scaleValue: 0.04167
     inputLayout: BNSD
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 151.07
-  note: float16-BNSD-MLA-B16S4-MTP-Dk576-top512
+  baseline_perf_us:
+  t_hw_us: 39.66
+  note: "float16-BNSD-MLA-B16S4-MTP-Dk576-top512-causal"
 - operator: SparseFlashAttention
   case_id: 18
   input_shape:
@@ -597,12 +614,13 @@ cases:
   attrs:
     scaleValue: 0.04419
     inputLayout: BSND
+    is_causal: false
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 142.03
-  note: float16-BSND-MLA-B32S1-decode-large-batch
+  baseline_perf_us: 59.18
+  t_hw_us: 19.69
+  note: "float16-BSND-MLA-B32S1-decode-large-batch | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 19
   input_shape:
@@ -630,12 +648,13 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BSND
+    is_causal: true
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 70.11
-  note: float16-BSND-GQA-B8S2-MTP-large-batch
+  baseline_perf_us:
+  t_hw_us: 17.68
+  note: "float16-BSND-GQA-B8S2-MTP-large-batch-causal"
 - operator: SparseFlashAttention
   case_id: 20
   input_shape:
@@ -663,9 +682,10 @@ cases:
   attrs:
     scaleValue: 0.08838
     inputLayout: BSND
+    is_causal: false
   value_range:
   - 0
   - 0
-  baseline_perf_us: null
+  baseline_perf_us:
   t_hw_us: 24.03
-  note: float16-BSND-GQA-zero-input
+  note: "float16-BSND-GQA-zero-input"

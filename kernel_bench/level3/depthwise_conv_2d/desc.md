@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.depthwise_conv2_d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize, int[] stride, int[] padding, int[] dilation, int groups) -> Tensor y
+cann_bench.depthwise_conv_2d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize, int[] stride, int[] padding, int[] dilation, int groups) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -108,7 +108,7 @@ DepthwiseConv2D算子Torch Golden参考实现
 二维深度卷积运算
 公式: y = bias + weight * x
 """
-def depthwise_conv2_d(
+def depthwise_conv_2d(
     x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, kernelSize: list, stride: list, padding: list, dilation: list, groups: int
 ) -> torch.Tensor:
     """
@@ -150,5 +150,5 @@ x = torch.randn(1, 64, 56, 56, dtype=torch.float16, device="npu")
 weight = torch.randn(64, 1, 3, 3, dtype=torch.float16, device="npu")
 bias = torch.randn(64, dtype=torch.float16, device="npu")
 
-y = cann_bench.depthwise_conv2_d(x, weight, bias, kernelSize=[3, 3], stride=[1, 1], padding=[1, 1], dilation=[1, 1], groups=64)
+y = cann_bench.depthwise_conv_2d(x, weight, bias, kernelSize=[3, 3], stride=[1, 1], padding=[1, 1], dilation=[1, 1], groups=64)
 ```

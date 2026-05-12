@@ -44,7 +44,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.conv3_d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] pads, int[] dilations, int groups, int[] filter_size) -> Tensor y
+cann_bench.conv_3d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] pads, int[] dilations, int groups, int[] filter_size) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -124,7 +124,7 @@ Conv3DBackpropFilter算子Torch Golden参考实现
 Conv3D的filter梯度
 公式: y = conv3d_filter_grad(x, grad, filter_size)
 """
-def conv3_d_backprop_filter(
+def conv_3d_backprop_filter(
     x: torch.Tensor, grad: torch.Tensor, strides: list, pads: list, dilations: list, groups: int = 1, filter_size: list = None
 ) -> torch.Tensor:
     """
@@ -168,5 +168,5 @@ x = torch.randn(2, 64, 8, 16, 16, dtype=torch.float32, device="npu")
 grad = torch.randn(2, 128, 6, 14, 14, dtype=torch.float32, device="npu")
 
 # filter_size: [C_out, C_in/groups, K_d, K_h, K_w]
-y = cann_bench.conv3_d_backprop_filter(x, grad, strides=[1, 1, 1], pads=[1, 1, 1, 1, 1, 1], dilations=[1, 1, 1], groups=1, filter_size=[128, 64, 3, 3, 3])
+y = cann_bench.conv_3d_backprop_filter(x, grad, strides=[1, 1, 1], pads=[1, 1, 1, 1, 1, 1], dilations=[1, 1, 1], groups=1, filter_size=[128, 64, 3, 3, 3])
 ```

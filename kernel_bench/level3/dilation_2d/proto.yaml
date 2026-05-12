@@ -63,5 +63,5 @@ operator:
     description: 膨胀后的图像
     dtype:
     - float16
-  schema: dilation2_d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode,
+  schema: dilation_2d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode,
     int[] pads, bool ceil_mode, str data_format) -> Tensor y

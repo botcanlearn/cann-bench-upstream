@@ -162,18 +162,9 @@ class SubprocessRunner:
 
             # 解析结果
             op_d = ops[0]
-            case_results: List[EvalCaseResult] = []
-            for r in op_d.get("results", []):
-                case_results.append(EvalCaseResult(
-                    case_id=str(r.get("case_id", "")),
-                    rel_path=r.get("rel_path", rel_path),
-                    operator=r.get("operator", operator_name),
-                    case_num=int(r.get("case_num", 0)),
-                    success=bool(r.get("success", False)),
-                    error_msg=r.get("error_msg"),
-                    baseline_perf_us=r.get("baseline_perf_us", 0.0),
-                    t_hw_us=r.get("t_hw_us", 0.0),
-                ))
+            case_results: List[EvalCaseResult] = [
+                EvalCaseResult.from_dict(r) for r in op_d.get("results", [])
+            ]
 
             return EvalOperatorResult(
                 rel_path=op_d.get("rel_path", rel_path),
@@ -315,18 +306,9 @@ class SubprocessRunner:
                 )
 
             op_d = ops[0]
-            case_results: List[EvalCaseResult] = []
-            for r in op_d.get("results", []):
-                case_results.append(EvalCaseResult(
-                    case_id=str(r.get("case_id", "")),
-                    rel_path=r.get("rel_path", rel_path),
-                    operator=r.get("operator", operator_name),
-                    case_num=int(r.get("case_num", 0)),
-                    success=bool(r.get("success", False)),
-                    error_msg=r.get("error_msg"),
-                    baseline_perf_us=r.get("baseline_perf_us", 0.0),
-                    t_hw_us=r.get("t_hw_us", 0.0),
-                ))
+            case_results: List[EvalCaseResult] = [
+                EvalCaseResult.from_dict(r) for r in op_d.get("results", [])
+            ]
 
             passed = sum(1 for r in case_results if r.success)
             speedups = [r.get_speedup() for r in case_results if r.success and r.get_speedup() > 0]

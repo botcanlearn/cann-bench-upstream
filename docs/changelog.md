@@ -2,7 +2,7 @@
 
 ## V0.2.0 (2026-05-07)
 
-**评分体系切换为 SOL-anchored 公式 (对齐 bench.tex)**
+**评分体系切换为 hardware-anchored 公式 (对齐 bench.tex)**
 
 - 评分公式改版：单用例性能得分由原始 `SpeedUp = baseline / candidate` 改为 `score_i = (T_baseline − T_HW) / ((T_cand − T_HW) + (T_baseline − T_HW))`（bench.tex Eq. 3）
 - 单算子综合评分改版：`EachOperatorScore = [w_c·δ_pass + Σ δ_acc,i (w_f + w_p·score_i) / N] · 100`，归一化到 [0, 100]（bench.tex Eq. 4）

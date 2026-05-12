@@ -13,9 +13,11 @@
 - 难度等级：L4（FusedComposite）
 - 多输入（q_nope, q_rope, k_nope, k_rope, v）单输出
 - Q 和 K 均分为 nope 和 rope 两部分传入，内部拼接后计算注意力
-- V 与 K_nope 共享 d_nope 维度，输出 head dim 为 d_nope
+- V 与 K_nope 不仅 shape 相同 (`[B, S_kv, N_kv, d_nope]`)，**数值上也完全相同**——生产环境中 V 就是从 latent KV cache 读出的 K_nope 那段内存，共享同一份数据；算子接口为兼容通用 attention API 保留为独立入参
+- 输出 head dim 为 d_nope
 - 支持 GQA 模式（N_q 个 query head 共享 N_kv 个 KV head），MLA 典型配置 N_kv=1
 - 支持 BSND 和 BNSD 两种输入输出 layout
+- 支持 `is_causal` 因果掩码：仅计算 attention 矩阵 [S, S_kv] 中从右下角向左上方延伸 45° 对角线及其下方部分（其余位置在 softmax 前置 -inf）
 
 ## 2. 算子定义
 
@@ -45,15 +47,16 @@ $$
 2. **K 拼接**：$K = \text{concat}(K_{nope}, K_{rope})$
 3. **GQA 扩展**：将 KV head 复制 $N_q / N_{kv}$ 次匹配 query head 数
 4. **缩放点积**：$\text{scores} = Q \times K^T \times \text{scaleValue}$
-5. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$
-6. **加权求和**：$y = \text{attn\_weights} \times V$
+5. **因果掩码（可选）**：当 `is_causal=True` 时，对 `scores[..., i, j]` 满足 $j > i + (S_{kv} - S)$ 的位置置为 $-\infty$（即仅保留从右下角向左上方 45° 延伸的对角线及其下方部分），$S=S_{kv}$ 时退化为标准下三角掩码
+6. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$
+7. **加权求和**：$y = \text{attn\_weights} \times V$
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-cann_bench.mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tensor v, int numKVHeads=1, float scaleValue=-1.0, str inputLayout="BSND") -> Tensor y
+cann_bench.mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tensor v, int numKVHeads=1, float scaleValue=-1.0, str inputLayout="BSND", bool is_causal=False) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -64,10 +67,11 @@ cann_bench.mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tenso
 | q_rope | Tensor | 必选 | query 的 rope 部分，BSND: [B, S, N_q, d_rope]，BNSD: [B, N_q, S, d_rope] |
 | k_nope | Tensor | 必选 | key 的 nope 部分，BSND: [B, S_kv, N_kv, d_nope]，BNSD: [B, N_kv, S_kv, d_nope] |
 | k_rope | Tensor | 必选 | key 的 rope 部分，BSND: [B, S_kv, N_kv, d_rope]，BNSD: [B, N_kv, S_kv, d_rope] |
-| v | Tensor | 必选 | 值张量，BSND: [B, S_kv, N_kv, d_nope]，BNSD: [B, N_kv, S_kv, d_nope] |
+| v | Tensor | 必选 | 值张量，BSND: [B, S_kv, N_kv, d_nope]，BNSD: [B, N_kv, S_kv, d_nope]。语义上要求 `v == k_nope`（数值完全相同，共享 latent KV cache） |
 | numKVHeads | int | 1 | KV 头数 |
 | scaleValue | float | -1.0 | 缩放因子，<=0 时自动使用 1/sqrt(d_nope + d_rope) |
 | inputLayout | str | "BSND" | 输入输出 layout，"BSND" 或 "BNSD" |
+| is_causal | bool | False | 是否启用因果掩码。False 时全计算；True 时仅计算 [S, S_kv] attention 矩阵中从右下角向左上方 45° 延伸的对角线及其下方部分（即满足 $j \le i + (S_{kv} - S)$ 的位置），上方部分在 softmax 前置 -inf |
 
 ### 输出
 
@@ -80,7 +84,6 @@ cann_bench.mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tenso
 | 输入 dtype | 输出 dtype |
 |-----------|-----------|
 | float16 | float16 |
-| float32 | float32 |
 | bfloat16 | bfloat16 |
 
 ### 规则与约束
@@ -89,7 +92,9 @@ cann_bench.mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tenso
 - N_q 必须能被 N_kv 整除
 - q_nope 和 k_nope 的 head dim 一致（d_nope），q_rope 和 k_rope 的 head dim 一致（d_rope）
 - v 的 head dim = d_nope，输出的 head dim 也为 d_nope
+- **语义约束 `v == k_nope`**：v 与 k_nope 在数值上必须完全相同（共享同一份 latent KV cache）。算子接口保留独立入参以兼容标准 attention API，但调用方有责任保证两者一致；本规范的 Golden 实现不强制检查
 - 所有输入和输出遵循相同的 layout（BSND 或 BNSD）
+- `is_causal=True` 时要求 $S \le S_{kv}$（否则 mask 会将部分 query 行全部屏蔽，导致 softmax 出现 NaN）
 
 ## 4. 精度要求
 
@@ -128,12 +133,17 @@ MLA算子Torch Golden参考实现
 
 多头潜在注意力 (Multi-Head Latent Attention)，仅包含注意力计算部分
 Q 和 K 均分为 nope 和 rope 两部分传入，内部拼接后计算注意力
-V 与 K_nope 共享 d_nope 维度
 支持 BSND 和 BNSD 两种输入 layout
+
+语义约束:
+    v 与 k_nope 在数值上完全相同 (共享同一份 latent KV cache)。
+    算子接口为兼容通用 attention API 保留独立入参；调用方需保证两者
+    一致，本 Golden 实现不做强制检查。
 
 公式:
     Q = concat(Q_nope, Q_rope)   dim: d_nope + d_rope
     K = concat(K_nope, K_rope)   dim: d_nope + d_rope
+    V = K_nope                    dim: d_nope     (语义上等价)
     y = softmax(Q @ K^T * scaleValue) @ V
 """
 
@@ -147,6 +157,7 @@ def mla(
     numKVHeads: int = 1,
     scaleValue: float = -1.0,
     inputLayout: str = "BSND",
+    is_causal: bool = False,
 ) -> torch.Tensor:
     """
     多头潜在注意力 (Multi-Head Latent Attention)
@@ -160,6 +171,7 @@ def mla(
         numKVHeads: KV 头数
         scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(d_nope + d_rope)
         inputLayout: 输入 layout，"BSND" 或 "BNSD"
+        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足 j > i + (S_kv - S) 的位置置 -inf
 
     Returns:
         输出张量，与输入 layout 一致，head dim 为 d_nope
@@ -200,6 +212,11 @@ def mla(
 
     # 缩放点积注意力
     scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    if is_causal:
+        i = torch.arange(S, device=scores.device).unsqueeze(-1)
+        j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
+        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf
+        scores = scores.masked_fill(causal_mask, float('-inf'))
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
     out = torch.matmul(attn_weights, v)  # [B, N_q, S, d_nope]
 
@@ -232,6 +249,6 @@ k_nope = torch.randn(B, S_kv, N_kv, d_nope, dtype=torch.float16, device="npu")
 k_rope = torch.randn(B, S_kv, N_kv, d_rope, dtype=torch.float16, device="npu")
 v = torch.randn(B, S_kv, N_kv, d_nope, dtype=torch.float16, device="npu")
 y = cann_bench.mla(q_nope, q_rope, k_nope, k_rope, v,
-                      numKVHeads=N_kv, scaleValue=-1.0, inputLayout="BSND")
+                      numKVHeads=N_kv, scaleValue=-1.0, inputLayout="BSND", is_causal=False)
 # y shape: [B, S, N_q, d_nope] = [2, 128, 128, 512]
 ```

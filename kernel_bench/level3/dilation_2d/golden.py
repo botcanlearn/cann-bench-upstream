@@ -19,7 +19,7 @@ Dilation2D 算子 Torch Golden 参考实现
 2D形态学膨胀操作，对每个位置在膨胀窗口内取 input + filter 的最大值
 公式: y[b, y, x, c] = max_{dy,dx} (x[b, y*stride_h + rate_h*dy, x*stride_w + rate_w*dx, c] + filter[dy, dx, c])
 """
-def dilation2_d(
+def dilation_2d(
     x: torch.Tensor, filter: torch.Tensor, strides: list, rates: list,
     padding_mode: str = 'SAME', pads: list = [0, 0, 0, 0],
     ceil_mode: bool = False, data_format: str = 'NHWC'

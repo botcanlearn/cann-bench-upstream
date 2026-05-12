@@ -29,9 +29,9 @@
 |------|------|------|------|
 | 编译正确性 | Pass/Fail | w_c=0.2 | 是否编译通过（算子级一次） |
 | 功能正确性 | 精度用例通过 | w_f=0.3 | 单用例是否通过精度门 |
-| 性能优化性 | SOL-anchored score | w_p=0.5 | 见下方公式 |
+| 性能优化性 | hardware-anchored score | w_p=0.5 | 见下方公式 |
 
-**单用例 SOL-anchored 性能得分** (bench.tex Eq. 3)：
+**单用例 hardware-anchored 性能得分** (bench.tex Eq. 3)：
 
 $$
 \text{score}_i = \frac{T_{\text{baseline},i} - T_{\text{HW},i}}{(T_{\text{cand},i} - T_{\text{HW},i}) + (T_{\text{baseline},i} - T_{\text{HW},i})}

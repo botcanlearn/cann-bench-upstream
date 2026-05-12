@@ -12,45 +12,56 @@ operator:
   name: GroupedMatmul
   category: Contraction
   difficulty: L3
-  formula: y_i = x_i @ weight_i + bias_i
-  description: 分组矩阵乘法算子，每组矩阵乘的维度大小可以不同
-  shape_support: 'x: TensorList of [m_i, k_i], weight: TensorList of [k_i, n_i] or [n_i, k_i]'
+  formula: |
+    对每个专家 g ∈ [0, E):
+      rows_g = group_list 指定属于第 g 组的 token 行（cumsum 语义）
+      y[rows_g] = x[rows_g] @ weight[g] (+ bias[g])
+  description: 分组矩阵乘法算子，x 沿 M 轴合并为单 tensor，weight 按 expert 维堆叠为 [E, K, N]，通过 group_list（cumsum）切分每组在 M 轴上的行
+  shape_support: 'x: [M, K], weight: [E, K, N] (transpose_weight=false) 或 [E, N, K] (transpose_weight=true), bias: [E, N]; 输出 y: [M, N]'
   attrs:
+  - name: group_list
+    type: List[int]
+    description: 每组 token 的累计行数（cumsum 语义），长度为 E，最后一个值等于 M；允许相邻值相等表示空组
+    required: true
   - name: split_item
     type: int
     default: 0
-    description: 输出切分模式，0/1=输出多tensor（每组独立），2/3=输出单tensor（结果连续存放）
+    description: 输出切分模式，0/1=输出 List[Tensor] 长度 E（按 group_list 切回每组），2/3=输出单 tensor [M, N]
     required: false
   - name: transpose_weight
     type: bool
     default: false
-    description: 是否转置权重，false时weight shape为[k_i, n_i]（直接参与matmul），true时为[n_i, k_i]（需转置后参与matmul）
+    description: 是否转置权重，false 时 weight 为 [E, K, N]（直接 matmul），true 时为 [E, N, K]（需在最后两维 transpose 后 matmul）
     required: false
   inputs:
   - name: x
-    description: 输入矩阵TensorList，每个tensor shape为[m_i, k_i]
+    description: 激活矩阵（GMM 左矩阵），所有组沿 M 轴合并为单 tensor
     dtype:
     - float16
     - bfloat16
     - float32
+    shape: '[M, K]'
   - name: weight
-    description: 权重矩阵TensorList，每个tensor shape为[k_i, n_i]（transpose_weight=false）或[n_i, k_i]（transpose_weight=true）
+    description: 专家权重（GMM 右矩阵），按 expert 维堆叠；transpose_weight=false 时为 [E, K, N]，true 时为 [E, N, K]
     dtype:
     - float16
     - bfloat16
     - float32
+    shape: '[E, K, N] 或 [E, N, K]'
   - name: bias
-    description: 偏置TensorList（可选），每个tensor shape为[n_i]
+    description: 偏置（可选），按 expert 维堆叠
     dtype:
     - float16
     - bfloat16
     - float32
+    shape: '[E, N]'
     optional: true
   outputs:
   - name: y
-    description: 输出TensorList（split_item=0/1时多tensor）或单tensor（split_item=2/3时），每个tensor shape为[m_i, n_i]
+    description: 输出 tensor，split_item=2/3 时为单 tensor [M, N]，0/1 时为 List[Tensor] 长度 E（每组 [m_i, N]）
     dtype:
     - float16
     - bfloat16
     - float32
-  schema: grouped_matmul(Tensor[] x, Tensor[] weight, Tensor[]? bias=None, int split_item=0, bool transpose_weight=False) -> Tensor[] y
+    shape: '[M, N]'
+  schema: grouped_matmul(Tensor x, Tensor weight, Tensor? bias, int[] group_list, int split_item=0, bool transpose_weight=False) -> Tensor y

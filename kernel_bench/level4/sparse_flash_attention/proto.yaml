@@ -28,6 +28,11 @@ operator:
     default: "BSND"
     description: 张量布局格式，"BSND" 或 "BNSD"，所有张量（含 sparseIndices 和输出）的布局保持一致
     required: false
+  - name: is_causal
+    type: bool
+    default: false
+    description: 是否启用因果掩码（右下角对齐），True 时在稀疏 gather 之上额外屏蔽 sparseIndices[..., s1, i] > s1 + (S2 - S1) 的位置
+    required: false
   inputs:
   - name: query
     description: 查询张量
@@ -42,7 +47,7 @@ operator:
     - bfloat16
     shape: "BSND: [B, S2, N2, Dk]; BNSD: [B, N2, S2, Dk]"
   - name: value
-    description: 值张量，head dim 可与 key 不同
+    description: 值张量，head dim 可与 key 不同。语义上 value == key[..., :Dv]（同一份 latent KV cache 的前缀视图）；Dk==Dv 时退化为 value == key；接口保留独立入参以兼容通用 attention API
     dtype:
     - float16
     - bfloat16
@@ -59,4 +64,4 @@ operator:
     - float16
     - bfloat16
     shape: "BSND: [B, S1, N1, Dv]; BNSD: [B, N1, S1, Dv]"
-  schema: sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndices, float scaleValue, str inputLayout="BSND") -> Tensor y
+  schema: sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndices, float scaleValue, str inputLayout="BSND", bool is_causal=False) -> Tensor y

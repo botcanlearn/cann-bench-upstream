@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.adaptive_avg_pool3_d(Tensor x, list[int] output_size) -> Tensor y
+cann_bench.adaptive_avg_pool_3d(Tensor x, list[int] output_size) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -98,7 +98,7 @@ AdaptiveAvgPool3D算子Torch Golden参考实现
 完成输入张量的3D自适应平均池化计算
 公式: y = adaptive_avg_pool3d(x, output_size)
 """
-def adaptive_avg_pool3_d(
+def adaptive_avg_pool_3d(
     x: torch.Tensor, output_size: tuple[int, int, int]
 ) -> torch.Tensor:
     """
@@ -127,8 +127,8 @@ import torch
 import cann_bench
 
 x = torch.randn(2, 32, 16, 64, 64, dtype=torch.float16, device="npu")
-y = cann_bench.adaptive_avg_pool3_d(x, [8, 8, 8])  # 自适应池化到 8x8x8
+y = cann_bench.adaptive_avg_pool_3d(x, [8, 8, 8])  # 自适应池化到 8x8x8
 
 x = torch.randn(2, 64, 32, 128, 128, dtype=torch.float32, device="npu")
-y = cann_bench.adaptive_avg_pool3_d(x, [1, 1, 1])  # 全局平均池化
+y = cann_bench.adaptive_avg_pool_3d(x, [1, 1, 1])  # 全局平均池化
 ```

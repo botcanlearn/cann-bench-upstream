@@ -98,7 +98,7 @@ class EvalCaseResult:
         return 0.0
 
     def get_perf_score(self) -> Optional[float]:
-        """单用例 SOL-anchored 性能得分（bench.tex Eq. 3）
+        """单用例 hardware-anchored 性能得分（bench.tex Eq. 3）
 
         score = (T_baseline - T_HW) / ((T_cand - T_HW) + (T_baseline - T_HW))
 

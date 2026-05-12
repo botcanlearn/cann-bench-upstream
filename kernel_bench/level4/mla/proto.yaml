@@ -15,8 +15,9 @@ operator:
   formula: |
     Q = concat(Q_nope, Q_rope)   dim: d_nope + d_rope
     K = concat(K_nope, K_rope)   dim: d_nope + d_rope
+    V = K_nope                    dim: d_nope        (语义上等价)
     y = softmax(Q @ K^T * scaleValue) @ V
-  description: 多头潜在注意力 (Multi-Head Latent Attention)，Q 和 K 均分为 nope/rope 两部分拼接，V 与 K_nope 共享 d_nope 维度，支持 BSND/BNSD layout
+  description: 多头潜在注意力 (Multi-Head Latent Attention)，Q 和 K 均分为 nope/rope 两部分拼接；v 与 k_nope 在数值上完全相同 (共享 latent KV cache)，接口保留独立入参以兼容通用 attention API；支持 BSND/BNSD layout
   shape_support: "BSND: q_nope/v [B, S, N, d_nope]，q_rope [B, S, N, d_rope]，k_nope [B, S_kv, N_kv, d_nope]，k_rope [B, S_kv, N_kv, d_rope]；BNSD 对应交换 S 和 N 维度"
   attrs:
   - name: numKVHeads
@@ -34,40 +35,40 @@ operator:
     default: "BSND"
     description: 输入输出 layout，"BSND" 或 "BNSD"
     required: false
+  - name: is_causal
+    type: bool
+    default: false
+    description: 是否启用因果掩码（右下角对齐），True 时仅计算 attention 矩阵中 j <= i + (S_kv - S) 的位置
+    required: false
   inputs:
   - name: q_nope
     description: query 的 nope 部分
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "BSND: [B, S, N_q, d_nope]；BNSD: [B, N_q, S, d_nope]"
   - name: q_rope
     description: query 的 rope 部分
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "BSND: [B, S, N_q, d_rope]；BNSD: [B, N_q, S, d_rope]"
   - name: k_nope
     description: key 的 nope 部分
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "BSND: [B, S_kv, N_kv, d_nope]；BNSD: [B, N_kv, S_kv, d_nope]"
   - name: k_rope
     description: key 的 rope 部分
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "BSND: [B, S_kv, N_kv, d_rope]；BNSD: [B, N_kv, S_kv, d_rope]"
   - name: v
-    description: 值张量，与 K_nope 共享 d_nope 维度
+    description: 值张量，head dim 为 d_nope。语义上 v 与 k_nope 数值完全相同 (共享同一份 latent KV cache，生产环境中即同一段 HBM)；接口保留独立入参以兼容通用 attention API
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "BSND: [B, S_kv, N_kv, d_nope]；BNSD: [B, N_kv, S_kv, d_nope]"
   outputs:
@@ -75,7 +76,6 @@ operator:
     description: 注意力输出张量，head dim 为 d_nope
     dtype:
     - float16
-    - float32
     - bfloat16
     shape: "BSND: [B, S, N_q, d_nope]；BNSD: [B, N_q, S, d_nope]"
-  schema: mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tensor v, int numKVHeads=1, float scaleValue=-1.0, str inputLayout="BSND") -> Tensor y
+  schema: mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tensor v, int numKVHeads=1, float scaleValue=-1.0, str inputLayout="BSND", bool is_causal=False) -> Tensor y

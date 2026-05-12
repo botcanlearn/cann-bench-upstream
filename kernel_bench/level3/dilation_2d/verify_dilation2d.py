@@ -26,7 +26,7 @@ import torch
 
 # 添加 golden 模块路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from golden import dilation2_d
+from golden import dilation_2d
 
 
 def pytorch_dilation2d(x_np, filter_np, strides, rates, padding):
@@ -34,7 +34,7 @@ def pytorch_dilation2d(x_np, filter_np, strides, rates, padding):
     x = torch.from_numpy(x_np)
     filter = torch.from_numpy(filter_np)
 
-    y = dilation2_d(
+    y = dilation_2d(
         x, filter,
         strides=strides,
         rates=rates,

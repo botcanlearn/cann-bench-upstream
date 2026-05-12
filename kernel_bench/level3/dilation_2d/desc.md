@@ -30,7 +30,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.dilation2_d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode, int[] pads, bool ceil_mode, str data_format) -> Tensor y
+cann_bench.dilation_2d(Tensor x, Tensor filter, int[] strides, int[] rates, str padding_mode, int[] pads, bool ceil_mode, str data_format) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -107,7 +107,7 @@ Dilation2D 算子 Torch Golden 参考实现
 2D形态学膨胀操作，使用最大池化在局部邻域内获取最大值
 公式: y[b, y, x, c] = max_{dy,dx} x[b, y + rates[1]*dy, x + rates[2]*dx, c] * filter[dy, dx, c]
 """
-def dilation2_d(
+def dilation_2d(
     x: torch.Tensor, filter: torch.Tensor, strides: list, rates: list,
     padding_mode: str = 'SAME', pads: list = [0, 0, 0, 0],
     ceil_mode: bool = False, data_format: str = 'NHWC'
@@ -211,5 +211,5 @@ import cann_bench
 x = torch.randn(2, 64, 64, 64, dtype=torch.float16, device="npu")  # NHWC: [N, H, W, C]
 filter = torch.randn(3, 3, 64, dtype=torch.float16, device="npu")   # [filter_h, filter_w, C]
 
-y = cann_bench.dilation2_d(x, filter, strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding_mode='SAME', pads=[0, 0, 0, 0], ceil_mode=False, data_format='NHWC')
+y = cann_bench.dilation_2d(x, filter, strides=[1, 1, 1, 1], rates=[1, 1, 1, 1], padding_mode='SAME', pads=[0, 0, 0, 0], ceil_mode=False, data_format='NHWC')
 ```

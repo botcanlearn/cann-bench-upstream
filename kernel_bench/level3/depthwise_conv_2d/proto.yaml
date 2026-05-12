@@ -9,53 +9,58 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: Conv3DBackpropFilter
+  name: DepthwiseConv2D
   category: Contraction
   difficulty: L3
-  formula: y = conv3d_filter_grad(x, grad, filter_size)
-  description: Conv3D的filter梯度
-  shape_support: 'x: [N, C_in, D, H, W], grad: [N, C_out, D_out, H_out, W_out], filter_size: [C_out, C_in, K_d, K_h, K_w]'
+  formula: y = bias + weight * x
+  description: 二维深度卷积运算
+  shape_support: 'x: [N, C_in, H, W], weight: [C_out, 1, K_h, K_w]'
   attrs:
-  - name: strides
+  - name: kernelSize
+    type: ListInt
+    description: 卷积核大小
+    required: true
+  - name: stride
     type: ListInt
     description: 步长
     required: true
-  - name: pads
+  - name: padding
     type: ListInt
-    description: 填充，6元素格式 [D_front, D_back, H_top, H_bottom, W_left, W_right]
+    description: 填充
     required: true
-  - name: dilations
+  - name: dilation
     type: ListInt
     description: 膨胀率
     required: true
   - name: groups
     type: Int
-    default: 1
     description: 分组数
-    required: false
-  - name: filter_size
-    type: ListInt
-    description: filter的shape [C_out, C_in/groups, K_d, K_h, K_w]
     required: true
   inputs:
   - name: x
-    description: 输入特征图，shape为[N, C_in, D, H, W]
+    description: 输入特征图
     dtype:
     - float16
-    - bfloat16
     - float32
-  - name: grad
-    description: 输出梯度，shape为[N, C_out, D_out, H_out, W_out]
+    - bfloat16
+  - name: weight
+    description: 卷积核
     dtype:
     - float16
-    - bfloat16
     - float32
+    - bfloat16
+  - name: bias
+    description: 偏置
+    dtype:
+    - float16
+    - float32
+    - bfloat16
   outputs:
   - name: y
-    description: filter梯度
+    description: 输出特征图
     dtype:
     - float16
-    - bfloat16
     - float32
-  schema: conv3_d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] pads,
-    int[] dilations, int groups, int[] filter_size) -> Tensor y
+    - bfloat16
+  schema: depthwise_conv_2d(Tensor x, Tensor weight, Tensor bias, int[] kernelSize,
+    int[] stride, int[] padding, int[] dilation, int groups) -> Tensor y
