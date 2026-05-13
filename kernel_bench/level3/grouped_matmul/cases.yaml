@@ -140,7 +140,7 @@ cases:
   dtype:
   - bfloat16
   - bfloat16
-  - bfloat16
+  - float32
   attrs:
     group_list: [22, 44, 44, 65, 86, 86, 107, 128]
     split_item: 0
@@ -149,10 +149,9 @@ cases:
   - [-2, 2]
   - [-2, 2]
   - [-0.2, 0.2]
-  baseline_perf_us: 12.98
+  baseline_perf_us: 12.13
   t_hw_us: 2.2571
-  note: "bf16-空组-E=8-M=128-含2个empty group(idx=2,5)-带bias | baseline_kernels: Cast×1
-    + GroupedMatmul×1"
+  note: "bf16-空组-E=8-M=128-含2个empty group(idx=2,5)-带bias | baseline_kernels: GroupedMatmul×1"
 - operator: GroupedMatmul
   case_id: 8
   input_shape:
@@ -283,7 +282,7 @@ cases:
   dtype:
   - bfloat16
   - bfloat16
-  - bfloat16
+  - float32
   attrs:
     group_list: [192, 385, 577, 769]
     split_item: 0
@@ -292,9 +291,9 @@ cases:
   - [-5, 10]
   - [-5, 10]
   - [-1, 1]
-  baseline_perf_us: 16.201
+  baseline_perf_us: 16.77
   t_hw_us: 0.2377
-  note: "bf16-小尺寸全质数-M=769,K=127,N=255-E=4-非对称值域 | baseline_kernels: Cast×1 + GroupedMatmul×1"
+  note: "bf16-小尺寸全质数-M=769,K=127,N=255-E=4-非对称值域 | baseline_kernels: GroupedMatmul×1"
 - operator: GroupedMatmul
   case_id: 15
   input_shape:
@@ -342,7 +341,7 @@ cases:
   dtype:
   - bfloat16
   - bfloat16
-  - bfloat16
+  - float32
   attrs:
     group_list: [256, 512, 768, 1024]
     split_item: 0
@@ -351,9 +350,9 @@ cases:
   - [-inf, inf]
   - [-inf, inf]
   - [-1, 1]
-  baseline_perf_us: 11.0
+  baseline_perf_us: 11.61
   t_hw_us: 0.272
-  note: "bf16-inf特殊值-K=127质数-E=4-M=1024-N=256-带bias | baseline_kernels: Cast×1 + GroupedMatmul×1"
+  note: "bf16-inf特殊值-K=127质数-E=4-M=1024-N=256-带bias | baseline_kernels: GroupedMatmul×1"
 - operator: GroupedMatmul
   case_id: 18
   input_shape:

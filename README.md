@@ -1,6 +1,8 @@
-# cann-bench: CANN 领域评测
+# CANN Bench: CANN 领域评测
 
 评测AI在处理CANN领域代码任务的能力，涵盖算子生成、算子优化等领域，支撑模型选型、训练效果评估，统一量化评估标准，识别Agent能力短板，构建CANN领域评测平台，推动AI能力在CANN领域的持续演进。
+
+📖 [查看详细技术报告](docs/technical-report.pdf)
 
 ## 👋 Task Description
 
@@ -28,48 +30,49 @@
 | 维度 | 指标 | 权重 | 说明 |
 |------|------|------|------|
 | 编译正确性 | Pass/Fail | w_c=0.2 | 是否编译通过（算子级一次） |
-| 功能正确性 | 精度用例通过 | w_f=0.3 | 单用例是否通过精度门 |
-| 性能优化性 | hardware-anchored score | w_p=0.5 | 见下方公式 |
+| 功能正确性 | 精度用例通过 | w_f=0.3 | 单用例是否通过精度标准测试 |
+| 性能优化性 | 性能用例评分 | w_p=0.5 | 见下方公式 |
 
-**单用例 hardware-anchored 性能得分** (bench.tex Eq. 3)：
+**单用例性能得分** ：
 
 $$
 \text{score}_i = \frac{T_{\text{baseline},i} - T_{\text{HW},i}}{(T_{\text{cand},i} - T_{\text{HW},i}) + (T_{\text{baseline},i} - T_{\text{HW},i})}
 $$
 
-其中 `T_HW = t_hw_us`（硬件下界，cases.yaml 中提供）；`T_baseline = baseline_perf_us`；`T_cand` 为候选 kernel 实测时间。
-
-**单算子综合评分** (bench.tex Eq. 4)：
+其中 `T_HW = t_hw_us` 为硬件理论性能上界，已在 cases.yaml 中提供；`T_baseline = baseline_perf_us` 为CANN基线性能，也已在 cases.yaml 中提供（由于torch接口功能限制，部分基线实现由算子拼接得到）；`T_cand` 为候选 kernel 实测时间。这个公式的设计保证了如果性能低于基线（T_cand > T_baseline），得分为0-0.5；如果性能优于基线（T_cand < T_baseline），得分0.5以上；如果性能达到硬件上界或更高（T_cand <= T_HW），得分为1以上。
+![性能得分示例曲线](docs/assets/perf_score.png)
+**单算子综合评分** ：
 
 $$
 \text{EachOperatorScore} = \left[ w_c \cdot \delta_{\text{pass}} + \sum_{i \in \text{cases}} \frac{\delta_{\text{accuracy},i} (w_f + w_p \cdot \text{score}_i)}{|\text{cases}|} \right] \cdot 100
 $$
 
-- 满分 100，编译失败时 `δ_pass=0` ⇒ 整算子计 0
-- Level-N 得分 = Σ 该 level 内算子 EachOperatorScore
-- benchmark 总分 = Σ 全部算子 EachOperatorScore（= Level1 + Level2 + Level3 + Level4）
+- 单个算子满分 100，编译失败时 `δ_pass=0` ⇒ 整算子计 0， 某个用例精度不过则只扣除改用例得分（`δ_accuracy,i=0`），性能得分按用例总和计算。
+- Level-N 得分 = 该 level 内算子 EachOperatorScore 总合
+- benchmark 总分 = 全部算子 EachOperatorScore（= Level1 + Level2 + Level3 + Level4）总和
 
 ## 🔍 Directory Structure
 
 ```
 cann-bench/
-├── tasks/        # 评测任务
-│   ├── ops/      # 算子生成任务
-│   └── models/   # 模型优化任务
-├── community_tasks/    
+├── kernel_bench/           # 评测任务集
+│   ├── level1/             # Level 1 算子（基础算子）
+│   ├── level2/             # Level 2 算子（中级算子）
+│   ├── level3/             # Level 3 算子（高级算子）
+│   └── level4/             # Level 4 算子（复杂算子）
 ├── bench_lab/              # 实验室级测试用例(后续版本会规划进主评测集)
-│   ├── ops/          # 算子优化任务
-│   └── models/       # 模型类任务
+│   └── custom_bench/       # 自定义算子评测任务
 ├── examples/               # 示例代码工程
 │   ├── aclnn_launch_example/        # ACLNN 算子工程样例
 │   └── direct_launch_example/       # 直接算子工程样例
 ├── docs/                   # 设计文档
 ├── scripts/                # 测试脚本
-│   ├── run_test.sh         # 统一测试运行脚本
-│   └── run_evaluation.py   # 评测运行脚本
+│   ├── run_evaluation.sh   # 统一评测运行脚本
+│   ├── run_test.sh         # 测试运行脚本
+│   └── run_ut.sh           # 单元测试脚本
 ├── src/                    # 源代码
 │   └── kernel_eval/        # 算子评测模块
-├── test/                   # 测试代码
+├── tests/                  # 测试代码
 ├── requirements.txt        # Python 依赖
 ├── LICENSE                 # 许可证文件
 └── README.md               # 项目说明文档
@@ -99,7 +102,7 @@ pip install -r requirements.txt
 ### 2. 生成算子代码
 参考 examples 中的算子工程样例，根据算子规格描述生成 Ascend C 算子代码工程（例如generated_project）。
 - **ACNN 算子工程样例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
-- **直接算子工程样例**：[examples/direct_launch_example/](examples/direct_launch_example/)
+- **直调算子工程样例**：[examples/direct_launch_example/](examples/direct_launch_example/)
 
 ### 3. 运行评测
 1. **准备测试用例**  
@@ -107,9 +110,10 @@ pip install -r requirements.txt
 
 2. **运行评测脚本**  
    ```bash
-   python scripts/run_evaluation.py --task kernel_bench --source-dir generated_project
+   # examples/aclnn_launch_example可以替换成自己ai按照参考工程生成的目录
+   bash scripts/run_evaluation.sh --task-dir kernel_bench --source-dir examples/aclnn_launch_example/
    ```
-   评测结果将在 `results/` 目录下生成。
+   评测结果将在 `reports/` 目录下生成。
 
 ## 📋 Test Case Structure
 
@@ -118,6 +122,7 @@ pip install -r requirements.txt
 | 文件 | 说明 |
 |------|------|
 | `cases.csv` | 测试用例 CSV 格式 |
+| `cases.yaml` | 测试用例 YAML 格式（内容与CSV相同，方便Agent读取） |
 | `golden.py` | PyTorch 参考实现，用于结果验证 |
 | `proto.yaml` | 算子原型定义 |
 | `desc.md` | 算子详细说明文档 |
@@ -127,7 +132,7 @@ pip install -r requirements.txt
 项目提供了多种算子开发示例：
 
 1. **ACNN 算子启动示例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
-2. **直接算子启动示例**：[examples/direct_launch_example/](examples/direct_launch_example/)
+2. **直调算子启动示例**：[examples/direct_launch_example/](examples/direct_launch_example/)
 
 这些示例演示如何使用 Ascend C 和 PyTorch Extension 开发自定义 NPU 算子。
 
@@ -150,7 +155,7 @@ result = cann_bench.add(x, y)
 ### 贡献流程
 
 1. **创建算子目录**  
-   在 `bench_lab/` 目录下创建以任务名（例如 `driver_bench`）+算子名称命名的文件夹（例如 `bench_lab/driver_bench/my_new_op/`）。
+   在 `bench_lab/` 目录下创建以算子名称命名的文件夹（例如 `bench_lab/custom/my_new_op/`）。
 
 2. **准备核心文件**  
    每个算子目录需包含以下文件作为评测输入：

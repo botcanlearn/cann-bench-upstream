@@ -126,7 +126,7 @@ cases:
   - [1000007]
   dtype: [bfloat16]
   attrs: {base: -1.0, scale: 0.5, shift: 0.5}
-  value_range: [-inf, inf]
+  value_range: [-.inf, .inf]
   baseline_perf_us: 15.8
   t_hw_us: 1.04
   note: "S-bfloat16-1M-质数非对齐-inf特殊值-scale=0.5-shift=0.5 | baseline_kernels: Muls×1
@@ -137,7 +137,7 @@ cases:
   - [11, 13, 17, 67, 67]
   dtype: [float32]
   attrs: {base: 2.0, scale: 1.0, shift: 1.0}
-  value_range: [nan, nan]
+  value_range: [.nan, .nan]
   baseline_perf_us: 92.263
   t_hw_us: 22.73
   note: "M-float32-10M-质数非对齐-nan特殊值-base=2-shift=1 | baseline_kernels: Mul×2 + Add×1

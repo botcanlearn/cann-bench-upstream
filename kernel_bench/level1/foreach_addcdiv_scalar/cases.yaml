@@ -199,11 +199,11 @@ cases:
   - - [1000003]
   - - [1000003]
   dtype: [float32]
-  attrs: {scalar: inf}
+  attrs: {scalar: .inf}
   value_range:
-  - [-inf, inf]
-  - [-inf, inf]
-  - [0.1, inf]
+  - [-.inf, .inf]
+  - [-.inf, .inf]
+  - [0.1, .inf]
   baseline_perf_us: 22.98
   t_hw_us: 6.25
   note: "M-float32-scalar=inf-inf特殊值-1D-质数非对齐 | baseline_kernels: ForeachAddcdivScalar×1"
@@ -214,11 +214,11 @@ cases:
   - - [11, 13, 17, 67, 67]
   - - [11, 13, 17, 67, 67]
   dtype: [bfloat16]
-  attrs: {scalar: nan}
+  attrs: {scalar: .nan}
   value_range:
-  - [nan, nan]
-  - [nan, nan]
-  - [nan, nan]
+  - [.nan, .nan]
+  - [.nan, .nan]
+  - [.nan, .nan]
   baseline_perf_us: 80.82
   t_hw_us: 34.10
   note: "M-bfloat16-scalar=nan-nan特殊值-10M-质数非对齐-5D | baseline_kernels: ForeachAddcdivScalar×1"

@@ -38,7 +38,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.foreach_norm(Tensor[] x, float scalar) -> Tensor y
+cann_bench.foreach_norm(Tensor[] x, float scalar) -> Tensor[] y
 ```
 
 ### 输入参数说明

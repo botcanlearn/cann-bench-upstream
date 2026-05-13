@@ -56,3 +56,6 @@ cann_bench_project/
 .arts
 # OpenCode 配置
 .opencode/
+
+# msprof profile data — large, runtime-generated under inner/baseline_perf_prof/results/
+inner/baseline_perf_prof/results/msprof_level*/

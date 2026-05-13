@@ -132,8 +132,8 @@ cases:
   input_shape:
   - - [1000003]
   dtype: [bfloat16]
-  attrs: {scalar: inf}
-  value_range: [-inf, inf]
+  attrs: {scalar: .inf}
+  value_range: [-.inf, .inf]
   baseline_perf_us: 7.80
   t_hw_us: 1.04
   note: "S-bfloat16-Linf范数-1M-质数非对齐-inf特殊值-1D | baseline_kernels: LpNormV2×1"

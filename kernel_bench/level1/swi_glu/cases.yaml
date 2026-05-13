@@ -125,7 +125,7 @@ cases:
   - [1000003, 2]
   dtype: [bfloat16]
   attrs: {scalarValue: 0.0}
-  value_range: [-inf, inf]
+  value_range: [-.inf, .inf]
   baseline_perf_us: 1657.63
   t_hw_us: 2.08
   note: "S-bfloat16-2M-质数非对齐-scalarValue=0.0-inf特殊值 | baseline_kernels: SwiGlu×1"
@@ -134,8 +134,8 @@ cases:
   input_shape:
   - [11, 13, 17, 67]
   dtype: [float32]
-  attrs: {scalarValue: nan}
-  value_range: [nan, nan]
+  attrs: {scalarValue: .nan}
+  value_range: [.nan, .nan]
   baseline_perf_us: 19.22
   t_hw_us: 0.34
   note: "S-float32-10M-质数非对齐-scalarValue=nan-nan特殊值-4D | baseline_kernels: Slice×1 + SwiGlu×1"

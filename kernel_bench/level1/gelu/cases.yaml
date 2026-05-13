@@ -125,7 +125,7 @@ cases:
   - [1000003]
   dtype: [bfloat16]
   attrs: {approximate: tanh}
-  value_range: [-inf, inf]
+  value_range: [-.inf, .inf]
   baseline_perf_us: 6.78
   t_hw_us: 2.00
   note: "S-bfloat16-1M-质数非对齐-inf特殊值-1D-tanh近似 | baseline_kernels: Gelu×1"
@@ -135,7 +135,7 @@ cases:
   - [11, 13, 17, 67, 67]
   dtype: [float32]
   attrs: {approximate: none}
-  value_range: [nan, nan]
+  value_range: [.nan, .nan]
   baseline_perf_us: 39.22
   t_hw_us: 22.73
   note: "M-float32-10M-质数非对齐-nan特殊值-5D-精确模式 | baseline_kernels: Gelu×1"

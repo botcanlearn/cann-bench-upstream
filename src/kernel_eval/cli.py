@@ -730,23 +730,30 @@ def cmd_eval_process(args):
         traceback.print_exc()
     finally:
         evaluator.shutdown()
-        # 强制杀死 profiler fork 子进程
-        # 使用进程组杀死所有子进程（包括 profiler fork 的解析进程）
-        try:
-            import os
-            import signal
-            # 杀死当前进程组中的所有进程（不包括当前进程）
-            pgid = os.getpgid(0)  # 获取当前进程组 ID
-            if pgid != os.getpid():  # 如果进程组 ID 不等于当前进程 ID
-                os.killpg(pgid, signal.SIGTERM)
-        except Exception:
-            pass
 
-    # 写入结果文件
+    # 写入结果文件（在杀死进程组之前）
     output_data = {"results": results, "process_id": args.process_id}
     Path(args.output).write_text(json.dumps(output_data, ensure_ascii=False, indent=2))
 
     print(f"[Process {args.process_id}] 完成，结果写入 {args.output}")
+
+    # 强制杀死 profiler fork 子进程和 ProcessPoolExecutor worker 进程
+    # 因为 start_new_session=True，子进程是新的进程组 leader
+    try:
+        import os
+        import signal
+        # 获取当前进程组 ID
+        pgid = os.getpgid(0)
+        # 如果当前进程是进程组 leader (pgid == getpid)，杀死整个进程组
+        # 这会杀死所有子进程包括 profiler fork 的解析进程
+        if pgid == os.getpid():
+            try:
+                # 发送 SIGTERM，让所有子进程优雅退出
+                os.killpg(pgid, signal.SIGTERM)
+            except OSError:
+                pass  # 进程组已不存在
+    except Exception:
+        pass
 
     return 0
 

@@ -43,19 +43,16 @@ operator:
     dtype:
     - float16
     - bfloat16
-    - float32
   - name: grad
     description: 输出梯度，shape为[N, C_out, D_out, H_out, W_out]
     dtype:
     - float16
     - bfloat16
-    - float32
   outputs:
   - name: y
     description: filter梯度
     dtype:
     - float16
     - bfloat16
-    - float32
   schema: conv_3d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] pads,
     int[] dilations, int groups, int[] filter_size) -> Tensor y

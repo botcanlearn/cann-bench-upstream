@@ -71,7 +71,6 @@ cann_bench.conv_3d_backprop_filter(Tensor x, Tensor grad, int[] strides, int[] p
 |---------------------|-----------|
 | float16 | float16 |
 | bfloat16 | bfloat16 |
-| float32 | float32 |
 
 ### 规则与约束
 
@@ -164,8 +163,8 @@ def conv_3d_backprop_filter(
 import torch
 import cann_bench
 
-x = torch.randn(2, 64, 8, 16, 16, dtype=torch.float32, device="npu")
-grad = torch.randn(2, 128, 6, 14, 14, dtype=torch.float32, device="npu")
+x = torch.randn(2, 64, 8, 16, 16, dtype=torch.float16, device="npu")
+grad = torch.randn(2, 128, 6, 14, 14, dtype=torch.float16, device="npu")
 
 # filter_size: [C_out, C_in/groups, K_d, K_h, K_w]
 y = cann_bench.conv_3d_backprop_filter(x, grad, strides=[1, 1, 1], pads=[1, 1, 1, 1, 1, 1], dilations=[1, 1, 1], groups=1, filter_size=[128, 64, 3, 3, 3])

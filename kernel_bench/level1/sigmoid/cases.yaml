@@ -125,7 +125,7 @@ cases:
   - [1000003]
   dtype: [bfloat16]
   attrs: {}
-  value_range: [-inf, inf]
+  value_range: [-.inf, .inf]
   baseline_perf_us: 5.12
   t_hw_us: 1.67
   note: "S-bfloat16-1M-质数非对齐-inf特殊值-1D | baseline_kernels: Sigmoid×1"
@@ -135,7 +135,7 @@ cases:
   - [11, 13, 17, 67, 67]
   dtype: [float32]
   attrs: {}
-  value_range: [nan, nan]
+  value_range: [.nan, .nan]
   baseline_perf_us: 37.14
   t_hw_us: 22.73
   note: "M-float32-10M-质数非对齐-nan特殊值-5D | baseline_kernels: Sigmoid×1"

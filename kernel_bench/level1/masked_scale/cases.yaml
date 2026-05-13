@@ -158,9 +158,9 @@ cases:
   - [1000007]
   - [1000007]
   dtype: [bfloat16, bfloat16]
-  attrs: {scale: inf}
+  attrs: {scale: .inf}
   value_range:
-  - [-inf, inf]
+  - [-.inf, .inf]
   - [0, 1]
   baseline_perf_us: 11.18
   t_hw_us: 2.08
@@ -171,9 +171,9 @@ cases:
   - [11, 13, 17, 67, 67]
   - [11, 13, 17, 67, 67]
   dtype: [float32, float32]
-  attrs: {scale: nan}
+  attrs: {scale: .nan}
   value_range:
-  - [nan, nan]
+  - [.nan, .nan]
   - [0, 1]
   baseline_perf_us: 87.70
   t_hw_us: 45.47
