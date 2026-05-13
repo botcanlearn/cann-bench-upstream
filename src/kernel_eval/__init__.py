@@ -28,7 +28,7 @@ kernel_eval 评测工程包
 
     # 加载算子信息
     from kernel_eval.data.operator_loader import OperatorLoader
-    loader = OperatorLoader("kernel_bench")
+    loader = OperatorLoader("tasks")
     op_info = loader.get_operator("level1/Exp")
 
     # 执行评测

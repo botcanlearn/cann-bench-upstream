@@ -252,6 +252,12 @@
 
 ### 5.3 配置参数
 
+> **注**：以下参数为本报告早期设计提案，仅用于追溯当时的推演。**实际落地的参数与命名见 `src/kernel_eval/cli.py` 与 [quick_start.md](../guide/quick_start.md)**，简述：
+> - 无 `--multi-card` 开关；改为通过"未指定 `--device-id`"自动进入多卡模式
+> - `--max-cards`：未实现（自动检测全部可用 NPU 卡）
+> - `--threads-per-card` → 实际为 `--processes-per-card`（进程而非线程，避免 GIL 与 profiler 资源竞争）
+> - `--task-strategy`：未做成 CLI 开关；当前由 `ProcessPoolCoordinator` 内部决定
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--multi-card` | bool | False | 是否启用多卡并行 |

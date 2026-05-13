@@ -397,9 +397,9 @@ def _measure_simple(func, warmup, repeat):
 
 ---
 
-## 10. 数据归档
+## 9. 数据归档
 
-### 10.1 目录结构
+### 9.1 目录结构
 
 ```
 reports/prof_data/
@@ -418,7 +418,7 @@ reports/prof_data/
     └── ...
 ```
 
-### 10.2 case_id 解析
+### 9.2 case_id 解析
 
 ```python
 def _parse_case_id(case_id):
@@ -431,7 +431,7 @@ def _parse_case_id(case_id):
 
 ---
 
-## 11. 配置参数
+## 10. 配置参数
 
 | 参数 | 配置来源 | 默认值 | 说明 |
 |------|----------|--------|------|
@@ -441,7 +441,9 @@ def _parse_case_id(case_id):
 | `freq_boost` | PerfEvaluator 初始化 | True | 是否升频清 Cache |
 | `archive_prof` | PerfEvaluator 初始化 | True | 是否归档 Trace 数据 |
 | `use_input_pool` | run_profiled 参数 | False | 是否启用 InputPool |
-| `profiler_level` | Config / CLI `--profiler-level` | "level1" | Profiler 级别（level0/level1） |
+| `profiler_level` | Config / CLI `--profiler-level` | `Level1` | Profiler 级别，可选 `Level1` / `Level2` |
+
+> CLI 完整参数与默认值，见 [evaluator_design.md §3.3](./evaluator_design.md#33-命令行参数)。
 
 ---
 
@@ -479,6 +481,7 @@ def _is_warmup_kernel(op_type: str, input_shapes: str) -> bool:
 
 ### 12.1 升级内容
 
+
 **已完成升级**（2026-04-30）：
 
 | 变更项 | 原方案 | 新方案 |
@@ -501,17 +504,7 @@ def _is_warmup_kernel(op_type: str, input_shapes: str) -> bool:
 
 ### 12.3 配置参数
 
-| 参数 | 配置来源 | 默认值 | 说明 |
-|------|----------|--------|------|
-| `profiler_level` | Config | "Level1" | Profiler 级别 |
-| `--profiler-level` | CLI | Level1 | 可选值: Level1, Level2 |
-- `--task-dir` | CLI | kernel_bench | 评测目录（替代 --level） |
-- `--device-id` | CLI | None | NPU 设备 ID，未指定则多卡并行 |
-| `--processes-per-card` | CLI | 2 | 多卡并行时每卡进程数 |
-| `--timeout-per-process` | CLI | 300 | 多卡并行时单进程超时（秒） |
-| `--no-perf` | CLI | False | 关闭性能采集，仅精度验证 |
-| `--warmup` | CLI | 3 | 预热次数 |
-| `--repeat` | CLI | 5 | 采集次数 |
+profiler 相关配置见 §10；CLI 完整参数表（多卡 / 子进程隔离 / Profiler 级别等）见 [evaluator_design.md §3.3](./evaluator_design.md#33-命令行参数)。
 
 ---
 
@@ -530,24 +523,24 @@ def _is_warmup_kernel(op_type: str, input_shapes: str) -> bool:
 
 ### 13.2 CLI 核心能力
 
-`python -m kernel_eval.cli eval` 支持以下参数：
+`python -m kernel_eval.cli eval` 主要参数（完整表见 [evaluator_design.md §3.3](./evaluator_design.md#33-命令行参数)）：
 
 **目录与筛选**：
-- `--dir <path>`：评测目录（kernel_bench/level1/exp 等）
+- `--task-dir <path>`：评测目录（`tasks` / `tasks/level1` / `tasks/level1/exp` 等）
 - `--operator <name>`：按算子名称筛选
 - `--case-id <id>`：按用例编号筛选
 
 **设备配置**：
-- `--device cpu|npu`：设备类型
-- `--device-id <id>`：单卡模式（不指定则多卡并行）
-- `--processes-per-card <n>`：多卡并行时每卡进程数
-- `--timeout-per-process <n>`：多卡并行时单进程超时
+- `--device cpu|npu`：设备类型（默认 npu）
+- `--device-id <id>`：单卡模式；不指定则多卡并行
+- `--processes-per-card <n>`：多卡并行时每卡进程数（默认 2）
+- `--timeout-per-operator <n>`：多卡并行下单算子超时（秒，默认 300）
 
 **性能配置**：
-- `--warmup <n>`：预热次数
-- `--repeat <n>`：采集次数
+- `--warmup <n>`：预热次数（默认 3）
+- `--repeat <n>`：采集次数（默认 5）
 - `--no-perf`：关闭性能采集
-- `--profiler-level Level1|Level2`：Profiler 级别
+- `--profiler-level Level1|Level2`：Profiler 级别（默认 Level1）
 
 **源码评测**：
 - `--source-dir <dir>`：AI 生成算子源码目录（自动编译安装）

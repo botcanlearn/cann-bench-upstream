@@ -41,7 +41,7 @@ class GoldenLoader:
         if bench_root:
             self.bench_root = Path(bench_root)
         else:
-            self.bench_root = get_project_root() / "kernel_bench"
+            self.bench_root = get_project_root() / "tasks"
         self._func_cache: Dict[str, str] = {}
         self._module_cache: Dict[str, object] = {}
 
@@ -55,8 +55,8 @@ class GoldenLoader:
             raise ImportError(f"Golden模块不存在: {module_path}")
 
         # 使用 rel_path 转换为模块名
-        # 例如 "level2/scatter" -> "kernel_bench.level2.scatter"
-        module_name = f"kernel_bench.{rel_path.replace('/', '.')}"
+        # 例如 "level2/scatter" -> "tasks.level2.scatter"
+        module_name = f"tasks.{rel_path.replace('/', '.')}"
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -79,7 +79,7 @@ class GoldenLoader:
             func_name = self._get_operator_name(rel_path).lower()
             if not hasattr(module, func_name):
                 raise AttributeError(
-                    f"模块 kernel_bench.{rel_path.replace('/', '.')} 中找不到函数: {func_name}")
+                    f"模块 tasks.{rel_path.replace('/', '.')} 中找不到函数: {func_name}")
 
         return getattr(module, func_name)
 

@@ -86,7 +86,7 @@ class TestProcessWorker(unittest.TestCase):
     def setUp(self):
         """测试前准备"""
         self.base_config = Config()
-        self.base_config.kernel_bench_root = str(project_root / "kernel_bench")
+        self.base_config.tasks_root = str(project_root / "tasks")
         self.process_config = ProcessConfig()
 
     def test_worker_creation(self):
@@ -175,7 +175,7 @@ class TestProcessPoolCoordinator(unittest.TestCase):
     def setUp(self):
         """测试前准备"""
         self.base_config = Config()
-        self.base_config.kernel_bench_root = str(project_root / "kernel_bench")
+        self.base_config.tasks_root = str(project_root / "tasks")
         self.base_config.device_type = "npu"
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')

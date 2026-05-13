@@ -13,7 +13,7 @@
 # 用法:
 #   ./scripts/run_evaluation.sh /path/to/ai_ops                    # 从源码目录评测
 #   ./scripts/run_evaluation.sh --source-dir /path/to/ai_ops       # 同上（显式指定）
-#   ./scripts/run_evaluation.sh --task-dir kernel_bench/level1/exp      # 指定评测目录
+#   ./scripts/run_evaluation.sh --task-dir tasks/level1/exp      # 指定评测目录
 #   ./scripts/run_evaluation.sh --operator Exp                     # 按算子名称筛选
 #   ./scripts/run_evaluation.sh --device-id 0                      # 单卡模式
 #   ./scripts/run_evaluation.sh                                    # 多卡并行模式（自动检测）
@@ -26,7 +26,7 @@ set -e
 # 项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="${PROJECT_ROOT}/src"
-KERNEL_BENCH_ROOT="${PROJECT_ROOT}/kernel_bench"
+TASKS_ROOT="${PROJECT_ROOT}/tasks"
 REPORTS_DIR="${PROJECT_ROOT}/reports"
 
 # 默认配置
@@ -71,8 +71,8 @@ print_help() {
     echo ""
     echo "目录配置:"
     echo "  --task-dir <path>         指定评测目录（bench根目录或算子目录）"
-    echo "                            默认: kernel_bench"
-    echo "                            支持: kernel_bench, kernel_bench/level1, kernel_bench/level1/exp 等"
+    echo "                            默认: tasks"
+    echo "                            支持: tasks, tasks/level1, tasks/level1/exp 等"
     echo ""
     echo "设备配置:"
     echo "  --device <type>           设备类型: cpu, npu（默认: npu）"
@@ -102,10 +102,10 @@ print_help() {
     echo "  $0 /path/to/ai_ops"
     echo ""
     echo "  # 指定评测目录"
-    echo "  $0 --task-dir kernel_bench/level1"
+    echo "  $0 --task-dir tasks/level1"
     echo ""
     echo "  # 评测单个算子目录"
-    echo "  $0 --task-dir kernel_bench/level1/exp"
+    echo "  $0 --task-dir tasks/level1/exp"
     echo ""
     echo "  # 按算子名称筛选"
     echo "  $0 --operator Exp"
@@ -248,13 +248,13 @@ uninstall_packages() {
     done
 }
 
-# 检查kernel_bench数据目录
-check_kernel_bench() {
-    if [[ ! -d "${KERNEL_BENCH_ROOT}" ]]; then
-        log_error "kernel_bench目录不存在: ${KERNEL_BENCH_ROOT}"
+# 检查tasks 数据目录
+check_tasks() {
+    if [[ ! -d "${TASKS_ROOT}" ]]; then
+        log_error "tasks 目录不存在: ${TASKS_ROOT}"
         exit 1
     fi
-    log_info "kernel_bench目录: ${KERNEL_BENCH_ROOT}"
+    log_info "tasks 目录: ${TASKS_ROOT}"
 }
 
 # 创建报告目录
@@ -307,8 +307,8 @@ build_cmd_args() {
             fi
 
             # 多进程并行参数（通过环境变量传递给底层）
-            export KERNEL_BENCH_PROCESSES_PER_CARD="${PROCESSES_PER_CARD}"
-            export KERNEL_BENCH_TIMEOUT_PER_PROCESS="${TIMEOUT_PER_PROCESS}"
+            export TASKS_PROCESSES_PER_CARD="${PROCESSES_PER_CARD}"
+            export TASKS_TIMEOUT_PER_PROCESS="${TIMEOUT_PER_PROCESS}"
 
             if [[ "${VERBOSE}" == true ]]; then
                 CMD_ARGS="${CMD_ARGS} -v"
@@ -358,7 +358,7 @@ main() {
     uninstall_packages
 
     if [[ "${ACTION}" == "eval" ]]; then
-        check_kernel_bench
+        check_tasks
         ensure_reports_dir
 
         if [[ -n "${SOURCE_DIR}" ]]; then
@@ -367,7 +367,7 @@ main() {
         if [[ -n "${TASK_DIR}" ]]; then
             log_info "评测目录: ${TASK_DIR}"
         else
-            log_info "评测目录: kernel_bench (默认)"
+            log_info "评测目录: tasks (默认)"
         fi
         if [[ -n "${OPERATOR}" ]]; then
             log_info "算子: ${OPERATOR}"

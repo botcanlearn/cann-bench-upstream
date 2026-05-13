@@ -34,7 +34,7 @@ def resolve_task_dir(
     """解析 --task-dir 参数，确定 bench_root 和筛选路径
 
     Args:
-        dir_arg: 用户指定的目录路径（None 则使用默认 kernel_bench）
+        dir_arg: 用户指定的目录路径（None 则使用默认 tasks）
         project_root: 项目根目录
         check_operator_dir: 是否检查算子目录特征（proto.yaml, cases.yaml, golden.py）
 
@@ -49,20 +49,20 @@ def resolve_task_dir(
 
     Examples:
         >>> resolve_task_dir(None, project_root)
-        ("/path/to/kernel_bench", None)
+        ("/path/to/tasks", None)
 
-        >>> resolve_task_dir("kernel_bench/level1", project_root)
-        ("/path/to/kernel_bench", "level1")
+        >>> resolve_task_dir("tasks/level1", project_root)
+        ("/path/to/tasks", "level1")
 
-        >>> resolve_task_dir("kernel_bench/level2/scatter", project_root)
-        ("/path/to/kernel_bench", "level2/scatter")
+        >>> resolve_task_dir("tasks/level2/scatter", project_root)
+        ("/path/to/tasks", "level2/scatter")
 
-        >>> resolve_task_dir("/abs/path/kernel_bench/level2/scatter", project_root)
-        ("/abs/path/kernel_bench", "level2/scatter")
+        >>> resolve_task_dir("/abs/path/tasks/level2/scatter", project_root)
+        ("/abs/path/tasks", "level2/scatter")
     """
     # 默认值
     if dir_arg is None:
-        return str(project_root / "kernel_bench"), None
+        return str(project_root / "tasks"), None
 
     # 解析路径
     dir_path = Path(dir_arg)
@@ -86,14 +86,14 @@ def resolve_task_dir(
         required_files = ['proto.yaml', 'cases.yaml', 'golden.py']
         is_operator_dir = all((dir_path / f).exists() for f in required_files)
 
-    # 向上查找 bench_root（kernel_bench 目录）
+    # 向上查找 bench_root（tasks 目录）
     bench_root = dir_path
-    while bench_root.name != 'kernel_bench' and bench_root != project_root:
+    while bench_root.name != 'tasks' and bench_root != project_root:
         bench_root = bench_root.parent
 
     # 计算筛选前缀
     if bench_root == project_root:
-        # 未找到 kernel_bench，使用原目录作为 bench_root
+        # 未找到 tasks，使用原目录作为 bench_root
         bench_root = dir_path
         filter_prefix = None
     else:
@@ -125,7 +125,7 @@ def is_operator_directory(dir_path: Path) -> bool:
 
 
 def find_bench_root(dir_path: Path, project_root: Path) -> Path:
-    """向上查找 bench_root（kernel_bench 目录）
+    """向上查找 bench_root（tasks 目录）
 
     Args:
         dir_path: 起始目录
@@ -135,7 +135,7 @@ def find_bench_root(dir_path: Path, project_root: Path) -> Path:
         bench_root 路径，若未找到则返回 dir_path
     """
     bench_root = dir_path
-    while bench_root.name != 'kernel_bench' and bench_root != project_root:
+    while bench_root.name != 'tasks' and bench_root != project_root:
         bench_root = bench_root.parent
 
     if bench_root == project_root:

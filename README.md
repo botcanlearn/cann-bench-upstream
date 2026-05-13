@@ -55,27 +55,26 @@ $$
 
 ```
 cann-bench/
-├── kernel_bench/           # 评测任务集
-│   ├── level1/             # Level 1 算子（基础算子）
-│   ├── level2/             # Level 2 算子（中级算子）
-│   ├── level3/             # Level 3 算子（高级算子）
-│   └── level4/             # Level 4 算子（复杂算子）
-├── bench_lab/              # 实验室级测试用例(后续版本会规划进主评测集)
-│   └── custom_bench/       # 自定义算子评测任务
-├── examples/               # 示例代码工程
-│   ├── aclnn_launch_example/        # ACLNN 算子工程样例
-│   └── direct_launch_example/       # 直接算子工程样例
-├── docs/                   # 设计文档
-├── scripts/                # 测试脚本
-│   ├── run_evaluation.sh   # 统一评测运行脚本
-│   ├── run_test.sh         # 测试运行脚本
-│   └── run_ut.sh           # 单元测试脚本
+├── tasks/                  # 评测主集合（algo desc / golden / cases / proto）
+│   ├── level1/             # L1 基础算子（Elementwise / Activation）
+│   ├── level2/             # L2 中级算子（Norm / Reduce / Gather/Scatter）
+│   ├── level3/             # L3 高级算子（Conv / Pool / MoE）
+│   └── level4/             # L4 复杂算子（Attention / RNN）
+├── bench_lab/              # 实验/孵化区，本地测试通过后转入 tasks
+├── examples/               # 算子工程样例
+│   ├── aclnn_launch_example/    # ACLNN 自定义算子样例
+│   └── direct_launch_example/   # Direct launch (<<<>>>) 算子样例
+├── docs/                   # 规范 / 设计 / 指南文档
+├── scripts/                # 评测/测试入口脚本
+│   ├── run_evaluation.sh   # AI 算子评测入口（编译→安装→评测）
+│   ├── run_test.sh         # Golden 功能验证
+│   └── run_ut.sh           # 单元测试
 ├── src/                    # 源代码
-│   └── kernel_eval/        # 算子评测模块
-├── tests/                  # 测试代码
+│   └── kernel_eval/        # 算子评测模块（CLI / 数据 / 评测 / 报告 / 安全）
+├── tests/                  # 测试代码（含 docs/test_report.md）
 ├── requirements.txt        # Python 依赖
-├── LICENSE                 # 许可证文件
-└── README.md               # 项目说明文档
+├── LICENSE                 # 许可证
+└── README.md               # 本文档
 ```
 
 ## 🔧 Setup
@@ -94,26 +93,31 @@ cann-bench/
 pip install -r requirements.txt
 ```
 
-2. **克隆项目仓库**  
+2. **克隆项目仓库**
    ```bash
-   git clone https://github.com/yourusername/cann-bench.git
+   git clone https://gitcode.com/cann/cann-bench.git
    cd cann-bench
    ```
 ### 2. 生成算子代码
-参考 examples 中的算子工程样例，根据算子规格描述生成 Ascend C 算子代码工程（例如generated_project）。
-- **ACNN 算子工程样例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
+参考 examples 中的算子工程样例，根据算子规格描述生成 Ascend C 算子代码工程（例如 `generated_project/`）。
+- **ACLNN 算子工程样例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
 - **直调算子工程样例**：[examples/direct_launch_example/](examples/direct_launch_example/)
 
 ### 3. 运行评测
-1. **准备测试用例**  
-   确保 `kernel_bench` 目录下包含测试用例文件 `cases.csv`、`golden.py`、`proto.yaml`、`desc.md`。
+1. **准备测试用例**
+   `tasks/levelN/<op>/` 下已包含 `proto.yaml`、`golden.py`、`cases.yaml`、`cases.csv`、`desc.md`。无需另外生成。
 
-2. **运行评测脚本**  
+2. **运行评测脚本**
    ```bash
-   # examples/aclnn_launch_example可以替换成自己ai按照参考工程生成的目录
-   bash scripts/run_evaluation.sh --task-dir kernel_bench --source-dir examples/aclnn_launch_example/
+   # 从 AI 生成的源码目录评测（自动扫描、编译、安装、评测）
+   ./scripts/run_evaluation.sh --source-dir generated_project
+
+   # 或位置参数形式：
+   ./scripts/run_evaluation.sh generated_project
    ```
-   评测结果将在 `reports/` 目录下生成。
+   评测报告输出到 `reports/`（含 `eval_report.json`、`eval_report.md`、`summary.md`）。
+
+   更多用法见 [docs/guide/quick_start.md](docs/guide/quick_start.md)。
 
 ## 📋 Test Case Structure
 
@@ -154,8 +158,8 @@ result = cann_bench.add(x, y)
 
 ### 贡献流程
 
-1. **创建算子目录**  
-   在 `bench_lab/` 目录下创建以算子名称命名的文件夹（例如 `bench_lab/custom/my_new_op/`）。
+1. **创建算子目录**
+   在 `tasks/levelN/` 下创建算子目录（如 `tasks/level2/my_op/`）；或先在 `bench_lab/` 实验/孵化区暂存，测试通过后 PR 转入主集合。详见 [docs/guide/contributing.md](docs/guide/contributing.md)。
 
 2. **准备核心文件**  
    每个算子目录需包含以下文件作为评测输入：

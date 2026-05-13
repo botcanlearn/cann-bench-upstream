@@ -45,7 +45,7 @@
 
 聚焦算子场景覆盖和泛化性，建立基础评测框架：
 
-- **算子覆盖**：完成算子泛化场景下55个算子（L1-L4）的规格定义、用例设计和Golden实现，覆盖Elementwise、Reduce、Matmul、Convolution、Attention等核心计算模式
+- **算子覆盖**：完成算子泛化场景下53个算子（L1=8、L2=16、L3=21、L4=8）的规格定义、用例设计和Golden实现，覆盖Elementwise、Reduce、Matmul、Convolution、Attention等核心计算模式
 - **评测维度**：建立编译正确性、功能正确性、性能优化性三大评测维度，形成综合评分体系
 - **泛化验证**：每个算子提供20开放用例，覆盖Shape维度、数据类型、属性取值等泛化场景
 - **基准建立**：发布第一版算子榜单，为AI生成算子代码能力提供量化评估基准
@@ -224,38 +224,45 @@
 - RNN类：LSTM、GRU
 - 量化融合：GroupedMatmulSwigluQuant
 
-**算子定义文件：** proto.yaml
+**算子定义文件：** proto.yaml（顶层为 `operator:` 字典，字段约定详见 [docs/guide/contributing.md §1](../guide/contributing.md)）
 ```yaml
 # proto.yaml
-- name: Exp
-    category: Elementwise
-    difficulty: L1
-    formula: "y = e^((x * scale + shift) * ln(base))"
-    description: "计算输入张量的指数函数，支持自定义底数、缩放和偏移"
-    shape_support: "输入任意维度，输出与输入相同shape"
-    attrs:
-      - name: base
-        type: float
-        default: -1.0
-        description: "指数底数，-1.0表示使用自然底数e，正值表示自定义底数"
-      - name: scale
-        type: float
-        default: 1.0
-        description: "输入缩放因子"
-      - name: shift
-        type: float
-        default: 0.0
-        description: "输入偏移量"
-    note: "当base=-1时，公式简化为 y = e^(x * scale + shift)"
-    inputs:
-      - name: x
-        description: 输入张量
-        dtype: ["float16", "float32", "bfloat16"]
-    outputs:
-      - name: y
-        description: 指数计算结果
-        dtype: ["float16", "float32", "bfloat16"]
-    schema: exp(Tensor x, float base, float scale, float shift) -> Tensor y
+operator:
+  name: Exp
+  category: Elementwise
+  difficulty: L1
+  formula: y = e^((x * scale + shift) * ln(base))
+  description: 计算输入张量的指数函数，支持自定义底数、缩放和偏移
+  shape_support: 输入任意维度，输出与输入相同shape
+  attrs:
+  - name: base
+    type: float
+    default: -1.0
+    description: 指数底数，-1.0表示使用自然底数e，正值表示自定义底数
+  - name: scale
+    type: float
+    default: 1.0
+    description: 输入缩放因子
+  - name: shift
+    type: float
+    default: 0.0
+    description: 输入偏移量
+  note: 当base=-1时，公式简化为 y = e^(x * scale + shift)
+  inputs:
+  - name: x
+    description: 输入张量
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+  outputs:
+  - name: y
+    description: 指数计算结果，输出数据类型与输入一致
+    dtype:
+    - float16
+    - float32
+    - bfloat16
+  schema: exp(Tensor x, float base, float scale, float shift) -> Tensor y
 ```
 > 算子自定义TorchAPI接口，需要与schema一致, lib空间统一为`cann_bench`
 ```
@@ -421,9 +428,56 @@ benchmark 总分     = Σ_{所有算子} EachOperatorScore
 **通过标准：**
 当平均相对误差MERE < Threshold ， 最大相对误差MARE < 10 * Threshold判定为通过
 
-##### 小值域通过说明
+##### 精度判定流程
 
-当算子输出结果为极小值（接近0）时，相对误差计算可能不稳定，因此需要使用小值域通过标准评估精度。
+精度判定采用多维度综合判断，包括正常值域、小值域和相消位置三种场景：
+
+**判定流程：**
+
+```
+所有位置 → 计算整体相对误差 →
+  若 MERE < threshold 且 MARE < mare_threshold → 通过 ✓
+  若不通过 → 分析失败位置所属场景 →
+    ├─ 正常值域位置失败 → 直接失败 ✗
+    ├─ 小值域位置失败 → 使用小值域标准判定
+    └─ 相消位置失败 → 使用相消标准判定
+```
+
+**设计说明：**
+- 相对误差是基础判定标准
+- 小值域和相消位置采用绝对误差(ErrorCount比值)标准，适用于相对误差计算不稳定的场景
+- 三种场景综合判断，确保判定结果全面准确
+
+##### 正常值域判定
+
+**误差指标：**
+
+1. 平均相对误差（MERE）：采样点中相对误差平均值。
+   
+   $$
+   \text{MERE} = \text{avg}(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+   
+2. 最大相对误差（MARE）：采样点中相对误差最大值。
+   
+   $$
+   \text{MARE} = \max(\frac{\text{abs}(actual - golden)}{\text{abs}(golden)+\text{1e-7}})
+   $$
+
+**通过阈值：**
+
+| 数据类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **通过阈值(Threshold)** | 2^-10 | 2^-7 | 2^-13 | 2^-11 | 2^-3 | 2^-2 |
+| **MARE阈值(10×Threshold)** | 2^-7 | 2^-4 | 2^-10 | 2^-8 | 2^-0 | 2^-1 |
+
+**通过标准：** MERE < Threshold 且 MARE < 10 × Threshold
+
+##### 小值域判定
+
+当算子输出结果为极小值（接近0）时，相对误差计算可能不稳定，采用绝对误差(ErrorCount比值)标准判定。
+
+**判定条件：** $|golden_{truncated}| < Small\_Value\_Threshold$
 
 **小值域阈值对应表：**
 
@@ -432,18 +486,31 @@ benchmark 总分     = Σ_{所有算子} EachOperatorScore
 | **小值域阈值(Small Value Threshold)** | 2^-11 | 2^-8 | 2^-14 | 2^-12 | 2^-4 | 2^-3 |
 | **小值域error指标** | 2^-16 | 2^-16 | 2^-30 | 2^-28 | 2^-6 | 2^-5 |
 
-当真值小于 Small Value Threshold 时，采用小值域通过标准。定义误差度量指标**小值域数值错误数量（ErrorCount）**：
+定义误差度量指标**小值域数值错误数量（ErrorCount）**：
 
 $$
 \mathbf{ErrorCount}=\sum \mathbb{I}\left(
-\mathbf{|golden|} < threshold \land
-\left|\mathbf{actual} - \mathbf{golden}\right| > \mathbf{error}
+\mathbf{|golden_{truncated}|} < threshold \land
+\left|\mathbf{actual} - \mathbf{golden_{truncated}}\right| > \mathbf{error}
 \right)
 $$
 
+其中：
 - $\mathbb{I}(⋅)$ 是指示函数（条件成立时为 1，否则为 0）
 - $∧$ 表示逻辑"且"
 - $error$、$threshold$ 请参考上表
+- **$golden_{truncated}$** 是理论真值 golden（FP64）经过精度截断后的值（FP64 → target_dtype → FP64），表示目标精度下能表示的"理想值"
+
+**比较基准一致性：**
+
+NPU 和 CPU 的 ErrorCount 计算必须使用**相同的比较基准** $golden_{truncated}$：
+
+| 项目 | 比较方式 |
+|------|----------|
+| ErrorCount_npu | $\|actual_{npu}(fp16升fp64) - golden_{truncated}\| > error$ |
+| ErrorCount_cpu | $\|actual_{cpu}(fp16升fp64) - golden_{truncated}\| > error$ |
+
+两者都先确认输出在目标精度（如 FP16），然后升到 FP64，与同一个基准 $golden_{truncated}$ 比较。
 
 **小值域通过标准：**
 
@@ -451,7 +518,27 @@ $$
 \frac{\text{ErrorCount}_{\text{npu}}}{\max(\text{ErrorCount}_{\text{cpu标准精度}}, 1)} \leq 2
 $$
 
-**说明：** 此标准适用于所有数据类型。
+##### 相消位置判定
+
+当两个接近的大数相减时，结果的有效位数急剧丢失（Kahan 灾难性相消），可能导致相对误差不稳定，采用绝对误差(ErrorCount比值)标准判定。
+
+**相消判定条件：**
+- $|output| < cancel\_zero\_threshold$（output 因相消接近零）
+- $|golden| < cancel\_boundary$（golden 在精度边界附近）
+- $|golden| \geq small\_value\_threshold$（排除小值域）
+
+**相消阈值对应表：**
+
+| 指标类型 | FLOAT16 | BFLOAT16 | FLOAT32 | HiFLOAT32 | FLOAT8 E4M3 | FLOAT8 E5M2 |
+|----------|---------|----------|---------|-----------|-------------|-------------|
+| **cancel_boundary** | 2^-5 | 2^-3 | 2^-8 | 2^-8 | 2^-1 | 2^-0 |
+| **cancel_zero_threshold** | 2^-5 | 2^-3 | 2^-8 | 2^-8 | 2^-1 | 2^-0 |
+
+**相消通过标准：**
+
+$$
+\frac{\text{ErrorCount}_{\text{npu}}}{\max(\text{ErrorCount}_{\text{cpu}}, 1)} \leq 2
+$$
 
 ### 4.5 性能评测规范
 

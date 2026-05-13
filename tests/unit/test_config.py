@@ -40,13 +40,13 @@ class TestConfig:
     def test_custom_config(self):
         """自定义配置"""
         config = Config(
-            kernel_bench_root="/custom/path",
+            tasks_root="/custom/path",
             device_type="cpu",
             device_id=1,
             warmup=5,
             repeat=10,
         )
-        assert config.kernel_bench_root == "/custom/path"
+        assert config.tasks_root == "/custom/path"
         assert config.device_type == "cpu"
         assert config.device_id == 1
         assert config.warmup == 5
@@ -56,13 +56,13 @@ class TestConfig:
         """初始化后设置默认路径"""
         config = Config()
         # 默认路径应在项目根目录下
-        assert config.kernel_bench_root != ""
+        assert config.tasks_root != ""
         assert config.reports_dir != ""
 
-    def test_get_kernel_bench_path(self):
-        """获取 kernel_bench 路径"""
-        config = Config(kernel_bench_root="/test/path")
-        path = config.get_kernel_bench_path()
+    def test_get_tasks_path(self):
+        """获取 tasks 路径"""
+        config = Config(tasks_root="/test/path")
+        path = config.get_tasks_path()
         assert isinstance(path, Path)
         assert str(path) == "/test/path"
 
@@ -142,10 +142,10 @@ class TestGetSetConfig:
 class TestConfigPathResolution:
     """配置路径解析测试"""
 
-    def test_kernel_bench_root_relative(self):
-        """相对路径 kernel_bench_root"""
-        config = Config(kernel_bench_root="relative/path")
-        assert config.kernel_bench_root == "relative/path"
+    def test_tasks_root_relative(self):
+        """相对路径 tasks_root"""
+        config = Config(tasks_root="relative/path")
+        assert config.tasks_root == "relative/path"
 
     def test_reports_dir_absolute(self):
         """绝对路径 reports_dir"""
@@ -154,9 +154,9 @@ class TestConfigPathResolution:
 
     def test_empty_paths_use_defaults(self):
         """空路径使用默认"""
-        config = Config(kernel_bench_root="", reports_dir="")
+        config = Config(tasks_root="", reports_dir="")
         # __post_init__ 会设置默认值
-        assert config.kernel_bench_root != ""
+        assert config.tasks_root != ""
         assert config.reports_dir != ""
 
     def test_source_dir_optional(self):

@@ -83,9 +83,9 @@ class Evaluator:
         self.accuracy_evaluator = AccuracyEvaluator(self.config.precision_thresholds)
 
         # 初始化数据层组件
-        self.case_loader = CaseLoader(self.config.kernel_bench_root)
-        self.golden_loader = GoldenLoader(self.config.kernel_bench_root)
-        self.operator_loader = OperatorLoader(self.config.kernel_bench_root)
+        self.case_loader = CaseLoader(self.config.tasks_root)
+        self.golden_loader = GoldenLoader(self.config.tasks_root)
+        self.operator_loader = OperatorLoader(self.config.tasks_root)
         self.data_generator = DataGenerator()
         self.param_builder = ParamBuilder(self.golden_loader)
 
@@ -124,108 +124,16 @@ class Evaluator:
             # 2.5 调用 get_input 预处理（如果存在）
             get_input_func = self.golden_loader.get_input_function(case.rel_path)
             if get_input_func is not None:
-                # get_input 期望 proto.yaml 顺序：x, h0, weights, biases
-                # 但 cases.yaml 可能省略 optional 参数，顺序为：x, weights, biases (或 x, weights, biases, h0)
-
-                # 获取 proto.yaml inputs 信息
+                # cases.yaml 已规范为使用 null 占位符表示省略的 optional 参数
+                # input_shapes 与 proto.inputs 长度一致，直接按顺序映射
                 op_info = self.operator_loader.get_operator(case.rel_path)
 
-                # 统计 proto.yaml tensor inputs 数量
-                proto_tensor_count = len([i for i in op_info.inputs if 'Tensor' in str(i.dtype) or isinstance(i.dtype, list)])
-                actual_tensor_count = len(input_tensors)
-
-                # 如果实际 tensor 数量少于 proto tensor 数量，说明有 optional 参数被省略
-                # 检测情况：cases.yaml 省略了 h0 (单 tensor)，但提供了所有 TensorList (weights/biases)
-
                 params_for_get_input = {}
-
-                # 检查是否有 optional h0/c0 参数
-                has_optional_h0 = any(i.name in ['h0', 'c0'] for i in op_info.inputs)
-
-                # 情况1: input_tensors 数量少于 proto tensor 数量
-                # 根据格式匹配来判断哪些 proto inputs 对应哪些 input_tensors
-                # 策略：按顺序匹配，单 tensor → 单 tensor input，TensorList → TensorList input
-                if actual_tensor_count < proto_tensor_count:
-                    params_for_get_input = {}
-                    tensor_idx = 0
-
-                    # 先处理 x (总是第一个)
-                    params_for_get_input['x'] = input_tensors[0] if len(input_tensors) > 0 else None
-                    tensor_idx = 1 if len(input_tensors) > 0 else 0
-
-                    # proto.yaml 第二个是 h0/c0 (optional)，如果 cases.yaml 没有单独的 h0 tensor，设为 None
-                    # 检查 input_tensors 中是否有单独的 h0 tensor（最后一个 tensor）
-                    last_val = input_tensors[-1] if input_tensors else None
-                    has_separate_h0 = isinstance(last_val, torch.Tensor) and actual_tensor_count > 3
-
-                    if has_separate_h0:
-                        params_for_get_input['h0'] = last_val
-                        # 剩余 tensors: input_tensors[1:-1]
-                        remaining_tensors = input_tensors[1:-1]
+                for i, input_info in enumerate(op_info.inputs):
+                    if i < len(input_tensors):
+                        params_for_get_input[input_info.name] = input_tensors[i]
                     else:
-                        params_for_get_input['h0'] = None
-                        remaining_tensors = input_tensors[1:]
-
-                    # 映射剩余 proto inputs (weight_ih, weight_hh, bias_ih, bias_hh)
-                    remaining_proto_inputs = [i for i in op_info.inputs if i.name not in ['x', 'h0', 'c0']]
-                    for proto_input in remaining_proto_inputs:
-                        if remaining_tensors:
-                            params_for_get_input[proto_input.name] = remaining_tensors[0]
-                            remaining_tensors = remaining_tensors[1:]
-                        else:
-                            params_for_get_input[proto_input.name] = None
-
-                # 情况2: input_tensors 数量 = proto tensor 数量 - 1，且 proto 有 optional h0/c0
-                # 此时 cases.yaml 顺序可能是：x, weights, biases (省略 h0)
-                elif has_optional_h0 and actual_tensor_count == proto_tensor_count - 1:
-                    # cases.yaml 省略了 h0/c0
-                    # 按 cases.yaml 实际顺序映射：x, weights, biases
-                    tensor_idx = 0
-                    for input_info in op_info.inputs:
-                        if input_info.name in ['h0', 'c0']:
-                            # optional tensor 未提供
-                            params_for_get_input[input_info.name] = None
-                        elif tensor_idx < len(input_tensors):
-                            params_for_get_input[input_info.name] = input_tensors[tensor_idx]
-                            tensor_idx += 1
-                        else:
-                            params_for_get_input[input_info.name] = None
-
-                # 情况2: input_tensors 数量 = proto tensor 数量
-                # 此时 cases.yaml 可能包含 h0/c0，但顺序可能不同
-                elif actual_tensor_count == proto_tensor_count:
-                    # 检查 input_tensors 最后一个是否是单 tensor (h0/c0 candidate)
-                    last_val = input_tensors[-1] if input_tensors else None
-                    last_is_single_tensor = isinstance(last_val, torch.Tensor)
-
-                    if last_is_single_tensor and has_optional_h0:
-                        # cases.yaml 顺序：x, weights, biases, h0
-                        # proto.yaml 顺序：x, h0, weights, biases
-                        tensor_idx = 0
-                        for input_info in op_info.inputs:
-                            if input_info.name in ['h0', 'c0']:
-                                # h0 在 cases.yaml 最后
-                                params_for_get_input[input_info.name] = input_tensors[-1]
-                            elif tensor_idx < len(input_tensors) - 1:  # 排除最后一个是 h0
-                                params_for_get_input[input_info.name] = input_tensors[tensor_idx]
-                                tensor_idx += 1
-                            else:
-                                params_for_get_input[input_info.name] = None
-                    else:
-                        # 完全按 proto.yaml 顺序
-                        for i, input_info in enumerate(op_info.inputs):
-                            if i < len(input_tensors):
-                                params_for_get_input[input_info.name] = input_tensors[i]
-                            else:
-                                params_for_get_input[input_info.name] = None
-
-                else:
-                    # 其他情况，按 proto.yaml 顺序映射
-                    for i, input_info in enumerate(op_info.inputs):
-                        if i < len(input_tensors):
-                            params_for_get_input[input_info.name] = input_tensors[i]
-                        else:
-                            params_for_get_input[input_info.name] = None
+                        params_for_get_input[input_info.name] = None
 
                 # 添加 attrs
                 case_attrs = getattr(case, 'attrs', None) or {}
@@ -349,6 +257,10 @@ class Evaluator:
 
             ignore_output_indices = self._get_ignore_output_indices(case.rel_path)
 
+            # 获取算子输出名称（用于填充 SingleOutputResult.name）
+            op_info = self.operator_loader.get_operator(case.rel_path)
+            output_names = [out.name for out in op_info.outputs] if op_info and op_info.outputs else []
+
             accuracy_result = self.accuracy_evaluator.evaluate(
                 ai_output=ai_result.outputs,
                 golden_output=golden_result.outputs,
@@ -357,6 +269,12 @@ class Evaluator:
                 cpu_output=cpu_out,
                 ignore_output_indices=ignore_output_indices,
             )
+
+            # 填充 output_results 中的输出名称
+            if hasattr(accuracy_result, 'output_results') and output_names:
+                for i, sr in enumerate(accuracy_result.output_results):
+                    if i < len(output_names):
+                        sr.name = output_names[i]
 
             # 8. 性能数据已在上面的 profiler 运行中采集，直接提取
             if accuracy_result.passed:
@@ -369,13 +287,21 @@ class Evaluator:
                 error_msg = None
             else:
                 perf_result = None
-                error_msg = (
-                    f"精度不达标: MARE={accuracy_result.mare:.6f}, "
-                    f"MERE={accuracy_result.mere:.6f}, "
-                    f"阈值={accuracy_result.threshold}, "
-                    f"最大差值={accuracy_result.max_diff:.6f}, "
-                    f"不匹配比例={accuracy_result.mismatch_ratio:.4f}"
-                )
+                # 使用新的多输出格式显示失败原因
+                if hasattr(accuracy_result, 'format_all_outputs') and accuracy_result.output_results:
+                    output_details = accuracy_result.format_all_outputs()
+                    error_msg = f"精度不达标:\n{output_details}"
+                else:
+                    # 兼容旧格式（单输出或无 output_results）
+                    mare_threshold = 10 * accuracy_result.threshold if accuracy_result.threshold > 0 else 0
+                    fail_reasons = []
+                    if accuracy_result.mare >= mare_threshold:
+                        fail_reasons.append(f"MARE({accuracy_result.mare:.6f}) >= mare_threshold({mare_threshold:.6f})")
+                    if accuracy_result.mere >= accuracy_result.threshold:
+                        fail_reasons.append(f"MERE({accuracy_result.mere:.6f}) >= threshold({accuracy_result.threshold:.6f})")
+                    if accuracy_result.error_msg:
+                        fail_reasons.append(accuracy_result.error_msg)
+                    error_msg = f"精度不达标: {', '.join(fail_reasons)}"
 
             self._cleanup_memory()
 

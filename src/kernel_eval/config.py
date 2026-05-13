@@ -17,7 +17,7 @@
 职责：
 1. 定义评测工程全局配置
 2. 提供配置获取接口
-3. 管理路径配置（kernel_bench数据目录、报告输出目录等）
+3. 管理路径配置（tasks 数据目录、报告输出目录等）
 """
 
 import os
@@ -31,7 +31,7 @@ class Config:
     """评测工程配置"""
 
     # 路径配置
-    kernel_bench_root: str = ""  # kernel_bench数据目录路径
+    tasks_root: str = ""  # tasks 数据目录路径
     reports_dir: str = ""        # 报告输出目录
 
     # 源码目录（AI生成的算子源码，通过参数传入）
@@ -78,15 +78,15 @@ class Config:
 
     def __post_init__(self):
         """初始化后自动设置默认路径"""
-        if not self.kernel_bench_root:
-            self.kernel_bench_root = str(get_project_root() / "kernel_bench")
+        if not self.tasks_root:
+            self.tasks_root = str(get_project_root() / "tasks")
 
         if not self.reports_dir:
             self.reports_dir = str(get_project_root() / "reports")
 
-    def get_kernel_bench_path(self) -> Path:
-        """获取kernel_bench数据目录路径"""
-        return Path(self.kernel_bench_root)
+    def get_tasks_path(self) -> Path:
+        """获取tasks 数据目录路径"""
+        return Path(self.tasks_root)
 
     def get_reports_path(self) -> Path:
         """获取报告输出目录路径"""
@@ -105,13 +105,13 @@ _project_root: Optional[Path] = None
 
 
 def get_project_root() -> Path:
-    """返回项目根目录（向上查找 kernel_bench 或 .git 标记）"""
+    """返回项目根目录（向上查找 tasks 或 .git 标记）"""
     global _project_root
     if _project_root is not None:
         return _project_root
     current = Path(__file__).resolve().parent
     for _ in range(10):
-        if (current / "kernel_bench").is_dir() or (current / ".git").is_dir():
+        if (current / "tasks").is_dir() or (current / ".git").is_dir():
             _project_root = current
             return current
         current = current.parent

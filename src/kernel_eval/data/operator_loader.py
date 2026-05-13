@@ -89,7 +89,7 @@ class OperatorLoader:
         if bench_root:
             self.bench_root = Path(bench_root)
         else:
-            self.bench_root = get_project_root() / "kernel_bench"
+            self.bench_root = get_project_root() / "tasks"
 
         self._cache: Dict[str, OperatorInfo] = {}
 

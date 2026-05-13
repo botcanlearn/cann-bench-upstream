@@ -59,7 +59,7 @@ def create_parser() -> argparse.ArgumentParser:
                              help='AI生成的算子源码目录（不指定则使用已安装的cann_bench）')
     eval_parser.add_argument('--task-dir', type=str, default=None,
                              help='评测目录（bench根目录或算子目录），替代 --level。'
-                                  '支持: kernel_bench, kernel_bench/level1, kernel_bench/level1/exp 等')
+                                  '支持: tasks, tasks/level1, tasks/level1/exp 等')
     eval_parser.add_argument('--operator', type=str, default=None,
                              help='算子名称（如 Exp, Softmax）')
     eval_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
@@ -129,7 +129,7 @@ def create_parser() -> argparse.ArgumentParser:
     config_parser = subparsers.add_parser('config', help='配置管理')
     config_parser.add_argument('--show', action='store_true', help='显示当前配置')
     config_parser.add_argument('--kernel-bench-root', type=str, default=None,
-                               help='设置kernel_bench数据目录')
+                               help='设置tasks 数据目录')
     config_parser.add_argument('--reports-dir', type=str, default=None,
                                help='设置报告输出目录')
 
@@ -159,7 +159,7 @@ def _resolve_operator_info(operator_name: str, config):
     """按算子名称查找 OperatorInfo，返回 None 若未找到"""
     try:
         from .data.operator_loader import OperatorLoader
-        loader = OperatorLoader(config.kernel_bench_root)
+        loader = OperatorLoader(config.tasks_root)
         return loader.get_operator_by_name(operator_name)
     except Exception:
         return None
@@ -168,7 +168,7 @@ def _resolve_operator_info(operator_name: str, config):
 def _create_config_from_args(args, bench_root: str) -> Config:
     """从命令行参数创建配置"""
     config = Config()
-    config.kernel_bench_root = bench_root
+    config.tasks_root = bench_root
 
     if getattr(args, 'reports_dir', None):
         config.reports_dir = args.reports_dir
@@ -415,7 +415,7 @@ def cmd_list(args):
 
     if args.cases:
         # 列出用例
-        case_loader = CaseLoader(config.kernel_bench_root)
+        case_loader = CaseLoader(config.tasks_root)
 
         if args.operator:
             cases = case_loader.scan_by_operator(args.operator)
@@ -430,7 +430,7 @@ def cmd_list(args):
 
     else:
         # 列出算子
-        operator_loader = OperatorLoader(config.kernel_bench_root)
+        operator_loader = OperatorLoader(config.tasks_root)
         operators = operator_loader.list_operators()
 
         print(f"\n共 {len(operators)} 个算子:")
@@ -444,7 +444,7 @@ def cmd_list(args):
 def cmd_info(args):
     """显示算子详细信息"""
     config = get_config()
-    operator_loader = OperatorLoader(config.kernel_bench_root)
+    operator_loader = OperatorLoader(config.tasks_root)
 
     op_info = operator_loader.get_operator_by_name(args.operator)
     if op_info is None:
@@ -473,7 +473,7 @@ def cmd_info(args):
         print(f"  - {attr.name}: {attr.type}{default_str}")
 
     # 显示用例统计
-    case_loader = CaseLoader(config.kernel_bench_root)
+    case_loader = CaseLoader(config.tasks_root)
     cases = case_loader.scan_by_operator(args.operator)
     print(f"\n用例数: {len(cases)}")
 
@@ -484,19 +484,19 @@ def cmd_config(args):
     """配置管理"""
     config = get_config()
 
-    if args.kernel_bench_root:
-        config.kernel_bench_root = args.kernel_bench_root
+    if args.tasks_root:
+        config.tasks_root = args.tasks_root
         set_config(config)
-        print(f"[INFO] kernel_bench_root 设置为: {config.kernel_bench_root}")
+        print(f"[INFO] tasks_root 设置为: {config.tasks_root}")
 
     if args.reports_dir:
         config.reports_dir = args.reports_dir
         set_config(config)
         print(f"[INFO] reports_dir 设置为: {config.reports_dir}")
 
-    if args.show or not (args.kernel_bench_root or args.reports_dir):
+    if args.show or not (args.tasks_root or args.reports_dir):
         print("\n当前配置:")
-        print(f"  kernel_bench_root: {config.kernel_bench_root}")
+        print(f"  tasks_root: {config.tasks_root}")
         print(f"  reports_dir: {config.reports_dir}")
         print(f"  source_dir: {config.source_dir}")
         print(f"  warmup: {config.warmup}")
@@ -545,14 +545,16 @@ def cmd_eval_process(args):
         print(f"[Process {args.process_id}] set_compile_mode failed: {e}")
 
     # 设置环境变量
-    kernel_bench_root = os.environ.get('KERNEL_BENCH_ROOT', '')
-    if kernel_bench_root:
-        config = get_config()
-        config.kernel_bench_root = kernel_bench_root
-        set_config(config)
+    tasks_root = os.environ.get('TASKS_ROOT', '')
 
-    # 创建配置
-    config = Config()
+    # 获取或创建配置（优先使用环境变量）
+    config = get_config()
+    if tasks_root:
+        config.tasks_root = tasks_root
+    elif not config.tasks_root:
+        # 只有在环境变量和现有配置都没有时才使用默认值
+        config.tasks_root = str(get_project_root() / "tasks")
+
     config.device_type = "npu"
     config.device_id = args.card_id
     config.auto_fallback = False
@@ -584,7 +586,7 @@ def cmd_eval_process(args):
                 print(f"[Process {args.process_id}] 开始评测算子 {rel_path}")
                 # 获取算子信息
                 from .data.operator_loader import OperatorLoader
-                op_loader = OperatorLoader(config.kernel_bench_root)
+                op_loader = OperatorLoader(config.tasks_root)
                 try:
                     op_info = op_loader.get_operator(rel_path)
                     operator_name = op_info.name
@@ -592,7 +594,7 @@ def cmd_eval_process(args):
                     operator_name = Path(rel_path).name
 
                 # 加载该算子的用例并评测
-                case_loader = CaseLoader(config.kernel_bench_root)
+                case_loader = CaseLoader(config.tasks_root)
                 cases = case_loader.scan_by_rel_path(rel_path)
 
                 if not cases:
@@ -600,7 +602,7 @@ def cmd_eval_process(args):
                     continue
 
                 # 评测每个用例
-                golden_loader = GoldenLoader(config.kernel_bench_root)
+                golden_loader = GoldenLoader(config.tasks_root)
                 case_results = []
                 for i, case in enumerate(cases, 1):
                     case_id_str = case.get_case_id_str()
@@ -616,12 +618,28 @@ def cmd_eval_process(args):
                     # 精度信息
                     acc_info = ""
                     if result.accuracy_result:
+                        mere = result.accuracy_result.mere
                         mare = result.accuracy_result.mare
-                        max_diff = result.accuracy_result.max_diff
-                        acc_info = f"MARE={mare:.6f}, max_diff={max_diff:.6f}"
+                        # 多输出算子：显示每个输出的判定摘要
+                        if hasattr(result.accuracy_result, 'output_results') and result.accuracy_result.output_results:
+                            # 通过时显示聚合值，失败时显示第一个失败输出
+                            if result.success:
+                                acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
+                            else:
+                                # 找到第一个失败的输出
+                                for sr in result.accuracy_result.output_results:
+                                    if not sr.passed and not sr.error_msg.startswith("(跳过"):
+                                        acc_info = sr.format_summary().replace("❌ ", "")
+                                        break
+                        else:
+                            acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
                     # speedup 信息
                     speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
-                    error_hint = result.error_msg[:80] if result.error_msg else ""
+                    # 多输出失败时显示更详细的错误（不截断）
+                    if result.error_msg and "\n" in result.error_msg:
+                        error_hint = result.error_msg.split("\n")[0]  # 只显示第一行
+                    else:
+                        error_hint = result.error_msg[:80] if result.error_msg else ""
                     print(
                         f"[Process {args.process_id}] [{i}/{len(cases)}] "
                         f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
@@ -662,6 +680,7 @@ def cmd_eval_process(args):
                     attrs=c.get('attrs', {}),
                     note=c.get('note', ''),
                     yaml_path=c.get('yaml_path', ''),
+                    op_dir_name=c.get('op_dir_name', ''),
                 )
                 if 'baseline_perf_us' in c:
                     case.baseline_perf_us = c['baseline_perf_us']
@@ -675,7 +694,7 @@ def cmd_eval_process(args):
             print(f"[Process {args.process_id}] 评测用例: {len(cases)} 个 ({operator})")
 
             # 获取 golden 函数
-            golden_loader = GoldenLoader(config.kernel_bench_root)
+            golden_loader = GoldenLoader(config.tasks_root)
 
             case_results = []
             for i, case in enumerate(cases, 1):
@@ -694,12 +713,28 @@ def cmd_eval_process(args):
                 # 精度信息
                 acc_info = ""
                 if result.accuracy_result:
+                    mere = result.accuracy_result.mere
                     mare = result.accuracy_result.mare
-                    max_diff = result.accuracy_result.max_diff
-                    acc_info = f"MARE={mare:.6f}, max_diff={max_diff:.6f}"
+                    # 多输出算子：显示每个输出的判定摘要
+                    if hasattr(result.accuracy_result, 'output_results') and result.accuracy_result.output_results:
+                        # 通过时显示聚合值，失败时显示第一个失败输出
+                        if result.success:
+                            acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
+                        else:
+                            # 找到第一个失败的输出
+                            for sr in result.accuracy_result.output_results:
+                                if not sr.passed and not sr.error_msg.startswith("(跳过"):
+                                    acc_info = sr.format_summary().replace("❌ ", "")
+                                    break
+                    else:
+                        acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
                 # speedup 信息
                 speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
-                error_hint = result.error_msg[:80] if result.error_msg else ""
+                # 多输出失败时显示更详细的错误（不截断）
+                if result.error_msg and "\n" in result.error_msg:
+                    error_hint = result.error_msg.split("\n")[0]  # 只显示第一行
+                else:
+                    error_hint = result.error_msg[:80] if result.error_msg else ""
                 print(
                     f"[Process {args.process_id}] [{i}/{len(cases)}] "
                     f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
@@ -769,10 +804,10 @@ def main():
 
     project_root = get_project_root()
 
-    # 设置默认kernel_bench路径
+    # 设置默认tasks 路径
     config = get_config()
-    if not config.kernel_bench_root:
-        config.kernel_bench_root = str(project_root / "kernel_bench")
+    if not config.tasks_root:
+        config.tasks_root = str(project_root / "tasks")
         set_config(config)
 
     # 执行命令

@@ -1,7 +1,12 @@
-# kernel_bench 算子贡献指南
+# tasks 算子贡献指南
 
-**创建算子目录**  
-  在 `bench_lab/` 目录下创建以任务名（例如 `driver_bench`）+算子名称命名的文件夹（例如 `bench_lab/driver_bench/my_new_op/`）。
+**创建算子目录**
+
+  评测正式集放在 `tasks/levelN/<op_name>/`（`N` 取 1/2/3/4，对应难度等级）。被 `python -m kernel_eval.cli` 实际加载的就是这个目录。
+
+  `bench_lab/` 是**实验/孵化区**：准备测试要放入 cann-bench 的算子可先放此处暂存，本地测试无误后通过 PR 转入对应 `tasks/levelN/` 主测试集合。
+
+  示例：新增 L2 算子 `MyOp` → 创建 `tasks/level2/my_op/`，按下文 1~6 节的规范放好 `proto.yaml`、`golden.py`、`desc.md`、`cases.yaml`、`cases.csv`，并通过 §6 的一致性检查清单。
 
 ## 贡献规范
 
@@ -409,7 +414,7 @@ dtype: [float32]                  # 单值简写，自动展开为6个float32
 
 ### 4.5 用例设计原则
 
-结合评测目标，设计用例覆盖场景，例如当前kernel_bench用例覆盖泛化场景（建议 20+ 个用例）：
+结合评测目标，设计用例覆盖场景，例如当前tasks 用例覆盖泛化场景（建议 20+ 个用例）：
 **note:当前场景仅供参考**
 | 场景类别 | 说明 |
 |---------|------|

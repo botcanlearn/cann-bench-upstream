@@ -34,9 +34,71 @@
 
 import math
 from typing import Union, Tuple, Dict, Any, Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
+
+
+@dataclass
+class SingleOutputResult:
+    """单个输出的对比结果（用于多输出算子独立判定）"""
+    index: int                      # 输出索引
+    name: str = ""                  # 输出名称（可选）
+    dtype: str = ""                 # 数据类型
+    dtype_category: str = ""        # 'float' 或 'int'
+    passed: bool = True
+    threshold: float = 0.0
+    # 浮点类型指标
+    mere: float = 0.0               # 平均相对误差
+    mare: float = 0.0               # 最大相对误差
+    max_diff: float = 0.0
+    mean_diff: float = 0.0
+    # 整数类型指标
+    mismatch_count: int = 0         # 不匹配元素数
+    total_count: int = 0            # 总元素数
+    max_abs_diff: int = 0           # 最大绝对差值
+    # 小值域/相消指标
+    small_value_error_count: int = 0
+    small_value_cpu_error_count: int = 0
+    small_value_total_count: int = 0
+    cancel_error_count: int = 0
+    cancel_cpu_error_count: int = 0
+    cancel_total_count: int = 0
+    # 错误信息
+    error_msg: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'index': self.index,
+            'name': self.name,
+            'dtype': self.dtype,
+            'dtype_category': self.dtype_category,
+            'passed': self.passed,
+            'threshold': self.threshold,
+            'mere': self.mere,
+            'mare': self.mare,
+            'mismatch_count': self.mismatch_count,
+            'total_count': self.total_count,
+            'max_abs_diff': self.max_abs_diff,
+            'error_msg': self.error_msg,
+        }
+
+    def format_summary(self) -> str:
+        """格式化单输出判定摘要（用于日志）"""
+        dtype_str = f"{self.dtype}[{self.name or self.index}]"
+
+        if self.dtype_category == 'int':
+            if self.passed:
+                return f"{dtype_str}: ✅ (exact match)"
+            else:
+                ratio = self.mismatch_count / max(self.total_count, 1)
+                return f"{dtype_str}: ❌ mismatch={self.mismatch_count}/{self.total_count} ({ratio:.2%}), max_diff={self.max_abs_diff}"
+        else:  # float
+            if self.passed:
+                return f"{dtype_str}: ✅ MERE={self.mere:.6f}, MARE={self.mare:.6f}"
+            else:
+                mare_threshold = 10 * self.threshold
+                return f"{dtype_str}: ❌ MERE={self.mere:.6f}, MARE={self.mare:.6f} (threshold={self.threshold:.6f}, mare_threshold={mare_threshold:.6f})"
 
 
 # 精度阈值表（采用生态算子开源精度标准）
@@ -142,12 +204,12 @@ CANCEL_ZERO_THRESHOLDS: Dict[str, float] = {
 
 @dataclass
 class CompareResult:
-    """对比结果"""
+    """对比结果（支持多输出算子）"""
     passed: bool
     dtype: str
-    threshold: float  # 精度阈值
-    mere: float = 0.0  # 平均相对误差
-    mare: float = 0.0  # 最大相对误差
+    threshold: float  # 精度阈值（聚合值）
+    mere: float = 0.0  # 平均相对误差（聚合值）
+    mare: float = 0.0  # 最大相对误差（聚合值）
     max_diff: float = 0.0
     mean_diff: float = 0.0
     mismatch_count: int = 0
@@ -160,6 +222,7 @@ class CompareResult:
     cancel_cpu_error_count: int = 0  # 相消位置 CPU 错误计数
     cancel_total_count: int = 0  # 相消位置总计数
     error_msg: Optional[str] = None
+    output_results: List[SingleOutputResult] = field(default_factory=list)  # 各输出独立结果
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -180,7 +243,15 @@ class CompareResult:
             'cancel_cpu_error_count': self.cancel_cpu_error_count,
             'cancel_total_count': self.cancel_total_count,
             'error_msg': self.error_msg,
+            'output_results': [r.to_dict() for r in self.output_results],
         }
+
+    def format_all_outputs(self) -> str:
+        """格式化所有输出判定结果（用于日志）"""
+        lines = []
+        for r in self.output_results:
+            lines.append(f"  - {r.format_summary()}")
+        return "\n".join(lines)
 
 
 def get_threshold(dtype_str: str) -> float:
@@ -243,6 +314,7 @@ def compare_tensors(
     threshold: Optional[float] = None,
     cpu_output: Optional[Union[torch.Tensor, Tuple, List]] = None,
     ignore_output_indices: Optional[List[int]] = None,
+    custom_thresholds: Optional[Dict[str, float]] = None,
 ) -> CompareResult:
     """
     对比输出张量与Golden参考结果（采用MERE/MARE标准 + 小值域处理）
@@ -254,6 +326,8 @@ def compare_tensors(
         threshold: 精度阈值（可选，默认根据dtype自动选择）
         cpu_output: CPU 相同精度下的输出（可选，用于小值域比较）
                     如果不提供，则使用 golden 截断到目标精度作为 CPU 输出
+        ignore_output_indices: 需要忽略对比的输出索引列表
+        custom_thresholds: 自定义精度阈值表（优先级高于默认阈值）
 
     Returns:
         CompareResult: 对比结果
@@ -262,9 +336,19 @@ def compare_tensors(
         正常值域: MERE < threshold 且 MARE < 10 * threshold
         小值域: ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
     """
-    # 获取阈值
+    # 获取阈值（优先使用自定义阈值）
+    if custom_thresholds is None:
+        custom_thresholds = {}
+
+    def _get_output_threshold(dtype_str: str) -> float:
+        """获取单个输出的阈值（优先自定义，其次默认）"""
+        dtype_lower = dtype_str.lower()
+        if dtype_lower in custom_thresholds:
+            return custom_thresholds[dtype_lower]
+        return get_threshold(dtype_str)
+
     if threshold is None:
-        threshold = get_threshold(dtype)
+        threshold = _get_output_threshold(dtype)
 
     try:
         # 处理多输出情况
@@ -303,13 +387,56 @@ def compare_tensors(
         cancel_cpu_error_count = 0
         cancel_total_count = 0
 
+        # 记录每个输出的独立判定结果
+        single_output_results: List[SingleOutputResult] = []
+
         for i, (out_tensor, gold_tensor) in enumerate(zip(outputs, goldens)):
             # 跳过不需要对比的输出
             if ignore_output_indices and i in ignore_output_indices:
+                # 创建跳过标记的 SingleOutputResult
+                single_output_results.append(SingleOutputResult(
+                    index=i,
+                    name="",  # 名称由调用方填充
+                    dtype=str(out_tensor.dtype).replace('torch.', ''),
+                    dtype_category='int' if out_tensor.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8) else 'float',
+                    passed=True,  # 跳过的输出视为通过
+                    error_msg="(跳过对比)"
+                ))
                 continue
 
+            # 根据每个输出的实际 dtype 获取阈值（优先自定义阈值）
+            out_dtype_str = str(out_tensor.dtype).replace('torch.', '')
+            out_threshold = _get_output_threshold(out_dtype_str)
+            out_dtype_category = 'int' if out_tensor.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8) else 'float'
+
             cpu_tensor = cpu_outputs[i] if cpu_outputs is not None else None
-            result = _compare_single_tensor(out_tensor, gold_tensor, threshold, dtype, cpu_tensor)
+            result = _compare_single_tensor(out_tensor, gold_tensor, out_threshold, out_dtype_str, cpu_tensor)
+
+            # 转换 CompareResult 到 SingleOutputResult
+            single_result = SingleOutputResult(
+                index=i,
+                name="",  # 名称由调用方填充
+                dtype=out_dtype_str,
+                dtype_category=out_dtype_category,
+                passed=result.passed,
+                threshold=out_threshold,
+                mere=result.mere,
+                mare=result.mare,
+                max_diff=result.max_diff,
+                mean_diff=result.mean_diff,
+                mismatch_count=result.mismatch_count,
+                total_count=result.total_count,
+                max_abs_diff=int(result.max_diff) if out_dtype_category == 'int' else 0,
+                small_value_error_count=result.small_value_error_count,
+                small_value_cpu_error_count=result.small_value_cpu_error_count,
+                small_value_total_count=result.small_value_total_count,
+                cancel_error_count=result.cancel_error_count,
+                cancel_cpu_error_count=result.cancel_cpu_error_count,
+                cancel_total_count=result.cancel_total_count,
+                error_msg=result.error_msg or "",
+            )
+            single_output_results.append(single_result)
+
             is_passed = result.passed
             all_passed = all_passed and is_passed
             mere_sum += result.mere * result.total_count
@@ -334,10 +461,21 @@ def compare_tensors(
         # 最终通过条件
         passed = all_passed
 
+        # 确定返回的 dtype 和 threshold
+        # 如果有失败输出，返回第一个失败输出的阈值信息
+        # 否则返回第一个输出的阈值信息
+        result_dtype = dtype
+        result_threshold = threshold
+        for sr in single_output_results:
+            if not sr.passed and not sr.error_msg.startswith("(跳过"):
+                result_dtype = sr.dtype
+                result_threshold = sr.threshold
+                break
+
         return CompareResult(
             passed=passed,
-            dtype=dtype,
-            threshold=threshold,
+            dtype=result_dtype,
+            threshold=result_threshold,
             mere=mere,
             mare=mare_max,
             max_diff=max_diff,
@@ -351,6 +489,7 @@ def compare_tensors(
             cancel_error_count=cancel_error_count,
             cancel_cpu_error_count=cancel_cpu_error_count,
             cancel_total_count=cancel_total_count,
+            output_results=single_output_results,  # 新增：各输出独立结果
         )
 
     except Exception as e:
@@ -588,6 +727,48 @@ def _compare_single_tensor(
     mean_diff = float(valid_diff.mean()) if len(valid_diff) > 0 else 0.0
     total_count = output.numel()
 
+    # ============================================================
+    # 第一阶段：整体相对误差判定（优先判定）
+    # ============================================================
+    # 原则：相对误差是主要判定标准，如果整体相对误差达标，直接通过
+    # 小值域/相消判定只是为了处理"相对误差可能不合理"的特殊情况
+    mare_threshold = 10 * threshold
+
+    # 计算整体相对误差（包括所有有效位置）
+    overall_mere = float(valid_relative_error.mean())
+    overall_mare = float(valid_relative_error.max())
+
+    # 如果整体相对误差通过，直接返回，不需要小值域/相消判定
+    if overall_mere < threshold and overall_mare < mare_threshold:
+        return CompareResult(
+            passed=True,
+            dtype=dtype,
+            threshold=threshold,
+            mere=overall_mere,
+            mare=overall_mare,
+            max_diff=max_diff,
+            mean_diff=mean_diff,
+            mismatch_count=0,
+            total_count=total_count,
+            mismatch_ratio=0.0,
+            small_value_error_count=0,
+            small_value_cpu_error_count=0,
+            small_value_total_count=0,
+            cancel_error_count=0,
+            cancel_cpu_error_count=0,
+            cancel_total_count=0,
+        )
+
+    # ============================================================
+    # 第二阶段：分析失败原因，使用兜底判定
+    # ============================================================
+    # 整体相对误差不通过，需要分析是哪些位置导致的，并判断是否属于特殊情况
+
+    # 找出相对误差超标的点
+    mismatch_mask = relative_error > mare_threshold
+    mismatch_mask[~valid_mask] = False
+    mismatch_count = int(mismatch_mask.sum())
+
     # === 小值域处理 ===
     # 获取小值域阈值
     small_value_threshold = get_small_value_threshold(dtype)
@@ -603,58 +784,32 @@ def _compare_single_tensor(
     small_value_error_count = int(small_value_npu_error_mask.sum())
 
     # 小值域 CPU 错误计数
-    # 如果提供了 cpu_output，使用它；否则使用 golden 截断到目标精度作为 CPU 输出
-    # 注意：CPU 差异是与原始 FP64 golden 比较，而不是截断后的 golden
+    # 重要：CPU 和 NPU 的比较基准必须一致，都使用 golden_truncated（FP64 → target_dtype → FP64）
+    # 这样才能公平比较两者在相同精度限制下与理论真值的误差差异
     if cpu_output is not None:
         cpu_output_fp64 = cpu_output.double()
-        # 使用原始 golden (FP64) 进行比较，而不是 golden_truncated
-        cpu_diff = torch.abs(cpu_output_fp64 - golden.double())
+        # CPU 差异也与截断后的 golden 比较，保持基准一致
+        cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
     else:
         # golden 截断到目标精度后再升到 FP64，这就是 CPU 相同精度下的"理想"输出
         cpu_output_fp64 = golden.to(target_dtype).double()
-        cpu_diff = torch.abs(cpu_output_fp64 - golden.double())
+        # 与截断后的 golden 比较（此时 cpu_output_fp64 == golden_truncated，diff = 0）
+        cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
 
-    # CPU 小值域错误计数: |golden| < threshold 且 |cpu_output - golden| > error
-    # 使用原始 golden (FP64) 的绝对值判断小值域
-    cpu_golden_abs = torch.abs(golden.double())
-    cpu_small_value_mask = cpu_golden_abs < small_value_threshold
-    cpu_small_value_mask[~valid_mask] = False
+    # CPU 小值域错误计数: |golden| < threshold 且 |cpu_output - golden_truncated| > error
+    cpu_small_value_mask = small_value_mask  # 直接使用 NPU 的小值域 mask，保证一致
     cpu_small_value_error_mask = cpu_small_value_mask & (cpu_diff > small_value_error)
     small_value_cpu_error_count = int(cpu_small_value_error_mask.sum())
 
-    # === 正常值域通过条件 ===
-    # 排除小值域位置后计算 MERE 和 MARE
-    # 因为小值域位置有自己的判断标准，不应该影响正常值域的误差计算
-    normal_value_mask = ~small_value_mask & valid_mask
-    normal_relative_error = relative_error[normal_value_mask]
-
-    if len(normal_relative_error) > 0:
-        normal_mere = float(normal_relative_error.mean())
-        normal_mare = float(normal_relative_error.max())
+    # 小值域兜底判定：ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
+    if small_value_total_count > 0:
+        max_cpu_error = max(small_value_cpu_error_count, 1)
+        small_value_ratio = small_value_error_count / max_cpu_error
+        small_value_passed = small_value_ratio <= 2
     else:
-        # 所有位置都在小值域内，正常值域直接通过
-        normal_mere = 0.0
-        normal_mare = 0.0
+        small_value_passed = True
 
-    mare_threshold = 10 * threshold
-    normal_passed = normal_mere < threshold and normal_mare < mare_threshold
-
-    # === 相消位置处理（基于 IEEE 754 精度位数理论 + CPU 同精度对照）===
-    #
-    # 理论依据：
-    # 1. IEEE 754 标准：FP32 有 23 位尾数，相对精度 ~2^-23 ≈ 10^-7
-    #    当两个接近的大数相减时，结果的有效位数急剧丢失（Kahan 灾难性相消）
-    # 2. 相消现象特征：
-    #    - output ≈ 0（因精度位数不足，相消结果丢失）
-    #    - golden 在精度边界附近（非零小值，如 FP32 的 10^-3）
-    #    - 不在小值域内（排除极小值场景）
-    #
-    # 检测条件：
-    # - |output| < cancel_zero_threshold（output 因相消接近零）
-    # - |golden| < cancel_boundary（golden 在精度边界附近）
-    # - |golden| >= small_value_threshold（排除小值域）
-    # - 是有效值（非 NaN/Inf）
-
+    # === 相消位置处理 ===
     # 获取相消阈值
     cancel_boundary = get_cancel_boundary(dtype)
     cancel_zero_threshold = get_cancel_zero_threshold(dtype)
@@ -670,13 +825,12 @@ def _compare_single_tensor(
     cancel_npu_error_mask = cancel_mask & (relative_error > mare_threshold)
     cancel_error_count = int(cancel_npu_error_mask.sum())
 
-    # CPU 相对误差超标计数：CPU 在相消位置是否也有相同的精度限制
-    cpu_relative_error = cpu_diff / (cpu_golden_abs + 1e-7)
+    # CPU 相对误差超标计数
+    cpu_relative_error = cpu_diff / (golden_abs + 1e-7)
     cancel_cpu_error_mask = cancel_mask & (cpu_relative_error > mare_threshold)
     cancel_cpu_error_count = int(cancel_cpu_error_mask.sum())
 
-    # 相消位置通过标准：ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
-    # 如果 NPU 和 CPU 都有相同数量的"错误"位置，说明是 dtype 精度限制而非算子 bug
+    # 相消位置兜底判定：ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
     if cancel_total_count > 0:
         max_cpu_cancel_error = max(cancel_cpu_error_count, 1)
         cancel_ratio = cancel_error_count / max_cpu_cancel_error
@@ -684,44 +838,34 @@ def _compare_single_tensor(
     else:
         cancel_passed = True
 
-    # 计算不匹配数量（相对误差超过阈值的点，排除小值域和相消位置）
-    # 如果相消位置通过了（NPU 和 CPU 一致），则不计入 mismatch
-    mismatch_mask = relative_error > mare_threshold
-    mismatch_mask[~valid_mask] = False
-    mismatch_mask[small_value_mask] = False  # 排除小值域位置
-    # 排除相消位置中 NPU 和 CPU 都"出错"的位置（这些是真正的精度限制）
-    # 但保留 NPU "出错"而 CPU 不"出错"的位置（这些可能是算子 bug）
-    if cancel_total_count > 0 and cancel_passed:
-        # 相消通过：排除所有相消位置
-        mismatch_mask[cancel_mask] = False
-    mismatch_count = int(mismatch_mask.sum())
+    # === 分析失败原因 ===
+    # 检查相对误差超标的点是否都在小值域/相消范围内
+    mismatch_in_small_value = mismatch_mask & small_value_mask
+    mismatch_in_cancel = mismatch_mask & cancel_mask
+    mismatch_in_normal = mismatch_mask & ~small_value_mask & ~cancel_mask
 
-    # 如果所有不匹配位置都因相消通过了，更新 normal_passed
-    if mismatch_count == 0 and cancel_total_count > 0 and cancel_passed:
-        normal_passed = True
+    normal_mismatch_count = int(mismatch_in_normal.sum())
 
-    # === 小值域通过标准 ===
-    # ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
-    # 来自 docs/kernel_bench_design_v1.0.md
-    if small_value_total_count > 0:
-        # NPU ErrorCount 不应超过 CPU ErrorCount 的 2 倍
-        # 如果 CPU ErrorCount = 0，则 NPU ErrorCount 必须 ≤ 2
-        max_cpu_error = max(small_value_cpu_error_count, 1)
-        small_value_ratio = small_value_error_count / max_cpu_error
-        small_value_passed = small_value_ratio <= 2
+    # 最终判定逻辑：
+    # 1. 如果正常值域位置有相对误差超标的点 → 直接失败（不是特殊情况）
+    # 2. 如果只有小值域/相消位置超标 → 使用兜底判定
+    if normal_mismatch_count > 0:
+        # 正常值域位置有误差超标，直接失败
+        passed = False
+        # 计算排除小值域/相消后的 MERE/MARE 用于显示
+        normal_mask = ~small_value_mask & ~cancel_mask & valid_mask
+        normal_relative_error = relative_error[normal_mask]
+        if len(normal_relative_error) > 0:
+            display_mere = float(normal_relative_error.mean())
+            display_mare = float(normal_relative_error.max())
+        else:
+            display_mere = 0.0
+            display_mare = 0.0
     else:
-        # 无小值域位置，直接通过
-        small_value_passed = True
-
-    # 最终通过条件: 正常值域通过 且 小值域通过 且 相消位置通过
-    passed = normal_passed and small_value_passed and cancel_passed
-
-    # 返回的 mere/mare 应与判定是否通过的指标一致
-    # 使用排除小值域和相消位置后的值，让用户看到的指标与通过判定一致
-    # 如果存在正常值域位置，使用 normal_mere/normal_mare
-    # 如果所有位置都在小值域/相消位置，则 mere/mare 为 0（通过判定已由小值域/相消标准处理）
-    display_mere = normal_mere if len(normal_relative_error) > 0 else 0.0
-    display_mare = normal_mare if len(normal_relative_error) > 0 else 0.0
+        # 只有特殊位置（小值域/相消）误差超标，使用兜底判定
+        passed = small_value_passed and cancel_passed
+        display_mere = overall_mere
+        display_mare = overall_mare
 
     return CompareResult(
         passed=passed,

@@ -27,11 +27,11 @@
 """
 
 from typing import Any, Dict, List, Optional, Union, Tuple, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 
-from ..utils.precision import compare_tensors, CompareResult, PRECISION_THRESHOLDS
+from ..utils.precision import compare_tensors, CompareResult, PRECISION_THRESHOLDS, SingleOutputResult
 from ..utils.tensor_utils import tensors_to_fp64_cpu, tensors_to_cpu, tensors_to_device
 from ..security.type_checker import check_output_type, check_multi_output
 
@@ -57,6 +57,7 @@ class AccuracyResult:
     cancel_cpu_error_count: int = 0  # 相消位置 CPU 错误计数
     cancel_total_count: int = 0  # 相消位置总计数
     error_msg: Optional[str] = None
+    output_results: List[SingleOutputResult] = field(default_factory=list)  # 各输出独立结果
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -78,7 +79,15 @@ class AccuracyResult:
             'cancel_cpu_error_count': self.cancel_cpu_error_count,
             'cancel_total_count': self.cancel_total_count,
             'error_msg': self.error_msg,
+            'output_results': [r.to_dict() for r in self.output_results],
         }
+
+    def format_all_outputs(self) -> str:
+        """格式化所有输出判定结果（用于日志）"""
+        lines = []
+        for r in self.output_results:
+            lines.append(f"  - {r.format_summary()}")
+        return "\n".join(lines)
 
 
 class AccuracyEvaluator:
@@ -172,8 +181,8 @@ class AccuracyEvaluator:
         # 获取阈值（优先使用自定义阈值）
         threshold = self._get_threshold(dtype, custom_thresholds)
 
-        # 对比张量（传入 cpu_output 用于小值域比较）
-        compare_result = compare_tensors(ai_output, golden_output, dtype, threshold, cpu_output, ignore_output_indices)
+        # 对比张量（传入 cpu_output 用于小值域比较，传入 custom_thresholds 用于多输出阈值）
+        compare_result = compare_tensors(ai_output, golden_output, dtype, threshold, cpu_output, ignore_output_indices, custom_thresholds)
 
         return AccuracyResult(
             passed=compare_result.passed,
@@ -194,6 +203,7 @@ class AccuracyEvaluator:
             cancel_cpu_error_count=compare_result.cancel_cpu_error_count,
             cancel_total_count=compare_result.cancel_total_count,
             error_msg=compare_result.error_msg,
+            output_results=compare_result.output_results,  # 各输出独立结果
         )
 
     def evaluate_with_retry(

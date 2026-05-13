@@ -20,7 +20,7 @@
 使用方式:
     python run_simple.py --cpu --operator Sigmoid          # CPU 简单验证
     python run_simple.py --npu --operator Scatter          # NPU 模拟评测
-    python run_simple.py --npu --task-dir kernel_bench/level2/scatter  # 指定算子目录
+    python run_simple.py --npu --task-dir tasks/level2/scatter  # 指定算子目录
 """
 
 import os
@@ -136,7 +136,7 @@ def parse_args():
 
     # 目录配置（替代 --level）
     parser.add_argument('--task-dir', type=str, default=None,
-                        help='指定评测目录（bench根目录或算子目录，默认: kernel_bench）')
+                        help='指定评测目录（bench根目录或算子目录，默认: tasks）')
 
     # 用例筛选
     parser.add_argument('--operator', type=str, default=None,
@@ -189,7 +189,7 @@ def run_cpu_mode(args) -> dict:
     config = Config()
     config.device_type = "cpu"
     config.enable_profiler = False
-    config.kernel_bench_root = bench_root
+    config.tasks_root = bench_root
     set_config(config)
 
     # 一次初始化，所有 case 复用
@@ -290,7 +290,7 @@ def run_npu_mode(args) -> EvalOperatorResult:
     config.repeat = args.repeat
     config.reports_dir = str(Path(args.output).parent)
     config.processes_per_card = args.processes_per_card
-    config.kernel_bench_root = bench_root
+    config.tasks_root = bench_root
     set_config(config)
 
     # 确保 cann_bench_golden 已安装

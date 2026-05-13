@@ -202,7 +202,7 @@ class OperatorScheduler:
             env["PYTHONPATH"] = f"{kernel_eval_root}:{existing_pythonpath}"
         else:
             env["PYTHONPATH"] = kernel_eval_root
-        env["KERNEL_BENCH_ROOT"] = self.base_config.kernel_bench_root
+        env["TASKS_ROOT"] = self.base_config.tasks_root
         env["PYTHONUNBUFFERED"] = "1"
 
         # 继承 CANN 环境变量（日志抑制）
@@ -404,7 +404,7 @@ class ProcessWorker:
             env["PYTHONPATH"] = f"{kernel_eval_root}:{existing_pythonpath}"
         else:
             env["PYTHONPATH"] = kernel_eval_root
-        env["KERNEL_BENCH_ROOT"] = self.base_config.kernel_bench_root
+        env["TASKS_ROOT"] = self.base_config.tasks_root
 
         # 强制无缓冲输出（stdout 是管道而非 TTY 时 Python 默认块缓冲）
         env["PYTHONUNBUFFERED"] = "1"
@@ -448,6 +448,7 @@ class ProcessWorker:
                 "note": getattr(c, 'note', ''),
                 "yaml_path": getattr(c, 'yaml_path', ''),
                 "baseline_perf_us": c.baseline_perf_us,
+                "op_dir_name": getattr(c, 'op_dir_name', ''),
             }
             for c in cases
         ]
@@ -795,7 +796,7 @@ class ProcessPoolCoordinator:
         """
         # 加载用例
         from ..data.case_loader import CaseLoader
-        loader = CaseLoader(self.base_config.kernel_bench_root)
+        loader = CaseLoader(self.base_config.tasks_root)
         cases = loader.scan_by_rel_path(rel_path)
 
         if not cases:
@@ -813,7 +814,9 @@ class ProcessPoolCoordinator:
             )
 
         operator_name = cases[0].operator
-        print(f"[INFO] 算子 {rel_path} ({operator_name}), 用例数: {len(cases)}")
+        # 当 rel_path == "." 时，使用 op_dir_name 显示
+        display_path = cases[0].op_dir_name if cases[0].op_dir_name and rel_path == "." else rel_path
+        print(f"[INFO] 算子 {display_path} ({operator_name}), 用例数: {len(cases)}")
 
         # 分配用例到进程
         distribution = self.distribute_cases(cases)

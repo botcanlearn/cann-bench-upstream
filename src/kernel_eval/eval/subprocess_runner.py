@@ -213,7 +213,7 @@ class SubprocessRunner:
             # 使用 -u 参数强制无缓冲输出，确保所有case日志都被捕获
             cmd = [
                 sys.executable, "-u", "-m", "kernel_eval.cli", "eval",
-                "--source-dir", "kernel_bench",
+                "--source-dir", "tasks",
                 "--operator", operator_name,
                 "--child-json-output", frag_path,
                 "--no-subprocess-isolation",

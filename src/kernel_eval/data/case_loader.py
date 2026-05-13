@@ -65,9 +65,12 @@ class CaseInfo:
     yaml_path: str      # YAML文件路径
     baseline_perf_us: float = 0.0  # 性能基线
     t_hw_us: float = 0.0  # 硬件下界 T_HW
+    op_dir_name: str = ""  # 算子目录名（用于 case_id_str 显示）
 
     def get_case_id_str(self) -> str:
-        return f"{self.rel_path}_{self.case_id}"
+        # 当 rel_path == "." 时，使用 op_dir_name 显示
+        display_path = self.op_dir_name if self.op_dir_name and self.rel_path == "." else self.rel_path
+        return f"{display_path}_{self.case_id}"
 
 
 class CaseLoader:
@@ -130,9 +133,9 @@ class CaseLoader:
             rel_path = op_dir.relative_to(self.bench_root)
         except ValueError:
             # 如果op_dir不在bench_root下，使用目录名
-            rel_path = op_dir.name
+            rel_path = Path(op_dir.name)
 
-        return self._load_yaml(cases_yaml, str(rel_path))
+        return self._load_yaml(cases_yaml, str(rel_path), op_dir)
 
     def scan_by_operator(self, operator: str) -> List[CaseInfo]:
         """扫描指定算子的用例"""
@@ -144,7 +147,7 @@ class CaseLoader:
         all_cases = self.scan_all_cases()
         return [c for c in all_cases if c.rel_path == rel_path]
 
-    def _load_yaml(self, yaml_path: Path, rel_path: str) -> List[CaseInfo]:
+    def _load_yaml(self, yaml_path: Path, rel_path: str, op_dir: Path = None) -> List[CaseInfo]:
         """解析YAML文件"""
         with open(yaml_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
@@ -152,13 +155,16 @@ class CaseLoader:
         if not data or 'cases' not in data:
             return []
 
+        # 提取算子目录名（用于 case_id_str 显示）
+        op_dir_name = op_dir.name if op_dir else ""
+
         cases = []
         for raw in data['cases']:
             # 校验格式并输出警告
             warnings = self._validate_case(raw, str(yaml_path))
             for warning in warnings:
                 print(f"[WARN] {warning}")
-            case = self._parse_case(raw, rel_path, str(yaml_path))
+            case = self._parse_case(raw, rel_path, str(yaml_path), op_dir_name)
             if case:
                 cases.append(case)
         return cases
@@ -204,7 +210,7 @@ class CaseLoader:
 
         return warnings
 
-    def _parse_case(self, raw: Dict, rel_path: str, yaml_path: str) -> CaseInfo:
+    def _parse_case(self, raw: Dict, rel_path: str, yaml_path: str, op_dir_name: str = "") -> CaseInfo:
         """解析单个用例"""
         input_shapes = raw.get('input_shape', [])
         if isinstance(input_shapes, list) and input_shapes and not isinstance(input_shapes[0], list):
@@ -229,6 +235,7 @@ class CaseLoader:
             yaml_path=yaml_path,
             baseline_perf_us=_coerce_baseline_us(raw.get('baseline_perf_us')),
             t_hw_us=_coerce_baseline_us(raw.get('t_hw_us')),
+            op_dir_name=op_dir_name,
         )
 
     def get_statistics(self) -> Dict[str, Any]:

@@ -48,7 +48,7 @@ class GoldenPackager:
     def __init__(self, bench_root: str, output_dir: str = None):
         self.bench_root = Path(bench_root)
         if not self.bench_root.exists():
-            raise ValueError(f"kernel_bench目录不存在: {bench_root}")
+            raise ValueError(f"tasks 目录不存在: {bench_root}")
 
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
         self.package_name = "cann_bench_golden"
@@ -441,7 +441,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Golden函数打包器")
-    parser.add_argument("--bench-root", required=True, help="kernel_bench目录路径")
+    parser.add_argument("--bench-root", required=True, help="tasks 目录路径")
     parser.add_argument("--output-dir", default=".", help="whl输出目录")
 
     args = parser.parse_args()

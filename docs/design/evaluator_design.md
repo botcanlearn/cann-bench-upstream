@@ -67,7 +67,7 @@
 │  src/kernel_eval/                                                            │
 │  ├── cli.py                # 命令行入口                                     │
 │  ├── config.py             # 配置管理                                       │
-│  ├── data/                 # 数据层（加载kernel_bench用例）                 │
+│  ├── data/                 # 数据层（加载tasks 用例）                 │
 │  ├── eval/                 # 评测层（精度+性能+安全验证）                   │
 │  ├── report/               # 报告层（JSON+Markdown+Summary）               │
 │  ├── security/             # 安全层（防篡改检查）                           │
@@ -80,7 +80,7 @@
 │  4. 安装run包（NPU内核包）+ whl包（Python包）                                │
 │  5. 安全验证（Timing API完整性检查）                                        │
 │  6. 扫描cann_bench接口，打印接口信息                                         │
-│  7. 加载 kernel_bench 用例数据                                              │
+│  7. 加载 tasks 用例数据                                              │
 │  8. 执行精度验证（CPU fp64 Golden + 二次验证）                              │
 │  9. 执行性能评测（Profiler kernel-only + 升频清cache）                      │
 │  10. 生成评测报告                                                            │
@@ -97,7 +97,7 @@
 
 **命名说明**：
 - `kernel_eval`：评测工程代码目录（src/kernel_eval）
-- `kernel_bench`：测试用例数据目录（kernel_bench/level*/op_name/）
+- `tasks`：测试用例数据目录（tasks/level*/op_name/）
 - `./scripts/run_evaluation.sh`：CLI命令脚本（推荐使用）
 
 ---
@@ -312,7 +312,7 @@ if hasattr(torch.ops, 'cann_bench'):
 
 **Step 7: 匹配用例**
 
-根据接口名称，匹配kernel_bench中的算子用例：
+根据接口名称，匹配tasks 中的算子用例：
 - 查找 proto.yaml 中对应的算子定义
 - 加载对应的 cases.yaml 用例
 
@@ -332,53 +332,69 @@ if hasattr(torch.ops, 'cann_bench'):
 
 ### 3.3 命令行参数
 
+底层入口为 `python -m kernel_eval.cli <subcommand>`；`scripts/run_evaluation.sh` 是它的 shell 包装（仅透传常用子集，详见 [scripts/README.md](../../scripts/README.md)）。
+
 #### 通用参数
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `-a, --action <action>` | 操作类型: eval(评测), list(列表), info(详情), config(配置) | eval |
-| `-v, --verbose` | 详细输出 | False |
+| 子命令 | `eval` / `list` / `info` / `config` / `eval-process`（内部） | 无 |
+| `-v, --verbose` | 详细输出（eval/list/info） | False |
 
-#### 评测(eval)相关参数
+> shell `run_evaluation.sh` 用 `-a, --action` 选择子命令（默认 `eval`）；直调 cli 时直接传子命令名即可。
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `--source-dir <dir>` | AI生成的算子源码目录（自动扫描编译安装） | 无 |
-| `--device <type>` | 设备类型 (cpu/npu) | npu |
-| `--device-id <id>` | NPU 设备 ID | 0 |
-| `--warmup <n>` | 预热次数 | 3 |
-| `--repeat <n>` | 采集次数 | 5 |
-| `-l, --level <level>` | 算子难度级别 (1/2/3/4) | 无 |
-| `-o, --operator <name>` | 算子名称 (如 Exp, Softmax) | 无 |
-| `-c, --case-id <id>` | 用例编号 | 无 |
-| `--reports-dir <dir>` | 报告输出目录 | reports |
-| `--no-subprocess-isolation` | 关闭子进程隔离（默认开启） | False |
-| `--op-timeout-sec` | 子进程隔离下 per-op 超时 | 240秒 |
-| `--no-iterative-compile` | 关闭迭代隔离编译 | False |
-| `--no-perf` | 关闭性能采集 | False |
-| `--profiler-level <level>` | Profiler级别 (Level1/Level2) | Level1 |
+#### 评测（`eval`）参数
 
-当不指定 `--source-dir` 时，默认跳过编译安装，直接使用已安装的cann_bench模块。
+| 参数 | 说明 | 默认值 | 通过 shell 暴露 |
+|------|------|--------|------|
+| `--source-dir <dir>` | AI 生成算子源码目录；不指定则使用已安装的 `cann_bench` | None | ✓ |
+| `--task-dir <path>` | 评测目录（`tasks` / `tasks/level1` / `tasks/level1/exp` 等） | None | ✓ |
+| `--operator <name>` | 算子名称筛选（如 `Exp`、`Softmax`） | None | ✓ |
+| `--level <1/2/3/4>` | 难度级别筛选（**已废弃**，建议用 `--task-dir`） | None | ✗ |
+| `--case-id <id>` | 用例编号筛选 | None | ✓ |
+| `--device <cpu/npu>` | 设备类型 | `npu` | ✓ |
+| `--device-id <id>` | NPU 设备 ID（单卡）；**不指定则多卡并行** | None | ✓ |
+| `--processes-per-card <n>` | 多卡并行每卡进程数 | 2 | ✓ (shell 同名) |
+| `--timeout-per-operator <n>` | 多卡并行单算子超时（秒），总超时 = 算子数 × 此值 | 300 | ✓ (shell 名为 `--timeout-per-process`) |
+| `--warmup <n>` | 预热次数 | 3 | ✓ |
+| `--repeat <n>` | 采集次数 | 5 | ✓ |
+| `--reports-dir <dir>` | 报告输出目录 | `reports` | ✗ |
+| `--output <dir>` | 报告输出目录（覆盖 `--reports-dir`） | None | ✗ |
+| `--eval-code <code>` | 评测代号（写入报告） | None | ✗ |
+| `--no-subprocess-isolation` | 关闭子进程隔离（默认开启，每算子独立子进程） | False | ✗ |
+| `--op-timeout-sec <n>` | 单进程隔离下 per-op 超时（先 SIGTERM，10s 宽限后 SIGKILL） | 240 | ✗ |
+| `--no-iterative-compile` | 关闭迭代隔离编译（默认开启，编译失败的算子自动隔离到 `_quarantine/`） | False | ✗ |
+| `--no-perf` | 关闭性能采集，仅精度验证 | False | ✓ |
+| `--profiler-level <level>` | Profiler 级别，可选 `Level1` / `Level2` | `Level1` | ✓ |
 
-#### 列表(list)相关参数
+**多卡并行判定**（`src/kernel_eval/cli.py:379`）：
+```python
+use_multi_card = (device == 'npu' and device_id is None and not source_dir)
+```
+即只要在 NPU 下不指定 `--device-id` 且不带 `--source-dir`，就走 `ProcessPoolCoordinator` 多卡并行模式。
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-l, --level <level>` | 按级别筛选 (1/2/3/4) | 无 |
-| `-o, --operator <name>` | 按算子筛选 | 无 |
-
-#### 详情(info)相关参数
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-o, --operator <name>` | 算子名称（必填） | 无 |
-| `-l, --level <level>` | 难度级别 | 无 |
-
-#### 配置(config)相关参数
+#### 列表（`list`）参数
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| 无 | 显示当前配置 | - |
+| `--level <1/2/3/4>` | 按级别筛选 | None |
+| `--operator <name>` | 按算子筛选 | None |
+| `--cases` | 列出用例而非算子 | False |
+
+#### 详情（`info`）参数
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--operator <name>` | 算子名称（必填） | — |
+| `--level <1/2/3/4>` | 难度级别 | None |
+
+#### 配置（`config`）参数
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--show` | 显示当前配置 | False |
+| `--kernel-bench-root <dir>` | 设置 tasks 数据目录 | None |
+| `--reports-dir <dir>` | 设置报告输出目录 | None |
 
 ### 3.4 使用示例
 
@@ -715,7 +731,7 @@ def geometric_mean_speedup(speedups):
 
 ### Phase 1：目录重命名与结构调整
 
-1. 将 `src/kernel_bench/` 重命名为 `src/kernel_eval/`
+1. 将 `src/tasks/` 重命名为 `src/kernel_eval/`
 2. 创建 `security/` 目录
 3. 创建 `eval/input_pool.py`
 4. 创建 `utils/baseline_resolver.py`

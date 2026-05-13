@@ -59,3 +59,8 @@ cann_bench_project/
 
 # msprof profile data — large, runtime-generated under inner/baseline_perf_prof/results/
 inner/baseline_perf_prof/results/msprof_level*/
+# 本地辅助文件（个人 working notes / skill / profiling output）
+output/
+SKILL_*.md
+skill_*.md
+待解决问题.md

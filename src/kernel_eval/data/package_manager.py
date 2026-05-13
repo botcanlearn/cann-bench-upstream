@@ -19,7 +19,7 @@
 2. 检查/编译whl包和run包（支持迭代隔离编译失败的算子）
 3. 安装whl包和run包
 4. 扫描cann_bench模块提供的算子接口
-5. 匹配kernel_bench中的算子定义
+5. 匹配tasks 中的算子定义
 """
 
 import os
@@ -486,14 +486,14 @@ class PackageManager:
         print("")
 
     def match_operators(self, interfaces: List[InterfaceInfo]) -> List[str]:
-        """匹配kernel_bench中的算子
+        """匹配tasks 中的算子
 
-        根据接口名称，匹配kernel_bench中的算子定义
+        根据接口名称，匹配tasks 中的算子定义
         返回匹配到的算子名称列表
         """
         from .operator_loader import OperatorLoader
 
-        operator_loader = OperatorLoader(self.config.kernel_bench_root)
+        operator_loader = OperatorLoader(self.config.tasks_root)
         all_operators = operator_loader.list_operators()  # 获取所有算子
 
         matched = []
@@ -578,10 +578,10 @@ class PackageManager:
         matched_operators = self.match_operators(interfaces)
 
         if not matched_operators:
-            print(f"[WARN] 未匹配到kernel_bench中的算子")
+            print(f"[WARN] 未匹配到tasks 中的算子")
             return [], package_info
 
-        print(f"[INFO] 匹配到 {len(matched_operators)} 个kernel_bench算子:")
+        print(f"[INFO] 匹配到 {len(matched_operators)} 个tasks 算子:")
         for op_name in matched_operators:
             print(f"       - {op_name}")
 
@@ -605,10 +605,10 @@ class PackageManager:
         matched_operators = self.match_operators(interfaces)
 
         if not matched_operators:
-            print(f"[WARN] 未匹配到kernel_bench中的算子")
+            print(f"[WARN] 未匹配到tasks 中的算子")
             return []
 
-        print(f"[INFO] 匹配到 {len(matched_operators)} 个kernel_bench算子:")
+        print(f"[INFO] 匹配到 {len(matched_operators)} 个tasks 算子:")
         for op_name in matched_operators:
             print(f"       - {op_name}")
 

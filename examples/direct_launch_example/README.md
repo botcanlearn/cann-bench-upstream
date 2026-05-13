@@ -28,7 +28,7 @@ direct_launch_example/
 │   └── build_wheel.sh
 ├── tests/
 ├── build.sh            # 统一构建入口
-└and setup.py
+└── setup.py
 ```
 
 ## 构建方法

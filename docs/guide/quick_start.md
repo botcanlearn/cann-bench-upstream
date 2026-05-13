@@ -31,10 +31,10 @@ pip install -e .
 
 ```bash
 # 评测指定目录
-./scripts/run_evaluation.sh --task-dir kernel_bench/level1
+./scripts/run_evaluation.sh --task-dir tasks/level1
 
 # 评测单个算子目录
-./scripts/run_evaluation.sh --task-dir kernel_bench/level1/exp
+./scripts/run_evaluation.sh --task-dir tasks/level1/exp
 
 # 按算子名称筛选
 ./scripts/run_evaluation.sh --operator Exp
@@ -86,19 +86,25 @@ pip install -e .
 
 ## 高级选项
 
+`./scripts/run_evaluation.sh` 支持的参数：
+
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `--device <type>` | 设备类型 (cpu/npu) | npu |
 | `--device-id <id>` | NPU 设备 ID（不指定则多卡并行） | None |
 | `--processes-per-card <n>` | 每卡进程数（多卡模式） | 2 |
-| `--timeout-per-process <n>` | 单进程超时（秒） | 300 |
+| `--timeout-per-process <n>` | 单进程超时（秒，等价于 cli `--timeout-per-operator`） | 300 |
 | `--warmup <n>` | 预热次数 | 3 |
 | `--repeat <n>` | 采集次数 | 5 |
 | `--no-perf` | 关闭性能采集（仅精度验证） | False |
 | `--profiler-level <level>` | Profiler 级别 (Level1/Level2) | Level1 |
-| `--op-timeout-sec` | 算子评测超时时间（秒） | 240 |
-| `--no-subprocess-isolation` | 关闭子进程隔离 | False（开启） |
-| `--no-iterative-compile` | 关闭迭代隔离编译 | False（开启） |
+
+> shell 暴露的是最常用子集。若需要 `--no-subprocess-isolation` / `--op-timeout-sec` / `--no-iterative-compile` / `--reports-dir` / `--eval-code` 等更精细控制，请直调 cli：
+> ```bash
+> PYTHONPATH=src python -m kernel_eval.cli eval --source-dir /path/to/ai_ops \
+>     --no-subprocess-isolation --op-timeout-sec 480
+> ```
+> cli 完整参数表见 [evaluator_design.md §3.3](../design/evaluator_design.md#33-命令行参数)。
 
 ## 测试脚本
 

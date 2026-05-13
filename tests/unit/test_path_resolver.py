@@ -38,41 +38,41 @@ class TestResolveTaskDir:
     """resolve_task_dir 函数测试"""
 
     def test_none_argument_returns_default(self):
-        """测试 None 参数返回默认 kernel_bench"""
+        """测试 None 参数返回默认 tasks"""
         project_root = Path("/project")
         bench_root, filter_prefix = resolve_task_dir(None, project_root)
 
-        assert bench_root == str(project_root / "kernel_bench")
+        assert bench_root == str(project_root / "tasks")
         assert filter_prefix is None
 
-    def test_relative_path_kernel_bench_root(self, tmp_path):
-        """测试相对路径指向 kernel_bench 根目录"""
-        # 创建真实的 kernel_bench 目录
-        kernel_bench = tmp_path / "kernel_bench"
-        kernel_bench.mkdir()
+    def test_relative_path_tasks_root(self, tmp_path):
+        """测试相对路径指向 tasks 根目录"""
+        # 创建真实的 tasks 目录
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
 
-        bench_root, filter_prefix = resolve_task_dir("kernel_bench", tmp_path)
+        bench_root, filter_prefix = resolve_task_dir("tasks", tmp_path)
 
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix is None
 
     def test_relative_path_level_subdir(self, tmp_path):
         """测试相对路径指向 level 子目录"""
         # 创建真实目录结构
-        kernel_bench = tmp_path / "kernel_bench"
-        level1 = kernel_bench / "level1"
+        tasks = tmp_path / "tasks"
+        level1 = tasks / "level1"
         level1.mkdir(parents=True)
 
-        bench_root, filter_prefix = resolve_task_dir("kernel_bench/level1", tmp_path)
+        bench_root, filter_prefix = resolve_task_dir("tasks/level1", tmp_path)
 
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level1"
 
     def test_absolute_path_operator_dir(self, tmp_path):
         """测试绝对路径指向算子目录"""
         # 创建模拟目录结构
-        kernel_bench = tmp_path / "kernel_bench"
-        level2 = kernel_bench / "level2"
+        tasks = tmp_path / "tasks"
+        level2 = tasks / "level2"
         scatter = level2 / "scatter"
         scatter.mkdir(parents=True)
 
@@ -82,18 +82,18 @@ class TestResolveTaskDir:
 
         bench_root, filter_prefix = resolve_task_dir(str(scatter), tmp_path)
 
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level2/scatter"
 
     def test_absolute_path_non_operator_dir(self, tmp_path):
         """测试绝对路径指向非算子目录"""
-        kernel_bench = tmp_path / "kernel_bench"
-        level2 = kernel_bench / "level2"
+        tasks = tmp_path / "tasks"
+        level2 = tasks / "level2"
         level2.mkdir(parents=True)
 
         bench_root, filter_prefix = resolve_task_dir(str(level2), tmp_path)
 
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level2"
 
     def test_nonexistent_path_raises_error(self):
@@ -104,32 +104,32 @@ class TestResolveTaskDir:
             with pytest.raises(ValueError, match="目录不存在"):
                 resolve_task_dir("nonexistent", project_root)
 
-    def test_path_without_kernel_bench(self, tmp_path):
-        """测试路径中不包含 kernel_bench 目录"""
-        # 创建一个不在 kernel_bench 下的目录
+    def test_path_without_tasks(self, tmp_path):
+        """测试路径中不包含 tasks 目录"""
+        # 创建一个不在 tasks 下的目录
         other_dir = tmp_path / "other_dir"
         other_dir.mkdir()
 
         bench_root, filter_prefix = resolve_task_dir(str(other_dir), tmp_path)
 
-        # 未找到 kernel_bench，使用原目录作为 bench_root
+        # 未找到 tasks，使用原目录作为 bench_root
         assert bench_root == str(other_dir)
         assert filter_prefix is None
 
     def test_filter_prefix_dot_returns_none(self, tmp_path):
         """测试 filter_prefix 为 "." 时返回 None"""
-        kernel_bench = tmp_path / "kernel_bench"
-        kernel_bench.mkdir()
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
 
-        bench_root, filter_prefix = resolve_task_dir(str(kernel_bench), tmp_path)
+        bench_root, filter_prefix = resolve_task_dir(str(tasks), tmp_path)
 
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix is None
 
     def test_check_operator_dir_false(self, tmp_path):
         """测试 check_operator_dir=False 时跳过算子目录检查"""
-        kernel_bench = tmp_path / "kernel_bench"
-        level2 = kernel_bench / "level2"
+        tasks = tmp_path / "tasks"
+        level2 = tasks / "level2"
         scatter = level2 / "scatter"
         scatter.mkdir(parents=True)
 
@@ -142,7 +142,7 @@ class TestResolveTaskDir:
             str(scatter), tmp_path, check_operator_dir=False
         )
 
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level2/scatter"
 
 
@@ -171,31 +171,31 @@ class TestIsOperatorDirectory:
 class TestFindBenchRoot:
     """find_bench_root 函数测试"""
 
-    def test_find_kernel_bench(self, tmp_path):
-        """测试向上查找 kernel_bench"""
-        kernel_bench = tmp_path / "kernel_bench"
-        level2 = kernel_bench / "level2"
+    def test_find_tasks(self, tmp_path):
+        """测试向上查找 tasks"""
+        tasks = tmp_path / "tasks"
+        level2 = tasks / "level2"
         scatter = level2 / "scatter"
         scatter.mkdir(parents=True)
 
         result = find_bench_root(scatter, tmp_path)
-        assert result == kernel_bench
+        assert result == tasks
 
-    def test_no_kernel_bench_returns_original(self, tmp_path):
-        """测试未找到 kernel_bench 时返回原目录"""
+    def test_no_tasks_returns_original(self, tmp_path):
+        """测试未找到 tasks 时返回原目录"""
         other_dir = tmp_path / "other_dir"
         other_dir.mkdir()
 
         result = find_bench_root(other_dir, tmp_path)
         assert result == other_dir
 
-    def test_direct_kernel_bench(self, tmp_path):
-        """测试直接指向 kernel_bench"""
-        kernel_bench = tmp_path / "kernel_bench"
-        kernel_bench.mkdir()
+    def test_direct_tasks(self, tmp_path):
+        """测试直接指向 tasks"""
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
 
-        result = find_bench_root(kernel_bench, tmp_path)
-        assert result == kernel_bench
+        result = find_bench_root(tasks, tmp_path)
+        assert result == tasks
 
 
 class TestResolveTaskDirIntegration:
@@ -204,9 +204,9 @@ class TestResolveTaskDirIntegration:
     def test_full_hierarchy(self, tmp_path):
         """测试完整层级结构"""
         # 创建完整目录结构
-        kernel_bench = tmp_path / "kernel_bench"
-        level1 = kernel_bench / "level1"
-        level2 = kernel_bench / "level2"
+        tasks = tmp_path / "tasks"
+        level1 = tasks / "level1"
+        level2 = tasks / "level2"
         exp_dir = level1 / "exp"
         scatter_dir = level2 / "scatter"
 
@@ -220,20 +220,20 @@ class TestResolveTaskDirIntegration:
 
         # 测试 exp 算子目录
         bench_root, filter_prefix = resolve_task_dir(str(exp_dir), tmp_path)
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level1/exp"
 
         # 测试 scatter 算子目录
         bench_root, filter_prefix = resolve_task_dir(str(scatter_dir), tmp_path)
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level2/scatter"
 
         # 测试 level1 目录（非算子目录）
         bench_root, filter_prefix = resolve_task_dir(str(level1), tmp_path)
-        assert bench_root == str(kernel_bench)
+        assert bench_root == str(tasks)
         assert filter_prefix == "level1"
 
-        # 测试 kernel_bench 根目录
-        bench_root, filter_prefix = resolve_task_dir(str(kernel_bench), tmp_path)
-        assert bench_root == str(kernel_bench)
+        # 测试 tasks 根目录
+        bench_root, filter_prefix = resolve_task_dir(str(tasks), tmp_path)
+        assert bench_root == str(tasks)
         assert filter_prefix is None

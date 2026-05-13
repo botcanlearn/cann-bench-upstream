@@ -13,7 +13,7 @@
 # 用法:
 #   ./run_test.sh --cpu --operator Sigmoid          # CPU 简单验证
 #   ./run_test.sh --npu --operator Scatter          # NPU 模拟评测（标准流程，采集性能）
-#   ./run_test.sh --npu --task-dir kernel_bench/level2/scatter  # 指定算子目录
+#   ./run_test.sh --npu --task-dir tasks/level2/scatter  # 指定算子目录
 #   ./run_test.sh --npu --device-id 1 --export-baseline baseline.json
 #
 # 详细帮助: ./run_test.sh --help
@@ -56,8 +56,8 @@ show_help() {
 
 目录配置:
     --task-dir <path>            指定评测目录（bench根目录或算子目录）
-                            默认: kernel_bench
-                            支持: kernel_bench, kernel_bench/level2/scatter 等
+                            默认: tasks
+                            支持: tasks, tasks/level2/scatter 等
 
 多进程并行配置（统一架构）:
     --processes-per-card <n> 每卡进程数（默认: 2）
@@ -80,7 +80,7 @@ show_help() {
     --help, -h              显示此帮助信息
 
 示例:
-    # CPU 验证（默认 kernel_bench）
+    # CPU 验证（默认 tasks）
     ./run_test.sh --cpu --operator Sigmoid
 
     # NPU 单卡评测（指定设备）
@@ -90,7 +90,7 @@ show_help() {
     ./run_test.sh --npu --operator Scatter
 
     # 指定算子目录评测
-    ./run_test.sh --npu --task-dir kernel_bench/level2/scatter
+    ./run_test.sh --npu --task-dir tasks/level2/scatter
 
     # 指定自定义 bench 目录
     ./run_test.sh --npu --task-dir my_custom_bench
@@ -214,7 +214,7 @@ fi
 if [[ -n "${BENCH_DIR}" ]]; then
     echo "目录: ${BENCH_DIR}"
 else
-    echo "目录: kernel_bench (默认)"
+    echo "目录: tasks (默认)"
 fi
 if [[ -n "${OPERATOR}" ]]; then
     echo "算子: ${OPERATOR}"
