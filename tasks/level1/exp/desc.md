@@ -76,6 +76,19 @@ cann_bench.exp(Tensor x, float base, float scale, float shift) -> Tensor y
 - `x` 支持任意维度（1D ~ 5D 及更高维），不限制具体 shape
 - 需注意数值溢出：float16 的有效范围约 [-65504, 65504]，float32 下 $e^x$ 在 $|x| > 88$ 左右可能溢出为 inf
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `x` 维度数 | 1 ~ 8 | cases.csv 实测 1D ~ 5D；逐元素算子，不限维度数 |
+| `x` 各维大小 | 1 ~ 1048576 | cases.csv 各维实测 2 ~ 8192（含 1D 张量长度 1000007） |
+| `x` 元素总数 | 1 ~ 268M | cases.csv 实测 1M ~ 268M |
+| `base` | -1.0 ~ 1024.0 | cases.csv 实测 -1.0 / 1.0 / 2.0 / 10.0；≤ 0 时一律视为自然底数 e |
+| `scale` | -1024.0 ~ 1024.0 | cases.csv 实测 0.5 ~ 2.0 |
+| `shift` | -1024.0 ~ 1024.0 | cases.csv 实测 0.0 ~ 2.0 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

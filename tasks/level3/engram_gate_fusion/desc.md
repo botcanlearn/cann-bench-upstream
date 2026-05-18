@@ -143,6 +143,30 @@ torch_npu.npu_engram_gate_fusion(
 - `raw_gate` 中 `clamp_min(1e-6)` 不可省略
 - 所有 RMSNorm 与 Conv1d 均无 bias 参数
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch，`keys` / `hidden_states` / `value` / `conv_state` 共享） | 1 ~ 256 | cases.csv 实测 1 ~ 8 |
+| `L`（序列长度，`keys` / `hidden_states` / `value` 共享） | 1 ~ 4096 | cases.csv 实测 1 ~ 2048；Decode 单步 `L=1` 必须提供 `conv_state` |
+| `HC`（hyper-connection，`keys` / `hidden_states` / `norm1_weight` / `norm2_weight` / `conv_norm_weight` 共享） | 1 ~ 16 | cases.csv 实测 2 / 4 / 8；须等于 `hc_mult` |
+| `D`（hidden size，`keys` / `hidden_states` / `value` / `norm*_weight` 共享） | 64 ~ 2048 | cases.csv 实测 256 / 512 / 769 / 1024；须等于 `hidden_size`；不要求 2 的幂（实测含质数 769） |
+| `conv_weight.shape[0]`（深度可分离 Conv1d 通道） | = `HC * D` | cases.csv 实测 1024 / 2048 / 3076 / 4096 / 8192 |
+| `conv_weight.shape[1]` | 固定 1 | depthwise，`groups = HC*D` |
+| `K`（`conv_weight.shape[2]`，卷积核） | 1 ~ 16 | cases.csv 实测 4 / 8；须等于 `kernel_size` |
+| `conv_state.shape[2]` | = `(K-1) * dilation` | cases.csv 实测 9（K=4, dil=3） |
+| `hc_mult` | 1 ~ 16 | cases.csv 实测 2 / 4 / 8 |
+| `hidden_size` | 64 ~ 2048 | cases.csv 实测 256 / 512 / 769 / 1024 |
+| `kernel_size` | 1 ~ 16 | cases.csv 实测 4 / 8 |
+| `dilation` | 1 ~ 16 | cases.csv 实测 1 / 3 |
+| `norm_eps` | (0, 1) | cases.csv 实测 1e-5 |
+| 激活值域（`keys` / `hidden_states` / `value` / `conv_state`） | bfloat16 可表示范围 | cases.csv 实测 [-0.1, 0.1] / [-0.01, 0.01] |
+| 权重值域（`norm*_weight` / `conv_weight`） | float32 可表示范围 | cases.csv 实测 [-0.1, 0.1] / [-0.01, 0.01] |
+
+约束：`HC == hc_mult`、`D == hidden_size`、`conv_weight.shape == [HC*D, 1, kernel_size]`；Decode 模式（`L=1`）必须传入 shape 为 `[B, HC*D, (K-1)*dilation]` 的 `conv_state`，Prefill 模式 `conv_state` 可为 None（内部左 padding）。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

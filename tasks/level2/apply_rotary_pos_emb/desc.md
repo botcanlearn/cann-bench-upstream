@@ -73,6 +73,22 @@ cann_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin
 - head_dim 必须为偶数（需要分为两半进行旋转）
 - 所有输入张量的 dtype 必须一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch_size） | 1 ~ 8192 | cases.csv 实测 3 ~ 4001 |
+| `S`（seq_len） | 1 ~ 1048576 | cases.csv 实测 3 ~ 500001 |
+| `N`（num_heads） | 1 ~ 128 | cases.csv 实测 3 ~ 31 |
+| `D`（head_dim） | 2 ~ 2048 | cases.csv 实测 4 ~ 2048；必须为偶数（旋转需对半切分） |
+| `cos`/`sin` shape | (S, D/2) 或 (B, S, D/2) | cases.csv 全部使用 2D 形式 (S, D/2) |
+| `layout` | 0 / 1 | cases.csv 已覆盖两种取值；0=[B,S,N,D]，1=[B,N,S,D] |
+| `rotaryMode` | `"half"` / `"interleaved"` | cases.csv 已覆盖两种模式 |
+
+约束：`query` 与 `key` shape 必须相同；所有四个输入张量 dtype 一致；`D` 必须为偶数。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

@@ -82,6 +82,20 @@ cann_bench.scatter(Tensor data, int dim, Tensor indices, Tensor updates, str? re
 - reduce 为 None 时执行直接覆盖更新，为 'add' 时执行累加，为 'multiply' 时执行累乘，为 'amax'/'amin' 时取最大/最小值
 - 输出 shape 与 data shape 完全一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `data` 维度数 | 1 ~ 8 | cases.csv 实测 1 ~ 5；`data`、`indices`、`updates` 维度数必须相同 |
+| `data` 各维度大小 | 1 ~ 2097152 | cases.csv 实测 2 ~ 1048583（一维大张量场景） |
+| `indices` 各维度大小 | 1 ~ 2097152 | cases.csv 实测 2 ~ 8193；每维 ≤ 对应 `data` 维度大小 |
+| `updates` 各维度大小 | 1 ~ 2097152 | cases.csv 实测 2 ~ 8193；shape 须与 `indices` 一致 |
+| `indices` 值 | `[0, data.size(dim))` | cases.csv 实测覆盖完整索引范围 |
+| `dim` | 0 ~ 7 | cases.csv 实测 0 / 1；支持负数索引，等价范围为 `[-rank, rank-1]` |
+| `reduce` | `None` / `add` / `multiply` / `amin` / `amax` | cases.csv 实测全部 5 种取值 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

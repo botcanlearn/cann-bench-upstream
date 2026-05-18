@@ -129,6 +129,30 @@ GRU 有 3 个门（z, r, n），每个门都需要独立的权重矩阵。权重
 - `batchFirst=true` 时，输入 x 的 shape 为 (B, S, input_size)，输出 y 的 shape 为 (B, S, num_directions * hiddenSize)
 - PyTorch GRU 内部使用 float32 计算，float16/bfloat16 输入会转换为 float32 后计算，结果再转回原 dtype
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `S`（序列长度） | 1 ~ 1024 | cases.csv 实测 5 ~ 200 |
+| `B`（batch） | 1 ~ 256 | cases.csv 实测 2 ~ 32 |
+| `inputSize` | 1 ~ 1024 | cases.csv 实测 32 ~ 512，含非对齐值 63 / 127 |
+| `hiddenSize` | 1 ~ 1024 | cases.csv 实测 16 ~ 256，含非对齐值 31 / 127 |
+| `numLayers` | 1 ~ 8 | cases.csv 实测 1 / 2 / 3 |
+| `bias` | {true, false} | cases.csv 实测两值均覆盖；为 true 时必须同时提供 `bias_ih` 与 `bias_hh`，每个 tensor shape = (3*hiddenSize) |
+| `batchFirst` | {true, false} | cases.csv 实测两值均覆盖；为 true 时 x shape 为 (B, S, inputSize)，否则 (S, B, inputSize) |
+| `dropout` | 0.0 ~ 1.0 | cases.csv 实测 0.0 / 0.1，仅在 `numLayers > 1` 时生效 |
+| `bidirectional` | {true, false} | cases.csv 实测两值均覆盖；为 true 时 num_directions=2，权重/偏置列表长度需 ×2 |
+| 输入 dtype | {float32, float16, bfloat16} | cases.csv 三种 dtype 均覆盖；所有输入 tensor 的 dtype 必须一致 |
+
+约束：
+
+- `len(weight_ih) = len(weight_hh) = numLayers * num_directions`；`bias=true` 时 `len(bias_ih) = len(bias_hh) = numLayers * num_directions`
+- `weight_ih[0]` shape = `(3*hiddenSize, inputSize)`；`weight_ih[k]` (k≥1，单向) shape = `(3*hiddenSize, hiddenSize)`，双向时 = `(3*hiddenSize, 2*hiddenSize)`
+- `weight_hh[*]` shape = `(3*hiddenSize, hiddenSize)`
+- `h0` 可选，shape 必须为 `(numLayers * num_directions, B, hiddenSize)`，dtype 与 x 一致
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

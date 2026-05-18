@@ -85,6 +85,22 @@ cann_bench.cross_entropy_loss(Tensor x, Tensor target, str reduction, int ignore
 - 输入 x 应为原始 logits（未经 softmax），内部自动应用 log_softmax
 - 需注意数值稳定性：内部实现应使用 log-sum-exp 技巧避免溢出
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch size，x 第 0 维） | 1 ~ 2097152 | cases.csv 实测 2 ~ 1,000,003 |
+| `C`（类别数，x 第 1 维） | 2 ~ 16384 | cases.csv 实测 2 ~ 16,384 |
+| 额外空间维度 `d_i`（x 第 ≥2 维） | 1 ~ 1024 | cases.csv 实测 3 ~ 1024 |
+| `rank(x)`（x 维度数） | 2 ~ 8 | cases.csv 实测 2 ~ 5 维 |
+| `rank(target)` | rank(x)-1 或 rank(x) | 硬标签缺 C 维；软标签同 x；cases.csv 全为硬标签 |
+| `reduction` | "none" / "mean" / "sum" | cases.csv 三种均覆盖 |
+| `ignore_index` | int64 任意值 | cases.csv 实测 -100 / -1 / 0 / 10 / 50 / 100 |
+
+约束：硬标签模式下 target 各元素取值范围为 [0, C) 或等于 `ignore_index`；软标签模式下 target 形状须与 x 完全一致。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

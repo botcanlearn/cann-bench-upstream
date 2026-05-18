@@ -72,6 +72,23 @@ cann_bench.grid_sampler_3d(Tensor x, Tensor grid, str interpolation_mode="biline
 - interpolation_mode 可选 'bilinear'、'nearest'（不支持 'bicubic'，5D 输入 PyTorch 限制）
 - padding_mode 可选 'zeros'、'border'、'reflection'
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 32 | cases.csv 实测 2 ~ 5；x 与 grid 的 N 必须一致 |
+| `C`（输入通道） | 1 ~ 512 | cases.csv 实测 7 ~ 256 |
+| `D`（输入深度） | 1 ~ 256 | cases.csv 实测 8 ~ 64 |
+| `H`（输入高度） | 1 ~ 256 | cases.csv 实测 8 ~ 127 |
+| `W`（输入宽度） | 1 ~ 4096 | cases.csv 实测 8 ~ 4001 |
+| `D_out`, `H_out`, `W_out`（grid 空间） | 1 ~ 256 | cases.csv 实测 7 ~ 127 |
+| `grid.shape[-1]` | = 3 | 最后一维固定为 3，表示 (d, h, w) 归一化坐标 |
+| `interpolation_mode` | `bilinear` / `nearest` | cases.csv 全覆盖；5D 输入不支持 `bicubic`（PyTorch 限制） |
+| `padding_mode` | `zeros` / `border` / `reflection` | cases.csv 全覆盖 |
+| `align_corners` | `true` / `false` | cases.csv 全覆盖 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

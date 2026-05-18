@@ -72,6 +72,19 @@ cann_bench.add_rms_norm_dynamic_quant(Tensor x1, Tensor x2, Tensor gamma, float 
 - epsilon 用于 RMSNorm 的数值稳定性，默认 1e-6
 - scaleOut 为 float32 类型标量
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `M`（x1/x2 第 0 维，batch × seq） | 1 ~ 1048576 | cases.csv 实测 256 ~ 524288 |
+| `N`（x1/x2 最后一维，hidden size） | 1 ~ 16384 | cases.csv 实测 128 ~ 16384；x2 / gamma 最后一维须等于 N |
+| `epsilon` | 1e-12 ~ 1e-2 | cases.csv 实测 1e-6 ~ 1e-3；RMSNorm 数值稳定项，默认 1e-6 |
+| `dst_type` | {0, 1} | cases.csv 实测 0 / 1；0=DT_INT8，1=DT_INT4（值范围 [-8,7]，存储为 int8） |
+
+约束：x1、x2 形状与 dtype 须完全一致；gamma 形状为 `[N]` 且 dtype 与 x1 一致；归一化沿最后一维进行。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

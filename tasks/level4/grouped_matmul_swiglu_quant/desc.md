@@ -81,6 +81,29 @@ cann_bench.grouped_matmul_swiglu_quant(
 - `group_list` 为 cumsum 序列，长度为 `E`，最终累计值不得超过 `M`。
 - 输出 `y` 会被截断到 `[-128, 127]`。
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `M`（TokensNum，token 总数） | 1 ~ 8192 | cases.csv 实测 32 ~ 4096 |
+| `E`（专家数） | 1 ~ 64 | cases.csv 实测 1 / 2 / 4 / 8 / 16；`group_list` 长度即为 `E` |
+| `K`（输入隐藏维） | 64 ~ 8192 | cases.csv 实测 256 ~ 7168；建议 16 对齐（实测 1040=16×65 也可） |
+| `N`（GMM 输出宽度，SwiGLU 拆分前） | 64 ~ 16384 | cases.csv 实测 512 ~ 10240；必须满足 `N % 2 == 0`，SwiGLU 拆分后输出宽度为 `N/2` |
+| `N/2`（SwiGLU 输出宽度） | 32 ~ 8192 | 由 `N` 派生，cases.csv 实测 256 ~ 5120（如 N=1056 → N/2=528） |
+| `group_list[i]` | 0 ~ `M` | cumsum 单调非减序列；`group_list[-1] == M`；允许某组为空（相邻值相等，见 case 7） |
+| `x` value_range（int8） | [-128, 127] | cases.csv 实测主集合 [-128, 127]；case 20 收窄为 [-32, 32]（防止 K=4096 累加溢出） |
+| `weight` value_range（int8） | [-128, 127] | cases.csv 实测固定 [-128, 127] |
+| `weight_scale` / `x_scale` value_range（float32） | (0, 1] | cases.csv 实测 [1e-4, 1e-3] / [1e-3, 1e-2] / [1e-2, 1e-1]；要求严格为正 |
+
+约束：
+
+- `weight.shape[1] == x.shape[1] == K`，`weight.shape[0] == weight_scale.shape[0] == group_list.numel() == E`。
+- `N % 2 == 0`（SwiGLU 沿最后一维对半拆分）。
+- `group_list` 严格满足 `0 ≤ group_list[0] ≤ group_list[1] ≤ ... ≤ group_list[E-1] == M`。
+- `x_scale.numel() == M`，与 `x` 的 token 维严格对齐。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

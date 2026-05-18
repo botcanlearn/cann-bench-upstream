@@ -112,6 +112,25 @@ cann_bench.quant_matmul(
 - int4 场景：x1/x2 为 int32，每个 int32 存放 8 个 int4，shape 最后一维缩小 8 倍
 - group_sizes 取值范围 [0, 65535]
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `batch`（前导批维度） | 1 ~ 256 | 2-6 维输入；2D 时无 batch；cases.csv 实测 2D 与 3D B=8 |
+| `m`（x1 倒数第二维） | 1 ~ 4096 | cases.csv 实测 1 ~ 4096 |
+| `k`（x1 最后一维 / x2 倒数第二维） | 16 ~ 16384 | `x1.shape[-1] == x2.shape[-2]`；cases.csv 实测 256 ~ 7168 |
+| `n`（x2 最后一维） | 16 ~ 65535 | 硬件限制 ≤ 65535；cases.csv 实测 512 ~ 14336 |
+| `scale.shape[0]` | 1 或 n | per-tensor=1 / per-channel=n；cases.csv 实测 1 / n |
+| `offset.shape[0]` | 1 或 n | 与 scale 相同形状 |
+| `pertoken_scale.shape[0]` | = m | cases.csv 实测 1024 |
+| `bias.shape[-1]` | = n | 1D `[n]` 或 3D `[batch, 1, n]` |
+| `output_dtype` | `int8` / `float16` / `bfloat16` / `int32` | cases.csv 全部覆盖 |
+| `group_sizes[i]` | 0 ~ 65535 | 分组量化粒度 `[group_m, group_n, group_k]`；cases.csv 未使用 |
+
+约束：x1/x2 dtype 一致（同为 int8 或同为 int32）；scale 为 2D 时 offset 必选；int4 场景下最后一维按 8 倍压缩存放在 int32 中。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

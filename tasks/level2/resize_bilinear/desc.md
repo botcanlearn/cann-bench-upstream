@@ -73,6 +73,26 @@ cann_bench.resize_bilinear(Tensor x, int[] output_size, bool align_corners=false
 - 输出 dtype 与输入 dtype 一致
 - 支持上采样（输出大于输入）和下采样（输出小于输入）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 256 | cases.csv 实测 1 ~ 127 |
+| `C`（通道） | 1 ~ 1024 | cases.csv 实测 1 ~ 363 |
+| `H`（输入高） | 1 ~ 8192 | cases.csv 实测 13 ~ 4097（3D 形态 H 折叠为 1000003，见备注） |
+| `W`（输入宽） | 1 ~ 8192 | cases.csv 实测 67 ~ 4001（4D case），3D case 无此维 |
+| `output_size[0]`（输出高 / 1D 输出长度） | 1 ~ 4096 | cases.csv 实测 64 ~ 2048（4D），3D case 为 500001（一维长度，最大实测 ≈ 5×10^5） |
+| `output_size[1]`（输出宽） | 1 ~ 4096 | cases.csv 实测 64 ~ 1024（仅 4D case 有该维） |
+| `align_corners` | {false, true} | cases.csv 实测两种取值都覆盖 |
+| `scale_factor` | null 或 长度=空间维数的正浮点数组 | cases.csv 实测均为 null（与 `output_size` 互斥，二者只能取一） |
+
+约束：
+- `output_size` 与 `scale_factor` 互斥，必须恰好提供其一
+- 输入张量 rank 须与 `output_size`/`scale_factor` 长度匹配：4D 输入 (N, C, H, W) 配 2 元素 `output_size`；3D 输入 (N, C, L) 配 1 元素 `output_size`
+- 输出 shape 的非空间维（N, C）与输入一致，空间维由 `output_size` 或 `H * scale_factor[i]` 计算得到
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

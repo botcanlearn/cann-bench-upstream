@@ -67,6 +67,18 @@ cann_bench.mhc_sinkhorn(Tensor logits, float temperature, int n_iters) -> Tensor
 - 输出 `routing_weights` 的 shape 与输入 `logits` 完全一致
 - Sinkhorn 迭代在 log 域进行以保证数值稳定性
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch） | 1 ~ 64 | cases.csv 实测 1 ~ 32 |
+| `S`（seq_len） | 1 ~ 8192 | cases.csv 实测 127 ~ 4096 |
+| `E`（num_experts） | 1 ~ 512 | cases.csv 实测 7 ~ 256 |
+| `temperature` | 0.01 ~ 10.0 | 正浮点数；cases.csv 实测 0.1 ~ 2.0 |
+| `n_iters` | 1 ~ 32 | 正整数；cases.csv 实测 1 ~ 10 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

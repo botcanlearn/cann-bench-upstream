@@ -11,7 +11,7 @@
 
 **算子特征**：
 - 难度等级：L3（Contraction）
-- 三输入（特征图、卷积核、偏置）单输出，支持分组卷积、膨胀卷积
+- 三输入（特征图、卷积核、偏置）单输出，支持膨胀卷积
 - 输入 x 为 [N, C_in, H, W]，卷积核 filter 为 [C_out, C_in, K_h, K_w]
 
 ## 2. 算子定义
@@ -22,14 +22,14 @@ $$
 y = \text{CONV}(x, \text{filter}) + \text{bias}
 $$
 
-即对输入特征图 $x$ 使用卷积核 $\text{filter}$ 进行2D卷积运算，并加上偏置 $\text{bias}$。卷积运算支持通过 strides 控制步长、pads 控制填充、dilations 控制膨胀率、groups 控制分组数。
+即对输入特征图 $x$ 使用卷积核 $\text{filter}$ 进行2D卷积运算，并加上偏置 $\text{bias}$。卷积运算支持通过 strides 控制步长、pads 控制填充、dilations 控制膨胀率。
 
 ## 3. 接口规范
 
 ### 算子原型
 
 ```python
-cann_bench.conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations, int groups) -> Tensor y
+cann_bench.conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads, int[] dilations) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -42,7 +42,6 @@ cann_bench.conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pa
 | strides | int[] | 必选 | 步长 |
 | pads | int[] | 必选 | 填充 |
 | dilations | int[] | [1, 1] | 膨胀率 |
-| groups | int | 1 | 分组数 |
 
 ### 输出
 
@@ -61,12 +60,29 @@ cann_bench.conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pa
 ### 规则与约束
 
 - x 的 shape 格式为 [N, C_in, H, W]
-- filter 的 shape 格式为 [C_out, C_in/groups, K_h, K_w]
+- filter 的 shape 格式为 [C_out, C_in, K_h, K_w]
 - x、filter、bias 的 dtype 须一致
 - strides 指定卷积的步长
 - pads 指定四方向填充 [pad_top, pad_bottom, pad_left, pad_right]
 - dilations 指定膨胀率，默认 [1, 1]
-- groups 指定分组数，C_in 和 C_out 都须能被 groups 整除
+- 不支持分组卷积；如需分组/depthwise，使用 `depthwise_conv_2d`
+
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 256 | cases.csv 实测 2 ~ 8 |
+| `C_in`（输入通道） | 1 ~ 2048 | cases.csv 实测 7 ~ 2048 |
+| `C_out`（输出通道） | 1 ~ 2048 | cases.csv 实测 7 ~ 2048 |
+| `H`, `W`（空间） | 8 ~ 256 | cases.csv 实测 13 ~ 128 |
+| `K_h`, `K_w`（卷积核） | 1 ~ 16 | cases.csv 实测 1 / 3 / 5 |
+| `strides[i]` | 1 ~ 4 | cases.csv 实测 (1,1) 和 (2,2) |
+| `pads[i]` | 0 ~ 8 | cases.csv 实测 0 ~ 2 |
+| `dilations[i]` | 1 ~ 16 | cases.csv 实测 1 / 2 / 3 |
+
+约束：输出 spatial 维度 `(H_out, W_out)` 必须满足 `H_out = (H + pad_top + pad_bottom - dilation_h*(K_h-1) - 1) / stride_h + 1 ≥ 1`，`W_out` 同理。
 
 ## 4. 精度要求
 
@@ -107,7 +123,7 @@ Conv2D算子Torch Golden参考实现
 公式: y = CONV(x, filter) + bias
 """
 def conv_2d(
-    x: torch.Tensor, filter: torch.Tensor, bias: torch.Tensor, strides: list, pads: list, dilations: list = [1, 1], groups: int = 1
+    x: torch.Tensor, filter: torch.Tensor, bias: torch.Tensor, strides: list, pads: list, dilations: list = [1, 1]
 ) -> torch.Tensor:
     """
     计算2D卷积
@@ -121,7 +137,6 @@ def conv_2d(
         strides: 步长
         pads: 填充 [pad_top, pad_bottom, pad_left, pad_right]
         dilations: 膨胀率
-        groups: 分组数
     
     Returns:
         输出特征图
@@ -140,7 +155,7 @@ def conv_2d(
     stride = (strides[0], strides[1])
     dilation = (dilations[0], dilations[1])
     
-    y = torch.nn.functional.conv2d(x, filter, bias, stride=stride, padding=padding, dilation=dilation, groups=groups)
+    y = torch.nn.functional.conv2d(x, filter, bias, stride=stride, padding=padding, dilation=dilation)
     return y
 ```
 
@@ -156,5 +171,5 @@ x = torch.randn(1, 64, 56, 56, dtype=torch.float16, device="npu")
 weight = torch.randn(128, 64, 3, 3, dtype=torch.float16, device="npu")
 bias = torch.randn(128, dtype=torch.float16, device="npu")
 
-y = cann_bench.conv_2d(x, weight, bias, strides=[1, 1], pads=[1, 1, 1, 1], dilations=[1, 1], groups=1)
+y = cann_bench.conv_2d(x, weight, bias, strides=[1, 1], pads=[1, 1, 1, 1], dilations=[1, 1])
 ```

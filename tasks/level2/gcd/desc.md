@@ -59,6 +59,20 @@ cann_bench.gcd(Tensor x1, Tensor x2) -> Tensor y
 - 仅支持整数类型（int16、int32、int64）
 - Golden 实现使用 `torch.gcd` 直接计算，输出 dtype 与输入保持一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `rank`（输入张量维度数） | 1 ~ 8 | cases.csv 实测 1D ~ 5D；x1 与 x2 rank 可不同，按广播规则对齐 |
+| `shape[i]`（每一维大小） | 1 ~ 2097152 | cases.csv 实测 1 ~ 1048583；x1 与 x2 对应维度需满足广播（相等或一方为 1） |
+| 广播后总元素数 | 1 ~ 2^27 | cases.csv 实测最大约 67M（8192×8192，case 4） |
+| 输入 dtype | int16 / int32 / int64 | x1/x2/y 必须同 dtype；不支持浮点 |
+| `x1`/`x2` 元素值（int16） | -32768 ~ 32767 | cases.csv 实测覆盖 int16 完整范围（case 4） |
+| `x1`/`x2` 元素值（int32） | -2^31 ~ 2^31-1 | cases.csv 实测覆盖 int32 完整范围（case 5） |
+| `x1`/`x2` 元素值（int64） | -2^63 ~ 2^63-1 | cases.csv 实测 ≤ ±100000（case 3/9/20） |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

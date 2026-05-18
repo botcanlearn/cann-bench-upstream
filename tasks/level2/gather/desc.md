@@ -73,6 +73,30 @@ cann_bench.gather(Tensor x, Tensor index, int dim=0) -> Tensor y
 - `index` 元素值必须在 `[0, x.shape[dim])` 范围内
 - 输出 `y.shape == index.shape`；输出 dtype 与 `x` 一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `x.ndim` / `index.ndim`（张量维度数） | 1 ~ 8 | cases.csv 实测 1 ~ 5；两者必须相等 |
+| `x.shape[i]`（x 各维 size） | 1 ~ 2^20 | cases.csv 实测 2 ~ 1000003 |
+| `x.shape[dim]`（gather 轴 size） | 1 ~ 2^20 | cases.csv 实测 7 ~ 1000003，决定 index 合法取值上界 |
+| `x.numel`（x 总元素数） | 1 ~ 2^27 | cases.csv 实测约 1.0M ~ 128M（即 1,000,003 ~ 134,217,728） |
+| `index.shape[i]`（index 各维 size，i ≠ dim） | 1 ~ x.shape[i] | cases.csv 实测 2 ~ 8193；约束 `index.shape[i] ≤ x.shape[i]` |
+| `index.shape[dim]`（index 在 gather 轴 size） | 1 ~ 2^20 | cases.csv 实测 7 ~ 8192，由用户自由决定（即输出 shape） |
+| `index.numel`（index 总元素数 = 输出元素数） | 1 ~ 2^26 | cases.csv 实测 1,000 ~ 67,108,864 |
+| `dim`（gather 维度索引） | 0 ~ x.ndim-1 | cases.csv 实测 0 / 1 / 2 |
+| `index` 元素值 | 0 ~ x.shape[dim]-1 | cases.csv 实测 0 ~ 1,000,002；越界为未定义行为 |
+| `x` 元素值（浮点） | 全范围（含 ±inf / NaN） | cases.csv 实测覆盖 `[-0.1, 0.1]` ~ `[-65504, 65504]` 及 ±inf / NaN / 全零 |
+| `x` 元素值（整型） | 各 dtype 完整表示范围 | cases.csv int8 测全范围 `[-128, 127]`；int32 取 `[-1000, 1000]`、int64 取 `[-100000, 100000]`（gather 只搬运数据不参与算术，cases 取小范围便于配套 index 设计；整型完整范围由 dtype 本身保证） |
+
+约束：
+- `x.ndim == index.ndim`，且 `0 ≤ dim < x.ndim`
+- 除 `dim` 维外，`index.shape[i] ≤ x.shape[i]`
+- `index` 元素值必须落在 `[0, x.shape[dim])`，否则结果未定义
+- `index` 仅支持整型（int8 / int32 / int64）；`x` 与输出 dtype 一致
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

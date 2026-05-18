@@ -63,6 +63,19 @@ cann_bench.transpose(Tensor x, int[] perm) -> Tensor y
 - 输出 shape 为输入 shape 按 perm 重排的结果，即 output_shape[i] = input_shape[perm[i]]
 - 输出 dtype 与输入 dtype 一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `x.ndim`（输入维度数） | 2 ~ 8 | cases.csv 实测 2 ~ 5 |
+| `x.shape[i]`（每个维度大小） | 1 ~ 8192 | cases.csv 实测 2 ~ 8193（含 1009 / 1021 / 4001 / 1013 等质数非对齐） |
+| `x.numel()`（元素总数） | 1 ~ 2^27（约 128M） | cases.csv 实测最大 [64, 32, 512, 128] = 128M (case 1) |
+| `perm`（维度置换顺序） | 长度 = `x.ndim` 的 [0, ndim) 整数排列 | cases.csv 实测覆盖 2D 转置 `[1, 0]`、4D `[0, 2, 1, 3]` / `[0, 2, 3, 1]` / `[0, 3, 1, 2]` / `[0, 1, 3, 2]`、3D 循环置换 `[2, 0, 1]`、3D/5D 全反转 `[2, 1, 0]` / `[4, 3, 2, 1, 0]` |
+
+约束：`perm` 必须是 `[0, x.ndim)` 的一个排列（即长度等于 `x.ndim`，且每个值在 `[0, x.ndim)` 区间内且互不重复）；输出 shape 满足 `y.shape[i] = x.shape[perm[i]]`。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

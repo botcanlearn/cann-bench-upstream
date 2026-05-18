@@ -99,6 +99,30 @@ cann_bench.moe_re_routing(
 5. `idx_type` 当前只支持为 0（gather 索引模式）
 6. `per_token_scales` 为可选参数，存在时 shape 必须为 (A)
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `A`（token 总数，`tokens` 第 0 维 / `per_token_scales` 长度） | 1 ~ 1048576 | 必须满足 `Sum(expert_token_num_per_rank) = A`；cases.csv 实测 64 ~ 524288 |
+| `H`（token 长度，`tokens` 第 1 维） | 1 ~ 16383 | 来自 §3 约束 `0 < H < 16384`；cases.csv 实测 32 ~ 2048 |
+| `N`（rank 数，`expert_token_num_per_rank` 第 0 维） | 1 ~ 128 | §3 标注「取值无限制」，受 A 总量约束；cases.csv 实测 1 ~ 64 |
+| `E`（专家数，`expert_token_num_per_rank` 第 1 维 / `expert_token_num` 长度） | 1 ~ 128 | §3 标注「取值无限制」，受 A 总量约束；cases.csv 实测 1 ~ 64 |
+| `tokens` dtype | float16 / bfloat16 / int8 | cases.csv 实测三种 dtype 均覆盖 |
+| `expert_token_num_per_rank` dtype | int32 / int64 | cases.csv 实测两种 dtype 均覆盖；元素必须 > 0 |
+| `per_token_scales` dtype | float32（或 None） | cases.csv 实测 float32 与 None 两种 |
+| `expert_token_num_type`（attr） | {0, 1} | cases.csv 实测仅 1；当前算子只支持 1（count 模式） |
+| `idx_type`（attr） | {0, 1} | cases.csv 实测仅 0；当前算子只支持 0（gather 索引） |
+
+约束：
+- `tokens.shape == (A, H)`、`expert_token_num_per_rank.shape == (N, E)`，且 `Sum(expert_token_num_per_rank) == A`（双重求和必须严格匹配 token 总数）。
+- `expert_token_num_per_rank` 元素必须满足 `> 0`（每个 (rank, expert) 组合至少有 1 个 token），且全部元素之和恰好等于 A；元素 dtype 为 int32 或 int64。
+- `per_token_scales` 为可选；提供时 `shape == (A,)`，dtype 必须为 float32。
+- dtype 一致性：`tokens.dtype == permute_tokens.dtype`，`expert_token_num_per_rank.dtype == expert_token_num.dtype`，`permute_token_idx.dtype == int32`，`permute_per_token_scales.dtype == float32`。
+- attr 限制：当前实现仅支持 `expert_token_num_type == 1`（count 模式）与 `idx_type == 0`（gather 索引）；其余取值未启用。
+- 输出索引 `permute_token_idx ∈ [0, A)`，构成长度 A 的全排列（双射）。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

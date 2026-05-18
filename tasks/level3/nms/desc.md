@@ -71,6 +71,23 @@ cann_bench.nms(Tensor boxes, Tensor scores, float iou_threshold) -> Tensor keep_
 - 输出 `keep_indices` 为 1D int64 张量，长度 M 取决于过滤后保留的框数
 - 输出索引按置信度从高到低排序
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `boxes` shape | `[N, 4]`，N ∈ [1, 8192] | cases.csv 实测 N ∈ [511, 4096]，包含对齐 (1024/4096) 与质数非对齐 (1009/3001/4001) |
+| `scores` shape | `[N]`，与 boxes 第一维一致 | cases.csv 实测 N ∈ [511, 4096] |
+| `boxes` dtype | float32 | cases.csv 实测仅 float32 |
+| `scores` dtype | float32 | cases.csv 实测仅 float32 |
+| `boxes` value | float32 有限值范围 | cases.csv 实测 [-65504, 65504]，含 float16 边界 / ±inf / nan / 全零等特殊值 |
+| `scores` value | [0, 1] | cases.csv 实测均为 [0, 1]（置信度语义） |
+| `iou_threshold` | (0, 1) | cases.csv 实测 0.05 ~ 0.9，覆盖严格 / 宽松阈值 |
+| 输出 `keep_indices` | `[M]`，M ≤ N，int64 | 长度由过滤结果决定，按 scores 从高到低排序 |
+
+约束：`scores.shape[0]` 必须等于 `boxes.shape[0]`；`iou_threshold` 须严格落在开区间 (0, 1) 内。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

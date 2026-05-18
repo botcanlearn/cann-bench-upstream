@@ -68,6 +68,22 @@ cann_bench.top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor id
 - 当 largest=true 时返回最大的 k 个元素，largest=false 时返回最小的 k 个元素
 - 输出 shape 与输入相同，仅 dim 维度大小变为 k
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `ndim`（输入维度数） | 1 ~ 8 | cases.csv 实测 1D / 2D / 3D / 4D / 5D |
+| `x.shape[i]`（各维大小） | 1 ~ 2^23 | cases.csv 实测 2 ~ 1048576（1D 最大 1048576；2D 最大单维 8193（case 18: [255, 8193]）；高维如 5D 最大 1013） |
+| `numel(x)`（总元素数） | 1 ~ 2^26 | cases.csv 实测 ~917K ~ 67M（case_6: 8192×8192 float32） |
+| `k` | 1 ~ 2048 | cases.csv 实测 7 ~ 2000；约束 1 ≤ k ≤ x.shape[dim] |
+| `dim` | -ndim ~ ndim-1 | cases.csv 实测 0 / 1 / 2 / -1；支持负数索引 |
+| `largest` | {true, false} | cases.csv 实测 true / false 均覆盖 |
+| `x.dtype` | int8 / uint8 / int32 / int64 / float16 / float32 / bfloat16 | cases.csv 实测 int32 / int64 / float16 / float32 / bfloat16（int8 / uint8 已声明支持但未在 cases 覆盖） |
+
+约束：`k` 必须满足 `1 ≤ k ≤ x.shape[dim]`；`dim` 必须在 `[-ndim, ndim-1]` 范围内；输出 `y` shape 与 `x` 相同但 `y.shape[dim] = k`，`idx` 与 `y` shape 一致且 dtype 固定为 int64。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

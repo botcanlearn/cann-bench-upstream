@@ -78,6 +78,28 @@ cann_bench.strided_slice(Tensor x, int[] begin, int[] end, int[] strides, int be
 - 各掩码参数以二进制位的形式对应各维度，低位对应低维度
 - 输出 dtype 与输入 dtype 一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `x` 维度数（rank） | 0 ~ 8 | cases.csv 实测 1D / 2D / 3D / 4D |
+| `x` 每维大小 | 1 ~ 1048576 | cases.csv 实测最小 64，最大 1048576（1D），2D 最大 8192×8192 |
+| `x` 总元素数 | 1 ~ 2^30 | cases.csv 实测最大约 134M（case 20: [64,128,128,128]） |
+| `x` dtype | int8 / uint8 / int32 / int64 / float16 / float32 / bfloat16 | cases.csv 实测 int32 / int64 / float16 / float32 / bfloat16（int8 / uint8 未覆盖） |
+| `begin[i]` | -2^31 ~ 2^31-1 | cases.csv 实测 0 ~ 1024（负数索引语义支持但未在 cases 中出现） |
+| `end[i]` | -2^31 ~ 2^31-1 | cases.csv 实测 -1 / 64 ~ 524288（-1 表示倒数第一） |
+| `strides[i]` | -2^15 ~ 2^15（非 0） | cases.csv 实测 1 ~ 4（负数步长语义支持但未在 cases 中出现） |
+| `len(begin)` / `len(end)` / `len(strides)` | 等于 `x` rank（或考虑 ellipsis_mask / new_axis_mask 调整后的有效长度） | cases.csv 实测长度 1 / 2 / 3 / 4 |
+| `begin_mask` | 0 ~ 2^8-1 | cases.csv 实测 0 / 1 / 3 |
+| `end_mask` | 0 ~ 2^8-1 | cases.csv 实测 0 / 1 / 2 |
+| `ellipsis_mask` | 0 ~ 2^8-1（至多 1 位置 1） | cases.csv 实测 0 / 1 |
+| `shrink_axis_mask` | 0 ~ 2^8-1 | cases.csv 实测 0 / 1 / 2 |
+| `new_axis_mask` | 0 ~ 2^8-1 | cases.csv 实测 0 / 1 / 2 |
+
+约束：`strides[i]` 不能为 0；`ellipsis_mask` 至多有一位为 1；`shrink_axis_mask` 位与 `new_axis_mask` 位不可在同一参数位置同时为 1；切片结果各维度大小 `ceil((end - begin) / strides) ≥ 0`。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

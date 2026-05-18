@@ -74,6 +74,24 @@ cann_bench.mha(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0, bo
 - `scaleValue` 通常设置为 $1/\sqrt{D}$，当 <= 0 时自动使用该值
 - `is_causal=True` 时要求 $S \le S_{kv}$（否则 mask 会将部分 query 行全部屏蔽，导致 softmax 出现 NaN）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch） | 1 ~ 128 | cases.csv 实测 1 ~ 128 |
+| `S`（query 序列长度） | 1 ~ 2048 | cases.csv 实测 1 ~ 1024；decode 场景 S=1 或 2，prefill 场景 S 与 S_kv 同量级 |
+| `S_kv`（key/value 序列长度） | 1 ~ 4096 | cases.csv 实测 128 ~ 2048；`is_causal=True` 时要求 S ≤ S_kv |
+| `N`（注意力头数） | 1 ~ 64 | cases.csv 实测 8 ~ 32 |
+| `D`（每头维度） | 64 ~ 256，64 对齐 | cases.csv 实测 64 / 128 / 256 |
+| `scaleValue` | 任意 float | cases.csv 实测 -1.0（auto = 1/sqrt(D)）和 0.08838（显式 ≈ 1/sqrt(128)）；<=0 时回退到 1/sqrt(D) |
+| `is_causal` | {False, True} | cases.csv 实测两值均覆盖（True 走右下角对齐因果掩码，False 全计算） |
+| 输入 value range | 任意有限实数 | cases.csv 实测 [-1, 1]（常态高斯采样）和 [0, 0]（全零退化输入） |
+| 输入 dtype | float16, bfloat16 | Q/K/V 三个 tensor dtype 必须一致 |
+
+约束：`query.shape = [B, S, N, D]`，`key.shape = value.shape = [B, S_kv, N, D]`，四个共享维度 B/N/D 必须严格相等；`is_causal=True` 时要求 `S ≤ S_kv`，否则部分 query 行会被全部屏蔽导致 softmax 出现 NaN。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

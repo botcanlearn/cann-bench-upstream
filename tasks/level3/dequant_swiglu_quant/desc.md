@@ -132,6 +132,19 @@ cann_bench.dequant_swiglu_quant(
 | `glu_alpha` | 1.702 | 仅变种 SwiGLU 生效 |
 | `glu_bias` | 1.0 | 仅变种 SwiGLU 生效 |
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `TokensNum`（`x` 第 0 维） | 1 ~ 65536 | cases.csv 实测 127 ~ 32768；`activation_scale` 长度须等于 TokensNum |
+| `2H`（`x` 最后一维） | 2 ~ 16384 | cases.csv 实测 64 ~ 8194；**必须为偶数**；`weight_scale` 形状须为 `[1, 2H]` |
+| `H`（输出最后一维） | 1 ~ 8192 | 由 `2H/2` 派生；`quant_scale` 形状须为 `[1, H]` |
+| `activate_left` | {false, true} | cases.csv 实测两值；false=`SiLU(B)*A`，true=`SiLU(A)*B` |
+
+约束：`x` 必须为 2D 张量；`x.dtype=int32` 时 `weight_scale` 与 `activation_scale` 必须同时非 None，否则两者必须同时为 None；`quant_scale` 仅支持 float32。
+
 ## 4. 精度要求
 
 由于输出 `y` 是 int8（容易出现 ±1 舍入抖动），采用经典量化算子的判定：

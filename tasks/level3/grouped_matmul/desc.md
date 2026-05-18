@@ -94,6 +94,28 @@ cann_bench.grouped_matmul(
   - true：weight 形状 `[E, N, K]`，每片 `weight[g]` 需 transpose 最后两维后参与 matmul
 - **维度限制**：每维大小在 32 字节对齐后应小于 int32 最大值
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `E`（expert / 组数） | 1 ~ 128 | cases.csv 实测 1 ~ 8；等于 `weight.shape[0]` 与 `group_list` 长度 |
+| `M`（token 总数 / x 行数） | 1 ~ 16384 | cases.csv 实测 64 ~ 7001（含非 2 幂奇数 1009 / 1023 / 1031 / 2047 / 7001）；等于 `group_list[-1]` |
+| `K`（contraction 维） | 1 ~ 8192 | cases.csv 实测 32 ~ 1040（含非 2 幂奇数 127 / 511、非 2 幂 1023 / 1040） |
+| `N`（输出维） | 1 ~ 8192 | cases.csv 实测 32 ~ 2048（含非 2 幂奇数 255 / 1023、非 2 幂 1056） |
+| `m_i`（每组 token 数） | 0 ~ `M` | cases.csv 实测 0 ~ 1751；允许 `m_i = 0` 表示空组（case_7 含 idx=2,5 两个空组） |
+| `group_list` | 长度 `E`，单调非递减，末值 = `M` | cumsum 语义；相邻相等表示空组；元素类型 int64 |
+| `split_item` | {0, 1, 2, 3} | cases.csv 实测 0 / 2 / 3；0/1 → `List[Tensor]` 长度 `E`，2/3 → 单 Tensor `[M, N]` |
+| `transpose_weight` | {false, true} | cases.csv 实测均覆盖；false → weight `[E, K, N]`，true → weight `[E, N, K]` 需对最后两维 transpose |
+| `bias` | 可选（None 或 `[E, N]`） | cases.csv 实测含 bias / 无 bias 均覆盖；提供时 dtype 与 x 一致或 fp32 |
+
+约束：
+- `x.shape[1] == K`，且 `weight` 中对应维（`weight.shape[1]` 若 tw=false，否则 `weight.shape[2]`）必须等于 `K`
+- `weight.shape[0] == E`，所有 expert 共享同一 `N`
+- `group_list[-1] == M`，`group_list[i] >= group_list[i-1]`
+- 每维大小在 32 字节对齐后应小于 int32 最大值
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

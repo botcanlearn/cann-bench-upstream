@@ -71,6 +71,19 @@ cann_bench.dynamic_quant(Tensor x) -> Tensor y
 - 输出 shape 与输入 shape 完全一致
 - 当某个 token 全部为 0 时 scale = 0，公式产生 NaN；NPU 实现与 golden 一致地输出 NaN（用户应避免此情形）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `rank(x)`（输入维度数） | 2 ~ 8 | NPU API 硬性要求 ≥ 2；cases.csv 实测 2 ~ 5 维 |
+| 各维度大小 `dim_i` | 1 ~ 16384 | cases.csv 实测最小 2、最大 16,384 |
+| last-dim 大小（量化粒度，每 token 长度） | 1 ~ 16384 | cases.csv 实测 67 ~ 16,384；沿此维取每 token 的 max-abs |
+| token 总数（前导维度乘积） | 1 ~ 2^20 | cases.csv 实测最大约 163K（11×13×17×67） |
+| 张量总元素数 | 1 ~ 2^30 | cases.csv 实测最大约 134M（8192×16384） |
+| 输入 dtype | float16 / bfloat16 | NPU API 不支持 float32 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

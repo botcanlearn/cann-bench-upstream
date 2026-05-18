@@ -72,6 +72,16 @@ cann_bench.softmax(Tensor x, int dim) -> Tensor y
 - 需注意数值稳定性：内部实现应使用减最大值技巧避免指数溢出
 - 当输入包含 inf 时，对应输出为 0 或 1；当输入包含 nan 时，输出为 nan
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `x` 维度数 | 1 ~ 8 | cases.csv 实测 2 ~ 5 维 |
+| `x` 各维度大小 | 1 ~ 2097152 | cases.csv 实测 2 ~ 1000003 |
+| `dim` | `[-rank, rank-1]` | cases.csv 实测 -1 / 0 / 1 / 2；支持负数索引 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

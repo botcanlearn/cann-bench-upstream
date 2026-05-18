@@ -117,6 +117,28 @@ sparse_flash_attention(Tensor query, Tensor key, Tensor value, Tensor sparseIndi
 - `is_causal=True` 时要求 $S1 \le S2$；若某个 query 行的全部 topK 槽位都被因果掩码屏蔽（极端情况），该行 softmax 输出按全 0 处理
 - **语义约束 `value == key[..., :Dv]`**：value 必须等于 key 的前 Dv 维前缀（同一份 latent KV cache 的不同视图）。当 `Dk == Dv` 时退化为 `value == key`；当 `Dk == Dv + 64`（MLA 典型 Dk=576/Dv=512）时 value 即 key_nope。算子接口保留 value 为独立入参以兼容通用 attention API，调用方有责任保证此关系；本规范的 Golden 实现不强制检查
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch） | 1 ~ 64 | cases.csv 实测 1 ~ 32 |
+| `S1`（query 序列长度） | 1 ~ 2048 | cases.csv 实测 1 ~ 1024；S1=1 对应 decode，S1=2/4 对应 MTP，S1 较大对应 prefill |
+| `S2`（KV 序列长度） | 1 ~ 16384 | cases.csv 实测 1024 ~ 8192；`is_causal=True` 时要求 `S1 ≤ S2` |
+| `N1`（query 头数） | 1 ~ 256 | cases.csv 实测 32 ~ 128 |
+| `N2`（KV 头数） | 1 ~ 64 | cases.csv 实测 1 / 8；必须满足 `N1 % N2 == 0`（GQA 分组约束），`N1 == N2` 时退化为 MHA |
+| `Dk`（query/key head dim） | 64 对齐 | cases.csv 实测 128 / 192 / 512 / 576；典型 MHA/GQA Dk=128 或 192，典型 MLA Dk=512（nope）或 Dk=576（nope=512+rope=64） |
+| `Dv`（value head dim） | 64 对齐，Dv ≤ Dk | cases.csv 实测 128 / 512；语义上 `value == key[..., :Dv]` |
+| `topK`（稀疏选中数量） | 1 ~ 2048 | cases.csv 实测 512 / 1024；要求 `1 ≤ topK ≤ S2` |
+| `sparseIndices` 取值 | [0, S2) | int32，必须为 KV 序列长度范围内的有效索引 |
+| `scaleValue` | 任意正浮点 | cases.csv 实测 0.04167 ~ 0.08838，约 `1/sqrt(Dk)` |
+| `inputLayout` | {"BSND", "BNSD"} | cases.csv 实测两种均覆盖；所有张量（含 sparseIndices 和输出）的布局保持一致 |
+| `is_causal` | {True, False} | cases.csv 实测两种均覆盖；True 时屏蔽 `sparseIndices[..., s1, i] > s1 + (S2 - S1)` 的位置 |
+| dtype | float16 / bfloat16 | cases.csv 实测两种均覆盖；query/key/value dtype 必须一致；sparseIndices 固定 int32 |
+
+约束：`N1 % N2 == 0`；`Dv ≤ Dk` 且语义上要求 `value == key[..., :Dv]`；`is_causal=True` 时要求 `S1 ≤ S2`；若某 query 行的全部 topK 槽位都被因果掩码屏蔽，该行 softmax 输出按全 0 处理。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

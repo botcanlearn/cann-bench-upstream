@@ -101,6 +101,26 @@ cann_bench.moe_finalize_routing(
 6. `expert_for_source_row` 的 dtype 为 int32，取值范围 [0, E-1]
 7. `drop_pad_mode` 取 1/3 时 `expanded_permuted_rows` 必须是 3D `(E, C, H)`，且 `expanded_src_to_dst_row` 的取值范围扩展为 `[-1, E*C-1]`（-1 表示该位置被丢弃）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `NUM_ROWS`（token 数） | 1 ~ 524288 | cases.csv 实测 64 ~ 32768 |
+| `K`（topk） | 1 ~ 32 | cases.csv 实测 1 ~ 16；`scales is None` 时 `K=1` |
+| `H`（hidden） | 1 ~ 8192 | cases.csv 实测 32 ~ 2048 |
+| `E`（专家数） | 1 ~ 256 | cases.csv 实测 8 ~ 64；`expert_for_source_row` 取值 ∈ [0, E-1] |
+| `C`（expert capacity，3D 模式） | 1 ~ 1024 | drop_pad_mode=1/3 时使用；cases.csv 实测 20 ~ 40 |
+| `drop_pad_mode` | 0 ~ 3 | 0/2: drop_less；1/3: drop_pad（输入为 3D，索引含 -1）；cases.csv 实测覆盖 0/1/2/3 |
+
+约束：
+- `expanded_permuted_rows` shape 与 `drop_pad_mode` 联动：`drop_pad_mode ∈ {0, 2}` 时为 2D `(NUM_ROWS * K, H)`，`drop_pad_mode ∈ {1, 3}` 时为 3D `(E, C, H)`。
+- `expanded_src_to_dst_row` 取值范围：`drop_pad_mode ∈ {0, 2}` 时 ∈ [0, NUM_ROWS*K - 1]；`drop_pad_mode ∈ {1, 3}` 时 ∈ [-1, E*C - 1]（-1 表示该位置被丢弃）。
+- 可选张量依赖：`skip1 is None` 时 `skip2` 必须也为 `None`；`bias` 存在时 `expert_for_source_row` 必须同时存在。
+- dtype 一致性：`skip1`、`skip2`、`bias` 的 dtype 与 `expanded_permuted_rows` 一致；`scales` 在主路径下同步 dtype，混合精度路径允许 `bfloat16` + `float32` scales（见 case 12）；`expanded_src_to_dst_row` 与 `expert_for_source_row` 均为 int32。
+- shape 关系：`expanded_src_to_dst_row.shape == (NUM_ROWS * K,)`、`scales.shape == (NUM_ROWS, K)`、`expert_for_source_row.shape == (NUM_ROWS, K)`、`skip1.shape == skip2.shape == (NUM_ROWS, H)`、`bias.shape == (E, H)`、输出 `out.shape == (NUM_ROWS, H)`。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

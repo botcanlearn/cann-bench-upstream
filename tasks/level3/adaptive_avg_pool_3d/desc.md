@@ -60,6 +60,23 @@ cann_bench.adaptive_avg_pool_3d(Tensor x, list[int] output_size) -> Tensor y
 - 输出 dtype 与输入 dtype 一致
 - 输出的 N 和 C 维度与输入保持一致，仅空间维度 (D, H, W) 发生变化
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 16 | cases.csv 实测 1 ~ 8 |
+| `C`（通道） | 1 ~ 512 | cases.csv 实测 7 ~ 257 |
+| `D`（输入深度） | 1 ~ 256 | cases.csv 实测 13 ~ 128 |
+| `H`（输入高） | 1 ~ 256 | cases.csv 实测 15 ~ 128 |
+| `W`（输入宽） | 1 ~ 256 | cases.csv 实测 15 ~ 128 |
+| `output_size[0]`（output_d） | 1 ~ 128 | cases.csv 实测 1 ~ 64 |
+| `output_size[1]`（output_h） | 1 ~ 128 | cases.csv 实测 1 ~ 64 |
+| `output_size[2]`（output_w） | 1 ~ 128 | cases.csv 实测 1 ~ 64 |
+
+约束：`output_size` 须为长度 3 的 list，元素均 ≥ 1；支持 downsample（output_size < 输入空间维）与 upsample（output_size > 输入空间维）；output_size=[1,1,1] 等价于全局平均池化。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

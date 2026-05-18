@@ -59,6 +59,19 @@ x 与 mask 支持不同 dtype 的组合：
 - 输出 dtype 与输入 x 的 dtype 一致
 - mask 通常取值 0 或 1，但不限于此（也支持连续值掩码）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `x` / `mask` 维度数 | 1 ~ 8 | cases.csv 实测 1D ~ 5D；mask 与 x 同 shape |
+| `x` / `mask` 各维大小 | 1 ~ 1048576 | cases.csv 各维实测 2 ~ 1000007 |
+| `x` / `mask` 元素总数 | 1 ~ 268M | cases.csv 实测 ~1M ~ ~64M |
+| `scale` | -1024.0 ~ 1024.0 | cases.csv 实测 -1.0 ~ 10.0（含 inf / nan 特殊值） |
+
+约束：`mask` 与 `x` shape 必须完全一致；输出 dtype 与 `x` dtype 相同。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

@@ -77,6 +77,20 @@ cann_bench.group_norm(Tensor x, Tensor gamma, Tensor beta, int num_groups, float
 - num_groups=C 时等价于 InstanceNorm（每个通道独立归一化）
 - 需注意数值稳定性：当组内方差极小时，归一化结果可能不稳定
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 2048 | cases.csv 实测 1 ~ 1023 |
+| `C`（通道） | 1 ~ 1024 | cases.csv 实测 31 ~ 513；必须能被 `num_groups` 整除 |
+| 空间维度（`H`, `W`, ...） | 1 ~ 512 | cases.csv 实测 5 ~ 480；支持 2D `(N, C)`、3D `(N, C, L)`、4D `(N, C, H, W)`、5D `(N, C, D, H, W)` 等 |
+| `num_groups` | 1 ~ 64 | cases.csv 实测 1 ~ 32；必须能整除 `C`；=1 等价 LayerNorm，=C 等价 InstanceNorm |
+| `epsilon` | 1e-8 ~ 1 | cases.csv 实测 1e-8 ~ 1e-3；必须 > 0 |
+
+约束：`C % num_groups == 0`；`gamma`、`beta` 的 shape 均为 `(C,)` 且 dtype 与 `x` 一致。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

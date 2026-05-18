@@ -51,18 +51,41 @@ cann_bench.unsorted_segment_sum(Tensor data, Tensor segment_ids, int num_segment
 | data dtype | segment_ids dtype | 输出 dtype |
 |-----------|------------------|-----------|
 | float16 | int32 / int64 | float16 |
+| bfloat16 | int32 / int64 | bfloat16 |
 | float32 | int32 / int64 | float32 |
 | int32 | int32 / int64 | int32 |
 | int64 | int32 / int64 | int64 |
 
 ### 规则与约束
 
-- segment_ids 的形状必须与 data 的第 0 维大小一致，或与 data 形状完全一致（多维场景）
-- segment_ids 中的值必须在 [0, num_segments) 范围内
-- 输出的第 0 维大小为 num_segments，其余维度与 data 的后续维度一致
-- 若某个段 ID 在 segment_ids 中未出现，对应输出段为全零
+- segment_ids 必须为 1D 张量，长度等于 data 的第 0 维大小，即 `segment_ids.shape == (data.shape[0],)`
+- segment_ids 中的值必须在 `[0, num_segments)` 范围内
 - segment_ids 的 dtype 必须为 int32 或 int64
+- 输出的第 0 维大小为 num_segments，其余维度与 data 的尾部维度一致：`y.shape == (num_segments, *data.shape[1:])`
+- 输出 dtype 与 data 一致
+- 若某个段 ID 在 segment_ids 中未出现，对应输出段为全零
 - num_segments 必须为正整数
+
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `data.rank` | 1 ~ 8 | cases.csv 实测 1 ~ 5 |
+| `data.shape[0]`（段轴长度，N） | 1 ~ 4194304 | cases.csv 实测 2 ~ 2097152；约束 `segment_ids.shape[0] == data.shape[0]` |
+| `data.shape[1:]`（每个尾部维度） | 1 ~ 16384 | cases.csv 实测 7 ~ 8193 |
+| `segment_ids.rank` | 1 | 固定为 1D，长度等于 `data.shape[0]` |
+| `segment_ids.shape[0]` | 1 ~ 4194304 | cases.csv 实测 2 ~ 2097152；与 `data.shape[0]` 相等 |
+| `num_segments`（attr） | 1 ~ 32768 | cases.csv 实测 1 ~ 16384；约束 `segment_ids ∈ [0, num_segments)` |
+
+约束：
+- shape 关系：`segment_ids.shape == (data.shape[0],)`（必须为 1D 且长度等于 data 第 0 维）；`y.shape == (num_segments, *data.shape[1:])`。
+- dtype 关系：`y.dtype == data.dtype`（输出沿 data dtype）；`segment_ids.dtype ∈ {int32, int64}`，与 data dtype 解耦。
+- 值域约束：`segment_ids` 中每个元素 `v` 必须满足 `0 ≤ v < num_segments`；越界元素的行为未定义。
+- 稀疏段：未在 `segment_ids` 中出现的段 ID 对应输出行为全零（zero-fill）。
+- attr 约束：`num_segments` 必须为正整数。
+- 数值精度：浮点 dtype 下内部使用 fp32 累加以减小累积误差（参见 §5 golden 代码）；NaN/Inf 在求和后可能传播为输出 NaN/Inf。
 
 ## 4. 精度要求
 

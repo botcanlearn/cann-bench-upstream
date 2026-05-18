@@ -61,6 +61,17 @@ cann_bench.cummin(Tensor x, int dim) -> Tensor y
 - 累积操作沿指定轴按顺序从前到后进行
 - 输出 dtype 与输入 dtype 一致
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `rank(x)`（输入维度数） | 1 ~ 8 | cases.csv 实测 1 ~ 5 维 |
+| 每个维度大小 `dim_i` | 1 ~ 1048576 | cases.csv 实测最小 2、最大 1,000,003 |
+| 张量总元素数 | 1 ~ 2^30 | cases.csv 实测最大约 268M（16384×16384） |
+| `dim` | -rank(x) ~ rank(x)-1 | 支持负数索引；cases.csv 实测 -1 / 0 / 1 / 2 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

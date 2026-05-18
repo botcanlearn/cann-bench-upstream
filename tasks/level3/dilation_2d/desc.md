@@ -69,6 +69,30 @@ cann_bench.dilation_2d(Tensor x, Tensor filter, int[] strides, int[] rates, str 
 - VALID 模式下可通过 pads 参数手动指定填充
 - ceil_mode 控制输出尺寸计算时是否向上取整
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 16 | cases.csv 实测 2 ~ 7 |
+| `H`（输入高度） | 8 ~ 1024 | cases.csv 实测 11 ~ 509 |
+| `W`（输入宽度） | 8 ~ 1024 | cases.csv 实测 13 ~ 512 |
+| `C`（depth / 通道数） | 1 ~ 1024 | cases.csv 实测 17 ~ 512；x 与 filter 的最后一维必须一致 |
+| `filter_h`, `filter_w`（结构元素 H/W） | 1 ~ 16 | cases.csv 实测 3 / 5 |
+| `strides` | `[1, stride_h, stride_w, 1]`，`stride_h`, `stride_w` ∈ 1 ~ 8 | cases.csv 实测 stride_h/w ∈ {1, 2}；首尾维度固定为 1 |
+| `rates` | `[1, rate_h, rate_w, 1]`，`rate_h`, `rate_w` ∈ 1 ~ 8 | cases.csv 实测 rate_h/w ∈ {1, 2, 3, 4}；首尾维度固定为 1 |
+| `padding_mode` | {"SAME", "VALID"} | cases.csv 实测 SAME / VALID 均覆盖 |
+| `pads` | `[pad_top, pad_bottom, pad_left, pad_right]`，每项 0 ~ 8 | cases.csv 实测 全为 [0,0,0,0]（SAME 模式下自动推导填充） |
+| `ceil_mode` | {false, true} | cases.csv 实测 false / true 均覆盖 |
+| `data_format` | {"NHWC"} | cases.csv 实测 仅 NHWC |
+
+约束：
+
+- 输入 `x` 的通道数 `C` 必须与 `filter` 最后一维一致（逐通道结构元素）。
+- 有效卷积核尺寸 `effective_filter = (filter_size - 1) * rate + 1`，VALID 模式下需满足 `effective_filter_h ≤ H + pad_top + pad_bottom`，`effective_filter_w` 同理，否则输出空间维度 ≤ 0。
+- SAME 模式下输出空间尺寸 `out = ceil(in / stride)`；VALID 模式下 `out = floor((in - effective_filter) / stride) + 1`。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

@@ -81,6 +81,23 @@ $$
 - padding 指定对称填充 [p_h, p_w]
 - dilation 指定膨胀率 [d_h, d_w]
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `N`（batch） | 1 ~ 256 | cases.csv 实测 2 ~ 8 |
+| `C`（通道；=`C_in`=`C_out`=`groups`） | 1 ~ 2048 | cases.csv 实测 7 ~ 2048；depthwise 定义性约束 |
+| `H`, `W`（空间） | 8 ~ 256 | cases.csv 实测 13 ~ 128 |
+| `K_h`, `K_w`（卷积核） | 1 ~ 16 | cases.csv 实测 1 / 3 / 5 |
+| `stride[i]` | 1 ~ 4 | cases.csv 实测 (1,1) 和 (2,2) |
+| `padding[i]` | 0 ~ 8 | cases.csv 实测 0 ~ 2 |
+| `dilation[i]` | 1 ~ 16 | cases.csv 实测 1 / 2 / 3 |
+| `groups` | 1 ~ 2048 | **必须等于 `C`**（depthwise 定义性约束） |
+
+约束：输出 spatial 维度 `(H_out, W_out)` 必须 ≥ 1（按 §3 输出公式计算）。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

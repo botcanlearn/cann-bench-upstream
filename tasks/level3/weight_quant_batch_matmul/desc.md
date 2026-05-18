@@ -72,6 +72,18 @@ cann_bench.weight_quant_batch_matmul(Tensor x, Tensor weight, Tensor antiquantSc
 - bias（可选）shape 为 [N] 或 [1, N]
 - antiquantScale/antiquantOffset/bias 的 dtype 与 x 相同
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `M`（x 行 / 输出行） | 1 ~ 65536 | cases.csv 实测 1 ~ 32768 |
+| `K`（contraction 维度） | 1 ~ 8192 | cases.csv 实测 31 ~ 4097；x 与 weight 的 K 必须相等 |
+| `N`（weight 列 / 输出列） | 16 ~ 4096 | cases.csv 实测 16 ~ 2049；antiquantScale / antiquantOffset / bias 的最后一维等于 N |
+| `antiquantOffset` | optional | cases.csv 实测 null 与非 null 两种 |
+| `bias` | optional | cases.csv 实测 null 与非 null 两种 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

@@ -33,12 +33,20 @@ $$
 - $\text{scaleValue}$ 为缩放因子（<=0 时自动使用 $1/\sqrt{D}$）
 - 每个 KV head 被 $N_q / N_{kv}$ 个 query head 共享
 
-具体子步骤：
-1. **KV head 扩展**：将每个 KV head 重复 $N_q / N_{kv}$ 次以匹配 query head 数
-2. **缩放点积**：$\text{scores} = Q_i \times K_{g(i)}^T \times \text{scaleValue}$
-3. **因果掩码（可选）**：当 `is_causal=True` 时，对 `scores[..., i, j]` 满足 $j > i + (S_{kv} - S)$ 的位置置为 $-\infty$（即仅保留从右下角向左上方 45° 延伸的对角线及其下方部分），$S=S_{kv}$ 时退化为标准下三角掩码
-4. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$
-5. **加权求和**：$y_i = \text{attn\_weights} \times V_{g(i)}$
+计算步骤（对每个 batch $b$ 与 query head 索引 $h_q \in [0, N_q)$，令 $g = g(h_q)$）：
+
+1. **缩放点积**：$\text{scores}[i, j] = (Q[b, i, h_q, :] \cdot K[b, j, g, :]) \times \text{scaleValue}$，形状 $[S, S_{kv}]$
+2. **因果掩码（可选）**：当 `is_causal=True` 时，对 `scores[i, j]` 满足 $j > i + (S_{kv} - S)$ 的位置置为 $-\infty$（即仅保留 $[S, S_{kv}]$ 矩阵从右下角向左上方 45° 延伸的对角线及其下方部分），$S = S_{kv}$ 时退化为标准下三角掩码
+3. **Softmax 归一化**：$\text{attn\_weights} = \text{softmax}(\text{scores}, \text{dim}=-1)$
+4. **加权求和**：$y[b, :, h_q, :] = \text{attn\_weights} \times V[b, :, g, :]$，形状 $[S, D]$
+
+### 实现建议
+
+> 本节为参考建议，**不是算子语义约束**。任何与上文数学公式等价、满足 §4 精度要求的实现均符合 benchmark 要求；本节仅就常见性能陷阱与误读 §5 Golden 代码的风险给出提示。
+
+- §5 Golden 代码中的 `key.unsqueeze(3).expand(...).reshape(...)` 是为绕开 `torch.matmul` 不支持 GQA 广播的**等价验证形式**，仅用于精度对照，不建议直接作为算子实现路径。
+- 建议按头索引 `g(h_q)` 直接复用 N_kv 个 KV head；若在算子内部或调用前将 K/V 在头维度物化复制 G 份扩展到 N_q，会抹掉 GQA 相对 MHA 的 KV cache 内存收益（占用变为 $N_q \cdot S_{kv} \cdot D$ 而非 $N_{kv} \cdot S_{kv} \cdot D$），并引入冗余访存。
+- CANN 原生 GQA 算子（如 `FusedInferAttentionScore`、`npu_fusion_attention`）通过 `num_key_value_heads` 属性告知 kernel 分组比、内部按索引复用 KV，可作为参考实现路径。
 
 ## 3. 接口规范
 
@@ -80,6 +88,27 @@ cann_bench.gqa(Tensor query, Tensor key, Tensor value, float scaleValue=-1.0, bo
 - 当 N_kv == 1 时退化为多查询注意力 (MQA)
 - `scaleValue` 通常设置为 $1/\sqrt{D}$，当 <= 0 时自动使用该值
 - `is_causal=True` 时要求 $S \le S_{kv}$（否则 mask 会将部分 query 行全部屏蔽，导致 softmax 出现 NaN）
+
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch） | 1 ~ 256 | cases.csv 实测 2 ~ 128 |
+| `S`（query 序列长度） | 1 ~ 4096 | cases.csv 实测 1 ~ 1024；S=1 / 2 / 4 对应 decode / MTP 场景 |
+| `S_kv`（key/value 序列长度） | 1 ~ 8192 | cases.csv 实测 128 ~ 2048；`is_causal=True` 要求 $S \le S_{kv}$ |
+| `N_q`（query 头数） | 1 ~ 256 | cases.csv 实测 32 ~ 128；必须满足 `N_q % N_kv == 0` |
+| `N_kv`（KV 头数） | 1 ~ 256 | cases.csv 实测 1 / 4 / 8 / 32；`N_kv==N_q` 退化为 MHA，`N_kv==1` 退化为 MQA |
+| `D`（每头维度） | 64 ~ 512，64 对齐 | cases.csv 实测 128 / 256 |
+| `scaleValue` | 任意 float | cases.csv 实测 -1.0（自动 $1/\sqrt{D}$）和 0.08838（显式 $1/\sqrt{128}$）；<=0 时自动使用 $1/\sqrt{D}$ |
+| `is_causal` | {False, True} | cases.csv 两者皆覆盖；True 时按右下角对齐生成 [S, S_kv] 因果掩码 |
+| 输入 dtype | float16 / bfloat16 | cases.csv 两者皆覆盖；query / key / value 三者 dtype 必须一致 |
+
+约束：
+- `N_q % N_kv == 0`，分组比 `G = N_q / N_kv`
+- `is_causal=True` 时要求 `S <= S_kv`，否则部分 query 行被全屏蔽产生 NaN
+- query / key / value 三者 dtype 必须一致，且最后一维 `D` 三者相同
 
 ## 4. 精度要求
 

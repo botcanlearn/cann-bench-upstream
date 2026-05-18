@@ -28,26 +28,30 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.roi_align(Tensor x, Tensor boxes, int outputHeight, int outputWidth, float spatial_scale, int sampling_ratio, bool aligned) -> Tensor y
+cann_bench.roi_align(Tensor x, Tensor boxes, int outputHeight, int outputWidth,
+                     float spatial_scale, int sampling_ratio, bool aligned) -> Tensor y
 ```
+
+本算子签名与 `torch_npu.npu_roi_align` 一致：`boxes` 为 (numBoxes, 5) 张量，第 0 列为
+batch 索引（与 features 同 dtype，整数值），第 1-4 列为 (x0, y0, x1, y1) 像素坐标。
 
 ### 输入参数说明
 
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入特征图，shape 为 [B, C, H, W] |
-| boxes | Tensor | 必选 | ROI 框，shape 为 [numBoxes, 5] (batch_idx, x1, y1, x2, y2) |
+| boxes | Tensor | 必选 | ROI 框，shape 为 [numBoxes, 5]，每行 (batch_idx, x0, y0, x1, y1)；col 0 为整数值的 batch 索引，取值 ∈ [0, B-1] |
 | outputHeight | int | 必选 | 输出高度 |
 | outputWidth | int | 必选 | 输出宽度 |
-| spatial_scale | float | 必选 | 空间缩放因子（用于将 boxes 坐标映射到输入特征图尺寸） |
-| sampling_ratio | int | -1 | 采样比率 (-1 或 0 时自动计算) |
+| spatial_scale | float | 必选 | 空间缩放因子（用于将 boxes 坐标乘到特征图分辨率） |
+| sampling_ratio | int | -1 | 采样比率 (-1 或 0 时自动计算 ceil(roi_h/oh)) |
 | aligned | bool | false | 是否对齐 (aligned=True 时 boxes 坐标偏移 -0.5 像素) |
 
 ### 输出
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | [numBoxes, C, outputHeight, outputWidth] | 与输入 x 相同 | 输出张量，boxes 对齐结果 |
+| y | [numBoxes, C, outputHeight, outputWidth] | 与输入 x 相同 | 输出张量，ROI 对齐结果 |
 
 ### 数据类型
 
@@ -59,11 +63,37 @@ cann_bench.roi_align(Tensor x, Tensor boxes, int outputHeight, int outputWidth, 
 ### 规则与约束
 
 - 输入特征图 x 的 shape 为 [B, C, H, W]，即 batch、通道、高、宽四维格式
-- ROI 框 boxes 的 shape 为 [numBoxes, 5]，其中 5 列格式为 (batch_idx, x1, y1, x2, y2)
+- ROI 框 boxes 的 shape 为 [numBoxes, 5]，每行 (batch_idx, x0, y0, x1, y1)
 - x 和 boxes 的 dtype 需一致
+- boxes 第 0 列须为整数值的 batch 索引，取值 ∈ [0, B-1]；fp16 下 B 须 ≤ 1024 以保证整数精度
 - outputHeight 和 outputWidth 需为正整数
 - spatial_scale 用于将 ROI 坐标从原图尺度映射到特征图尺度
 - sampling_ratio 为 -1 或 0 时自动计算采样点数
+
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch） | 1 ~ 64 | cases.csv 实测 2 ~ 4；fp16 下要求 `B ≤ 1024` 以保证 `batch_idx` 在 fp16 中能精确表示 |
+| `C`（通道） | 1 ~ 2048 | cases.csv 实测 127 ~ 1023 |
+| `H`（特征图高） | 8 ~ 512 | cases.csv 实测 31 ~ 128 |
+| `W`（特征图宽） | 8 ~ 512 | cases.csv 实测 31 ~ 128 |
+| `numBoxes`（ROI 数） | 1 ~ 2048 | cases.csv 实测 50 ~ 256 |
+| `boxes.shape[1]` | = 5 | 固定 `(batch_idx, x0, y0, x1, y1)` |
+| `outputHeight` | 1 ~ 64 | cases.csv 实测 1 ~ 28 |
+| `outputWidth` | 1 ~ 64 | cases.csv 实测 1 ~ 28 |
+| `spatial_scale` | (0, 1] | cases.csv 实测 0.0625 / 0.125 / 0.25 / 1.0 |
+| `sampling_ratio` | -1 ~ 16 | -1 / 0 表示自动（取 `ceil(roi_h/oh)`）；cases.csv 实测 0 / 1 / 2 / 4 |
+| `aligned` | `false` / `true` | cases.csv 全部覆盖 |
+
+约束：
+- shape 关系：`x.shape == [B, C, H, W]`、`boxes.shape == [numBoxes, 5]`，输出 `y.shape == [numBoxes, C, outputHeight, outputWidth]`。
+- dtype 关系：`x.dtype == boxes.dtype`（必须同为 float16 或 float32）；输出 `y.dtype` 与 `x.dtype` 一致。
+- `boxes` 数据约束：第 0 列 `batch_idx` 必须为整数值且 ∈ [0, B-1]；fp16 下 B ≤ 1024，否则 batch_idx 在 fp16 中无法精确表示。
+- 几何约束：`(x0, y0, x1, y1)` 是原图像素坐标；乘以 `spatial_scale` 映射到特征图坐标后，结果应落入 `[0, W) × [0, H)`；超出范围的部分由 bilinear 插值的 clamp 行为决定（输出靠近边界值或 0）。
+- `outputHeight`、`outputWidth` 必须为正整数；`sampling_ratio` 取 -1 或 0 时自动按 `ceil(roi_h/oh)` 计算采样点数，否则使用指定值（必须为正整数）。
 
 ## 4. 精度要求
 
@@ -193,6 +223,44 @@ import torch
 import cann_bench
 
 x = torch.randn(2, 256, 64, 64, dtype=torch.float32, device="npu")
-boxes = torch.tensor([[0, 10.0, 10.0, 50.0, 50.0], [1, 20.0, 20.0, 60.0, 60.0]], dtype=torch.float32, device="npu")
+boxes = torch.tensor([[0, 10.0, 10.0, 50.0, 50.0], [1, 20.0, 20.0, 60.0, 60.0]],
+                     dtype=torch.float32, device="npu")
 y = cann_bench.roi_align(x, boxes, 7, 7, 0.0625, 2, False)
 ```
+
+### NPU 实现路径与基线测量说明
+
+torch_npu 上对应 API 为
+`torch_npu.npu_roi_align(features, boxes, spatial_scale, pooled_height, pooled_width, sample_num, roi_end_mode)`。
+`aligned` 与 `roi_end_mode` 的映射遵循官方 `torch_npu/contrib/module/roi_align.py`：`aligned=True → roi_end_mode=3`，
+`aligned=False → roi_end_mode=0`。
+
+**`baseline_perf_us` = `torch_npu.npu_roi_align(...)` 单次调用在 device 端启动的全部 kernel 的时长之和（msprof pattern-interval 中位数）。**
+不做计时窗口外的预处理（不预转 NC1HWC0、不预拼 rois、不预 Cast），不做后处理过滤。也就是说：包装层的「fusion pass」——
+torch_npu binding 调 `aclnnRoiAlign` V1 时由 `libopapi.so` 内部展开的 `Reshape + Cast + ConcatD + (Trans/Slice) + ROIAlign`——
+统统计入 baseline。这是第三方调用该 API 时实际看到的成本，不能减。
+
+#### V1 vs V2 背景（reference only，不影响 baseline 值）
+
+`torch_npu.npu_roi_align` 当前绑定到 `aclnnRoiAlign` V1（`libopapi.so::aclnnRoiAlign`）。
+反汇编 `libopapi.so` 显示 V1 内部用 `Reshape + Cast (fp16→fp32) + ConcatD` 把用户传入的 (N,5)
+拆成 (rois (N,4), batchIndices int64) 再喂 kernel；V2（`aclnnRoiAlignV2`，接受 (N,5) 直通）
+未在 `torch_npu` 暴露任何 Python 入口。故 fp16 调用路径上的 `Cast×2` 是 V1 实现的固有开销，
+不属于 ROIAlign kernel 的纯计算，但作为本 baseline 的可观测成本被计入。
+
+实测在 op_summary 中观察到的 kernel 链（全部计入 baseline）：
+
+| dtype | C 通道 | kernel 链 |
+|---|---|---|
+| fp32 | 任意 | `TransData×1 + ROIAlign×1` |
+| fp16 | C%16==0 | `Cast×2 + TransData×1 + ROIAlign×1` |
+| fp16 | C%16≠0 | `Cast×2 + TransData×3 + ROIAlign×1 + Slice×1` |
+
+`note` 后缀 `| baseline_kernels: <完整 kernel 链>` 明确列出该 case 实际启动的所有 kernel。
+
+### boxes 数据的取值约束（cases.yaml 的语义补充）
+
+`boxes` 第 0 列（batch_idx）必须为整数值且 ∈ [0, B-1]。cases.yaml 的 `value_range` 是均匀随机采样，
+直接随机会产生越界。harness 在 `inputs.py:_apply_op_aliases` 把 `boxes[:, 0]` 强制设为 `arange(N) % B`
+（确保每个 ROI 指向合法 batch、覆盖均匀）。这是**输入数据合法性整形**，第三方 kernel 在自己实现中
+对相同输入约束也需要承认 batch_idx 必须有效——不属于 baseline 计时窗口的工作量。

@@ -63,6 +63,17 @@ cann_bench.arg_max(Tensor x, int dimension) -> Tensor y
 - 输出 shape 为输入 shape 去掉 `dimension` 维度后的结果
 - 当指定维度上存在多个相同的最大值时，返回第一个（最小索引）出现的位置
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `rank(x)`（输入维度数） | 0 ~ 8 | cases.csv 实测 1 ~ 5 维 |
+| 每个维度大小 `dim_i` | 1 ~ 2097152 | cases.csv 实测最小 2、最大 1,048,583 |
+| 张量总元素数 | 1 ~ 2^30 | cases.csv 实测最大约 67M（8192×8192） |
+| `dimension` | -rank(x) ~ rank(x)-1 | 支持负数索引；cases.csv 实测 -1 / 0 / 1 / 2 |
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

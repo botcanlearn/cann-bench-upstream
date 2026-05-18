@@ -96,6 +96,25 @@ cann_bench.mla(Tensor q_nope, Tensor q_rope, Tensor k_nope, Tensor k_rope, Tenso
 - 所有输入和输出遵循相同的 layout（BSND 或 BNSD）
 - `is_causal=True` 时要求 $S \le S_{kv}$（否则 mask 会将部分 query 行全部屏蔽，导致 softmax 出现 NaN）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch） | 1 ~ 128 | cases.csv 实测 1 ~ 128 |
+| `S`（query 序列长度） | 1 ~ 512 | cases.csv 实测 BSND: 1 / 2 / 128 / 256；BNSD: 1 / 2 / 128 / 512 |
+| `S_kv`（KV 序列长度） | 128 ~ 2048 | cases.csv 实测 128 / 256 / 512 / 1024 / 2048；`is_causal=True` 时要求 $S \le S_{kv}$ |
+| `N_q`（query head 数） | 32 ~ 128 | cases.csv 实测 64 / 128；必须能被 `N_kv` 整除 |
+| `N_kv`（KV head 数 = `numKVHeads`） | 1 | MLA 典型配置，固定为 1 |
+| `d_nope`（nope head dim） | 128 ~ 512，64 对齐 | cases.csv 实测 448 / 512；与 `v`、输出 head dim 一致 |
+| `d_rope`（rope head dim） | 32 ~ 128，64 对齐 | cases.csv 实测均为 64 |
+| `scaleValue` | float (`<=0` 自动取 $1/\sqrt{d_{nope}+d_{rope}}$) | cases.csv 实测均为 -1.0（走默认缩放） |
+| `inputLayout` | `"BSND"` / `"BNSD"` | cases.csv 实测两种 layout 均覆盖 |
+| `is_causal` | `True` / `False` | cases.csv 实测两种取值均覆盖 |
+
+约束：`N_q` 必须能被 `N_kv` 整除；`q_nope`、`k_nope`、`v` 的最后一维必须相同（均为 `d_nope`），`q_rope`、`k_rope` 的最后一维必须相同（均为 `d_rope`）；所有输入 dtype 必须一致；`is_causal=True` 时必须满足 $S \le S_{kv}$。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

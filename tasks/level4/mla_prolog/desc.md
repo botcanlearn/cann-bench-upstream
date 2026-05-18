@@ -128,6 +128,31 @@ def mla_pre(
 - **输出**: bfloat16（4 个输出 Tensor）
 - **内部计算**: CUBE 矩阵乘法使用 bf16×bf16→bf16；VEC 向量运算（RMSNorm、RoPE）内部使用 fp32，输入输出为 bf16
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch，token_x[0]） | 1 ~ 256 | cases.csv 实测 1 ~ 128 |
+| `S`（序列长度，token_x[1]） | 1 ~ 512 | cases.csv 实测 1 ~ 256；S ≥ 1，不支持空序列 |
+| `He`（hidden size，token_x[2] / w_dq[0] / w_dkv_kr[0]） | 1024 ~ 8192 | cases.csv 实测 5120（DSv2）和 7168（DSv3） |
+| `Hcq`（query 压缩维，w_dq[1] / w_uq_qr[0] / γ_cq） | 256 ~ 2048 | cases.csv 实测固定 1536 |
+| `N`（注意力头数，n_heads / w_uk[0]） | 8 ~ 256 | cases.csv 实测固定 128；须与 w_uk[0] 一致 |
+| `D`（每头 query/key 内容维，w_uk[1]） | 16 ~ 256 | cases.csv 实测固定 128；须为 16 的倍数（CUBE 对齐） |
+| `Hckv`（KV 压缩维，w_uk[2] / γ_ckv） | 64 ~ 1024 | cases.csv 实测固定 512 |
+| `Dr`（RoPE 维度，rope_sin[2] / rope_cos[2]） | 16 ~ 128 | cases.csv 实测固定 64；须为偶数（rotate_half 对半分割） |
+| `w_uq_qr[1]` | = N \* (D + Dr) | cases.csv 实测固定 24576 = 128 \* (128 + 64） |
+| `w_dkv_kr[1]` | = Hckv + Dr | cases.csv 实测固定 576 = 512 + 64 |
+| `rmsnorm_epsilon_cq` | 1e-8 ~ 1e-3 | cases.csv 实测 1e-6 / 1e-5（默认 1e-5），必须 > 0 |
+| `rmsnorm_epsilon_ckv` | 1e-8 ~ 1e-3 | cases.csv 实测 1e-8 / 1e-5（默认 1e-5），必须 > 0 |
+| 输入数值范围 | [-1, 1] 典型 | cases.csv 实测 [-1, 1]（19 case）和 [0, 0]（zero-input 1 case） |
+
+约束：
+- 所有 9 个 Tensor 输入 dtype 必须为 `bfloat16`
+- 维度一致性：`w_dq[0] == w_dkv_kr[0] == He`、`w_dq[1] == w_uq_qr[0] == len(γ_cq) == Hcq`、`w_uk[2] == len(γ_ckv) == Hckv`、`rope_sin.shape == rope_cos.shape == [B, S, Dr]`
+- `w_uq_qr[1]` 必须能整除为 `N * (D + Dr)`，由调用方保证（算子根据 `n_heads` 与 `w_uk` 推断 D、Dr）
+
 ## 4. 计算流程
 
 ```

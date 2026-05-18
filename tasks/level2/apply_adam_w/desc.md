@@ -90,6 +90,24 @@ cann_bench.apply_adam_w(Tensor var, Tensor grad, Tensor m, Tensor v, float lr, f
 - `epsilon` 用于防止除零，通常取极小正数
 - 当 `maximize=true` 时，更新方向取反（用于最大化目标函数）
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `var/grad/m/v` 维度数 (ndim) | 1 ~ 8 | cases.csv 实测 1 ~ 5；四个张量 shape/dtype 必须一致 |
+| `var/grad/m/v` 单维大小 | 1 ~ 1048576 | cases.csv 实测 2 ~ 1000003 |
+| `var/grad/m/v` 总元素数 | 1 ~ 256M | cases.csv 实测 ~1M ~ ~50M (363×367×373, case 9) |
+| `lr` | 0.0 ~ 1.0 | cases.csv 实测 1e-4 ~ 0.1 |
+| `beta1` | 0.0 ~ 1.0 | cases.csv 实测 0.0 ~ 0.99；取值范围 `[0, 1)` |
+| `beta2` | 0.0 ~ 1.0 | cases.csv 实测 0.5 ~ 0.999；取值范围 `[0, 1)` |
+| `weight_decay` | 0.0 ~ 1.0 | cases.csv 实测 0.0 ~ 0.5 |
+| `epsilon` | 0.0 ~ 1.0 | cases.csv 实测 0.0 ~ 1e-4；通常取极小正数（默认 1e-8） |
+| `maximize` | `false` / `true` | cases.csv 已覆盖两种取值；`true` 时更新方向取反 |
+
+约束：四个张量 `var/grad/m/v` 的 shape 和 dtype 必须完全一致；输出 `y` 形状/dtype 与 `var` 一致。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。

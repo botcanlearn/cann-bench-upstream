@@ -80,6 +80,25 @@ cann_bench.moe_gating_top_k_softmax(Tensor x, Tensor? finished=None, int k=1) ->
 - Softmax 和 TopK 均沿最后一维（dim=-1）计算
 - 当 `finished` 中某行为 True 时，该行对应的 `expert_idx` 值会被设为 `num_expert`
 
+### 支持范围
+
+输入 tensor 各维度与参数的支持范围：
+
+| 维度 / 参数 | 范围 | 备注 |
+|---|---|---|
+| `B`（batch，3D 输入时） | 1 ~ 64 | x 为 3D `(B, N, E)` 时使用；cases.csv 实测 4 ~ 8 |
+| `N`（tokens） | 1 ~ 262144 | cases.csv 实测 64 ~ 131072 |
+| `E`（专家数，x 最后一维） | 1 ~ 2048 | cases.csv 实测 4 ~ 1024 |
+| `k`（topK） | 1 ~ 1024 | 必须满足 0 < k ≤ E；cases.csv 实测 1 ~ 128 |
+| `finished` | shape = x_shape[:-1] | 可选；dtype 必须为 bool；存在时对应行的 `expert_idx` 置为 E |
+
+约束：
+- `x` rank ∈ {2, 3}；2D 时 shape `(N, E)`，3D 时 shape `(B, N, E)`；Softmax 与 TopK 沿最后一维 (axis=-1) 计算。
+- `0 < k ≤ E` 且 `k ≤ 1024`；`y`、`expert_idx`、`row_idx` 的最后一维大小均为 `k`。
+- `finished.shape == x_shape[:-1]` 且 `finished.dtype == bool`；当 `finished[i] == True` 时对应行的 `expert_idx` 填入 `E`（专家总数），表示该 token 不参与路由。
+- 输出 dtype：`y` 与 `x` 一致；`expert_idx` 与 `row_idx` 均为 int32。
+- `x` 元素必须为非 NaN 有限值（NaN 会破坏 Softmax 归一化，导致 TopK 排序未定义；本基准的 case 集不引入 NaN）。
+
 ## 4. 精度要求
 
 采用[生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)进行验证。
