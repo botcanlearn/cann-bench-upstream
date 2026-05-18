@@ -128,7 +128,7 @@ cases:
   value_range: [-88, 88]
   baseline_perf_us: 12.56
   t_hw_us: 1.64
-  note: "S-bfloat16-1M-质数非对齐-float32边界值-4D | baseline_kernels: DynamicQuant×1"
+  note: "S-bfloat16-1M-质数非对齐-bfloat16边界值-4D | baseline_kernels: DynamicQuant×1"
 - operator: DynamicQuant
   case_id: 13
   input_shape:
@@ -158,7 +158,7 @@ cases:
   value_range: [-inf, inf]
   baseline_perf_us: 12.70
   t_hw_us: 1.57
-  note: "S-bfloat16-1M-非对齐-inf特殊值-2D | baseline_kernels: DynamicQuant×1"
+  note: "S-bfloat16-1M-质数非对齐-inf特殊值-2D | baseline_kernels: DynamicQuant×1"
 - operator: DynamicQuant
   case_id: 16
   input_shape:

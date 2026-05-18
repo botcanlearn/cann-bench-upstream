@@ -20,7 +20,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-1, 1]
   - [-1, 1]
@@ -40,7 +39,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-0.1, 0.1]
   - [-0.1, 0.1]
@@ -59,7 +57,6 @@ cases:
     strides: [1, 1]
     pads: [2, 2, 2, 2]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-3, 3]
   - [-3, 3]
@@ -79,7 +76,6 @@ cases:
     strides: [2, 2]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-1, 1]
   - [-1, 1]
@@ -99,7 +95,6 @@ cases:
     strides: [1, 1]
     pads: [2, 2, 2, 2]
     dilations: [2, 2]
-    groups: 1
   value_range:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
@@ -118,7 +113,6 @@ cases:
     strides: [1, 1]
     pads: [0, 0, 0, 0]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-10, 10]
   - [-10, 10]
@@ -138,7 +132,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-0.1, 0.1]
   - [-0.1, 0.1]
@@ -157,7 +150,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-1, 2]
   - [-1, 2]
@@ -176,7 +168,6 @@ cases:
     strides: [2, 2]
     pads: [2, 2, 2, 2]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-5, 10]
   - [-5, 10]
@@ -196,7 +187,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [2, 2]
-    groups: 1
   value_range:
   - [-50, 100]
   - [-50, 100]
@@ -216,7 +206,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-10, 10]
   - [-10, 10]
@@ -236,7 +225,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
@@ -255,7 +243,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-.inf, .inf]
   - [-.inf, .inf]
@@ -274,7 +261,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [.nan, .nan]
   - [.nan, .nan]
@@ -293,7 +279,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [0, 0]
   - [0, 0]
@@ -313,7 +298,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
@@ -332,7 +316,6 @@ cases:
     strides: [2, 2]
     pads: [2, 2, 2, 2]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-1, 3]
   - [-1, 3]
@@ -351,7 +334,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [3, 3]
-    groups: 1
   value_range:
   - [-10, 10]
   - [-10, 10]
@@ -371,7 +353,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [1, 1]
-    groups: 1
   value_range:
   - [-0.2, 0.2]
   - [-0.2, 0.2]
@@ -390,7 +371,6 @@ cases:
     strides: [1, 1]
     pads: [1, 1, 1, 1]
     dilations: [2, 2]
-    groups: 1
   value_range:
   - [-3, 6]
   - [-3, 6]

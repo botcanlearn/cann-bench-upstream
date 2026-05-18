@@ -19,6 +19,9 @@ ROIAlign 算子 Torch Golden 参考实现
 池化层，用于非均匀输入尺寸的特征图
 公式: y = roi_align(x, boxes, output_size)
 
+输入签名与 torch_npu.npu_roi_align 一致：boxes 为 (N, 5) 张量，
+第 0 列为 batch index（与特征 dtype 相同），第 1-4 列为 (x0, y0, x1, y1) 像素坐标。
+
 优先使用 torchvision.ops.roi_align 官方实现，
 torchvision 不可用时使用纯 Python fallback（对标 torchvision 源码逻辑）。
 """
@@ -154,16 +157,17 @@ def roi_align(
     公式: y = roi_align(x, boxes, output_size)
 
     Args:
-        x: 输入特征图 [N, C, H, W]
-        boxes: ROI框 [K, 5] (batch_idx, x1, y1, x2, y2)
+        x: 输入特征图 [B, C, H, W]
+        boxes: ROI 框 [N, 5]，每行 (batch_idx, x0, y0, x1, y1)；col 0 为整数值的
+            batch 索引（与 features dtype 相同）
         outputHeight: 输出高度
         outputWidth: 输出宽度
-        spatial_scale: 空间缩放因子
-        sampling_ratio: 采样比率 (-1 或 0 表示自动计算)
+        spatial_scale: 空间缩放因子（将 boxes 坐标乘到特征图分辨率）
+        sampling_ratio: 采样比率 (-1 或 0 表示自动计算 ceil(roi_h/oh))
         aligned: 是否对齐 (aligned=True 时 ROI 坐标偏移 -0.5 像素)
 
     Returns:
-        输出张量 [K, C, outputHeight, outputWidth]
+        输出张量 [N, C, outputHeight, outputWidth]
     """
     if HAS_TORCHVISION:
         return _tv_roi_align(

@@ -34,7 +34,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 31.64
+  baseline_perf_us: null
   t_hw_us: 0.41
   note: 'S-float16-B2S128N8D64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -62,7 +62,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 57.58
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'M-bfloat16-B4S256N16D64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -90,7 +90,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 113.88
+  baseline_perf_us: null
   t_hw_us: 13.11
   note: 'M-bfloat16-B2S512N32D128-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -118,7 +118,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 42.96
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'S-float16-B2S256N8D256-D256-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -146,7 +146,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 46.74
+  baseline_perf_us: null
   t_hw_us: 1.05
   note: 'S-float16-B2Sq128Skv256N12D64-cross | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -174,7 +174,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 48.02
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'S-bfloat16-B2Sq512Skv128N16D128-cross | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -538,7 +538,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 53.12
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'S-float16-B2S128N32D128-explicit-scale-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MHA
@@ -566,6 +566,6 @@ cases:
   value_range:
   - 0
   - 0
-  baseline_perf_us: 49.34
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'S-float16-B2S128N32D128-zero-input | baseline_kernels: FusedInferAttentionScore×1'

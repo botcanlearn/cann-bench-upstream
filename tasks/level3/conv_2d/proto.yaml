@@ -31,11 +31,6 @@ operator:
     - 1
     description: 膨胀率
     required: false
-  - name: groups
-    type: Int
-    default: 1
-    description: 分组数
-    required: false
   inputs:
   - name: x
     description: 输入特征图
@@ -63,4 +58,4 @@ operator:
     - float32
     - bfloat16
   schema: conv_2d(Tensor x, Tensor filter, Tensor bias, int[] strides, int[] pads,
-    int[] dilations, int groups) -> Tensor y
+    int[] dilations) -> Tensor y

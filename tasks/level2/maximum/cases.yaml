@@ -234,15 +234,15 @@ cases:
   case_id: 18
   input_shape:
   - [255, 8193]
-  - [255, 8193]
+  - [8193]
   dtype: [float16, float16]
   attrs: {}
   value_range:
   - [-65504, 65504]
   - [-1, 1]
-  baseline_perf_us: 9.04
-  t_hw_us: 4.35
-  note: "S-float16-2M-非对齐-float16边界值-Broadcast | baseline_kernels: Maximum×1"
+  baseline_perf_us: 9.74
+  t_hw_us: 2.18
+  note: "S-float16-2M-非对齐-float16边界值-跨rank-Broadcast-2D×1D | baseline_kernels: Maximum×1"
 - operator: Maximum
   case_id: 19
   input_shape:

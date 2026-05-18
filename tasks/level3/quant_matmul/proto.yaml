@@ -18,6 +18,9 @@ operator:
     浮点 bias (无offset): out = x1 @ x2 * scale + bias
   description: 量化矩阵乘法算子，int8/int4输入，支持per-tensor/per-channel/per-group/per-token量化
   shape_support: 'x1: [..., m, k]; x2: [..., k, n]; scale: [t] 或 2D; 输出: [..., m, n]'
+  # 量化输出允许 ±1 round-mode 差异(NPU round-half-* vs PyTorch round-half-even)
+  precision_thresholds:
+    int8: 1
   attrs:
   - name: output_dtype
     type: string

@@ -17,7 +17,7 @@ operator:
   precision_thresholds:
     float16: 0.1
     float32: 0.01
-  shape_support: 'self: [B, C, H, W], boxes: [numBoxes, 5]'
+  shape_support: 'x: [B, C, H, W], boxes: [numBoxes, 5]'
   attrs:
   - name: outputHeight
     type: int
@@ -29,32 +29,32 @@ operator:
     required: true
   - name: spatial_scale
     type: float
-    description: 空间缩放因子 (用于将 boxes 坐标映射到输入特征图尺寸)
+    description: 空间缩放因子 (用于将 boxes 坐标映射到特征图尺度)
     required: true
   - name: sampling_ratio
     type: int
     default: -1
-    description: 采样比率
+    description: 采样比率 (-1 或 0 表示自动计算)
     required: false
   - name: aligned
     type: bool
     default: false
-    description: 是否对齐
+    description: 是否对齐 (aligned=True 时 boxes 坐标偏移 -0.5 像素)
     required: false
   inputs:
   - name: x
-    description: 输入特征图
+    description: 输入特征图 [B, C, H, W]
     dtype:
     - float32
     - float16
   - name: boxes
-    description: ROI 框 [numBoxes, 5] (batch_idx, x1, y1, x2, y2)
+    description: ROI 框 [numBoxes, 5]，每行 (batch_idx, x0, y0, x1, y1)；col 0 为整数值的 batch 索引（同 features dtype）
     dtype:
     - float32
     - float16
   outputs:
   - name: y
-    description: 输出张量，ROI 对齐结果
+    description: 输出张量 [numBoxes, C, outputHeight, outputWidth]，ROI 对齐结果
     dtype:
     - float32
     - float16

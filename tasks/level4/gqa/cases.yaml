@@ -34,7 +34,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 44.48
+  baseline_perf_us: null
   t_hw_us: 1.64
   note: 'S-float16-B2S128Nq32Nkv8D128-G4-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -62,7 +62,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 54.66
+  baseline_perf_us: null
   t_hw_us: 2.27
   note: 'S-float16-B2S128Nq48Nkv4D128-G12-prefill | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -90,7 +90,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 69.48
+  baseline_perf_us: null
   t_hw_us: 4.92
   note: 'S-float16-B2S128Nq128Nkv8D128-G16-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -146,7 +146,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 49.4
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'S-float16-B2S128Nq32Nkv8D256-G4-D256-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -174,7 +174,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 166.02
+  baseline_perf_us: null
   t_hw_us: 24.36
   note: 'M-bfloat16-B2S256Nq128Nkv8D256-G16-D256-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -202,7 +202,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 43.86
+  baseline_perf_us: null
   t_hw_us: 3.03
   note: 'S-bfloat16-B2Sq128Skv256Nq32Nkv8D128-G4-cross | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -286,7 +286,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 510.33
+  baseline_perf_us: null
   t_hw_us: 97.25
   note: 'L-bfloat16-B4S512Nq128Nkv8D128-G16-long-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -510,7 +510,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 39.88
+  baseline_perf_us: null
   t_hw_us: 1.52
   note: 'S-float16-B2S128Nq32Nkv1D128-G32-MQA-degenerate | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -538,7 +538,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 48.5
+  baseline_perf_us: null
   t_hw_us: 3.28
   note: 'S-bfloat16-B2S128Nq32Nkv32D128-G1-MHA-degenerate-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: GQA
@@ -566,6 +566,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 42.78
+  baseline_perf_us: null
   t_hw_us: 1.64
   note: 'S-bfloat16-B2S128Nq32Nkv8D128-G4-explicit-scale-causal | baseline_kernels: FusedInferAttentionScore×1'

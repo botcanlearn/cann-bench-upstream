@@ -46,7 +46,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 113.94
+  baseline_perf_us: null
   t_hw_us: 19.81
   note: 'M-float16-BSND-B2S128Nq128Nkv1-dnope512drope64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
@@ -286,7 +286,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 45.12
+  baseline_perf_us: null
   t_hw_us: 1.61
   note: 'S-float16-BSND-B1S1Skv2048Nq128-decode-single-batch | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
@@ -526,7 +526,7 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 117.68
+  baseline_perf_us: null
   t_hw_us: 19.81
   note: 'M-float16-BNSD-B2Nq128S128-dnope512drope64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
@@ -806,6 +806,6 @@ cases:
   value_range:
   - 0
   - 0
-  baseline_perf_us: 113.7
+  baseline_perf_us: null
   t_hw_us: 19.81
   note: 'M-float16-BSND-zero-input-causal | baseline_kernels: FusedInferAttentionScore×1'

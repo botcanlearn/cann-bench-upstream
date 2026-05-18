@@ -23,13 +23,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -48,14 +48,14 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, bfloat16]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
     baseline_perf_us: null
     t_hw_us: null
     note: single_token_decode-B1L1HC4D1024K4dil3-decode-Decode 单步推理 (L=1, 需 conv_state)
@@ -73,13 +73,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -98,13 +98,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -123,13 +123,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -148,13 +148,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -173,13 +173,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -198,13 +198,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -223,13 +223,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -248,13 +248,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 512, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -273,14 +273,14 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, bfloat16]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
     baseline_perf_us: null
     t_hw_us: null
     note: decode_state_prefill-B1L8HC4D1024K4dil3-decode-8-token chunk with state (Decode-after-Prefill 场景)
@@ -298,13 +298,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -323,13 +323,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 769, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -348,13 +348,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 256, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -373,13 +373,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 8, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -398,13 +398,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 2, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -423,13 +423,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 8, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -448,13 +448,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 1, norm_eps: 1.0e-5}
     value_range:
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
-      - [-1, 1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null
@@ -473,13 +473,13 @@ cases:
     dtype: [bfloat16, bfloat16, bfloat16, float32, float32, float32, float32, null]
     attrs: {hc_mult: 4, hidden_size: 1024, kernel_size: 4, dilation: 3, norm_eps: 1.0e-5}
     value_range:
-      - [-100, 100]
-      - [-100, 100]
-      - [-100, 100]
-      - [-100, 100]
-      - [-100, 100]
-      - [-100, 100]
-      - [-100, 100]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
+      - [-0.1, 0.1]
       - null
     baseline_perf_us: null
     t_hw_us: null

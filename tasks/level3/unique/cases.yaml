@@ -58,7 +58,7 @@ cases:
   value_range: [-100000, 100000]
   baseline_perf_us: null
   t_hw_us: 290.81
-  note: L-int64-268M-对齐-2D-无逆索引-大值域
+  note: L-int64-33M元素-256MB-对齐-2D-无逆索引-大值域
 - operator: Unique
   case_id: 6
   input_shape:
@@ -68,7 +68,7 @@ cases:
   value_range: [0, 255]
   baseline_perf_us: null
   t_hw_us: 1188.29
-  note: L-uint8-1G-对齐-2D-带逆索引-全范围
+  note: L-uint8-268M元素-对齐-2D-带逆索引-全范围
 - operator: Unique
   case_id: 7
   input_shape:
@@ -128,7 +128,7 @@ cases:
   value_range: [-88, 88]
   baseline_perf_us: null
   t_hw_us: 4.20
-  note: S-float32-1M-质数非对齐-4D-float32边界值-带逆索引
+  note: S-float32-1M-质数非对齐-4D-exp溢出边界-带逆索引
 - operator: Unique
   case_id: 13
   input_shape:

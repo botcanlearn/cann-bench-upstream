@@ -20,7 +20,7 @@ bias / quant_offset 后并固定 quant_mode=1（动态 per-token）的子集：
                        activate_left) -> (y, scale)
 
 x 支持 int32（W8A8 反量化路径，必配 weight_scale + activation_scale）和
-bfloat16（直接 SwiGLU 路径，weight_scale / activation_scale 必须 None）。
+bfloat16 / float16（直接 SwiGLU 路径，weight_scale / activation_scale 必须 None）。
 
 固定动态量化的原因：CANN 850 的静态量化路径在实测中表现为 identity scale
 且 scale 返回值未初始化（垃圾数据），不具备生产可用性，因此从 tasks
@@ -39,10 +39,9 @@ def dequant_swiglu_quant(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Args:
-        x: [TokensNum, 2H] int32 / bfloat16 / float16 / float32 / float64
-           框架计算 golden 时可能传入 fp64，应保持高精度计算获得理论最优参考值
-        weight_scale: [1, 2H] float32；x=int32 时必须；x=浮点类型时必须 None
-        activation_scale: [TokensNum] float32；x=int32 时必须；x=浮点类型时必须 None
+        x: [TokensNum, 2H] int32 / bfloat16 / float16
+        weight_scale: [1, 2H] float32；x=int32 时必须；x=bfloat16/float16 时必须 None
+        activation_scale: [TokensNum] float32；x=int32 时必须；x=bfloat16/float16 时必须 None
         quant_scale: [1, H] float32；smooth quant 系数（可选）
         activate_left: False = SiLU(B)*A；True = SiLU(A)*B
 
@@ -50,12 +49,6 @@ def dequant_swiglu_quant(
         y: [TokensNum, H] int8（每行独立 per-token scale 量化）
         scale: [TokensNum] float32（每 token 的 scale）
     """
-    # ---- Step 0: 处理输入精度 ----
-    # 框架计算 golden 参考值时可能将浮点输入升精度到 fp64
-    # golden 参考值应保持高精度计算，获得理论最优结果
-    # int32 输入：保持原样
-    # 浮点输入（包括 fp64）：直接在高精度下计算 SwiGLU，不强制降精度
-
     # ---- Step 1: 反量化 ----
     if x.dtype == torch.int32:
         assert weight_scale is not None and activation_scale is not None, \
@@ -63,14 +56,12 @@ def dequant_swiglu_quant(
         # weight_scale 形状 [1, 2H]；activation_scale 形状 [TokensNum]
         dequant_out = x.float() * weight_scale.float()                   # broadcast → [TokensNum, 2H]
         dequant_out = dequant_out * activation_scale.float().unsqueeze(-1)
-    elif x.dtype in (torch.bfloat16, torch.float16, torch.float32, torch.float64):
-        # 浮点输入路径：weight_scale 和 activation_scale 必须为 None
+    elif x.dtype in (torch.bfloat16, torch.float16):
         assert weight_scale is None and activation_scale is None, \
             f"x={x.dtype} 时 weight_scale / activation_scale 必须为 None"
-        # 直接在高精度下计算（不降精度）
-        dequant_out = x.float() if x.dtype != torch.float64 else x
+        dequant_out = x.float()
     else:
-        raise ValueError(f"x dtype must be int32, bfloat16, float16, float32, or float64, got {x.dtype}")
+        dequant_out = x
 
     # ---- Step 2: SwiGLU 激活 ----
     last_dim = dequant_out.shape[-1]

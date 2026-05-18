@@ -58,6 +58,12 @@ def quant_matmul(
     if bias is not None and bias.dtype == torch.int32:
         mm = mm + bias.float()
 
+    # output_dtype=int32: NPU 直接返回原始 int32 累加器 (含可选 int32 bias),
+    # 不应用 scale/offset/pertoken_scale —— 留给后续算子做反量化融合。
+    # 对应 API 支持表: int32 输出要求 offset=None, pertoken=None。
+    if output_dtype == "int32":
+        return mm.to(torch.int32)
+
     # 反量化 scale
     y = mm * scale.float()
 
@@ -74,15 +80,14 @@ def quant_matmul(
         y = y + bias.float()
 
     # 输出 dtype
+    # int8 走标准量化语义: round-to-nearest + 饱和 clamp 到 [-128, 127],
+    # 与 NPU npu_quant_matmul 的 int8 输出一致。直接 .to(int8) 是截断
+    # 且越界会回绕,与 NPU 不符。
     if output_dtype is None or output_dtype == "int8":
-        out_dtype = torch.int8
+        return torch.clamp(torch.round(y), -128, 127).to(torch.int8)
     elif output_dtype == "float16":
-        out_dtype = torch.float16
+        return y.to(torch.float16)
     elif output_dtype == "bfloat16":
-        out_dtype = torch.bfloat16
-    elif output_dtype == "int32":
-        out_dtype = torch.int32
+        return y.to(torch.bfloat16)
     else:
         raise ValueError(f"unsupported output_dtype: {output_dtype}")
-
-    return y.to(out_dtype)

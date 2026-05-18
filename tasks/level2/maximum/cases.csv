@@ -16,6 +16,6 @@ Maximum,14,"[[1000007], [1000007]]","[""float32"", ""float32""]",{},"[[""-inf"",
 Maximum,15,"[[11, 13, 17, 67, 67], [11, 13, 17, 67, 67]]","[""float16"", ""float16""]",{},"[[""nan"", ""nan""], [-1, 1]]",37.98,22.74,M-float16-10M-质数非对齐-nan特殊值-5D | baseline_kernels: Maximum×1
 Maximum,16,"[[3, 7, 11, 13, 1013], [3, 7, 11, 13, 1013]]","[""float32"", ""float32""]",{},"[[0, 0], [0, 0]]",20.62,12.68,M-float32-3M-质数非对齐-零值-5D | baseline_kernels: Maximum×1
 Maximum,17,"[[512, 2049], [512, 2049]]","[""bfloat16"", ""bfloat16""]",{},"[[-0.5, 0.5], [-0.5, 0.5]]",6.48,2.19,S-bfloat16-1M-非对齐-对称微小值域 | baseline_kernels: Maximum×1
-Maximum,18,"[[255, 8193], [255, 8193]]","[""float16"", ""float16""]",{},"[[-65504, 65504], [-1, 1]]",9.04,4.35,S-float16-2M-非对齐-float16边界值-Broadcast | baseline_kernels: Maximum×1
+Maximum,18,"[[255, 8193], [8193]]","[""float16"", ""float16""]",{},"[[-65504, 65504], [-1, 1]]",9.74,2.18,S-float16-2M-非对齐-float16边界值-跨rank-Broadcast-2D×1D | baseline_kernels: Maximum×1
 Maximum,19,"[[4097, 511], [1, 511]]","[""int64"", ""int64""]",{},"[[-32768, 32767], [-100, 100]]",101.92,2.18,S-int64-2M-非对齐-小整数范围-Broadcast | baseline_kernels: Maximum×1
 Maximum,20,"[[2, 3, 17, 1024, 101], [1, 1, 1, 1024, 1]]","[""float32"", ""float32""]",{},"[[-20, 40], [-10, 10]]",133.06,21.98,M-float32-10M-非对齐-非对称大值域-5D-Broadcast | baseline_kernels: Maximum×1

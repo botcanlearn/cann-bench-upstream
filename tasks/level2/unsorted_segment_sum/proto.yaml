@@ -28,6 +28,7 @@ operator:
     description: 输入数据张量
     dtype:
     - float16
+    - bfloat16
     - float32
     - int32
     - int64
@@ -41,6 +42,7 @@ operator:
     description: 输出张量，段求和结果
     dtype:
     - float16
+    - bfloat16
     - float32
     - int32
     - int64

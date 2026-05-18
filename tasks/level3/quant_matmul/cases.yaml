@@ -60,7 +60,7 @@ cases:
   - [4096]
   - [4096]
   dtype: [int8, int8, float32, float32]
-  attrs: {pertoken_scale: null, bias: null, output_dtype: float16}
+  attrs: {pertoken_scale: null, bias: null, output_dtype: int8}
   value_range:
   - [-128, 127]
   - [-128, 127]
@@ -68,7 +68,7 @@ cases:
   - [-0.1, 0.1]
   baseline_perf_us: null
   t_hw_us: 48.53
-  note: offset-param-fp16
+  note: offset-param-int8
 
 # offset + int32 bias
 - operator: QuantMatmul
@@ -81,7 +81,7 @@ cases:
   - null
   - [14336]
   dtype: [int8, int8, float32, float32, null, int32]
-  attrs: {pertoken_scale: null, output_dtype: float16}
+  attrs: {pertoken_scale: null, output_dtype: int8}
   value_range:
   - [-128, 127]
   - [-128, 127]
@@ -91,7 +91,7 @@ cases:
   - [-100, 100]
   baseline_perf_us: null
   t_hw_us: 169.86
-  note: offset+int32-bias-fp16
+  note: offset+int32-bias-int8
 
 # ========== 带 pertoken_scale ==========
 - operator: QuantMatmul
@@ -114,28 +114,28 @@ cases:
   t_hw_us: 130.43
   note: pertoken-scale-fp16
 
-# pertoken + offset + int32 bias
+# pertoken + int32 bias (offset incompatible with pertoken in fp16/bf16 输出)
 - operator: QuantMatmul
   case_id: 6
   input_shape:
   - [1024, 4096]
   - [4096, 14336]
   - [14336]
-  - [14336]
+  - null
   - [1024]
   - [14336]
-  dtype: [int8, int8, float32, float32, float32, int32]
+  dtype: [int8, int8, float32, null, float32, int32]
   attrs: {output_dtype: float16}
   value_range:
   - [-128, 127]
   - [-128, 127]
   - [0.001, 0.01]
-  - [-0.1, 0.1]
+  - null
   - [0.001, 0.01]
   - [-100, 100]
   baseline_perf_us: null
   t_hw_us: 169.86
-  note: full-combo-offset+pertoken+int32-bias-fp16
+  note: pertoken+int32-bias-fp16
 
 # ========== bfloat16 输出 ==========
 # 基础 bf16 输出
@@ -233,23 +233,25 @@ cases:
   t_hw_us: 12.13
   note: int32-output
 
-# ========== 不同 scale dtype ==========
-# int64 scale (需通过 npu_trans_quant_param 转换，golden 用 float32 等效)
+# ========== 不同 scale 数值范围 ==========
+# 用 fp32 scale + 较小数值范围(避免 fp16 溢出)
+# 注: 原 int64 scale 用例需 npu_trans_quant_param 预处理才能产生合法 packed
+# 数据,build_inputs 直接生成随机 int64 与 NPU 的 packed 语义不符,故改用 fp32
 - operator: QuantMatmul
   case_id: 12
   input_shape:
   - [1024, 4096]
   - [4096, 4096]
   - [4096]
-  dtype: [int8, int8, int64]
+  dtype: [int8, int8, float32]
   attrs: {offset: null, pertoken_scale: null, bias: null, output_dtype: float16}
   value_range:
   - [-128, 127]
   - [-128, 127]
-  - [1, 10000]
+  - [0.001, 0.01]
   baseline_perf_us: null
   t_hw_us: 48.53
-  note: int64-scale-fp16
+  note: fp32-scale-fp16
 
 # ========== 多维输入 ==========
 # 3D batched
