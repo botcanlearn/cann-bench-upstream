@@ -337,6 +337,8 @@ class AccuracyEvaluator:
             return self.evaluate(custom_out.cpu(), golden_out.cpu(), dtype, trial, cpu_output=cpu_out)
 
         except Exception as e:
+            # 错误信息保留完整长度——check_output_type 抛出的 RuntimeError 信息
+            # 较长（含类型名+期望类型+实际类型），200 字符常会截掉关键信息。
             return AccuracyResult(
                 passed=False,
                 dtype=dtype,
@@ -344,7 +346,7 @@ class AccuracyEvaluator:
                 mere=0,
                 mare=0,
                 trial=trial,
-                error_msg=str(e)[:200]
+                error_msg=f"{type(e).__name__}: {e}",
             )
 
     def evaluate_batch(

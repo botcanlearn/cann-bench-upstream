@@ -374,8 +374,10 @@ class PerfEvaluator:
         try:
             for _ in range(warmup):
                 fn()
-        except Exception:
-            pass  # warmup errors don't invalidate measurement
+        except Exception as warmup_err:
+            # warmup 失败本身不让评测中断，但必须可见——否则 measurement 阶段
+            # 若侥幸不挂会得到误导性的性能数据。
+            print(f"[WARN] perf_eval warmup 异常被忽略: {type(warmup_err).__name__}: {warmup_err}")
 
         times = []
         for _ in range(repeat):
@@ -506,8 +508,11 @@ class PerfEvaluator:
                         step_kernel_times[step_id][name] = []
                     step_kernel_times[step_id][name].append(duration)
 
-        except Exception:
-            pass
+        except Exception as parse_err:
+            # CSV 文件为空、列缺失、编码错误等都会进到这里。
+            # 静默吞掉会让外层得到 elapsed_us=0 且无任何提示——必须可见。
+            print(f"[WARN] kernel_details.csv 解析失败 ({csv_file}): "
+                  f"{type(parse_err).__name__}: {parse_err}")
 
         if not step_kernel_times:
             return {}, 0.0

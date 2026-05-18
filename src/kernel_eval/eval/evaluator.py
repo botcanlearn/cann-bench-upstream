@@ -192,19 +192,20 @@ class Evaluator:
             if actual_ai_func is None:
                 try:
                     actual_ai_func = self.operator_matcher.load_ai_operator(case.operator)
-                except Exception:
+                except Exception as load_err:
+                    # 与下方"AI 算子执行失败"分支保持一致：success=False，
+                    # 不设置 accuracy_result（无精度对比可言）。该用例对
+                    # function/performance 两轴的贡献都是 0——即 0 分。
+                    # 正常路径上 matched_operators 已经做了 overlap 过滤，
+                    # 进到 except 多半是 wheel 损坏/动态加载竞态等异常情况。
                     return EvalCaseResult(
                         case_id=case_id_str,
                         rel_path=case.rel_path,
                         operator=case.operator,
                         case_num=case.case_id,
-                        success=True,
+                        success=False,
                         golden_run_result=golden_result,
-                        accuracy_result=AccuracyResult(
-                            passed=True,
-                            dtype=case.dtypes[0] if case.dtypes else 'float32',
-                            threshold=0, mere=0, mare=0,
-                        ),
+                        error_msg=f"AI算子加载失败: {load_err}",
                         baseline_perf_us=case.baseline_perf_us,
                         t_hw_us=case.t_hw_us,
                     )
@@ -555,8 +556,10 @@ class Evaluator:
                 if op_info and op_info.outputs and op_info.outputs[0].dtype:
                     output_dtype_list = op_info.outputs[0].dtype
                     dtype = output_dtype_list[0] if isinstance(output_dtype_list, list) else output_dtype_list
-            except Exception:
-                pass
+            except Exception as e:
+                # 静默吞掉会让 proto.yaml 缺失/损坏的算子退回到 case.dtypes[0]，
+                # 可能选错精度阈值。至少记录可见的告警。
+                print(f"[WARN] _determine_dtype: 读取 {case.rel_path} 算子定义失败({type(e).__name__}: {e})，回退到 case.dtypes")
 
         return dtype or (case.dtypes[0] if case.dtypes else 'float32')
 

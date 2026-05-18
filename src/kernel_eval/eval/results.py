@@ -98,23 +98,19 @@ class EvalCaseResult:
         return 0.0
 
     def get_perf_score(self) -> Optional[float]:
-        """单用例 hardware-anchored 性能得分（bench.tex Eq. 3）
+        """单用例 hardware-anchored 性能得分（bench.tex Eq. 3）。
 
-        score = (T_baseline - T_HW) / ((T_cand - T_HW) + (T_baseline - T_HW))
-
-        缺失 baseline / t_hw / 实测时间时返回 None，由调用方决定该用例如何处理。
+        薄封装：实际公式与边界处理见 scoring.per_case_sol_score——单一事实来源。
         """
         if not self.perf_result or self.perf_result.elapsed_us <= 0:
             return None
-        if self.baseline_perf_us <= 0 or self.t_hw_us <= 0:
-            return None
-        t_cand = float(self.perf_result.elapsed_us)
-        t_base = float(self.baseline_perf_us)
-        t_hw = float(self.t_hw_us)
-        denom = (t_cand - t_hw) + (t_base - t_hw)
-        if denom <= 0:
-            return None
-        return (t_base - t_hw) / denom
+        # 局部 import 避免 evaluator/results <-> scoring 循环依赖。
+        from ..report.scoring import per_case_sol_score
+        return per_case_sol_score(
+            float(self.baseline_perf_us),
+            float(self.perf_result.elapsed_us),
+            float(self.t_hw_us),
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -160,6 +156,17 @@ class EvalCaseResult:
                 mere=accuracy_data.get('mere', 0.0),
                 max_diff=accuracy_data.get('max_diff', 0.0),
                 mean_diff=accuracy_data.get('mean_diff', 0.0),
+                mismatch_count=accuracy_data.get('mismatch_count', 0),
+                total_count=accuracy_data.get('total_count', 0),
+                mismatch_ratio=accuracy_data.get('mismatch_ratio', 0.0),
+                trial=accuracy_data.get('trial', 1),
+                small_value_error_count=accuracy_data.get('small_value_error_count', 0),
+                small_value_cpu_error_count=accuracy_data.get('small_value_cpu_error_count', 0),
+                small_value_total_count=accuracy_data.get('small_value_total_count', 0),
+                cancel_error_count=accuracy_data.get('cancel_error_count', 0),
+                cancel_cpu_error_count=accuracy_data.get('cancel_cpu_error_count', 0),
+                cancel_total_count=accuracy_data.get('cancel_total_count', 0),
+                error_msg=accuracy_data.get('error_msg'),
             )
 
         return cls(

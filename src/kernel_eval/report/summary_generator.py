@@ -32,6 +32,7 @@ from .scoring import (
     WEIGHT_COMPILATION,
     WEIGHT_FUNCTION,
     WEIGHT_PERFORMANCE,
+    aggregate_eq4,
     per_case_sol_score,
 )
 
@@ -100,48 +101,47 @@ def calculate_geometric_mean(values: List[float]) -> float:
 
 
 def _composite_score_from_dict(op_result: Dict[str, Any]) -> Dict[str, float]:
-    """从 op_result 字典直接计算 bench.tex Eq. 4 的三轴得分与综合得分。
+    """从 op_result 字典计算 Eq.4 三轴得分与综合得分。
 
-    权重与单用例公式从 scoring 模块导入，确保单一事实来源。
+    本函数仅负责把 dict 解析成 (success, score_i) 元组列表，实际 Eq.4 聚合
+    委托给 scoring.aggregate_eq4——单一事实来源。
+
     支持两种 JSON 形状：
-      - EvalCaseResult.to_dict 形状：perf={'elapsed_us', 'perf_score', ...}（嵌套）
-      - EvalResult.to_dict 形状：elapsed_us / perf_score 直接放在 case 顶层
+      - EvalCaseResult.to_dict（嵌套）：perf={'elapsed_us', 'perf_score', ...}
+      - EvalResult.to_dict（扁平）：elapsed_us / perf_score 在 case 顶层
     """
-    w_c, w_f, w_p = WEIGHT_COMPILATION, WEIGHT_FUNCTION, WEIGHT_PERFORMANCE
     compile_passed = op_result.get("compile_passed",
                                    op_result.get("compilation_error") is None)
-    delta_pass = 1 if compile_passed else 0
     # 同时识别两种 case 列表字段名：results (EvalOperatorResult) / cases (OperatorReport)
     cases = op_result.get("results") or op_result.get("cases") or []
-    total_cases = max(op_result.get("total_cases", len(cases)), 1)
+    total_cases = max(op_result.get("total_cases", 0), len(cases), 1)
 
-    n_func_pass = 0
-    perf_score_sum = 0.0
-    if compile_passed:
-        for case in cases:
-            success = case.get("success", case.get("status") == "success")
-            if not success:
-                continue
-            n_func_pass += 1
-            perf = case.get("perf") or {}
-            score_i = perf.get("perf_score", case.get("perf_score"))
-            if score_i is None:
-                t_cand = perf.get("elapsed_us") or case.get("elapsed_us") or 0
-                t_base = case.get("baseline_perf_us") or 0
-                t_hw = case.get("t_hw_us") or 0
-                score_i = per_case_sol_score(t_base, t_cand, t_hw)
-            perf_score_sum += score_i if score_i is not None else 0.0
+    case_scores: List = []
+    for case in cases:
+        success = case.get("success", case.get("status") == "success")
+        if not success:
+            case_scores.append((False, None))
+            continue
+        perf = case.get("perf") or {}
+        score_i = perf.get("perf_score", case.get("perf_score"))
+        if score_i is None:
+            t_cand = perf.get("elapsed_us") or case.get("elapsed_us") or 0
+            t_base = case.get("baseline_perf_us") or 0
+            t_hw = case.get("t_hw_us") or 0
+            score_i = per_case_sol_score(t_base, t_cand, t_hw)
+        case_scores.append((True, score_i))
 
-    compilation_score = w_c * delta_pass * 100.0
-    function_score = (n_func_pass * w_f / total_cases) * 100.0
-    performance_score = (perf_score_sum * w_p / total_cases) * 100.0
-    composite = compilation_score + function_score + performance_score
+    agg = aggregate_eq4(
+        compile_passed=compile_passed,
+        total_cases=total_cases,
+        case_scores=case_scores,
+    )
     return {
         "compile_passed": compile_passed,
-        "compilation_score": compilation_score,
-        "function_score": function_score,
-        "performance_score": performance_score,
-        "composite_score": composite,
+        "compilation_score": agg["compilation_score"],
+        "function_score": agg["function_score"],
+        "performance_score": agg["performance_score"],
+        "composite_score": agg["total_score"],
     }
 
 
@@ -157,22 +157,36 @@ def calculate_operator_summary(op_result: Dict[str, Any]) -> OperatorSummary:
     """
     operator = op_result.get("operator", "")
     rel_path = op_result.get("rel_path", "")
-    total_cases = op_result.get("total_cases", 0)
+    cases = op_result.get("results") or op_result.get("cases") or []
+    total_cases = op_result.get("total_cases", len(cases))
     passed_cases = op_result.get("passed_cases", 0)
-    failed_cases = total_cases - passed_cases
+    # 优先使用上游统计字段（与 results.py summarize_case_results 口径一致），
+    # 缺失时再退化为 total - passed（仅当 skipped/failed 字段都不可用时）。
+    failed_cases = op_result.get("failed_cases")
+    if failed_cases is None:
+        failed_cases = max(total_cases - passed_cases, 0)
     pass_rate = passed_cases / total_cases if total_cases > 0 else 0.0
 
-    # 计算几何平均加速比
+    # 计算几何平均加速比 / MERE / MARE。
+    # case 形状有两种：
+    #   - EvalCaseResult.to_dict()：嵌套，perf.speedup / accuracy.mere / accuracy.mare
+    #   - EvalResult.to_dict()（OperatorReport.cases）：扁平，顶层 speedup / accuracy.{mere,mare}
+    # 两种形状都需要兼容。
     speedups = []
     meres = []
     mares = []
-    for case in op_result.get("results", []):
-        if case.get("speedup") and case["speedup"] > 0:
-            speedups.append(case["speedup"])
-        if case.get("mere"):
-            meres.append(case["mere"])
-        if case.get("mare"):
-            mares.append(case["mare"])
+    for case in cases:
+        perf = case.get("perf") or {}
+        speedup = perf.get("speedup", case.get("speedup"))
+        if speedup and speedup > 0:
+            speedups.append(speedup)
+        accuracy = case.get("accuracy") or {}
+        mere = accuracy.get("mere", case.get("mere"))
+        if mere:
+            meres.append(mere)
+        mare = accuracy.get("mare", case.get("mare"))
+        if mare:
+            mares.append(mare)
 
     geometric_mean_speedup = calculate_geometric_mean(speedups)
     mere_avg = sum(meres) / len(meres) if meres else 0.0
@@ -336,21 +350,30 @@ def render_summary_markdown(summary: EvaluationSummary) -> str:
             lines.append(f"- **{op.operator}** ({op.rel_path}): {op.subprocess_failure_reason}")
         lines.append("")
 
-    # 结论
-    if summary.overall_pass_rate >= 0.9:
-        lines.append("## 结论")
-        lines.append("")
-        lines.append(f"评测通过率高（{summary.overall_pass_rate:.2%}），算子质量良好。")
-        if summary.overall_geometric_mean_speedup > 1.0:
-            lines.append(f"性能加速比 {summary.overall_geometric_mean_speedup:.3f}x，有性能优化空间。")
+    # 结论：综合考量通过率与综合得分（pass_rate 高但性能 0 不应被评为"良好"）。
+    # 每算子满分=100，故 avg_composite >= 70 视为整体性能也达标。
+    avg_composite = (
+        summary.benchmark_total_score / summary.total_operators
+        if summary.total_operators > 0 else 0.0
+    )
+    lines.append("## 结论")
+    lines.append("")
+    lines.append(
+        f"- 通过率：{summary.overall_pass_rate:.2%}"
+        f"  |  平均综合得分：{avg_composite:.2f}/100"
+        f"  |  几何平均加速比：{summary.overall_geometric_mean_speedup:.3f}x"
+    )
+    if summary.overall_pass_rate >= 0.9 and avg_composite >= 70:
+        lines.append("评测整体表现良好：通过率高且综合得分达标。")
+    elif summary.overall_pass_rate >= 0.9 and avg_composite < 70:
+        lines.append(
+            f"通过率高但综合得分偏低（{avg_composite:.2f}/100）——"
+            "多数算子精度通过但性能/编译扣分严重，建议排查性能数据。"
+        )
     elif summary.overall_pass_rate >= 0.7:
-        lines.append("## 结论")
-        lines.append("")
-        lines.append(f"评测通过率中等（{summary.overall_pass_rate:.2%}），需要改进部分用例。")
+        lines.append("评测中等：建议改进未通过的用例并复核性能采集。")
     else:
-        lines.append("## 结论")
-        lines.append("")
-        lines.append(f"评测通过率较低（{summary.overall_pass_rate:.2%}），需要重点排查精度问题。")
+        lines.append("评测不达标：通过率偏低，需重点排查精度问题。")
 
     return "\n".join(lines)
 

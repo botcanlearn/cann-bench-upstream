@@ -28,6 +28,7 @@ Timing API防护模块
 """
 
 import os
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -36,6 +37,10 @@ _CRITICAL_API_ENTRIES: List[Tuple[str, Any, str]] = []
 
 # 快照存储
 _API_SNAPSHOT: Dict[str, Tuple[Any, str, Any]] = {}
+
+# 模块级状态读写互斥锁——snapshot / verify / restore 都会改写
+# _API_SNAPSHOT，多线程评测路径下需要互斥防止读到半截的状态。
+_API_SNAPSHOT_LOCK = threading.Lock()
 
 
 def _init_critical_apis():
@@ -75,14 +80,15 @@ def snapshot_timing_apis() -> None:
 
     _init_critical_apis()
 
-    _API_SNAPSHOT = {}
-    for name, parent, attr in _CRITICAL_API_ENTRIES:
-        try:
-            original = getattr(parent, attr)
-            _API_SNAPSHOT[name] = (parent, attr, original)
-        except AttributeError:
-            # API不存在时跳过
-            pass
+    with _API_SNAPSHOT_LOCK:
+        _API_SNAPSHOT = {}
+        for name, parent, attr in _CRITICAL_API_ENTRIES:
+            try:
+                original = getattr(parent, attr)
+                _API_SNAPSHOT[name] = (parent, attr, original)
+            except AttributeError:
+                # API不存在时跳过
+                pass
 
 
 def verify_timing_apis() -> List[str]:
@@ -94,7 +100,10 @@ def verify_timing_apis() -> List[str]:
     """
     changed = []
 
-    for name, (parent, attr, original) in _API_SNAPSHOT.items():
+    with _API_SNAPSHOT_LOCK:
+        snapshot_items = list(_API_SNAPSHOT.items())
+
+    for name, (parent, attr, original) in snapshot_items:
         try:
             current = getattr(parent, attr)
             if current is not original:
@@ -116,7 +125,10 @@ def restore_timing_apis() -> None:
 
     在程序退出前调用，确保torch_npu的atexit钩子使用原始API
     """
-    for name, (parent, attr, original) in _API_SNAPSHOT.items():
+    with _API_SNAPSHOT_LOCK:
+        snapshot_items = list(_API_SNAPSHOT.items())
+
+    for name, (parent, attr, original) in snapshot_items:
         try:
             setattr(parent, attr, original)
         except Exception:

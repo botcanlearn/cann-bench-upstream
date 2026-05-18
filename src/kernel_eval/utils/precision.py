@@ -33,6 +33,7 @@
 """
 
 import math
+import traceback
 from typing import Union, Tuple, Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
@@ -493,11 +494,13 @@ def compare_tensors(
         )
 
     except Exception as e:
+        # 顶层 except 会吞掉所有内部逻辑（in-place mutation、shape 比较、
+        # MERE/MARE 计算等）的 traceback。把堆栈附在 error_msg 末尾，方便排查。
         return CompareResult(
             passed=False,
             dtype=dtype,
             threshold=threshold,
-            error_msg=str(e)
+            error_msg=f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
         )
 
 
@@ -561,6 +564,58 @@ def _compare_single_tensor(
             threshold=threshold,
             error_msg=f"形状不匹配: output={output.shape}, golden={golden.shape}"
         )
+
+    # Bit-exact 浮点路径: 当 threshold == 0 且为浮点 dtype 时, 通过 .view(int dtype)
+    # 做字节级比较, 这样 +0.0 / -0.0 不会被 IEEE 754 相等性当作同值放过, NaN payload
+    # 也按字节区分。整数 dtype 已经天然字节唯一, 走下方 torch.equal 路径即可。
+    if threshold == 0 and output.is_floating_point():
+        _BIT_VIEW = {
+            torch.float16: torch.int16,
+            torch.bfloat16: torch.int16,
+            torch.float32: torch.int32,
+            torch.float64: torch.int64,
+        }
+        int_dtype = _BIT_VIEW.get(output.dtype)
+        if int_dtype is not None:
+            golden_cast = golden.to(output.dtype).contiguous()
+            output_c = output.contiguous()
+            out_bits = output_c.view(int_dtype)
+            gold_bits = golden_cast.view(int_dtype)
+            if torch.equal(out_bits, gold_bits):
+                return CompareResult(
+                    passed=True,
+                    dtype=dtype,
+                    threshold=threshold,
+                    mere=0.0,
+                    mare=0.0,
+                    max_diff=0.0,
+                    mean_diff=0.0,
+                    mismatch_count=0,
+                    total_count=output.numel(),
+                    mismatch_ratio=0.0,
+                    cancel_error_count=0,
+                    cancel_cpu_error_count=0,
+                    cancel_total_count=0,
+                )
+            mismatch_mask = out_bits != gold_bits
+            mismatch_count = int(mismatch_mask.sum())
+            return CompareResult(
+                passed=False,
+                dtype=dtype,
+                threshold=threshold,
+                mere=0.0,
+                mare=0.0,
+                max_diff=0.0,
+                mean_diff=0.0,
+                mismatch_count=mismatch_count,
+                total_count=output.numel(),
+                mismatch_ratio=mismatch_count / output.numel() if output.numel() > 0 else 0.0,
+                cancel_error_count=0,
+                cancel_cpu_error_count=0,
+                cancel_total_count=0,
+                error_msg=f"bit-exact 比较失败: {mismatch_count}/{output.numel()} 个元素字节不等 (包括 ±0.0、NaN payload、Inf 符号等差异)",
+            )
+        # 不支持 view 的浮点类型 (例如 fp8) 继续走下方 MERE/MARE 路径
 
     # 对于整数类型，使用绝对差值容差比较
     if output.dtype in (torch.int8, torch.int16, torch.int32, torch.int64,
@@ -779,7 +834,7 @@ def _compare_single_tensor(
     small_value_mask[~valid_mask] = False  # 排除NaN/Inf
     small_value_total_count = int(small_value_mask.sum())
 
-    # 小值域 NPU 错误计数: |golden| < threshold 且 |output - golden| > error
+    # 小值域 NPU 错误计数: |golden| < small_value_threshold 且 |output - golden| > small_value_error
     small_value_npu_error_mask = small_value_mask & (diff > small_value_error)
     small_value_error_count = int(small_value_npu_error_mask.sum())
 

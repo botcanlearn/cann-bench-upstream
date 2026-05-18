@@ -128,8 +128,9 @@ def create_parser() -> argparse.ArgumentParser:
     # config 命令
     config_parser = subparsers.add_parser('config', help='配置管理')
     config_parser.add_argument('--show', action='store_true', help='显示当前配置')
-    config_parser.add_argument('--kernel-bench-root', type=str, default=None,
-                               help='设置tasks 数据目录')
+    config_parser.add_argument('--tasks-root', '--kernel-bench-root', dest='tasks_root',
+                               type=str, default=None,
+                               help='设置 tasks 数据目录（--kernel-bench-root 为向后兼容别名）')
     config_parser.add_argument('--reports-dir', type=str, default=None,
                                help='设置报告输出目录')
 
@@ -590,8 +591,13 @@ def cmd_eval_process(args):
                 try:
                     op_info = op_loader.get_operator(rel_path)
                     operator_name = op_info.name
-                except Exception:
+                except Exception as e:
+                    # 兜底从目录名取算子名：目录名是 snake_case，proto.yaml 中的 name 是 PascalCase，
+                    # 报告中会出现命名不一致。打印告警提示 proto.yaml 缺失/损坏。
                     operator_name = Path(rel_path).name
+                    print(f"[WARN] OperatorLoader.get_operator({rel_path}) 失败 "
+                          f"({type(e).__name__}: {e})，回退到目录名 '{operator_name}'。"
+                          f"该算子在报告中将使用 snake_case 命名，与 proto.yaml 不一致。")
 
                 # 加载该算子的用例并评测
                 case_loader = CaseLoader(config.tasks_root)

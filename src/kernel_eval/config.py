@@ -26,6 +26,15 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+def _default_precision_thresholds() -> dict:
+    """返回 utils.precision.PRECISION_THRESHOLDS 的浅拷贝。
+
+    在函数体内延迟 import 是为了打破 utils <-> config 的潜在循环依赖。
+    """
+    from .utils.precision import PRECISION_THRESHOLDS
+    return dict(PRECISION_THRESHOLDS)
+
+
 @dataclass
 class Config:
     """评测工程配置"""
@@ -59,22 +68,10 @@ class Config:
     # 通过条件: MERE < threshold, MARE < 10 * threshold
     # MERE = avg(|actual - golden| / (|golden| + 1e-7))
     # MARE = max(|actual - golden| / (|golden| + 1e-7))
-    precision_thresholds: dict = field(default_factory=lambda: {
-        'float16': 2**-10,      # ≈ 0.000976
-        'bfloat16': 2**-7,      # ≈ 0.007812
-        'float32': 2**-13,      # ≈ 0.000122
-        'hifloat32': 2**-11,    # ≈ 0.000488
-        'float8_e4m3': 2**-3,   # ≈ 0.125
-        'float8_e5m2': 2**-2,   # ≈ 0.25
-        'int8': 0,              # 完全相等
-        'int16': 0,
-        'int32': 0,
-        'int64': 0,
-        'uint8': 0,
-        'uint16': 0,
-        'uint32': 0,
-        'uint64': 0,
-    })
+    # 单一事实来源：utils.precision.PRECISION_THRESHOLDS。本字段持有它的拷贝，
+    # 允许 caller 在不污染模块级常量的前提下自定义阈值（例如 op_info.precision_thresholds
+    # 通过 dict.update 覆盖单 dtype）。
+    precision_thresholds: dict = field(default_factory=lambda: _default_precision_thresholds())
 
     def __post_init__(self):
         """初始化后自动设置默认路径"""

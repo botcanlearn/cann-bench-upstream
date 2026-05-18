@@ -69,7 +69,8 @@ class OperatorMatcher:
                         func = getattr(torch.ops.cann_bench, name)
                         self._ai_op_cache[cache_key] = func
                         return func
-        except Exception:
+        except (AttributeError, ImportError):
+            # 仅吞掉"模块未安装"或"属性不存在"——其它异常应继续向外冒泡。
             pass
 
         # 2. 再尝试 cann_bench 模块（submission whl）
