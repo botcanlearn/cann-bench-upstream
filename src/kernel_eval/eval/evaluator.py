@@ -28,6 +28,7 @@
 """
 
 import os
+import sys
 import traceback
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Any
@@ -271,6 +272,19 @@ class Evaluator:
                 ignore_output_indices=ignore_output_indices,
             )
 
+            # 防作弊二次验证：用新鲜输入再跑一遍 golden + AI，两次都过才算 pass
+            # 只在 config.enable_accuracy_retry=True 且第一次已通过时触发，避免开销
+            if accuracy_result.passed and getattr(self.config, 'enable_accuracy_retry', False):
+                accuracy_result = self._retry_with_fresh_inputs(
+                    case=case,
+                    golden_func=golden_func,
+                    ai_op_func=ai_op_func,
+                    dtype=dtype,
+                    merged_thresholds=merged_thresholds,
+                    ignore_output_indices=ignore_output_indices,
+                    first_result=accuracy_result,
+                )
+
             # 填充 output_results 中的输出名称
             if hasattr(accuracy_result, 'output_results') and output_names:
                 for i, sr in enumerate(accuracy_result.output_results):
@@ -439,6 +453,18 @@ class Evaluator:
         for snake_op_name, err in (package_info.compile_errors or {}).items():
             op_info = self.operator_matcher.find_operator_info_by_snake(snake_op_name)
             if op_info is None:
+                # F006: 编译失败的 snake_name 在 OperatorMatcher 找不到对应 OperatorInfo
+                # 时旧代码静默 continue，导致这条编译失败不出现在最终报告，看起来
+                # 像"没编译就没编译" 实际是失踪。加 WARN log 让运维 / Agent 能注意到。
+                # 可能原因：tasks/ 目录有新算子但 spec 未注册 / 命名约定不一致
+                # （新 op 用 PascalCase 但 build 输出 snake_case 的 .so 时未 lookup）。
+                print(
+                    f"[WARN] evaluator: 编译失败算子 {snake_op_name!r} 未在 OperatorMatcher 中找到 "
+                    f"对应 OperatorInfo，已跳过合成失败结果——该算子不会出现在最终报告中。"
+                    f"请核查 tasks/<level>/<op>/proto.yaml 是否已注册。",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 continue
             if operator_filter and op_info.name not in operator_filter:
                 continue
@@ -598,6 +624,69 @@ class Evaluator:
                 if not output.compare:
                     ignore_indices.append(idx)
         return ignore_indices
+
+    def _retry_with_fresh_inputs(self, case, golden_func, ai_op_func, dtype,
+                                  merged_thresholds, ignore_output_indices,
+                                  first_result):
+        """防作弊二次验证：用一组新鲜（微扰过的）输入再跑一遍 golden + AI，
+        两次都过才记为 pass；任何一次失败把 first_result 替换成失败 result。
+
+        启用条件：Config.enable_accuracy_retry=True 且第一轮已通过。
+        参考 AccuracyEvaluator.evaluate_with_retry 的设计思路。
+        """
+        try:
+            import torch
+
+            # 生成新鲜输入（DataGenerator 每次调用 seed 不同）
+            fresh_inputs = self.data_generator.generate_input_tensors_from_case(
+                input_shapes=case.input_shapes,
+                dtypes=case.dtypes,
+                value_ranges=case.value_ranges,
+            )
+
+            # 微扰：浮点输入加 0.01，防止 seed 偶然重合导致两次 inputs 相同
+            for item in fresh_inputs:
+                if isinstance(item, torch.Tensor) and item.is_floating_point():
+                    item.add_(0.01)
+                    break
+                elif isinstance(item, (list, tuple)):
+                    for sub in item:
+                        if isinstance(sub, torch.Tensor) and sub.is_floating_point():
+                            sub.add_(0.01)
+                            break
+                    break
+
+            # 重建 params + 跑 golden + 跑 AI
+            case_id_str = case.get_case_id_str()
+            params = self.param_builder.build_call_params(golden_func, case, fresh_inputs)
+            golden_result2 = self.op_runner.run_golden(golden_func, params, case_id_str, fresh_inputs)
+            if not golden_result2.success:
+                return first_result   # golden 自己挂了，第二轮无意义，保持第一轮结果
+
+            ai_result2 = self.op_runner.run_ai_operator(
+                ai_op_func, params, case_id_str, fresh_inputs,
+                enable_profiler=False,   # 二次验证不需要 perf 数据
+            )
+            if not ai_result2.success:
+                from .results import AccuracyResult
+                return AccuracyResult(
+                    passed=False, dtype=dtype, threshold=first_result.threshold,
+                    mere=0.0, mare=0.0, max_diff=0.0,
+                    error_msg=f"二次验证失败：AI 算子崩溃 ({ai_result2.error_msg})",
+                )
+
+            return self.accuracy_evaluator.evaluate(
+                ai_output=ai_result2.outputs,
+                golden_output=golden_result2.outputs,
+                dtype=dtype,
+                custom_thresholds=merged_thresholds,
+                cpu_output=None,
+                ignore_output_indices=ignore_output_indices,
+            )
+        except Exception as e:
+            # 二次验证基础设施异常不应整体阻断评测；记 warn 并返回第一轮
+            print(f"[WARN] enable_accuracy_retry 二次验证基础设施异常 ({case.rel_path}): {e}", flush=True)
+            return first_result
 
     def _cleanup_memory(self):
         """清理 NPU cache（不触发完整 GC，引用计数足以处理大多数情况）

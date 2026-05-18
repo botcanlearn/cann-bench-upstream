@@ -76,6 +76,11 @@ class EvaluationSummary:
     # bench.tex Eq. 5: Σ EachOperatorScore (跨算子求和) 与各 Level 的小计
     benchmark_total_score: float = 0.0
     level_scores: Dict[str, float] = None  # type: ignore[assignment]
+    # F023: 归一化总分——每算子满分 100，total / num_operators 跨算子集可比。
+    # Σ 总分会随算子数线性膨胀，跨 benchmark 版本/不同 Level 子集不可比；
+    # 平均分作为额外维度让"系统变好" vs "系统变大"能被区分。
+    benchmark_avg_score: float = 0.0
+    level_avg_scores: Dict[str, float] = None  # type: ignore[assignment]
 
 
 def calculate_geometric_mean(values: List[float]) -> float:
@@ -251,10 +256,21 @@ def generate_summary(
     # bench.tex Eq. 5: benchmark / level 总分 = Σ EachOperatorScore
     benchmark_total_score = sum(op.composite_score for op in operators)
     level_scores: Dict[str, float] = {}
+    level_op_count: Dict[str, int] = {}
     for op in operators:
         # 取 rel_path 第一段作为 level 标签 (e.g. "level1/exp" -> "level1")
         level_key = op.rel_path.split('/', 1)[0] if op.rel_path else "unknown"
         level_scores[level_key] = level_scores.get(level_key, 0.0) + op.composite_score
+        level_op_count[level_key] = level_op_count.get(level_key, 0) + 1
+
+    # F023: 归一化分——按算子数除回到 [0, 100] 量纲，让跨算子集可比
+    benchmark_avg_score = (
+        benchmark_total_score / total_operators if total_operators > 0 else 0.0
+    )
+    level_avg_scores: Dict[str, float] = {
+        lvl: (level_scores[lvl] / level_op_count[lvl]) if level_op_count[lvl] > 0 else 0.0
+        for lvl in level_scores
+    }
 
     return EvaluationSummary(
         eval_code=eval_code,
@@ -268,6 +284,8 @@ def generate_summary(
         timestamp=timestamp,
         benchmark_total_score=benchmark_total_score,
         level_scores=level_scores,
+        benchmark_avg_score=benchmark_avg_score,
+        level_avg_scores=level_avg_scores,
     )
 
 
@@ -299,10 +317,13 @@ def render_summary_markdown(summary: EvaluationSummary) -> str:
     lines.append(f"- **通过用例**: {summary.total_passed}")
     lines.append(f"- **通过率**: {summary.overall_pass_rate:.2%}")
     lines.append(f"- **几何平均加速比 (诊断)**: {summary.overall_geometric_mean_speedup:.3f}x")
-    lines.append(f"- **Benchmark 总分** (Σ EachOperatorScore): {summary.benchmark_total_score:.2f}")
+    lines.append(f"- **Benchmark 总分** (Σ EachOperatorScore，随算子数线性膨胀): {summary.benchmark_total_score:.2f}")
+    lines.append(f"- **Benchmark 归一化分** (avg，每算子满分 100，跨算子集可比): {summary.benchmark_avg_score:.2f} / 100")
     if summary.level_scores:
         for level in sorted(summary.level_scores.keys()):
-            lines.append(f"  - {level}: {summary.level_scores[level]:.2f}")
+            total = summary.level_scores[level]
+            avg = summary.level_avg_scores.get(level, 0.0) if summary.level_avg_scores else 0.0
+            lines.append(f"  - {level}: total={total:.2f}, avg={avg:.2f}/100")
     lines.append("")
 
     # 各算子结果

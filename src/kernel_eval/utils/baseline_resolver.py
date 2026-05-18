@@ -31,15 +31,30 @@ cases.yaml格式：
       910a: 50.0
 
 参考evaluation/evaluate.py中的resolve_baseline_us函数
+
+硬件配置：
+    DEFAULT_HARDWARE 从环境变量 `CANN_BENCH_HARDWARE` 读取，未设置时 fallback 到 "910b2"。
+    非默认硬件 + scalar baseline 组合下旧实现会 silent 返回 0.0（F170）；现改为同时
+    log WARNING（每个 hardware first-seen 一次），让调用方能观察到 silent failure，
+    而 API contract 保持向后兼容（仍返回 float）。
 """
 
+import logging
 import math
-from typing import Any, Dict, Optional, Union
+import os
+from typing import Any, Dict, Optional, Set, Union
 from dataclasses import dataclass
 
 
-# 默认硬件
-DEFAULT_HARDWARE = "910b2"
+# 默认硬件——支持环境变量覆盖以避免硬编码 (F170)。
+# 未设置时 fallback 到 "910b2"，与历史行为一致。
+DEFAULT_HARDWARE: str = os.environ.get("CANN_BENCH_HARDWARE", "910b2")
+
+
+# 已 warn 过的 hardware 集合，避免 per-case 重复 spam
+_WARNED_HARDWARES: Set[str] = set()
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,6 +64,31 @@ class BaselineInfo:
     measured_us: float   # 实测的baseline
     used_us: float       # 实际使用的baseline
     source: str          # baseline来源: "yaml" / "measured"
+
+
+def has_baseline_for(case_raw: Dict[str, Any], hardware: str = DEFAULT_HARDWARE) -> bool:
+    """
+    判断指定硬件是否有可用 baseline。
+
+    `resolve_baseline_us` 在缺失情形返回 0.0 维持向后兼容，但 0.0 也是合法值，
+    无法仅从返回值反推。需要区分"缺失"和"=0"时使用此函数（如评分系统决定是否
+    走 sol-based fallback）。
+
+    Args:
+        case_raw: 用例原始数据
+        hardware: 目标硬件名称
+
+    Returns:
+        True 表示该硬件有 baseline，False 表示需要走 fallback。
+    """
+    bp = case_raw.get("baseline_perf_us")
+    if bp is None or bp == "None":
+        return False
+    if isinstance(bp, dict):
+        v = bp.get(hardware)
+        return v is not None and v != "None"
+    # scalar 仅匹配默认硬件
+    return hardware == DEFAULT_HARDWARE
 
 
 def resolve_baseline_us(
@@ -63,7 +103,11 @@ def resolve_baseline_us(
         hardware: 目标硬件名称
 
     Returns:
-        baseline时间（微秒），无baseline返回0
+        baseline时间（微秒），无baseline返回0.0（向后兼容；区分"缺失"和"=0"
+        请用 has_baseline_for）
+
+    F170: 非默认硬件 + scalar baseline 组合会返回 0.0，且 once-per-hardware
+    log WARNING，提示评测在该硬件下走的是 fallback 路径。
     """
     bp = case_raw.get("baseline_perf_us", 0)
 
@@ -82,6 +126,17 @@ def resolve_baseline_us(
 
     # Scalar形式：仅对默认硬件有效
     if hardware != DEFAULT_HARDWARE:
+        # F170: 不再 silent return 0.0；log 一次让调用方/运维察觉。
+        # 同一 hardware 只 warn 一次，避免 per-case spam。
+        if hardware not in _WARNED_HARDWARES:
+            _WARNED_HARDWARES.add(hardware)
+            _logger.warning(
+                "baseline_resolver: hardware=%r != DEFAULT_HARDWARE=%r, "
+                "scalar baseline 仅对默认硬件有效，将返回 0.0。请将 cases.yaml 的 "
+                "baseline_perf_us 改为 dict 形式（如 {%s: <us>, %s: <us>}），"
+                "或设置环境变量 CANN_BENCH_HARDWARE=%s。",
+                hardware, DEFAULT_HARDWARE, DEFAULT_HARDWARE, hardware, hardware,
+            )
         return 0.0
 
     try:

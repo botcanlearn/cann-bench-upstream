@@ -267,6 +267,84 @@ class TestCompareTensors:
         assert result.passed is True
 
 
+class TestBitExactFloat:
+    """threshold=0 触发的浮点 bit-exact 路径（覆盖 ±0.0 / ±inf / NaN payload）"""
+
+    BIT_EXACT = {"float16": 0, "bfloat16": 0, "float32": 0}
+
+    def test_identical_fp32_passes(self):
+        a = torch.tensor([1.0, -1.0, 0.0, float("inf"), -float("inf")], dtype=torch.float32)
+        result = compare_tensors(a.clone(), a, "float32", custom_thresholds=self.BIT_EXACT)
+        assert result.passed is True
+        assert result.mismatch_count == 0
+
+    def test_identical_bf16_passes(self):
+        a = torch.randn(64, dtype=torch.bfloat16)
+        result = compare_tensors(a.clone(), a, "bfloat16", custom_thresholds=self.BIT_EXACT)
+        assert result.passed is True
+
+    def test_signed_zero_divergence_fails_fp32(self):
+        out = torch.tensor([+0.0, 1.0, 2.0], dtype=torch.float32)
+        gold = torch.tensor([-0.0, 1.0, 2.0], dtype=torch.float32)
+        result = compare_tensors(out, gold, "float32", custom_thresholds=self.BIT_EXACT)
+        assert result.passed is False
+        assert result.mismatch_count == 1
+
+    def test_signed_zero_divergence_fails_bf16(self):
+        out = torch.tensor([+0.0, 1.0], dtype=torch.bfloat16)
+        gold = torch.tensor([-0.0, 1.0], dtype=torch.bfloat16)
+        result = compare_tensors(out, gold, "bfloat16", custom_thresholds=self.BIT_EXACT)
+        assert result.passed is False
+
+    def test_signed_inf_divergence_fails(self):
+        out = torch.tensor([float("inf"), 1.0], dtype=torch.float32)
+        gold = torch.tensor([-float("inf"), 1.0], dtype=torch.float32)
+        result = compare_tensors(out, gold, "float32", custom_thresholds=self.BIT_EXACT)
+        assert result.passed is False
+
+    def test_one_ulp_off_fails(self):
+        a = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
+        b = a.clone()
+        b[1] = torch.nextafter(b[1], torch.tensor(100.0))
+        result = compare_tensors(a, b, "float32", custom_thresholds=self.BIT_EXACT)
+        assert result.passed is False
+
+    def test_signed_zero_still_passes_with_normal_threshold(self):
+        """Back-compat: non-zero threshold keeps the MERE/MARE relaxation for ±0.0."""
+        out = torch.tensor([+0.0, 1.0], dtype=torch.float32)
+        gold = torch.tensor([-0.0, 1.0], dtype=torch.float32)
+        result = compare_tensors(out, gold, "float32", custom_thresholds={"float32": 2**-13})
+        assert result.passed is True
+
+    def test_unique_style_multi_output_signed_zero_caught(self):
+        """Multi-output (Unique-like) ±0.0 on the float output is caught."""
+        y_npu = torch.tensor([-0.0, 1.0, 2.0], dtype=torch.float32)
+        y_gold = torch.tensor([+0.0, 1.0, 2.0], dtype=torch.float32)
+        inv = torch.tensor([0, 1, 2, 1, 0], dtype=torch.int64)
+        result = compare_tensors((y_npu, inv), (y_gold, inv.clone()), "float32",
+                                 custom_thresholds=self.BIT_EXACT)
+        assert result.passed is False
+
+    def test_fp64_golden_against_target_dtype_output(self):
+        """Mirror the real harness flow: golden runs on fp64-promoted input
+        (per tensors_to_fp64_cpu), output stays in the operator's target dtype.
+        The bit-exact path must round golden back to target dtype before
+        bit-comparison. Round-trip should be lossless when golden's values
+        originally come from target-dtype input."""
+        for target_dtype, dtype_str in [
+            (torch.bfloat16, "bfloat16"),
+            (torch.float16, "float16"),
+            (torch.float32, "float32"),
+        ]:
+            x = torch.tensor([1.0, 2.0, 3.0, 1.0, 2.0], dtype=target_dtype)
+            x_fp64 = x.double()
+            golden_fp64, _ = torch.unique(x_fp64, return_inverse=True)
+            output, _ = torch.unique(x, return_inverse=True)
+            result = compare_tensors(output, golden_fp64, dtype_str,
+                                     custom_thresholds=self.BIT_EXACT)
+            assert result.passed, f"{target_dtype} round-trip via fp64 should pass bit-exact"
+
+
 class TestPrecisionThresholds:
     """精度阈值表测试"""
 

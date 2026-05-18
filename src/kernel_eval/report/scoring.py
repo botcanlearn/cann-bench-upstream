@@ -69,22 +69,35 @@ class ScoreInfo:
 
 
 def per_case_sol_score(t_baseline: float, t_cand: float, t_hw: float) -> Optional[float]:
-    """bench.tex Eq. 3。任一锚点缺失或分母 ≤ 0 时返回 None。
+    """bench.tex Eq. 3。T_cand 或 T_HW 异常 / 分母 ≤ 0 时返回 None。
 
     设计取舍：
     - 不对返回值做上界截断——当 T_cand < T_HW 时 score > 1.0 的"超额分"
       是有意保留的，用以激励算法突破当前硬件下界。
     - T_baseline < T_HW 视为基线/T_HW 标定可疑（应在用例侧人工核查），
       但仍计算分数继续输出，仅在 stderr 上提示一次。
+    - **T_baseline 缺失（≤ 0）但 T_HW 已知时**，按 fallback 规则取
+      ``max(T_HW * 3, 10)`` 作为代理基线继续打分；fallback 不回写到 cases，
+      仅在运行时使用（约定：让缺基线的 case 也能拿到一个合理的相对分数，
+      不会因为基线漏填整体被静默置 0）。
     """
-    if t_baseline <= 0 or t_cand <= 0 or t_hw <= 0:
+    if t_cand <= 0 or t_hw <= 0:
         return None
-    if t_baseline < t_hw:
+    if t_baseline <= 0:
+        # baseline 缺失：用 max(T_HW * 3, 10) 作 fallback。
+        # 直觉：假设"够用的"参考实现大约比硬件下界慢 3 倍，或至少 10 us。
+        t_baseline = _fallback_baseline_from_hw(t_hw)
+    elif t_baseline < t_hw:
         _warn_baseline_below_hw(t_baseline, t_hw)
     denom = (t_cand - t_hw) + (t_baseline - t_hw)
     if denom <= 0:
         return None
     return (t_baseline - t_hw) / denom
+
+
+def _fallback_baseline_from_hw(t_hw: float) -> float:
+    """缺基线时的代理 baseline：max(T_HW * 3, 10 us)。"""
+    return max(t_hw * 3.0, 10.0)
 
 
 # 同一 (T_baseline, T_HW) 组合只提示一次，避免成批用例时刷屏。
@@ -99,6 +112,27 @@ def _warn_baseline_below_hw(t_baseline: float, t_hw: float) -> None:
     print(
         f"[WARN] per_case_sol_score: T_baseline ({t_baseline:.4f} us) < T_HW "
         f"({t_hw:.4f} us)。请核查该用例 baseline_perf_us / t_hw_us 是否标定正确。"
+    )
+
+
+# 一次 aggregate_eq4 调用中只打一次缺锚点告警
+_PERF_MISSING_WARNED_RUN: set = set()
+
+
+def _warn_perf_anchor_missing(n_func_pass: int, n_perf_missing: int) -> None:
+    """通知调用者：功能通过的 case 中有 N 个缺基线/T_HW 锚点，按 §3.3 计为 0 性能分。
+
+    避免静默"系统性低估"——按 spec 设计 missing anchor → 0 是有意的，
+    但用户至少应该看到这条信息，知道分数偏低是因为基线缺失，不是 kernel 慢。
+    """
+    key = (n_func_pass, n_perf_missing)
+    if key in _PERF_MISSING_WARNED_RUN:
+        return
+    _PERF_MISSING_WARNED_RUN.add(key)
+    print(
+        f"[WARN] aggregate_eq4: {n_perf_missing} / {n_func_pass} 个功能通过的 case "
+        f"缺 baseline_perf_us / t_hw_us 锚点，按 spec §3.3 按 0 计入性能项。"
+        f"若分数偏低，请先核查这些 case 的基线是否已填充。"
     )
 
 
@@ -118,8 +152,27 @@ def aggregate_eq4(
 
     EachOperatorScore = [ w_c·δ_pass + Σ_i δ_acc,i (w_f + w_p·score_i) / N ] · 100
 
+    **F021 设计意图（必读）**：
+
+    权重 ``wc=0.2 / wf=0.3 / wp=0.5`` 是 **运行通过路径** 下的权重分配，**不**
+    意味着编译失败仅扣 20%。根据 spec §3.x，``δ_pass=0`` 时**所有** ``δ_acc,i ≡ 0``，
+    意味着：
+
+        编译失败 → compilation_score = 0
+                  → function_score    = 0   (无 case 能通过 functional check)
+                  → performance_score = 0   (无 case 能通过 perf 评测)
+                  → total_score       = 0
+
+    即"编译失败 = 不可评测 = 0 分"。这是有意设计：未编译的 kernel 没有任何
+    可信的数值可供性能/功能评判，部分给分会让"完全不能跑"的提交看起来比"跑通
+    但全错"的提交分数还高。
+
+    如果调用方需要"编译失败时仍给 wf+wp 部分分"的语义，请**明确**修改 spec
+    并重新设计 Eq.4，不要靠改 wc 来"近似"。
+
     Args:
-        compile_passed: δ_pass=1 时为 True；δ_pass=0 时所有 δ_acc,i ≡ 0。
+        compile_passed: δ_pass=1 时为 True；δ_pass=0 时所有 δ_acc,i ≡ 0
+            （详见上"设计意图"段）。
         total_cases: 分母 N。调用方负责保证 ≥ 1。
         case_scores: 列表，每项为 ``(success, score_i_or_None)``——
             ``success`` 对应 δ_acc,i；``score_i_or_None`` 缺锚点时为 None
@@ -133,6 +186,7 @@ def aggregate_eq4(
     """
     delta_pass = 1 if compile_passed else 0
     n_func_pass = 0
+    n_perf_missing = 0   # 功能通过但缺基线/T_HW 锚点导致性能分按 0 计入
     perf_score_sum = 0.0
     per_case_scores: List[Optional[float]] = []
 
@@ -143,9 +197,17 @@ def aggregate_eq4(
                 continue
             n_func_pass += 1
             per_case_scores.append(score_i)
-            perf_score_sum += score_i if score_i is not None else 0.0
+            if score_i is None:
+                n_perf_missing += 1
+                perf_score_sum += 0.0
+            else:
+                perf_score_sum += score_i
     else:
         per_case_scores = [None] * total_cases
+
+    # 通过的 case 中如果有缺锚点的，打印一次警告，避免性能分被静默"系统性低估"
+    if n_perf_missing > 0:
+        _warn_perf_anchor_missing(n_func_pass, n_perf_missing)
 
     compilation_score = wc * delta_pass * 100.0
     function_score = (n_func_pass * wf / total_cases) * 100.0
@@ -221,6 +283,17 @@ class ScoringCalculator:
     def calculate_overall_score(self, score_infos: List[ScoreInfo]) -> float:
         """benchmark 总分 = Σ Level 得分 = Σ EachOperatorScore (Eq. 5)."""
         return sum(info.total_score for info in score_infos)
+
+    def calculate_average_score(self, score_infos: List[ScoreInfo]) -> float:
+        """benchmark 平均分 = 总分 / 算子数（理论满分 100，跨时间可比）。
+
+        Eq. 5 的总分会随新增算子线性膨胀（每个算子满分 +100），新旧 benchmark
+        分数不可比。平均分（normalized to per-operator 100 满分）可以在算子集
+        发生变化时仍保留可比性，作为额外报告维度——不替代 Eq. 5 总分。
+        """
+        if not score_infos:
+            return 0.0
+        return sum(info.total_score for info in score_infos) / len(score_infos)
 
     def calculate_level_score(self, score_infos: List[ScoreInfo], level: str) -> float:
         """指定 Level 的得分 = Σ EachOperatorScore over ops in that level (Eq. 5)。

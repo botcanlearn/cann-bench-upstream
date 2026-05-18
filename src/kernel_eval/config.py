@@ -64,6 +64,18 @@ class Config:
     # 多进程并行配置（统一架构）
     processes_per_card: int = 2  # 每卡进程数
 
+    # 防作弊：用新鲜输入二次验证（Evaluator._retry_with_fresh_inputs，
+    # 见 eval/evaluator.py；accuracy_eval.evaluate_with_retry 是早期独立 API，
+    # 已 DeprecationWarning）。
+    # 防止 submission 缓存第一次输出 / 翻转 "computed-once" 标志骗过单次评测。
+    # 启用后每个 case 用新鲜输入再跑一次 golden + AI，两次都通过才记 pass。
+    enable_accuracy_retry: bool = False
+
+    # 防作弊：监听 AI 算子在执行时是否直接调用了 torch.matmul / conv / softmax
+    # 等内置数学 API（=把计算甩给 PyTorch，跳过自己写的 AscendC kernel）。
+    # off=不监听；warn=记日志不阻断（默认，便于排查）；block=直接抛错。
+    torch_op_guard_mode: str = "warn"
+
     # 精度配置（采用生态算子开源精度标准）
     # 通过条件: MERE < threshold, MARE < 10 * threshold
     # MERE = avg(|actual - golden| / (|golden| + 1e-7))

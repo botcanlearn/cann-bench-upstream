@@ -27,13 +27,20 @@ Timing API防护模块
 参考evaluation/evaluate.py中的防篡改机制
 """
 
+import atexit
 import os
+import sys
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 
 # 关键Timing API列表
 _CRITICAL_API_ENTRIES: List[Tuple[str, Any, str]] = []
+
+# 标记 _init_critical_apis 是否检测到 torch_npu 不可用——
+# 用于在 snapshot 时拒绝继续而不是静默通过。
+_INIT_TORCH_NPU_AVAILABLE: bool = False
+_INIT_DONE: bool = False
 
 # 快照存储
 _API_SNAPSHOT: Dict[str, Tuple[Any, str, Any]] = {}
@@ -42,13 +49,21 @@ _API_SNAPSHOT: Dict[str, Tuple[Any, str, Any]] = {}
 # _API_SNAPSHOT，多线程评测路径下需要互斥防止读到半截的状态。
 _API_SNAPSHOT_LOCK = threading.Lock()
 
+# snapshot 时固定下来的 ALLOW_TIMING_TAMPERING 状态，避免 TOCTOU——
+# 攻击者在 snapshot 之后、verify 之前设置环境变量并重新实例化 APIGuard 来绕过校验。
+_SNAPSHOT_ALLOW_TAMPERING: Optional[bool] = None
+
+# atexit 钩子是否已注册——避免重复注册
+_ATEXIT_REGISTERED: bool = False
+
 
 def _init_critical_apis():
     """初始化关键API列表（延迟加载，避免import时torch_npu不可用）"""
-    global _CRITICAL_API_ENTRIES
+    global _CRITICAL_API_ENTRIES, _INIT_TORCH_NPU_AVAILABLE, _INIT_DONE
 
-    if _CRITICAL_API_ENTRIES:
+    if _INIT_DONE:
         return
+    _INIT_DONE = True
 
     try:
         import torch
@@ -65,22 +80,34 @@ def _init_critical_apis():
             ("torch_npu.profiler.tensorboard_trace_handler", torch_npu.profiler, "tensorboard_trace_handler"),
             ("torch_npu.profiler._ExperimentalConfig", torch_npu.profiler, "_ExperimentalConfig"),
         ]
-    except ImportError:
-        # torch_npu不可用时，跳过NPU相关API
-        pass
+        _INIT_TORCH_NPU_AVAILABLE = True
+    except ImportError as e:
+        # torch_npu 不可用——记录状态。snapshot 时若要求安全保护会拒绝继续。
+        print(
+            f"[ERROR] APIGuard: torch_npu import failed ({e}); "
+            "Timing API security checks DISABLED. NPU evaluation results cannot be trusted.",
+            file=sys.stderr,
+            flush=True,
+        )
+        _INIT_TORCH_NPU_AVAILABLE = False
 
 
 def snapshot_timing_apis() -> None:
     """
     快照Timing API身份
 
-    在submission代码运行前调用，保存原始callable
+    在submission代码运行前调用，保存原始callable。同时：
+    - 固化 ALLOW_TIMING_TAMPERING 环境变量值（防 TOCTOU）
+    - 注册 atexit 钩子以确保异常退出时 API 也会被恢复（防止 torch_npu atexit 用到被篡改的 API）
     """
-    global _API_SNAPSHOT
+    global _API_SNAPSHOT, _SNAPSHOT_ALLOW_TAMPERING, _ATEXIT_REGISTERED
 
     _init_critical_apis()
 
     with _API_SNAPSHOT_LOCK:
+        # 固化 ALLOW_TIMING_TAMPERING——之后 verify 读这个固化值
+        _SNAPSHOT_ALLOW_TAMPERING = (os.environ.get("ALLOW_TIMING_TAMPERING") == "1")
+
         _API_SNAPSHOT = {}
         for name, parent, attr in _CRITICAL_API_ENTRIES:
             try:
@@ -90,14 +117,34 @@ def snapshot_timing_apis() -> None:
                 # API不存在时跳过
                 pass
 
+        # 注册一次 atexit，确保任何退出路径（包括 SystemExit / 未捕获异常）
+        # 都会还原 timing API；torch_npu 自己的 atexit 钩子才能用回真身。
+        if not _ATEXIT_REGISTERED and _API_SNAPSHOT:
+            atexit.register(restore_timing_apis)
+            _ATEXIT_REGISTERED = True
+
+
+def is_torch_npu_available_for_guard() -> bool:
+    """供调用方检查：APIGuard 是否能真正提供安全保护。"""
+    _init_critical_apis()
+    return _INIT_TORCH_NPU_AVAILABLE
+
 
 def verify_timing_apis() -> List[str]:
     """
     验证Timing API完整性
 
     Returns:
-        被篡改的API名称列表（空列表表示通过）
+        被篡改的API名称列表（空列表表示通过）。
+        若 torch_npu 在初始化时不可用 → snapshot 是空 dict，无任何可校验对象，
+        直接判定为不可信，返回 ["__torch_npu_unavailable__"] sentinel。
     """
+    # F091: torch_npu 不可用时不能 silent-pass —— 没有 snapshot 对象就什么都校验不了，
+    # 评测结果不可信。强制返回非空列表让调用方触发现有的篡改处理路径。
+    _init_critical_apis()
+    if not _INIT_TORCH_NPU_AVAILABLE:
+        return ["__torch_npu_unavailable__"]
+
     changed = []
 
     with _API_SNAPSHOT_LOCK:
@@ -149,7 +196,11 @@ class APIGuard:
     """
 
     def __init__(self):
-        self._allow_tampering = os.environ.get("ALLOW_TIMING_TAMPERING") == "1"
+        # 不再在 __init__ 读环境变量——TOCTOU 安全漏洞：
+        # 攻击者可在 snapshot() 之后、verify() 之前设置 ALLOW_TIMING_TAMPERING=1
+        # 然后重新实例化一个 APIGuard 来让 verify() 直接 return True。
+        # ALLOW_TIMING_TAMPERING 现在在 snapshot_timing_apis() 中固化为模块级值。
+        pass
 
     def snapshot(self) -> None:
         """快照API身份"""
@@ -165,7 +216,8 @@ class APIGuard:
         Raises:
             RuntimeError: 如果检测到篡改且未设置ALLOW_TIMING_TAMPERING
         """
-        if self._allow_tampering:
+        # 读 snapshot 时固化的 allow_tampering 值——非每次 verify 重新读 env
+        if _SNAPSHOT_ALLOW_TAMPERING is True:
             return True
 
         changed = verify_timing_apis()
@@ -173,7 +225,7 @@ class APIGuard:
             raise RuntimeError(
                 f"[SECURITY] Timing API被篡改: {changed}\n"
                 "评测结果不可信，已终止执行。\n"
-                "如需调试，可设置环境变量 ALLOW_TIMING_TAMPERING=1"
+                "如需调试，可在 snapshot() 之前设置环境变量 ALLOW_TIMING_TAMPERING=1"
             )
         return True
 

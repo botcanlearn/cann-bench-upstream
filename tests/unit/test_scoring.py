@@ -51,14 +51,31 @@ class TestPerCaseSolScore:
         assert score > 1.0
 
     def test_zero_anchor_returns_none(self):
-        assert per_case_sol_score(0, 80, 50) is None
+        # baseline=0 现在走 fallback，不再返回 None；只剩 t_cand=0 / t_hw=0 返回 None
         assert per_case_sol_score(100, 0, 50) is None
         assert per_case_sol_score(100, 80, 0) is None
 
     def test_negative_anchor_returns_none(self):
-        assert per_case_sol_score(-1, 80, 50) is None
+        # 负 t_cand / 负 t_hw 仍返回 None；负 baseline 等同缺失，走 fallback
         assert per_case_sol_score(100, -1, 50) is None
         assert per_case_sol_score(100, 80, -1) is None
+
+    def test_baseline_missing_uses_fallback(self):
+        # baseline ≤ 0 时：fallback = max(t_hw*3, 10)
+        # t_hw=50 → fallback=max(150,10)=150；t_cand=100
+        # score = (150-50) / ((100-50) + (150-50)) = 100/150 = 2/3
+        assert per_case_sol_score(t_baseline=0, t_cand=100, t_hw=50) == pytest.approx(2.0 / 3.0)
+
+    def test_baseline_missing_fallback_uses_10us_floor(self):
+        # t_hw 很小时 fallback 退到 10 us 地板
+        # t_hw=1 → fallback=max(3,10)=10；t_cand=5
+        # score = (10-1) / ((5-1) + (10-1)) = 9/13
+        assert per_case_sol_score(t_baseline=0, t_cand=5, t_hw=1) == pytest.approx(9.0 / 13.0)
+
+    def test_baseline_negative_treated_as_missing(self):
+        # 负 baseline 与 0 等效，走 fallback
+        score = per_case_sol_score(t_baseline=-1, t_cand=100, t_hw=50)
+        assert score is not None
 
     def test_denom_zero_returns_none(self):
         # (t_cand - t_hw) + (t_base - t_hw) == 0

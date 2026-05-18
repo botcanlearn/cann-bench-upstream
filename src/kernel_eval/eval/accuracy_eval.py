@@ -221,6 +221,16 @@ class AccuracyEvaluator:
         """
         执行二次验证评测
 
+        .. deprecated::
+            F002: 本方法是早期独立实现，**当前主评测路径未调用**。实际防作弊
+            二次验证已迁移到 :meth:`Evaluator._retry_with_fresh_inputs`
+            (见 ``src/kernel_eval/eval/evaluator.py``)，由 Evaluator 在
+            functional pass 后按 ``Config.enable_accuracy_retry`` 触发。
+
+            保留本方法是为了让旧的独立调用方（如脚本、单测）仍能运行；新代
+            码请直接走 ``Evaluator``。本方法不会被自动废弃，但**不要**作为
+            主防作弊点依赖。
+
         原理：用新鲜输入重跑一次，防止缓存作弊。
         如果submission缓存第一次结果或翻转"computed-once"标志，
         第二次用不同输入会产生垃圾结果。
@@ -239,6 +249,16 @@ class AccuracyEvaluator:
         Returns:
             AccuracyResult: 最终评测结果
         """
+        import warnings
+        warnings.warn(
+            "AccuracyEvaluator.evaluate_with_retry is parallel to "
+            "Evaluator._retry_with_fresh_inputs and not on the main evaluation "
+            "path. Prefer constructing an Evaluator and letting it manage retry "
+            "via Config.enable_accuracy_retry. This method is kept for legacy "
+            "scripts and unit tests; do not rely on it for anti-cheat in new code.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # 第一轮验证
         result1 = self._single_eval(
             golden_fn, custom_fn, inputs, param_builder, case, device, dtype, trial=1

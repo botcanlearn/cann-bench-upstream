@@ -139,13 +139,20 @@ class OpRunner:
 
     def run_ai_op(self, ai_op_func: Callable, params: Dict, case_id: str, input_tensors: List,
                   enable_perf: bool = True) -> OpRunResult:
-        """执行AI算子"""
-        # 如果需要性能采集且evaluator可用，临时启用
-        if enable_perf and self.perf_evaluator:
-            return self.run(ai_op_func, params, case_id, input_tensors)
-        else:
-            # 不采集性能，简单执行
-            return self._run_simple(ai_op_func, params, input_tensors)
+        """执行AI算子（受 TorchOpGuard 监视，检测对禁用 builtin 数学 API 的调用）"""
+        # 防作弊监听：detect AI op calling torch.matmul / conv / softmax 等
+        guard_mode = "warn"
+        if self.perf_evaluator is not None:
+            guard_mode = getattr(self.perf_evaluator.config, 'torch_op_guard_mode', 'warn')
+
+        from ..security.torch_op_guard import TorchOpGuard
+        with TorchOpGuard(mode=guard_mode):
+            # 如果需要性能采集且evaluator可用，临时启用
+            if enable_perf and self.perf_evaluator:
+                return self.run(ai_op_func, params, case_id, input_tensors)
+            else:
+                # 不采集性能，简单执行
+                return self._run_simple(ai_op_func, params, input_tensors)
 
     def _run_simple(self, func: Callable, params: Dict, input_tensors: List) -> OpRunResult:
         """简单执行（不采集性能）"""

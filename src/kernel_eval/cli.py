@@ -207,7 +207,7 @@ def _cmd_eval_multi_card(args, bench_root: str, filter_prefix: str, config: Conf
     import time
 
     processes_per_card = getattr(args, 'processes_per_card', 2)
-    timeout_per_process = getattr(args, 'timeout_per_process', 300)
+    timeout_per_operator = getattr(args, 'timeout_per_operator', 300)
 
     loader = CaseLoader(bench_root)
     all_cases = loader.scan_all_cases()
@@ -236,14 +236,14 @@ def _cmd_eval_multi_card(args, bench_root: str, filter_prefix: str, config: Conf
         print(f"[INFO] 筛选路径: {filter_prefix}")
     print(f"[INFO] 算子数: {len(rel_paths)}, 用例数: {len(all_cases)}")
     print(f"[INFO] 每卡进程数: {processes_per_card}")
-    print(f"[INFO] 进程超时: {timeout_per_process}s")
+    print(f"[INFO] 单算子超时: {timeout_per_operator}s")
     print(f"[INFO] Warmup/Repeat: {args.warmup}/{args.repeat}")
     if args.no_perf:
         print("[INFO] 性能采集: 关闭")
 
     process_config = ProcessConfig(
         processes_per_card=processes_per_card,
-        timeout_per_process=timeout_per_process,
+        timeout_per_operator=timeout_per_operator,
         enable_profiler=not args.no_perf,
     )
 
@@ -300,6 +300,15 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
                            operator_filter: list, case_filter: dict,
                            subprocess_isolation: bool) -> int:
     """跳过安装评测"""
+    # F007: 子进程评测路径（--skip-install，由父进程在 subprocess_isolation=True
+    # 模式下 fork+exec 调用）旧版完全跳过 APIGuard.snapshot()，导致约 1/2 的
+    # 评测路径不受 timing API 保护。在此入口显式 snapshot，进程退出时由
+    # api_guard 已注册的 atexit 钩子负责 restore（防止 torch_npu 自己 atexit
+    # 时用到被篡改的 API）。
+    from .security.api_guard import APIGuard
+    guard = APIGuard()
+    guard.snapshot()
+
     evaluator = Evaluator(config)
 
     if args.operator:
@@ -319,6 +328,15 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
         for op_result in session_result.operators:
             report_generator.add_operator_result(op_result)
     evaluator.shutdown()
+
+    # F007: 评测结束前做一次完整性验证；若 timing API 被篡改这里会抛 RuntimeError
+    # （由 api_guard 处理）。子进程评测异常时能立即暴露安全问题，而不是带着篡改
+    # 的结果返回父进程。
+    try:
+        guard.verify()
+    except RuntimeError as e:
+        print(f"[SECURITY] {e}", file=sys.stderr, flush=True)
+        return 1
     return 0
 
 
@@ -407,7 +425,9 @@ def cmd_eval(args):
 
     report_generator.save_all(report)
     report_generator.print_summary(report)
-    return 0 if report.passed_cases > 0 else 1
+    # F042: 旧版 `passed_cases > 0` → 退出码 0 误导 CI/CD（52/53 失败仍 success）。
+    # 改为 failed_cases==0 时 0，否则非零（capped 至 255 防 POSIX 溢出）。
+    return 0 if report.failed_cases == 0 else min(report.failed_cases, 255)
 
 
 def cmd_list(args):

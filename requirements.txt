@@ -14,9 +14,13 @@ pyyaml>=6.0
 pytest>=7.0.0
 pytest-timeout>=2.1.0
 
+# ==================== NPU 核心依赖 ====================
+# torch_npu 是 NPU 评测路径的硬依赖（cli.py / evaluator.py 等无条件 import）。
+# 仅 CPU-only 单测（inner/tests/task/ pytest，CI 走 ubuntu）可省略。
+# 版本须与 PyTorch 严格匹配，详见 https://www.hiascend.com/document
+torch_npu>=2.3.0
+
 # ==================== 可选依赖 ====================
-# NPU支持（昇腾设备，需要匹配PyTorch版本）
-# torch_npu>=2.3.0  # 根据实际PyTorch版本选择兼容的torch_npu
 
 # 性能分析报告生成
 # pytest-html>=3.1.0

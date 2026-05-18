@@ -32,12 +32,16 @@
 - Kahan 灾难性相消理论：接近大数相减导致精度丢失
 """
 
+import logging
 import math
 import traceback
 from typing import Union, Tuple, Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
 import torch
+
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -109,7 +113,9 @@ PRECISION_THRESHOLDS: Dict[str, float] = {
     'float32': 2**-13,      # ≈ 0.000122
     'float64': 2**-13,      # 使用float32阈值
     'hifloat32': 2**-11,    # ≈ 0.000488
-    'float8_e4m3': 2**-3,   # ≈ 0.125
+    # F083: 删除死代码 `float8_e4m3` 键 — PyTorch 实际 dtype 是 float8_e4m3fn
+    # 字典查找用 str(t.dtype) 仅会命中 'float8_e4m3fn'，旧键永不触发
+    'float8_e4m3fn': 2**-3, # ≈ 0.125
     'float8_e5m2': 2**-2,   # ≈ 0.25
     'int8': 0,              # 完全相等
     'int16': 0,
@@ -129,7 +135,7 @@ SMALL_VALUE_THRESHOLDS: Dict[str, float] = {
     'float32': 2**-14,      # ≈ 6.10e-5
     'float64': 2**-14,      # 使用float32阈值
     'hifloat32': 2**-12,    # ≈ 2.44e-4
-    'float8_e4m3': 2**-4,   # ≈ 0.0625
+    'float8_e4m3fn': 2**-4, # ≈ 0.0625 — F083 删 `float8_e4m3` 死键
     'float8_e5m2': 2**-3,   # ≈ 0.125
 }
 
@@ -141,7 +147,7 @@ SMALL_VALUE_ERROR_THRESHOLDS: Dict[str, float] = {
     'float32': 2**-30,      # ≈ 9.31e-10
     'float64': 2**-30,      # 使用float32阈值
     'hifloat32': 2**-28,    # ≈ 3.73e-9
-    'float8_e4m3': 2**-6,   # ≈ 1.56e-2
+    'float8_e4m3fn': 2**-6, # ≈ 1.56e-2 — F083 删 `float8_e4m3` 死键
     'float8_e5m2': 2**-5,   # ≈ 3.12e-2
 }
 
@@ -185,7 +191,7 @@ CANCEL_BOUNDARY_THRESHOLDS: Dict[str, float] = {
     'bfloat16': 2**-3,      # ≈ 1.25e-1 ≈ 0.125
 
     'hifloat32': 2**-8,     # ≈ 3.91e-3
-    'float8_e4m3': 2**-1,   # ≈ 0.5
+    'float8_e4m3fn': 2**-1, # ≈ 0.5 — F083 删 `float8_e4m3` 死键
     'float8_e5m2': 2**-0,   # ≈ 1.0
 }
 
@@ -198,7 +204,7 @@ CANCEL_ZERO_THRESHOLDS: Dict[str, float] = {
     'float16': 2**-5,       # ≈ 0.031
     'bfloat16': 2**-3,      # ≈ 0.125
     'hifloat32': 2**-8,
-    'float8_e4m3': 2**-1,
+    'float8_e4m3fn': 2**-1, # F083 删 `float8_e4m3` 死键
     'float8_e5m2': 2**-0,
 }
 
@@ -718,8 +724,13 @@ def _compare_single_tensor(
                 max_finite = float(torch.finfo(target_dtype).max)
 
             mismatch_count = int(inf_mismatch.sum())
-            print(f"[inf_sat] {mismatch_count} element(s) saturated to inf on one side only, "
-                  f"replacing inf with {max_finite} and continuing comparison")
+            # F087: 旧版无条件 print 到 stdout，批量评测污染输出 / 干扰 JSON 管道。
+            # 改 logging.info 让用户/CI 通过 LOG_LEVEL 控制是否显示。
+            _logger.info(
+                "[inf_sat] %d element(s) saturated to inf on one side only, "
+                "replacing inf with %s and continuing comparison",
+                mismatch_count, max_finite,
+            )
 
             # 替换 inf 为最大有限值（保留符号）
             if torch.any(inf_out & ~inf_gold):

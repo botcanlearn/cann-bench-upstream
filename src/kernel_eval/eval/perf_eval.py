@@ -193,14 +193,20 @@ class PerfEvaluator:
 
         # Save original stdout/stderr file descriptors
         # 使用 os.dup2 在系统级别重定向，影响所有子进程
+        # 重定向到 tempfile 而非 /dev/null：profiler 退出后扫描其中的 NPU
+        # 驱动 / Runtime 错误（AICPU 异常 / Tiling 错误等），避免静默丢失。
+        import tempfile
         saved_stdout_fd = os.dup(1)
         saved_stderr_fd = os.dup(2)
-        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+        sink_file = tempfile.NamedTemporaryFile(
+            mode='w+', prefix='kernel_eval_profiler_', suffix='.log', delete=False
+        )
+        sink_fd = sink_file.fileno()
 
         try:
-            # Redirect stdout and stderr to /dev/null at system level
-            os.dup2(devnull_fd, 1)
-            os.dup2(devnull_fd, 2)
+            # Redirect stdout and stderr to the temp file (NOT /dev/null)
+            os.dup2(sink_fd, 1)
+            os.dup2(sink_fd, 2)
 
             with torch_npu.profiler.profile(
                 activities=[
@@ -237,8 +243,31 @@ class PerfEvaluator:
             os.dup2(saved_stderr_fd, 2)
             os.close(saved_stdout_fd)
             os.close(saved_stderr_fd)
-            os.close(devnull_fd)
+            sink_file.close()
             logging.basicConfig = original_basicConfig
+
+            # 扫描 profiler 期间被捕获的 stderr/stdout，找出 NPU 关键错误关键词
+            try:
+                with open(sink_file.name, 'r', errors='replace') as f:
+                    captured = f.read()
+                # 只关心 NPU 驱动/Runtime/AICPU 类关键错误；profiler 自身的 INFO/WARN 噪声忽略
+                error_keywords = ('AICPU exception', 'Inner error', 'Runtime error',
+                                  'EZ1001', 'EZ9999', 'aicore error',
+                                  'kernel launch failed', 'failed to launch')
+                hits = [line for line in captured.splitlines()
+                        if any(kw.lower() in line.lower() for kw in error_keywords)]
+                if hits:
+                    print(f"[WARN] Profiler 期间捕获 NPU 关键错误（{len(hits)} 条），完整日志: {sink_file.name}", flush=True)
+                    for h in hits[:5]:
+                        print(f"    {h.strip()}", flush=True)
+                else:
+                    # 无错误：直接删 tempfile
+                    try:
+                        os.unlink(sink_file.name)
+                    except OSError:
+                        pass
+            except Exception:
+                pass
 
     def run_profiled(self, case_id: str, func: Callable, *args,
                      warmup: int = None, repeat: int = None,

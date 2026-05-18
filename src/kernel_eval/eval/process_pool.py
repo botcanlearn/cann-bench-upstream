@@ -38,7 +38,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from queue import Queue
+from queue import Queue, Empty as QueueEmpty
 from typing import List, Dict, Optional, Any
 
 import torch
@@ -158,7 +158,9 @@ class OperatorScheduler:
 
             try:
                 rel_path = self.pending_queue.get_nowait()
-            except:
+            except QueueEmpty:
+                # F043: 旧版 bare `except:` 会吞 SystemExit / KeyboardInterrupt，
+                # 长跑评测中 Ctrl+C 无反应、进程池僵尸化。精确捕获 Empty 即可。
                 break
 
             task = self._create_task(rel_path, card_id)

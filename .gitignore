@@ -59,8 +59,17 @@ cann_bench_project/
 
 # msprof profile data — large, runtime-generated under inner/baseline_perf_prof/results/
 inner/baseline_perf_prof/results/msprof_level*/
+
+# torch_ops_extension/ 整个子树:个人 wrapper / 测试工程,不入 cann-bench 主仓.
+# 本地保留,只是 untrack —— xc/dev squash merge 时 master diff 不含此目录.
+torch_ops_extension/
 # 本地辅助文件（个人 working notes / skill / profiling output）
 output/
 SKILL_*.md
 skill_*.md
 待解决问题.md
+docs/superpowers/
+
+# inner/tests/baseline/results/ 是 runtime msprof JSON 落盘点，每次跑都更新
+inner/tests/baseline/results/*.json
+!inner/tests/baseline/results/.gitkeep
