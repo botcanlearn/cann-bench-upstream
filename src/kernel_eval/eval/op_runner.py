@@ -75,9 +75,7 @@ class OpRunner:
                          and self.perf_evaluator.config.enable_profiler
                          and self.device_manager.is_npu_mode())
             if use_profiler:
-                # 提取位置参数（保持参数顺序），避免kwargs导致torch_npu profiler解析ERROR
-                args = [updated_params[k] for k in params.keys()]
-                outputs, perf_result = self.perf_evaluator.run_profiled(case_id, func, *args)
+                outputs, perf_result = self.perf_evaluator.run_profiled(case_id, func, **updated_params)
                 self.perf_evaluator.wait_all()
                 elapsed_us = perf_result.elapsed_us
             else:

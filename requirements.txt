@@ -1,6 +1,7 @@
 # ==================== 核心依赖 ====================
-# PyTorch 2.3+ 支持 numpy 2.x 和 uint16/uint32/uint64 类型
-torch>=2.3.0
+# PyTorch 2.4+ 提供 torch.nn.functional.rms_norm（RmsNorm golden 直接复用）
+# 2.3+ 支持 numpy 2.x 和 uint16/uint32/uint64 类型
+torch>=2.4.0
 
 # TorchVision 用于 ROI 相关算子
 torchvision>=0.18.0
@@ -18,7 +19,7 @@ pytest-timeout>=2.1.0
 # torch_npu 是 NPU 评测路径的硬依赖（cli.py / evaluator.py 等无条件 import）。
 # 仅 CPU-only 单测（inner/tests/task/ pytest，CI 走 ubuntu）可省略。
 # 版本须与 PyTorch 严格匹配，详见 https://www.hiascend.com/document
-torch_npu>=2.3.0
+torch_npu>=2.4.0
 
 # ==================== 可选依赖 ====================
 

@@ -440,7 +440,6 @@ class PerfEvaluator:
                 op_times, total_kernel_us = self._parse_kernel_details_csv(csv_file)
                 self._normalize_result(result, op_times, total_kernel_us)
             elif not result.error_msg:
-                # 只在 profiler 未报错时才设置此错误，避免覆盖 profiler 异常信息
                 result.error_msg = "no kernel_details.csv produced"
 
         finally:

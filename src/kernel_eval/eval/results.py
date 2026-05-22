@@ -92,9 +92,20 @@ class EvalCaseResult:
     t_hw_us: float = 0.0  # 硬件下界 T_HW
 
     def get_speedup(self) -> float:
-        """计算加速比（保留为诊断指标）"""
-        if self.perf_result and self.baseline_perf_us > 0:
-            return self.baseline_perf_us / self.perf_result.elapsed_us if self.perf_result.elapsed_us > 0 else 0.0
+        """计算加速比（保留为诊断指标）
+
+        baseline_perf_us 缺失时走 fallback 代理基线 max(t_hw*3, 10)，
+        与 per_case_sol_score 的 fallback 规则一致。
+        """
+        if not self.perf_result or self.perf_result.elapsed_us <= 0:
+            return 0.0
+        if self.baseline_perf_us > 0:
+            return self.baseline_perf_us / self.perf_result.elapsed_us
+        # Fallback: baseline 缺失，使用代理基线
+        if self.t_hw_us > 0:
+            from ..report.scoring import _fallback_baseline_from_hw
+            proxy_baseline = _fallback_baseline_from_hw(self.t_hw_us)
+            return proxy_baseline / self.perf_result.elapsed_us
         return 0.0
 
     def get_perf_score(self) -> Optional[float]:

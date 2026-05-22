@@ -465,6 +465,7 @@ class ProcessWorker:
                 "rel_path": getattr(c, 'rel_path', ''),
                 "operator": getattr(c, 'operator', ''),
                 "case_id": c.case_id,
+                "case_num": getattr(c, 'case_num', 0),
                 "input_shapes": c.input_shapes,
                 "dtypes": c.dtypes,
                 "value_ranges": c.value_ranges,
@@ -472,6 +473,7 @@ class ProcessWorker:
                 "note": getattr(c, 'note', ''),
                 "yaml_path": getattr(c, 'yaml_path', ''),
                 "baseline_perf_us": getattr(c, 'baseline_perf_us', 0.0),
+                "t_hw_us": getattr(c, 't_hw_us', 0.0),
                 "op_dir_name": getattr(c, 'op_dir_name', ''),
             }
             for c in cases
@@ -615,6 +617,13 @@ class ProcessPoolCoordinator:
         else:
             # 多卡模式：自动检测
             self.card_count = self._detect_cards()
+
+        # torch_npu.profiler 使用 ACL 设备级 profiling 硬件资源，
+        # 同一 NPU 卡上多进程并发 profile 会竞争该资源导致 "Failed to get acl to
+        # npu flow events"，无法产出 kernel_details.csv（elapsed_us=0）。
+        # profiling 开启时每卡仅 1 进程，保证 profiler 独占硬件资源。
+        if self.process_config.enable_profiler:
+            self.process_config.processes_per_card = 1
 
         self.total_processes = self.card_count * self.process_config.processes_per_card
         self.workers: List[ProcessWorker] = []

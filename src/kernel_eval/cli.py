@@ -794,7 +794,13 @@ def cmd_eval_process(args):
             # 重建 CannCaseSpec 对象
             cases = []
             for c in cases_data:
-                case_num = c['case_id']  # 原 case_id 是数字
+                # case_num: 优先用序列化的整数值，否则从 case_id 字符串提取
+                case_num_raw = c.get('case_num')
+                if case_num_raw is not None:
+                    case_num = int(case_num_raw)
+                else:
+                    parts = str(c.get('case_id', '')).rsplit('_', 1)
+                    case_num = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 0
                 display_path = c.get('op_dir_name', '') if c.get('op_dir_name') and c['rel_path'] == "." else c['rel_path']
                 case_id_str = f"{display_path}_{case_num}"
 

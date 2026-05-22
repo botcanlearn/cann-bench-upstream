@@ -22,6 +22,7 @@
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -98,7 +99,16 @@ def per_case_sol_score(
         rel_path: 算子相对路径，用于日志去重 key（F058）+ 错误溯源。可选。
 
     F057: 返回 None 的三种成因分别 warn，避免被 aggregate_eq4 统一吞为"缺锚点"。
+    F646: NaN inputs traverse `<= 0` guards transparently because every IEEE 754
+    comparison against NaN returns False. Explicitly reject NaN up front so it
+    cannot propagate into the aggregated total_score.
     """
+    # F646: reject NaN inputs explicitly — IEEE 754 makes every comparison
+    # against NaN false (`NaN <= 0` is False), so the subsequent guards alone
+    # would let NaN pass through and contaminate `perf_score_sum`.
+    if math.isnan(t_baseline) or math.isnan(t_cand) or math.isnan(t_hw):
+        _warn_invalid_anchor(rel_path, t_cand, t_hw)
+        return None
     # F057 成因 (a): T_cand 或 T_HW 异常
     if t_cand <= 0 or t_hw <= 0:
         _warn_invalid_anchor(rel_path, t_cand, t_hw)
@@ -283,11 +293,16 @@ def aggregate_eq4(
                 per_case_scores.append(None)
                 continue
             n_func_pass += 1
-            per_case_scores.append(score_i)
-            if score_i is None:
+            # F646: belt-and-suspenders — `per_case_sol_score` now rejects NaN
+            # upfront, but defend the aggregator against callers that pass a
+            # hand-rolled `case_scores` list with NaN, which would otherwise
+            # poison `perf_score_sum` (NaN + anything = NaN).
+            if score_i is None or math.isnan(score_i):
+                per_case_scores.append(None if score_i is None else score_i)
                 n_perf_missing += 1
                 perf_score_sum += 0.0
             else:
+                per_case_scores.append(score_i)
                 perf_score_sum += score_i
     else:
         per_case_scores = [None] * total_cases
