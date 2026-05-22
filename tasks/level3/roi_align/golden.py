@@ -149,7 +149,7 @@ def _roi_align_fallback(
 
 def roi_align(
     x: torch.Tensor, boxes: torch.Tensor, outputHeight: int, outputWidth: int,
-    spatial_scale: float = 1.0, sampling_ratio: int = -1, aligned: bool = False,
+    spatial_scale: float, sampling_ratio: int = -1, aligned: bool = False,
 ) -> torch.Tensor:
     """
     池化层，用于非均匀输入尺寸的特征图

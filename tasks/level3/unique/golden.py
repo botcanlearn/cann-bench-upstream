@@ -12,7 +12,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import Optional, Tuple
+from typing import Union, Tuple
 
 """
 Unique 算子 Torch Golden 参考实现
@@ -23,7 +23,7 @@ Unique 算子 Torch Golden 参考实现
 def unique(
     x: torch.Tensor,
     return_inverse: bool = False
-) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
     """
     去除张量中的重复元素
 
@@ -34,13 +34,11 @@ def unique(
         return_inverse: 是否返回逆索引，用于重建原始张量
 
     Returns:
-        y: 唯一值张量
-        inverse: 逆索引，满足 x = y[inverse] (当 return_inverse=True 时)
+        return_inverse=True:  (y, inverse)  唯一值 + 逆索引
+        return_inverse=False: y             仅唯一值
     """
 
+    y, inverse = torch.unique(x, return_inverse=True)
     if return_inverse:
-        y, inverse = torch.unique(x, return_inverse=True)
         return y, inverse
-    else:
-        y = torch.unique(x, return_inverse=False)
-        return y, None
+    return y
