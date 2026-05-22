@@ -18,7 +18,7 @@ operator:
   attrs:
   - name: drop_pad_mode
     type: int
-    default: "0"
+    default: 0
     description: "模式选择，取值范围 [0, 3]。0: drop less 按列排列; 1: drop pad 按列排列; 2: drop less 按行排列; 3: drop pad 按行排列"
   inputs:
   - name: expanded_permuted_rows

@@ -22,7 +22,7 @@ operator:
   attrs:
   - name: k
     type: int
-    default: "1"
+    default: 1
     description: topK数量，要求0<k<=x最后一维大小，且k<=1024
   inputs:
   - name: x

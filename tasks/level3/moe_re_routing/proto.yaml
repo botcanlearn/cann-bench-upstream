@@ -21,11 +21,11 @@ operator:
   attrs:
   - name: expert_token_num_type
     type: int
-    default: "1"
+    default: 1
     description: 输出 expert_token_num 的模式。0=cumsum 模式，1=count 模式。当前只支持为 1
   - name: idx_type
     type: int
-    default: "0"
+    default: 0
     description: 输出 permute_token_idx 的索引类型。0=gather 索引，1=scatter 索引。当前只支持为 0
   inputs:
   - name: tokens

@@ -27,12 +27,12 @@ operator:
     required: true
   - name: padding_mode
     type: string
-    default_value: SAME
+    default: SAME
     description: 填充模式：'SAME' 或 'VALID'
     required: false
   - name: pads
     type: listInt
-    default_value:
+    default:
     - 0
     - 0
     - 0
@@ -41,12 +41,12 @@ operator:
     required: false
   - name: ceil_mode
     type: bool
-    default_value: false
+    default: false
     description: 是否向上取整计算输出尺寸
     required: false
   - name: data_format
     type: string
-    default_value: NHWC
+    default: NHWC
     description: 数据格式，如 'NHWC'
     required: false
   inputs:
