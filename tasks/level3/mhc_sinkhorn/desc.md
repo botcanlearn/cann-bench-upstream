@@ -156,7 +156,11 @@ MhcSinkhorn 算子 Torch Golden 参考实现 — linear-domain Sinkhorn-Knopp
 hyper-connection stream 混合矩阵的双随机化投影 kernel：第 1 轮做 row-softmax
 （数值稳定地把 raw 输入转成概率分布）再做 column normalize；剩余 iter_step - 1
 轮做交替 row / column 归一化，直到 row_sum 与 col_sum 都趋近 1（投影到 Birkhoff
-Polytope 流形）。fp32 only。
+Polytope 流形）。
+
+NPU candidate kernel 仅支持 fp32 输入（spec 在 §3 数据类型中声明，cases.csv
+也只生成 fp32 case）；golden 这一侧不在 dtype 上做硬约束——harness 的
+``tensors_to_fp64_cpu`` 会把 float 提升到 fp64 提高参考精度，数学结果不变。
 """
 def mhc_sinkhorn(
     comb: torch.Tensor, iter_step: int = 20, eps: float = 1e-6
@@ -165,14 +169,13 @@ def mhc_sinkhorn(
     mHC Sinkhorn — linear-domain doubly-stochastic projection on hc_mult × hc_mult matrices
 
     Args:
-        comb: 输入 hyper-connection 混合矩阵，shape [B, hc_mult, hc_mult] fp32，inner 两维必须相等
+        comb: 输入 hyper-connection 混合矩阵，shape [B, hc_mult, hc_mult]，inner 两维必须相等
         iter_step: Sinkhorn 总迭代轮数 (≥ 1)；DSv4 production 默认 20
         eps: 数值稳定项，所有除法分母上加该常量
 
     Returns:
-        comb_out: 双随机化后的方阵，shape 与输入完全一致 (fp32)
+        comb_out: 双随机化后的方阵，shape 与输入完全一致；dtype 与输入相同
     """
-    assert comb.dtype == torch.float32, "mhc_sinkhorn 仅支持 fp32 输入"
     # First iter: row-softmax + eps，然后 column normalize
     # 等价于把 raw logits 转换成 row-probability 分布的起点
     row_max = comb.amax(dim=-1, keepdim=True)               # numerically-stable shift
