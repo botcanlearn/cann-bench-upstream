@@ -46,7 +46,7 @@ cases:
   - [-2, 2]
   - [-2, 2]
   baseline_perf_us: 106.24
-  t_hw_us:
+  t_hw_us: 15.3554
   note: 'M-float16-3M-质数非对齐-3x3x3k-same | baseline_kernels: TransData×3 + MemSet×1
     + Conv3DBackpropFilter×1'
 - operator: Conv3DBackpropFilter
@@ -104,7 +104,7 @@ cases:
   - [-100, 100]
   - [-100, 100]
   baseline_perf_us: 82.0
-  t_hw_us:
+  t_hw_us: 13.496
   note: 'M-bfloat16-84M-质数非对齐-dilation=2 | baseline_kernels: TransData×3 + MemSet×1
     + Conv3DBackpropFilter×1'
 - operator: Conv3DBackpropFilter
@@ -162,7 +162,7 @@ cases:
   - [-1, 2]
   - [-1, 2]
   baseline_perf_us: 186.12
-  t_hw_us:
+  t_hw_us: 63.5803
   note: 'M-float16-6M-非对齐-非对称 | baseline_kernels: TransData×3 + MemSet×1 + Conv3DBackpropFilter×1'
 - operator: Conv3DBackpropFilter
   case_id: 9
@@ -239,7 +239,7 @@ cases:
   - [-88, 88]
   - [-88, 88]
   baseline_perf_us: 45.12
-  t_hw_us:
+  t_hw_us: 1
   note: 'S-bfloat16-100K-质数非对齐-bfloat16边界值 | baseline_kernels: TransData×3 + MemSet×1
     + Conv3DBackpropFilter×1'
 - operator: Conv3DBackpropFilter
@@ -260,7 +260,7 @@ cases:
   - [-.inf, .inf]
   - [-.inf, .inf]
   baseline_perf_us: 87.16
-  t_hw_us:
+  t_hw_us: 8.5889
   note: 'S-bfloat16-3M-非对齐-inf特殊值 | baseline_kernels: TransData×3 + MemSet×1 + Conv3DBackpropFilter×1'
 - operator: Conv3DBackpropFilter
   case_id: 14
@@ -334,7 +334,7 @@ cases:
   - [-2, 2]
   - [-2, 2]
   baseline_perf_us: 87.26
-  t_hw_us:
+  t_hw_us: 2.1845
   note: 'M-float16-20M-非对齐-stride=1,2,2 | baseline_kernels: TransData×4 + MemSet×2
     + Conv3DBackpropFilter×1'
 - operator: Conv3DBackpropFilter
@@ -392,6 +392,6 @@ cases:
   - [-3, 6]
   - [-3, 6]
   baseline_perf_us: 966.06
-  t_hw_us:
+  t_hw_us: 537.9995
   note: 'M-float16-4M-质数非对齐-dilation=2-非对称中值域 | baseline_kernels: TransData×3 + MemSet×1
     + Conv3DBackpropFilter×1'
