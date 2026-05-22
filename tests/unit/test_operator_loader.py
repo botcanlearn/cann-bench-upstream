@@ -12,13 +12,13 @@
 # ----------------------------------------------------------------------------------------------------------
 
 """
-OperatorLoader 单元测试
+OperatorLoader/CannTaskLoader 单元测试
 
-测试对象：kernel_eval.data.operator_loader.OperatorLoader
+测试对象：kernel_eval.data.CannTaskLoader (OperatorLoader 别名)
 核心功能：
-1. get_operator(rel_path) 解析 proto.yaml
+1. get_operator(rel_path) / get_task(task_id) 解析 proto.yaml
 2. get_operator_by_name(operator) 按名称查找
-3. list_operators() 列出所有算子
+3. list_operators() / list_tasks() 列出所有算子
 4. proto.yaml 解析容错
 5. 异常路径的 warning 日志
 """
@@ -28,7 +28,7 @@ import tempfile
 import pytest
 from pathlib import Path
 
-from kernel_eval.data.operator_loader import OperatorLoader
+from kernel_eval.benches import CannTaskLoader
 
 
 class TestOperatorLoaderGetOperator:
@@ -45,7 +45,7 @@ class TestOperatorLoaderGetOperator:
             (level_dir / "cases.yaml").write_text("cases: []\n", encoding="utf-8")
             (level_dir / "proto.yaml").write_text(":\n\t- broken: yaml: [[[\n", encoding="utf-8")
 
-            loader = OperatorLoader(bench_root=str(root))
+            loader = CannTaskLoader(bench_root=str(root))
             # get_operator 对损坏的 YAML 会抛出 yaml.YAMLError
             with pytest.raises(Exception):
                 loader.get_operator("level1/badop")
@@ -61,14 +61,14 @@ class TestOperatorLoaderGetOperator:
             with open(level_dir / "proto.yaml", "wb") as f:
                 f.write(b'\xff\xfe\x00\x00\xff\xff')
 
-            loader = OperatorLoader(bench_root=str(root))
+            loader = CannTaskLoader(bench_root=str(root))
             with pytest.raises(UnicodeDecodeError):
                 loader.get_operator("level1/binop")
 
     def test_missing_directory_raises_file_not_found(self):
         """不存在的算子目录应抛出 FileNotFoundError"""
         with tempfile.TemporaryDirectory() as td:
-            loader = OperatorLoader(bench_root=str(td))
+            loader = CannTaskLoader(bench_root=str(td))
             with pytest.raises(FileNotFoundError):
                 loader.get_operator("level1/NonExistentOp")
 
@@ -86,7 +86,7 @@ class TestOperatorLoaderGetOperator:
             )
 
             with caplog.at_level(logging.WARNING, logger="kernel_eval.data.operator_loader"):
-                loader = OperatorLoader(bench_root=str(root))
+                loader = CannTaskLoader(bench_root=str(root))
                 op_info = loader.get_operator("level1/add")
 
             assert op_info.name == "Add"
@@ -109,7 +109,7 @@ class TestOperatorLoaderListOperators:
             (level_dir / "proto.yaml").write_text("\tbad: : [[[\n", encoding="utf-8")
 
             with caplog.at_level(logging.WARNING, logger="kernel_eval.data.operator_loader"):
-                loader = OperatorLoader(bench_root=str(root))
+                loader = CannTaskLoader(bench_root=str(root))
                 operators = loader.list_operators()
 
             # 损坏的算子被跳过
@@ -137,7 +137,7 @@ class TestOperatorLoaderListOperators:
             (corrupt_dir / "proto.yaml").write_text("]\n:\nbad\n", encoding="utf-8")
 
             with caplog.at_level(logging.WARNING, logger="kernel_eval.data.operator_loader"):
-                loader = OperatorLoader(bench_root=str(root))
+                loader = CannTaskLoader(bench_root=str(root))
                 operators = loader.list_operators()
 
             # 有效算子被加载，损坏的被跳过
@@ -162,7 +162,7 @@ class TestOperatorLoaderGetByOperatorName:
                 encoding="utf-8"
             )
 
-            loader = OperatorLoader(bench_root=str(root))
+            loader = CannTaskLoader(bench_root=str(root))
             op_info = loader.get_operator_by_name("MyOp")
             assert op_info is not None
             assert op_info.name == "MyOp"
@@ -171,7 +171,7 @@ class TestOperatorLoaderGetByOperatorName:
     def test_not_found_returns_none(self):
         """不存在的算子应返回 None"""
         with tempfile.TemporaryDirectory() as td:
-            loader = OperatorLoader(bench_root=str(td))
+            loader = CannTaskLoader(bench_root=str(td))
             assert loader.get_operator_by_name("NonExistent") is None
 
 
@@ -192,7 +192,7 @@ class TestOperatorLoaderGetStatistics:
                     encoding="utf-8"
                 )
 
-            loader = OperatorLoader(bench_root=str(root))
+            loader = CannTaskLoader(bench_root=str(root))
             stats = loader.get_statistics()
             assert stats['total'] == 2
             assert len(stats['operators']) == 2

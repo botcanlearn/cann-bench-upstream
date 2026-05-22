@@ -31,15 +31,17 @@ from pathlib import Path
 from typing import List, Optional
 
 from .config import Config, get_config, get_project_root, set_config
-from .data.operator_loader import OperatorLoader
-from .data.case_loader import CaseLoader
+from .benches.cann import CannTaskLoader, CannCaseLoader
 from .eval.evaluator import Evaluator
 from .report.report_generator import ReportGenerator
 from .utils.path_resolver import resolve_task_dir
 
-# 尝试导入 cann_bench_golden，触发 torch.ops.cann_bench 注册
+# 导入 benches 模块，触发所有评测集组件注册（使用相对导入）
+from .benches import cann as _cann_bench
+
+# 尝试导入 cann_bench（用户提交的算子包），触发 torch.ops.cann_bench 注册
 try:
-    import cann_bench_golden
+    import cann_bench
 except ImportError:
     pass
 
@@ -55,6 +57,13 @@ def create_parser() -> argparse.ArgumentParser:
 
     # eval 命令
     eval_parser = subparsers.add_parser('eval', help='执行评测')
+
+    # === 评测集参数 ===
+    eval_parser.add_argument('--bench-name', type=str, default='cann',
+                             help='评测集名称（默认: cann）。指定后自动加载对应配置：'
+                                  'Loader、评分方案、精度判断器等。可通过 BenchRegistry 注册自定义评测集。')
+
+    # === 原有参数 ===
     eval_parser.add_argument('--source-dir', type=str, default=None,
                              help='AI生成的算子源码目录（不指定则使用已安装的cann_bench）')
     eval_parser.add_argument('--task-dir', type=str, default=None,
@@ -112,18 +121,26 @@ def create_parser() -> argparse.ArgumentParser:
 
     # list 命令
     list_parser = subparsers.add_parser('list', help='列出算子/用例')
+    list_parser.add_argument('--bench-name', type=str, default='cann',
+                             help='评测集名称（默认: cann）')
     list_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
                              help='按级别筛选')
     list_parser.add_argument('--operator', type=str, default=None,
                              help='按算子筛选')
     list_parser.add_argument('--cases', action='store_true', help='列出用例而非算子')
+    list_parser.add_argument('--task-dir', type=str, default=None,
+                             help='评测目录（默认使用配置的 tasks_root）')
 
     # info 命令
     info_parser = subparsers.add_parser('info', help='显示算子详细信息')
+    info_parser.add_argument('--bench-name', type=str, default='cann',
+                             help='评测集名称（默认: cann）')
     info_parser.add_argument('--operator', type=str, required=True,
                              help='算子名称')
     info_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
                              help='难度级别')
+    info_parser.add_argument('--task-dir', type=str, default=None,
+                             help='评测目录（默认使用配置的 tasks_root）')
 
     # config 命令
     config_parser = subparsers.add_parser('config', help='配置管理')
@@ -133,9 +150,17 @@ def create_parser() -> argparse.ArgumentParser:
                                help='设置 tasks 数据目录（--kernel-bench-root 为向后兼容别名）')
     config_parser.add_argument('--reports-dir', type=str, default=None,
                                help='设置报告输出目录')
+    config_parser.add_argument('--list-benches', action='store_true',
+                               help='列出已注册的评测集')
+    config_parser.add_argument('--list-scoring-schemes', action='store_true',
+                               help='列出已注册的评分方案')
+    config_parser.add_argument('--list-checkers', action='store_true',
+                               help='列出已注册的精度判断器')
 
     # eval-process 命令（进程池子进程专用）
     eval_process_parser = subparsers.add_parser('eval-process', help='进程池子进程执行')
+    eval_process_parser.add_argument('--bench-name', type=str, default='cann',
+                                      help='评测集名称（默认: cann）')
     eval_process_parser.add_argument('--process-id', type=int, required=True,
                                       help='进程 ID')
     eval_process_parser.add_argument('--card-id', type=int, required=True,
@@ -156,21 +181,35 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_operator_info(operator_name: str, config):
-    """按算子名称查找 OperatorInfo，返回 None 若未找到"""
+def _resolve_operator_info(operator_name: str, config, bench_name: str = "cann"):
+    """按算子名称查找 CannTaskSpec，返回 None 若未找到"""
+    from .registry import get_task_loader
     try:
-        from .data.operator_loader import OperatorLoader
-        loader = OperatorLoader(config.tasks_root)
-        return loader.get_operator_by_name(operator_name)
+        loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+        return loader.get_task_by_name(operator_name)
     except Exception:
         return None
 
 
 def _create_config_from_args(args, bench_root: str) -> Config:
-    """从命令行参数创建配置"""
+    """从命令行参数创建配置
+
+    核心逻辑：从 BenchRegistry 获取评测集完整配置
+    """
+    from .registry import get_bench_config
+
+    # 获取评测集配置（默认 cann）
+    bench_name = getattr(args, 'bench_name', 'cann')
+    bench_config = get_bench_config(bench_name)
+
     config = Config()
     config.tasks_root = bench_root
 
+    # 从 BenchConfig 设置配置
+    config.checker_name = bench_config.checker
+    config.precision_thresholds = bench_config.get_precision_thresholds()
+
+    # CLI 参数
     if getattr(args, 'reports_dir', None):
         config.reports_dir = args.reports_dir
     if args.output:
@@ -203,14 +242,15 @@ def _cmd_eval_multi_card(args, bench_root: str, filter_prefix: str, config: Conf
                          report_generator: ReportGenerator) -> int:
     """多卡并行模式评测"""
     from .eval.process_pool import ProcessPoolCoordinator, ProcessConfig
-    from .data.case_loader import CaseLoader
+    from .registry import get_case_loader
     import time
 
+    bench_name = getattr(args, 'bench_name', 'cann')
     processes_per_card = getattr(args, 'processes_per_card', 2)
     timeout_per_operator = getattr(args, 'timeout_per_operator', 300)
 
-    loader = CaseLoader(bench_root)
-    all_cases = loader.scan_all_cases()
+    loader = get_case_loader(bench_name, tasks_root=bench_root)
+    all_cases = loader.scan_all()
 
     if filter_prefix:
         all_cases = [
@@ -222,7 +262,7 @@ def _cmd_eval_multi_card(args, bench_root: str, filter_prefix: str, config: Conf
         all_cases = [c for c in all_cases if c.operator.lower() == args.operator.lower()]
 
     if args.case_id:
-        all_cases = [c for c in all_cases if c.case_id == args.case_id]
+        all_cases = [c for c in all_cases if c.case_num == args.case_id]
 
     if not all_cases:
         print("[WARN] 无匹配用例")
@@ -230,7 +270,7 @@ def _cmd_eval_multi_card(args, bench_root: str, filter_prefix: str, config: Conf
 
     rel_paths = list(set(c.rel_path for c in all_cases))
 
-    print(f"\n[INFO] 多卡并行模式")
+    print(f"\n[INFO] 多卡并行模式 [{bench_name}]")
     print(f"[INFO] Bench目录: {bench_root}")
     if filter_prefix:
         print(f"[INFO] 筛选路径: {filter_prefix}")
@@ -298,10 +338,10 @@ def _cmd_eval_source(args, config: Config, report_generator: ReportGenerator,
 
 def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerator,
                            operator_filter: list, case_filter: dict,
-                           subprocess_isolation: bool) -> int:
+                           subprocess_isolation: bool, bench_name: str = "cann") -> int:
     """跳过安装评测"""
     # F007: 子进程评测路径（--skip-install，由父进程在 subprocess_isolation=True
-    # 模式下 fork+exec 调用）旧版完全跳过 APIGuard.snapshot()，导致约 1/2 的
+    # 模式下 fork+exec 用用）旧版完全跳过 APIGuard.snapshot()，导致约 1/2 的
     # 评测路径不受 timing API 保护。在此入口显式 snapshot，进程退出时由
     # api_guard 已注册的 atexit 钩子负责 restore（防止 torch_npu 自己 atexit
     # 时用到被篡改的 API）。
@@ -312,7 +352,7 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
     evaluator = Evaluator(config)
 
     if args.operator:
-        op_info = _resolve_operator_info(args.operator, config)
+        op_info = _resolve_operator_info(args.operator, config, bench_name)
         result = evaluator.evaluate_operator(
             operator=args.operator,
             rel_path=op_info.rel_path if op_info else args.operator,
@@ -341,12 +381,12 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
 
 
 def _cmd_eval_golden(args, config: Config, report_generator: ReportGenerator,
-                     operator_filter: list, case_filter: dict) -> int:
+                     operator_filter: list, case_filter: dict, bench_name: str = "cann") -> int:
     """单卡 Golden 模式评测"""
     evaluator = Evaluator(config)
 
     if args.operator:
-        op_info = _resolve_operator_info(args.operator, config)
+        op_info = _resolve_operator_info(args.operator, config, bench_name)
         result = evaluator.evaluate_golden_only(
             operator=args.operator,
             rel_path=op_info.rel_path if op_info else args.operator,
@@ -367,6 +407,7 @@ def _cmd_eval_golden(args, config: Config, report_generator: ReportGenerator,
 def cmd_eval(args):
     """执行评测命令"""
     project_root = get_project_root()
+    bench_name = getattr(args, 'bench_name', 'cann')
 
     # 解析 --task-dir 参数
     bench_root, filter_prefix = resolve_task_dir(args.task_dir, project_root)
@@ -410,9 +451,9 @@ def cmd_eval(args):
                                case_subprocess_isolation, iterative_compile)
     elif args.source_dir and skip_install:
         ret = _cmd_eval_skip_install(args, config, report_generator, operator_filter,
-                                     case_filter, subprocess_isolation)
+                                     case_filter, subprocess_isolation, bench_name)
     else:
-        ret = _cmd_eval_golden(args, config, report_generator, operator_filter, case_filter)
+        ret = _cmd_eval_golden(args, config, report_generator, operator_filter, case_filter, bench_name)
 
     # 生成报告
     report = report_generator.generate()
@@ -432,54 +473,65 @@ def cmd_eval(args):
 
 def cmd_list(args):
     """列出算子/用例"""
+    from .registry import get_task_loader, get_case_loader
+
     config = get_config()
+    bench_name = getattr(args, 'bench_name', 'cann')
 
     if args.cases:
         # 列出用例
-        case_loader = CaseLoader(config.tasks_root)
+        case_loader = get_case_loader(bench_name, tasks_root=config.tasks_root)
 
         if args.operator:
             cases = case_loader.scan_by_operator(args.operator)
         else:
-            cases = case_loader.scan_all_cases()
+            cases = case_loader.scan_all()
 
-        print(f"\n共 {len(cases)} 个用例:")
+        print(f"\n[{bench_name}] 共 {len(cases)} 个用例:")
         for case in cases[:50]:  # 限制显示数量
-            print(f"  {case.rel_path}_{case.operator}_{case.case_id}: {case.dtypes}")
+            print(f"  {case.rel_path}_{case.operator}_{case.case_num}: {case.dtypes}")
         if len(cases) > 50:
             print(f"  ... 还有 {len(cases) - 50} 个用例")
 
     else:
         # 列出算子
-        operator_loader = OperatorLoader(config.tasks_root)
-        operators = operator_loader.list_operators()
+        task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+        operators = task_loader.list_tasks()
 
-        print(f"\n共 {len(operators)} 个算子:")
-        for op in operators:
+        print(f"\n[{bench_name}] 共 {len(operators)} 个算子:")
+        for op in operators[:50]:
             diff_info = f" ({op.difficulty})" if op.difficulty else ""
-            print(f"  {op.name}{diff_info}: {op.category} - {op.description[:50]}")
+            desc = op.description[:50] if op.description else ""
+            print(f"  {op.name}{diff_info}: {op.category} - {desc}")
+        if len(operators) > 50:
+            print(f"  ... 还有 {len(operators) - 50} 个算子")
 
     return 0
 
 
 def cmd_info(args):
     """显示算子详细信息"""
-    config = get_config()
-    operator_loader = OperatorLoader(config.tasks_root)
+    from .registry import get_task_loader, get_case_loader
 
-    op_info = operator_loader.get_operator_by_name(args.operator)
+    config = get_config()
+    bench_name = getattr(args, 'bench_name', 'cann')
+
+    task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+
+    op_info = task_loader.get_task_by_name(args.operator)
     if op_info is None:
         print(f"[ERROR] 算子 {args.operator} 不存在")
         return 1
 
-    print(f"\n算子信息:")
+    print(f"\n[{bench_name}] 算子信息:")
     print(f"  名称: {op_info.name}")
     print(f"  路径: {op_info.rel_path}")
     print(f"  类别: {op_info.category}")
     print(f"  难度: {op_info.difficulty}")
     print(f"  公式: {op_info.formula}")
     print(f"  描述: {op_info.description}")
-    print(f"  目录: {op_info.dir_name}")
+    if hasattr(op_info, 'dir_name'):
+        print(f"  目录: {op_info.dir_name}")
     print(f"\n接口签名:")
     print(f"  {op_info.schema}")
     print(f"\n输入:")
@@ -494,7 +546,7 @@ def cmd_info(args):
         print(f"  - {attr.name}: {attr.type}{default_str}")
 
     # 显示用例统计
-    case_loader = CaseLoader(config.tasks_root)
+    case_loader = get_case_loader(bench_name, tasks_root=config.tasks_root)
     cases = case_loader.scan_by_operator(args.operator)
     print(f"\n用例数: {len(cases)}")
 
@@ -515,13 +567,47 @@ def cmd_config(args):
         set_config(config)
         print(f"[INFO] reports_dir 设置为: {config.reports_dir}")
 
-    if args.show or not (args.tasks_root or args.reports_dir):
+    # 列出已注册的评测集
+    if args.list_benches:
+        from .registry import BenchRegistry
+        benches = BenchRegistry.list_benches()
+        print("\n已注册的评测集:")
+        for bench in benches:
+            config = BenchRegistry.get(bench)
+            desc = config.description if config else ""
+            print(f"  - {bench}: {desc}")
+        return
+
+    # 列出已注册的评分方案
+    if args.list_scoring_schemes:
+        from .report.scoring_scheme import ScoringSchemeRegistry
+        schemes = ScoringSchemeRegistry.list_schemes()
+        print("\n已注册的评分方案:")
+        for scheme_name in schemes:
+            scheme = ScoringSchemeRegistry.get(scheme_name)
+            desc = scheme.get_scheme_description() if scheme else ""
+            print(f"  - {scheme_name}: {desc}")
+        return
+
+    # 列出已注册的精度判断器
+    if args.list_checkers:
+        from .eval.checkers import list_correctness_checkers, get_checker_info
+        checkers = list_correctness_checkers()
+        print("\n已注册的精度判断器:")
+        for checker_name in checkers:
+            info = get_checker_info(checker_name)
+            desc = info.get('description', '') if info else ''
+            print(f"  - {checker_name}: {desc}")
+        return
+
+    if args.show or not (args.tasks_root or args.reports_dir or args.list_benches or args.list_scoring_schemes or args.list_checkers):
         print("\n当前配置:")
         print(f"  tasks_root: {config.tasks_root}")
         print(f"  reports_dir: {config.reports_dir}")
         print(f"  source_dir: {config.source_dir}")
         print(f"  warmup: {config.warmup}")
         print(f"  repeat: {config.repeat}")
+        print(f"  checker: {config.checker_name}")
         print(f"\n精度阈值:")
         for dtype, threshold in config.precision_thresholds.items():
             # 显示阈值和10倍阈值（MARE阈值）
@@ -529,6 +615,70 @@ def cmd_config(args):
             print(f"  {dtype}: threshold={threshold:.6f}, mare_threshold={mare_threshold:.6f}")
 
     return 0
+
+
+def _evaluate_cases_batch(evaluator, cases, golden_loader, process_id="0"):
+    """评测一批用例，打印进度，返回 EvalCaseResult 列表。
+
+    从 cmd_eval_process 的 rel_paths / cases_file 两处重复循环中抽取。
+    """
+    case_results = []
+    for i, case in enumerate(cases, 1):
+        case_id_str = case.get_case_id_str()
+        print(f"[Process {process_id}] [{i}/{len(cases)}] {case_id_str}")
+
+        golden_func = golden_loader.get_golden_function(case.rel_path)
+        result = evaluator.evaluate_case(case, golden_func)
+        case_results.append(result)
+
+        status = "✅" if result.success else "❌"
+        elapsed = result.perf_result.elapsed_us if result.perf_result else 0
+        speedup = result.get_speedup()
+        acc_info = ""
+        if result.accuracy_result:
+            metadata = result.accuracy_result.get_metadata()
+            mere = metadata.get('mere', 0.0)
+            mare = metadata.get('mare', 0.0)
+            if hasattr(result.accuracy_result, 'output_results') and result.accuracy_result.output_results:
+                if result.success:
+                    acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
+                else:
+                    for sr in result.accuracy_result.output_results:
+                        if not sr.is_passed() and not sr.get_error_msg().startswith("(跳过"):
+                            acc_info = sr.format_summary().replace("❌ ", "")
+                            break
+            else:
+                acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
+        speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
+        if result.error_msg and "\n" in result.error_msg:
+            error_hint = result.error_msg.split("\n")[0]
+        else:
+            error_hint = result.error_msg[:80] if result.error_msg else ""
+        print(
+            f"[Process {process_id}] [{i}/{len(cases)}] "
+            f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
+        )
+
+    return case_results
+
+
+def _build_op_result_dict(rel_path, operator_name, case_results):
+    """从 case 评测结果构建算子级 EvalOperatorResult 字典（供 JSON 序列化）。"""
+    from .eval.results import EvalOperatorResult, summarize_case_results
+
+    summary = summarize_case_results(case_results)
+    op_result = EvalOperatorResult(
+        rel_path=rel_path,
+        operator=operator_name,
+        total_cases=len(case_results),
+        passed_cases=summary.passed,
+        failed_cases=summary.failed,
+        skipped_cases=summary.skipped,
+        results=case_results,
+        pass_rate=summary.pass_rate,
+        avg_speedup=summary.avg_speedup,
+    )
+    return op_result.to_dict()
 
 
 def cmd_eval_process(args):
@@ -590,8 +740,8 @@ def cmd_eval_process(args):
 
     from .eval.evaluator import Evaluator
     from .eval.results import EvalOperatorResult, EvalCaseResult, summarize_case_results
-    from .data.case_loader import CaseLoader, CaseInfo
-    from .data.golden_loader import GoldenLoader
+    from .benches.cann import CannCaseLoader, CannCaseSpec
+    from .benches.cann import GoldenLoader
 
     evaluator = Evaluator(config)
     results = []
@@ -606,8 +756,8 @@ def cmd_eval_process(args):
             for rel_path in rel_paths:
                 print(f"[Process {args.process_id}] 开始评测算子 {rel_path}")
                 # 获取算子信息
-                from .data.operator_loader import OperatorLoader
-                op_loader = OperatorLoader(config.tasks_root)
+                from .benches.cann import CannTaskLoader
+                op_loader = CannTaskLoader(config.tasks_root)
                 try:
                     op_info = op_loader.get_operator(rel_path)
                     operator_name = op_info.name
@@ -615,12 +765,12 @@ def cmd_eval_process(args):
                     # 兜底从目录名取算子名：目录名是 snake_case，proto.yaml 中的 name 是 PascalCase，
                     # 报告中会出现命名不一致。打印告警提示 proto.yaml 缺失/损坏。
                     operator_name = Path(rel_path).name
-                    print(f"[WARN] OperatorLoader.get_operator({rel_path}) 失败 "
+                    print(f"[WARN] CannTaskLoader.get_operator({rel_path}) 失败 "
                           f"({type(e).__name__}: {e})，回退到目录名 '{operator_name}'。"
                           f"该算子在报告中将使用 snake_case 命名，与 proto.yaml 不一致。")
 
                 # 加载该算子的用例并评测
-                case_loader = CaseLoader(config.tasks_root)
+                case_loader = CannCaseLoader(config.tasks_root)
                 cases = case_loader.scan_by_rel_path(rel_path)
 
                 if not cases:
@@ -629,89 +779,40 @@ def cmd_eval_process(args):
 
                 # 评测每个用例
                 golden_loader = GoldenLoader(config.tasks_root)
-                case_results = []
-                for i, case in enumerate(cases, 1):
-                    case_id_str = case.get_case_id_str()
-                    print(f"[Process {args.process_id}] [{i}/{len(cases)}] {case_id_str}")
+                case_results = _evaluate_cases_batch(
+                    evaluator, cases, golden_loader, args.process_id)
 
-                    golden_func = golden_loader.get_golden_function(case.rel_path)
-                    result = evaluator.evaluate_case(case, golden_func)
-                    case_results.append(result)
-
-                    status = "✅" if result.success else "❌"
-                    elapsed = result.perf_result.elapsed_us if result.perf_result else 0
-                    speedup = result.get_speedup()
-                    # 精度信息
-                    acc_info = ""
-                    if result.accuracy_result:
-                        mere = result.accuracy_result.mere
-                        mare = result.accuracy_result.mare
-                        # 多输出算子：显示每个输出的判定摘要
-                        if hasattr(result.accuracy_result, 'output_results') and result.accuracy_result.output_results:
-                            # 通过时显示聚合值，失败时显示第一个失败输出
-                            if result.success:
-                                acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
-                            else:
-                                # 找到第一个失败的输出
-                                for sr in result.accuracy_result.output_results:
-                                    if not sr.passed and not sr.error_msg.startswith("(跳过"):
-                                        acc_info = sr.format_summary().replace("❌ ", "")
-                                        break
-                        else:
-                            acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
-                    # speedup 信息
-                    speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
-                    # 多输出失败时显示更详细的错误（不截断）
-                    if result.error_msg and "\n" in result.error_msg:
-                        error_hint = result.error_msg.split("\n")[0]  # 只显示第一行
-                    else:
-                        error_hint = result.error_msg[:80] if result.error_msg else ""
-                    print(
-                        f"[Process {args.process_id}] [{i}/{len(cases)}] "
-                        f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
-                    )
-
-                # 合并为算子结果
-                summary = summarize_case_results(case_results)
-
-                op_result = EvalOperatorResult(
-                    rel_path=rel_path,
-                    operator=operator_name,
-                    total_cases=len(cases),
-                    passed_cases=summary.passed,
-                    failed_cases=summary.failed,
-                    skipped_cases=summary.skipped,
-                    results=case_results,
-                    pass_rate=summary.pass_rate,
-                    avg_speedup=summary.avg_speedup,
-                )
-                results.append(op_result.to_dict())
-                print(f"[Process {args.process_id}] {rel_path}: 通过 {summary.passed}/{len(cases)}")
+                results.append(_build_op_result_dict(rel_path, operator_name, case_results))
+                n_passed = sum(1 for r in case_results if r.success)
+                print(f"[Process {args.process_id}] {rel_path}: 通过 {n_passed}/{len(cases)}")
 
         elif args.cases_file:
             # case_parallel 模式
             with open(args.cases_file, 'r') as f:
                 cases_data = json.load(f)
 
-            # 重建 CaseInfo 对象
+            # 重建 CannCaseSpec 对象
             cases = []
             for c in cases_data:
-                case = CaseInfo(
+                case_num = c['case_id']  # 原 case_id 是数字
+                display_path = c.get('op_dir_name', '') if c.get('op_dir_name') and c['rel_path'] == "." else c['rel_path']
+                case_id_str = f"{display_path}_{case_num}"
+
+                case = CannCaseSpec(
+                    case_id=case_id_str,
                     rel_path=c['rel_path'],
                     operator=c['operator'],
-                    case_id=c['case_id'],
+                    case_num=case_num,
                     input_shapes=c['input_shapes'],
                     dtypes=c['dtypes'],
                     value_ranges=c['value_ranges'],
                     attrs=c.get('attrs', {}),
                     note=c.get('note', ''),
                     yaml_path=c.get('yaml_path', ''),
-                    op_dir_name=c.get('op_dir_name', ''),
+                    baseline_perf_us=c.get('baseline_perf_us', 0.0),
+                    t_hw_us=c.get('t_hw_us', 0.0),
+                    metadata={'op_dir_name': c.get('op_dir_name', '')},
                 )
-                if 'baseline_perf_us' in c:
-                    case.baseline_perf_us = c['baseline_perf_us']
-                if 't_hw_us' in c:
-                    case.t_hw_us = c['t_hw_us']
                 cases.append(case)
 
             operator = cases[0].operator if cases else 'unknown'
@@ -719,68 +820,11 @@ def cmd_eval_process(args):
 
             print(f"[Process {args.process_id}] 评测用例: {len(cases)} 个 ({operator})")
 
-            # 获取 golden 函数
             golden_loader = GoldenLoader(config.tasks_root)
+            case_results = _evaluate_cases_batch(
+                evaluator, cases, golden_loader, args.process_id)
 
-            case_results = []
-            for i, case in enumerate(cases, 1):
-                case_id_str = case.get_case_id_str()
-                print(f"[Process {args.process_id}] [{i}/{len(cases)}] {case_id_str}")
-
-                # 使用 golden 作为 AI 算子（模拟评测）
-                golden_func = golden_loader.get_golden_function(case.rel_path)
-
-                result = evaluator.evaluate_case(case, golden_func)
-                case_results.append(result)
-
-                status = "✅" if result.success else "❌"
-                elapsed = result.perf_result.elapsed_us if result.perf_result else 0
-                speedup = result.get_speedup()
-                # 精度信息
-                acc_info = ""
-                if result.accuracy_result:
-                    mere = result.accuracy_result.mere
-                    mare = result.accuracy_result.mare
-                    # 多输出算子：显示每个输出的判定摘要
-                    if hasattr(result.accuracy_result, 'output_results') and result.accuracy_result.output_results:
-                        # 通过时显示聚合值，失败时显示第一个失败输出
-                        if result.success:
-                            acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
-                        else:
-                            # 找到第一个失败的输出
-                            for sr in result.accuracy_result.output_results:
-                                if not sr.passed and not sr.error_msg.startswith("(跳过"):
-                                    acc_info = sr.format_summary().replace("❌ ", "")
-                                    break
-                    else:
-                        acc_info = f"MERE={mere:.6f}, MARE={mare:.6f}"
-                # speedup 信息
-                speedup_info = f", speedup={speedup:.2f}x" if speedup > 0 else ""
-                # 多输出失败时显示更详细的错误（不截断）
-                if result.error_msg and "\n" in result.error_msg:
-                    error_hint = result.error_msg.split("\n")[0]  # 只显示第一行
-                else:
-                    error_hint = result.error_msg[:80] if result.error_msg else ""
-                print(
-                    f"[Process {args.process_id}] [{i}/{len(cases)}] "
-                    f"{case_id_str}: {status} ({elapsed:.2f}μs{speedup_info}) {acc_info} {error_hint}"
-                )
-
-            # 合并为算子结果
-            summary = summarize_case_results(case_results)
-
-            op_result = EvalOperatorResult(
-                rel_path=rel_path,
-                operator=operator,
-                total_cases=len(cases),
-                passed_cases=summary.passed,
-                failed_cases=summary.failed,
-                skipped_cases=summary.skipped,
-                results=case_results,
-                pass_rate=summary.pass_rate,
-                avg_speedup=summary.avg_speedup,
-            )
-            results.append(op_result.to_dict())
+            results.append(_build_op_result_dict(rel_path, operator, case_results))
 
         else:
             print(f"[Process {args.process_id}] ERROR: 未指定任务")

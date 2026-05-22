@@ -34,7 +34,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,7 +45,7 @@ import torch
 
 from .results import EvalOperatorResult, EvalCaseResult, summarize_case_results
 from ..config import Config, get_config, get_project_root
-from ..data.case_loader import CaseInfo
+from ..base.models import CaseSpec
 
 
 @dataclass
@@ -242,8 +242,16 @@ class OperatorScheduler:
         )
 
     def _collect_completed_tasks(self) -> List[OperatorTask]:
-        """检查并收集已完成的任务"""
+        """检查并收集已完成的任务
+
+        F033: kill-on-timeout used to call ``time.sleep(2)`` inside the
+        ``with self.lock`` critical section, blocking other cards from
+        scheduling new work for 2s on every timeout. Split the work:
+        identify timed-out tasks under the lock, then release it and do
+        the SIGTERM / sleep / SIGKILL / wait outside.
+        """
         completed_tasks = []
+        timed_out_tasks: List[OperatorTask] = []
 
         with self.lock:
             for card_id, tasks in list(self.running_tasks.items()):
@@ -253,32 +261,11 @@ class OperatorScheduler:
                     if task.completed:
                         continue
 
-                    # 检查是否超时
                     elapsed = time.time() - task.started_at
                     if elapsed > task.timeout:
                         print(f"[WARN] Card {task.card_id}: 算子 {task.rel_path} 超时 ({task.timeout}s)")
-                        # 杀死整个进程组（包括 profiler fork 子进程）
-                        try:
-                            import signal
-                            pgid = os.getpgid(task.process.pid)
-                            os.killpg(pgid, signal.SIGTERM)
-                            # 给予 2 秒时间让进程组清理
-                            time.sleep(2)
-                            # 检查是否还有进程存活
-                            try:
-                                os.killpg(pgid, 0)  # 检查进程组是否还存在
-                                # 如果还存在，发送 SIGKILL
-                                os.killpg(pgid, signal.SIGKILL)
-                            except OSError:
-                                pass  # 进程组已不存在
-                        except OSError:
-                            # 进程组不存在，直接杀死进程
-                            task.process.kill()
-                        try:
-                            task.process.wait(timeout=2)
-                        except subprocess.TimeoutExpired:
-                            task.process.kill()
                         task.completed = True
+                        timed_out_tasks.append(task)
                         completed_tasks.append(task)
                         continue
 
@@ -297,24 +284,59 @@ class OperatorScheduler:
 
                 self.running_tasks[card_id] = remaining_tasks
 
+        # Kill the timed-out tasks outside the lock so other cards can
+        # keep scheduling. SIGTERM → 2s grace → SIGKILL → wait.
+        for task in timed_out_tasks:
+            self._kill_timed_out_task(task)
+
         return completed_tasks
 
-    def _read_result(self, task: OperatorTask) -> Dict:
-        """读取任务结果文件"""
-        if task.output_file and os.path.exists(task.output_file):
+    def _kill_timed_out_task(self, task: OperatorTask) -> None:
+        """SIGTERM grace → SIGKILL — process group cleanup for timed-out task."""
+        try:
+            import signal
+            pgid = os.getpgid(task.process.pid)
+            os.killpg(pgid, signal.SIGTERM)
+            time.sleep(2)
             try:
-                with open(task.output_file, 'r') as f:
-                    data = json.load(f)
-                # 清理临时文件
-                os.unlink(task.output_file)
-                return data.get("results", [{}])[0] if data.get("results") else {}
-            except json.JSONDecodeError:
-                print(f"[WARN] Card {task.card_id}: 算子 {task.rel_path} 结果文件解析失败")
-                return {}
-            except Exception as e:
-                print(f"[WARN] Card {task.card_id}: 算子 {task.rel_path} 读取结果失败: {e}")
-                return {}
-        return {}
+                os.killpg(pgid, 0)
+                os.killpg(pgid, signal.SIGKILL)
+            except OSError:
+                pass
+        except OSError:
+            task.process.kill()
+        try:
+            task.process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            task.process.kill()
+
+    def _read_result(self, task: OperatorTask) -> Dict:
+        """读取任务结果文件
+
+        F031: tempfile cleanup used to live inside the success branch only.
+        On JSONDecodeError / generic exceptions the file stayed in /tmp,
+        and a batch run with many failures would fill the disk with
+        `cannbench_op_*.json` orphans. Use try/finally so cleanup runs
+        on every exit path.
+        """
+        if not (task.output_file and os.path.exists(task.output_file)):
+            return {}
+        try:
+            with open(task.output_file, 'r') as f:
+                data = json.load(f)
+            return data.get("results", [{}])[0] if data.get("results") else {}
+        except json.JSONDecodeError:
+            print(f"[WARN] Card {task.card_id}: 算子 {task.rel_path} 结果文件解析失败")
+            return {}
+        except Exception as e:
+            print(f"[WARN] Card {task.card_id}: 算子 {task.rel_path} 读取结果失败: {e}")
+            return {}
+        finally:
+            try:
+                if task.output_file and os.path.exists(task.output_file):
+                    os.unlink(task.output_file)
+            except OSError:
+                pass
 
 
 class ProcessWorker:
@@ -349,7 +371,7 @@ class ProcessWorker:
     def start(
         self,
         rel_paths: List[str] = None,
-        cases: List[CaseInfo] = None,
+        cases: List[CaseSpec] = None,
     ):
         """启动子进程
 
@@ -436,12 +458,12 @@ class ProcessWorker:
         )
         self._started = True
 
-    def _serialize_cases(self, cases: List[CaseInfo]) -> List[Dict]:
+    def _serialize_cases(self, cases: List[CaseSpec]) -> List[Dict]:
         """序列化用例数据"""
         return [
             {
-                "rel_path": c.rel_path,
-                "operator": c.operator,
+                "rel_path": getattr(c, 'rel_path', ''),
+                "operator": getattr(c, 'operator', ''),
                 "case_id": c.case_id,
                 "input_shapes": c.input_shapes,
                 "dtypes": c.dtypes,
@@ -449,7 +471,7 @@ class ProcessWorker:
                 "attrs": getattr(c, 'attrs', {}),
                 "note": getattr(c, 'note', ''),
                 "yaml_path": getattr(c, 'yaml_path', ''),
-                "baseline_perf_us": c.baseline_perf_us,
+                "baseline_perf_us": getattr(c, 'baseline_perf_us', 0.0),
                 "op_dir_name": getattr(c, 'op_dir_name', ''),
             }
             for c in cases
@@ -478,7 +500,11 @@ class ProcessWorker:
             # 使用 select 实现非阻塞读取，确保能及时检测超时
             import select
 
-            stdout_lines = []
+            # F035: was an unbounded list — verbose / profiler-Level2
+            # children can dump tens of thousands of lines, and the buffer
+            # is only used (if at all) for tail context. Use a bounded
+            # deque so peak memory stays small.
+            stdout_lines: deque = deque(maxlen=10000)
             while True:
                 # 计算剩余时间
                 remaining = deadline - time.time()
@@ -717,8 +743,8 @@ class ProcessPoolCoordinator:
 
     def distribute_cases(
         self,
-        cases: List[CaseInfo],
-    ) -> Dict[int, List[CaseInfo]]:
+        cases: List[CaseSpec],
+    ) -> Dict[int, List[CaseSpec]]:
         """分配 cases 到进程池
 
         Args:
@@ -752,8 +778,20 @@ class ProcessPoolCoordinator:
             算子评测结果列表
         """
         if self.card_count == 0:
-            print("[WARN] 无可用 NPU 卡")
-            return []
+            # F120: 旧版仅 WARN + 返回空列表 → 多卡评测静默降级为不评测，
+            # 前端看到 "0 算子通过" 无法分辨是设备故障还是算子集为空。
+            # 改为抛 RuntimeError 阻断 — 调用方可显式 catch 走 CPU/单卡 fallback。
+            # ALLOW_NO_NPU_CARDS=1 提供 escape hatch 给只想 dry-run 的场景。
+            if os.environ.get("ALLOW_NO_NPU_CARDS") == "1":
+                print(
+                    "[WARN] 无可用 NPU 卡 (ALLOW_NO_NPU_CARDS=1 — 评测返回空结果)",
+                    flush=True,
+                )
+                return []
+            raise RuntimeError(
+                "[ERROR] 无可用 NPU 卡 (card_count=0)。多卡评测需要至少 1 张 NPU。"
+                "如确需在无 NPU 环境跑空评测做 dry-run，设置 ALLOW_NO_NPU_CARDS=1。"
+            )
 
         print(f"[INFO] 配置: {self.card_count} 卡 × {self.process_config.processes_per_card} 并发/卡")
         print(f"[INFO] 单算子超时: {self.process_config.timeout_per_operator}s")
@@ -782,6 +820,39 @@ class ProcessPoolCoordinator:
         scheduler.submit_operators(rel_paths)
         return scheduler.run()
 
+    def _collect_worker_results(self) -> List[EvalCaseResult]:
+        """从所有已启动 worker 收集并解析结果"""
+        all_case_results = []
+        started = [w for w in self.workers if w._started]
+        with ThreadPoolExecutor(max_workers=max(len(started), 1)) as executor:
+            futures = {executor.submit(worker.wait): worker for worker in started}
+            for future in as_completed(futures):
+                for data in future.result():
+                    if 'results' in data:
+                        for case_data in data['results']:
+                            all_case_results.append(EvalCaseResult.from_dict(case_data))
+                    else:
+                        all_case_results.append(EvalCaseResult.from_dict(data))
+        return all_case_results
+
+    def _build_operator_result(
+        self, operator_name: str, rel_path: str,
+        total_cases: int, all_case_results: List[EvalCaseResult],
+    ) -> EvalOperatorResult:
+        """汇总 case 结果并构造 EvalOperatorResult"""
+        summary = summarize_case_results(all_case_results)
+        return EvalOperatorResult(
+            rel_path=rel_path,
+            operator=operator_name,
+            total_cases=total_cases,
+            passed_cases=summary.passed,
+            failed_cases=summary.failed,
+            skipped_cases=summary.skipped,
+            results=all_case_results,
+            pass_rate=summary.pass_rate,
+            avg_speedup=summary.avg_speedup,
+        )
+
     def evaluate_cases_parallel(
         self,
         rel_path: str,
@@ -797,8 +868,8 @@ class ProcessPoolCoordinator:
             算子评测结果（合并所有进程结果）
         """
         # 加载用例
-        from ..data.case_loader import CaseLoader
-        loader = CaseLoader(self.base_config.tasks_root)
+        from ..registry.loader_registry import get_case_loader
+        loader = get_case_loader(tasks_root=self.base_config.tasks_root)
         cases = loader.scan_by_rel_path(rel_path)
 
         if not cases:
@@ -817,7 +888,8 @@ class ProcessPoolCoordinator:
 
         operator_name = cases[0].operator
         # 当 rel_path == "." 时，使用 op_dir_name 显示
-        display_path = cases[0].op_dir_name if cases[0].op_dir_name and rel_path == "." else rel_path
+        op_dir_name = cases[0].metadata.get('op_dir_name', '')
+        display_path = op_dir_name if op_dir_name and rel_path == "." else rel_path
         print(f"[INFO] 算子 {display_path} ({operator_name}), 用例数: {len(cases)}")
 
         # 分配用例到进程
@@ -835,43 +907,13 @@ class ProcessPoolCoordinator:
             if proc_id in distribution and distribution[proc_id]:
                 worker.start(cases=distribution[proc_id])
 
-        # 等待并收集结果（case_parallel 模式）
-        all_case_results = []
-        started_workers = [w for w in self.workers if w._started]
-
-        with ThreadPoolExecutor(max_workers=len(started_workers)) as executor:
-            futures = {executor.submit(worker.wait): worker for worker in started_workers}
-            for future in as_completed(futures):
-                results_data = future.result()
-                for data in results_data:
-                    # data 是 EvalOperatorResult.to_dict()，需要提取其中的 results
-                    if 'results' in data:
-                        for case_data in data['results']:
-                            result = EvalCaseResult.from_dict(case_data)
-                            all_case_results.append(result)
-                    else:
-                        # 兼容：如果直接是 case result
-                        result = EvalCaseResult.from_dict(data)
-                        all_case_results.append(result)
-
-        # 合并统计
-        summary = summarize_case_results(all_case_results)
-
-        return EvalOperatorResult(
-            rel_path=rel_path,
-            operator=operator_name,
-            total_cases=len(cases),
-            passed_cases=summary.passed,
-            failed_cases=summary.failed,
-            skipped_cases=summary.skipped,
-            results=all_case_results,
-            pass_rate=summary.pass_rate,
-            avg_speedup=summary.avg_speedup,
-        )
+        # 等待并收集结果
+        all_case_results = self._collect_worker_results()
+        return self._build_operator_result(operator_name, rel_path, len(cases), all_case_results)
 
     def evaluate_cases(
         self,
-        cases: List[CaseInfo],
+        cases: List[CaseSpec],
         rel_path: str,
         progress_callback: callable = None,
     ) -> EvalOperatorResult:
@@ -919,42 +961,45 @@ class ProcessPoolCoordinator:
             if proc_id in distribution and distribution[proc_id]:
                 worker.start(cases=distribution[proc_id])
 
-        # 等待并收集结果（case_parallel 模式）
-        all_case_results = []
-        for worker in self.workers:
-            if worker._started:
-                results_data = worker.wait()
-                for data in results_data:
-                    # data 是 EvalOperatorResult.to_dict()，需要提取其中的 results
-                    if 'results' in data:
-                        for case_data in data['results']:
-                            result = EvalCaseResult.from_dict(case_data)
-                            all_case_results.append(result)
-                    else:
-                        # 兼容：如果直接是 case result
-                        result = EvalCaseResult.from_dict(data)
-                        all_case_results.append(result)
-
-        # 合并统计
-        summary = summarize_case_results(all_case_results)
-
-        return EvalOperatorResult(
-            rel_path=rel_path,
-            operator=operator_name,
-            total_cases=len(cases),
-            passed_cases=summary.passed,
-            failed_cases=summary.failed,
-            skipped_cases=summary.skipped,
-            results=all_case_results,
-            pass_rate=summary.pass_rate,
-            avg_speedup=summary.avg_speedup,
-        )
+        # 等待并收集结果
+        all_case_results = self._collect_worker_results()
+        return self._build_operator_result(operator_name, rel_path, len(cases), all_case_results)
 
     def shutdown(self):
-        """关闭所有进程"""
+        """关闭所有进程
+
+        F034: was sending SIGKILL straight away. Children never got a
+        chance to run their `finally` blocks, so torch_npu profiler fork
+        children were orphaned and held NPU device context — the next
+        evaluation could fail with "device is in use" / Bus error. Send
+        SIGTERM first, give a grace window, then SIGKILL anything that
+        is still alive.
+        """
+        grace_sec = 5
         for worker in self.workers:
             if worker.is_alive():
-                worker._process.kill()
+                try:
+                    worker._process.terminate()  # SIGTERM
+                except Exception:
+                    pass
+
+        if self.workers:
+            deadline = time.time() + grace_sec
+            for worker in self.workers:
+                remaining = max(deadline - time.time(), 0)
+                if remaining <= 0 or not worker.is_alive():
+                    continue
+                try:
+                    worker._process.wait(timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    pass
+
+        for worker in self.workers:
+            if worker.is_alive():
+                try:
+                    worker._process.kill()
+                except Exception:
+                    pass
         self.workers = []
 
     def get_stats(self) -> Dict:

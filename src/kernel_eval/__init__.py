@@ -18,17 +18,32 @@ kernel_eval 评测工程包
 涵盖精度验证和性能评测两个核心维度
 
 主要模块：
-- data: 数据层（算子/用例/Golden加载、数据生成）
+- data: 数据层（任务/用例加载器、Golden加载、数据生成）
 - eval: 评测层（精度评测、性能评测、算子执行器）
 - report: 报告层（JSON+Markdown报告、评分计算）
 - utils: 工具层（设备管理、类型映射、精度验证）
 
+架构：
+- TaskLoader/CaseLoader: 加载器抽象基类
+- CannTaskLoader/CannCaseLoader: CANN特化加载器
+- LoaderRegistry: 加载器注册机制（支持多评测体系接入）
+
 使用方法：
     import kernel_eval
 
-    # 加载算子信息
-    from kernel_eval.data.operator_loader import OperatorLoader
-    loader = OperatorLoader("tasks")
+    # 加载任务信息（推荐方式）
+    from kernel_eval.benches.cann import CannTaskLoader, CannCaseLoader
+    task_loader = CannTaskLoader("tasks")
+    task_spec = task_loader.get_task("level1/Exp")
+
+    # 或使用注册机制
+    from kernel_eval.data import get_task_loader, get_case_loader
+    task_loader = get_task_loader("cann", bench_root="tasks")
+    case_loader = get_case_loader("cann", bench_root="tasks")
+
+    # 向后兼容方式
+    from kernel_eval.benches.cann import CannTaskLoader, CannCaseLoader
+    loader = CannTaskLoader("tasks")
     op_info = loader.get_operator("level1/Exp")
 
     # 执行评测

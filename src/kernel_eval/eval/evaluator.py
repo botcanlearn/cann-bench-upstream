@@ -37,28 +37,34 @@ from inspect import Parameter, signature
 import torch
 
 from ..config import Config, get_config, get_project_root
-from ..data.case_loader import CaseLoader, CaseInfo
-from ..data.golden_loader import GoldenLoader
+from ..registry.loader_registry import get_task_loader, get_case_loader
+from ..registry.golden_registry import get_golden_loader
+from ..registry.bench_registry import get_bench_config
 from ..data.data_generator import DataGenerator
-from ..data.operator_loader import OperatorLoader, OperatorInfo
 from ..data.package_manager import PackageManager, PackageInfo
+from ..base.models import TaskSpec, CaseSpec
 from ..utils.device_manager import DeviceManager, DeviceConfig
 from ..utils.param_builder import ParamBuilder
-from ..utils.tensor_utils import tensors_to_cpu
+from ..utils.tensor_utils import tensors_to_cpu, tensors_to_fp64_cpu
 from .op_runner import OpRunner, OpRunResult
 from .accuracy_eval import AccuracyEvaluator, AccuracyResult
 from .perf_eval import PerfEvaluator, PerfResult
 from .results import EvalCaseResult, EvalOperatorResult, EvalSessionResult
 from .failure_synthesizer import FailureSynthesizer
-from .operator_matcher import OperatorMatcher
+from ..registry.matcher_registry import get_operator_matcher
 from .subprocess_runner import SubprocessRunner
+
+# 导入 benches 模块，确保 Registry 已注册
+from .. import benches as _benches
 
 
 class Evaluator:
     """综合评测调度器"""
 
-    def __init__(self, config: Config = None):
+    def __init__(self, config: Config = None, bench_name: str = 'cann'):
         self.config = config or get_config()
+        self.bench_name = bench_name
+        self.bench_config = get_bench_config(self.bench_name)
 
         # 初始化设备管理器
         device_config = DeviceConfig(
@@ -81,12 +87,18 @@ class Evaluator:
         self.op_runner = OpRunner(self.device_manager, self.perf_evaluator)
 
         # 初始化精度评测器
-        self.accuracy_evaluator = AccuracyEvaluator(self.config.precision_thresholds)
+        self.accuracy_evaluator = AccuracyEvaluator(
+            custom_thresholds=self.config.precision_thresholds,
+            checker_name=self.config.checker_name,
+        )
 
-        # 初始化数据层组件
-        self.case_loader = CaseLoader(self.config.tasks_root)
-        self.golden_loader = GoldenLoader(self.config.tasks_root)
-        self.operator_loader = OperatorLoader(self.config.tasks_root)
+        # 初始化数据层组件（通过 Registry 获取）
+        self.case_loader = get_case_loader(self.bench_name, tasks_root=self.config.tasks_root)
+        self.golden_loader = get_golden_loader(
+            eval_system=self.bench_name,
+            bench_root=self.config.tasks_root,
+        )
+        self.operator_loader = get_task_loader(self.bench_name, tasks_root=self.config.tasks_root)
         self.data_generator = DataGenerator()
         self.param_builder = ParamBuilder(self.golden_loader)
 
@@ -94,7 +106,10 @@ class Evaluator:
         self.package_manager = PackageManager(config=self.config)
 
         # 初始化拆分模块
-        self.operator_matcher = OperatorMatcher(self.operator_loader)
+        self.operator_matcher = get_operator_matcher(
+            eval_system=self.bench_name,
+            operator_loader=self.operator_loader,
+        )
         self.failure_synthesizer = FailureSynthesizer(self.case_loader)
         kernel_eval_root = str(get_project_root() / "src")
         self.subprocess_runner = SubprocessRunner(
@@ -107,8 +122,19 @@ class Evaluator:
         """加载AI生成的算子函数（委托给 OperatorMatcher）"""
         return self.operator_matcher.load_ai_operator(operator_name)
 
-    def evaluate_case(self, case: CaseInfo, ai_op_func: Callable = None) -> EvalCaseResult:
-        """评测单个用例"""
+    def evaluate_case(self, case: CaseSpec, ai_op_func: Callable = None) -> EvalCaseResult:
+        """评测单个用例。
+
+        评测流程：
+        1. Golden 参考执行（精度策略由 bench_config.golden_precision 控制）：
+           - fp64_cpu: 升精度到 fp64 + CPU 计算，避免 NPU 溢出污染
+           - native_cpu: 原始精度在 CPU 上计算
+           - native_npu: 原始精度在 NPU 上计算
+        2. AI 算子执行（NPU + profiler 采集性能）
+        3. 精度对比（checker 三输入：AI 输出、golden 输出、同精度参考输出）
+           - fp64_cpu 时同精度参考需单独执行（golden 是 fp64，精度不同）
+           - native_cpu/native_npu 时同精度参考直接复用 golden（精度相同）
+        """
         case_id_str = case.get_case_id_str()
 
         try:
@@ -173,8 +199,14 @@ class Evaluator:
             else:
                 params = self.param_builder.build_call_params(golden_func, case, input_tensors)
 
-            # 4. 执行Golden函数获取参考结果
-            golden_result = self.op_runner.run_golden(golden_func, params, case_id_str, input_tensors)
+            # 4. 执行Golden函数获取参考结果（精度策略由 golden_precision 控制）
+            golden_inputs = self._apply_golden_precision(input_tensors)
+            if get_input_func is not None:
+                golden_params = params
+            else:
+                golden_params = self.param_builder.build_call_params(golden_func, case, golden_inputs)
+            golden_result = self.op_runner.run(golden_func, golden_params, case_id_str,
+                                               golden_inputs, to_device=self._get_golden_to_device())
             if not golden_result.success:
                 return EvalCaseResult(
                     case_id=case_id_str,
@@ -188,22 +220,18 @@ class Evaluator:
                     t_hw_us=case.t_hw_us,
                 )
 
-            # 5. 如果没有传入AI算子函数，尝试加载
+            # 5. 确定使用的 AI 算子函数
+            # 优先级：传入参数 > 加载 AI 算子
             actual_ai_func = ai_op_func
             if actual_ai_func is None:
                 try:
                     actual_ai_func = self.operator_matcher.load_ai_operator(case.operator)
                 except Exception as load_err:
-                    # 与下方"AI 算子执行失败"分支保持一致：success=False，
-                    # 不设置 accuracy_result（无精度对比可言）。该用例对
-                    # function/performance 两轴的贡献都是 0——即 0 分。
-                    # 正常路径上 matched_operators 已经做了 overlap 过滤，
-                    # 进到 except 多半是 wheel 损坏/动态加载竞态等异常情况。
                     return EvalCaseResult(
                         case_id=case_id_str,
                         rel_path=case.rel_path,
                         operator=case.operator,
-                        case_num=case.case_id,
+                        case_num=case.case_num,
                         success=False,
                         golden_run_result=golden_result,
                         error_msg=f"AI算子加载失败: {load_err}",
@@ -235,27 +263,20 @@ class Evaluator:
             dtype = self._determine_dtype(ai_result, case)
             merged_thresholds = self._get_merged_thresholds(case.rel_path)
 
-            # CPU 同精度输出
-            cpu_inputs = tensors_to_cpu(input_tensors)
-            if get_input_func is not None:
-                # get_input 已重新排序，直接按位置构建参数
-                golden_sig = signature(golden_func)
-                cpu_params = {}
-                tensor_idx = 0
-                for param_name, param in golden_sig.parameters.items():
-                    annotation = str(param.annotation) if param.annotation != Parameter.empty else ""
-                    if 'Tensor' in annotation:
-                        if tensor_idx < len(cpu_inputs):
-                            cpu_params[param_name] = cpu_inputs[tensor_idx]
-                            tensor_idx += 1
-                    elif param_name in case_attrs:
-                        cpu_params[param_name] = case_attrs[param_name]
-                    elif param.default != Parameter.empty:
-                        cpu_params[param_name] = param.default
+            # 同精度参考输出（用于 checker 小值域判断）
+            # native_cpu/native_npu 时 golden 已是同精度，直接复用以避免重复计算
+            golden_strategy = getattr(self.bench_config, 'golden_precision', 'fp64_cpu')
+            if golden_strategy in ('native_cpu', 'native_npu'):
+                native_out = golden_result.outputs
             else:
-                cpu_params = self.param_builder.build_call_params(golden_func, case, cpu_inputs)
-            with torch.no_grad():
-                cpu_out = golden_func(**cpu_params)
+                native_inputs = tensors_to_cpu(input_tensors)
+                if get_input_func is not None:
+                    native_params = params
+                else:
+                    native_params = self.param_builder.build_call_params(golden_func, case, native_inputs)
+                native_result = self.op_runner.run(golden_func, native_params, case_id_str,
+                                                   native_inputs, to_device=False)
+                native_out = native_result.outputs if native_result.success else None
 
             ignore_output_indices = self._get_ignore_output_indices(case.rel_path)
 
@@ -268,7 +289,7 @@ class Evaluator:
                 golden_output=golden_result.outputs,
                 dtype=dtype,
                 custom_thresholds=merged_thresholds,
-                cpu_output=cpu_out,
+                native_output=native_out,
                 ignore_output_indices=ignore_output_indices,
             )
 
@@ -292,11 +313,14 @@ class Evaluator:
                         sr.name = output_names[i]
 
             # 8. 性能数据已在上面的 profiler 运行中采集，直接提取
-            if accuracy_result.passed:
+            if accuracy_result.is_passed():
                 if ai_result.perf_result is not None:
                     perf_result = ai_result.perf_result
                 elif ai_result.elapsed_us > 0:
-                    perf_result = PerfResult(case_id=case_id_str, elapsed_us=ai_result.elapsed_us)
+                    perf_result = PerfResult(
+                        elapsed_us=ai_result.elapsed_us,
+                        metadata={'case_id': case_id_str}
+                    )
                 else:
                     perf_result = None
                 error_msg = None
@@ -307,13 +331,16 @@ class Evaluator:
                     output_details = accuracy_result.format_all_outputs()
                     error_msg = f"精度不达标:\n{output_details}"
                 else:
-                    # 兼容旧格式（单输出或无 output_results）
+                    # 兼容旧格式（从 metadata 获取 mere/mare）
+                    metadata = accuracy_result.get_metadata()
+                    mere = metadata.get('mere', 0.0)
+                    mare = metadata.get('mare', 0.0)
                     mare_threshold = 10 * accuracy_result.threshold if accuracy_result.threshold > 0 else 0
                     fail_reasons = []
-                    if accuracy_result.mare >= mare_threshold:
-                        fail_reasons.append(f"MARE({accuracy_result.mare:.6f}) >= mare_threshold({mare_threshold:.6f})")
-                    if accuracy_result.mere >= accuracy_result.threshold:
-                        fail_reasons.append(f"MERE({accuracy_result.mere:.6f}) >= threshold({accuracy_result.threshold:.6f})")
+                    if mare >= mare_threshold:
+                        fail_reasons.append(f"MARE({mare:.6f}) >= mare_threshold({mare_threshold:.6f})")
+                    if mere >= accuracy_result.threshold:
+                        fail_reasons.append(f"MERE({mere:.6f}) >= threshold({accuracy_result.threshold:.6f})")
                     if accuracy_result.error_msg:
                         fail_reasons.append(accuracy_result.error_msg)
                     error_msg = f"精度不达标: {', '.join(fail_reasons)}"
@@ -325,7 +352,7 @@ class Evaluator:
                 rel_path=case.rel_path,
                 operator=case.operator,
                 case_num=case.case_id,
-                success=accuracy_result.passed,
+                success=accuracy_result.is_passed(),
                 accuracy_result=accuracy_result,
                 perf_result=perf_result,
                 golden_run_result=golden_result,
@@ -376,8 +403,11 @@ class Evaluator:
             # 添加精度信息
             if result.success and result.accuracy_result:
                 acc = result.accuracy_result
-                mare_str = f"MARE={acc.mare:.6f}" if acc.mare is not None else ""
-                mere_str = f"MERE={acc.mere:.6f}" if acc.mere is not None else ""
+                metadata = acc.get_metadata()
+                mare = metadata.get('mare')
+                mere = metadata.get('mere')
+                mare_str = f"MARE={mare:.6f}" if mare is not None else ""
+                mere_str = f"MERE={mere:.6f}" if mere is not None else ""
                 acc_str = f", {mare_str}, {mere_str}" if mare_str or mere_str else ""
                 print(
                     f"[{i}/{len(cases)}] {case_id_str}: {status_icon} "
@@ -453,14 +483,14 @@ class Evaluator:
         for snake_op_name, err in (package_info.compile_errors or {}).items():
             op_info = self.operator_matcher.find_operator_info_by_snake(snake_op_name)
             if op_info is None:
-                # F006: 编译失败的 snake_name 在 OperatorMatcher 找不到对应 OperatorInfo
+                # F006: 编译失败的 snake_name 在 OperatorMatcher 找不到对应 CannTaskSpec
                 # 时旧代码静默 continue，导致这条编译失败不出现在最终报告，看起来
                 # 像"没编译就没编译" 实际是失踪。加 WARN log 让运维 / Agent 能注意到。
                 # 可能原因：tasks/ 目录有新算子但 spec 未注册 / 命名约定不一致
                 # （新 op 用 PascalCase 但 build 输出 snake_case 的 .so 时未 lookup）。
                 print(
                     f"[WARN] evaluator: 编译失败算子 {snake_op_name!r} 未在 OperatorMatcher 中找到 "
-                    f"对应 OperatorInfo，已跳过合成失败结果——该算子不会出现在最终报告中。"
+                    f"对应 CannTaskSpec，已跳过合成失败结果——该算子不会出现在最终报告中。"
                     f"请核查 tasks/<level>/<op>/proto.yaml 是否已注册。",
                     file=sys.stderr,
                     flush=True,
@@ -566,6 +596,28 @@ class Evaluator:
 
     # ---- 辅助方法 ----
 
+    def _apply_golden_precision(self, input_tensors: List) -> List:
+        """根据 bench 配置的 golden_precision 策略转换输入张量。
+
+        取值：
+          - fp64_cpu（默认）: 升精度到 float64 + CPU 计算，避免 NPU 溢出污染
+          - native_cpu: 保持原始精度在 CPU 上计算
+          - native_npu: 保持原始精度在 NPU 上计算
+        """
+        strategy = getattr(self.bench_config, 'golden_precision', 'fp64_cpu')
+        if strategy == 'fp64_cpu':
+            return tensors_to_fp64_cpu(input_tensors)
+        elif strategy == 'native_cpu':
+            return tensors_to_cpu(input_tensors)
+        elif strategy == 'native_npu':
+            return list(input_tensors)
+        return list(input_tensors)
+
+    def _get_golden_to_device(self) -> bool:
+        """golden 执行时 to_device 参数：仅 native_npu 在 NPU 上计算时为 True"""
+        strategy = getattr(self.bench_config, 'golden_precision', 'fp64_cpu')
+        return strategy == 'native_npu'
+
     def _determine_dtype(self, ai_result, case) -> str:
         """确定 dtype"""
         dtype = None
@@ -597,11 +649,12 @@ class Evaluator:
             return f"{result.ai_run_result.elapsed_us:.2f}μs"
         return "N/A"
 
-    def _filter_cases(self, cases: List[CaseInfo], filter_dict: Dict) -> List[CaseInfo]:
+    def _filter_cases(self, cases: List[CaseSpec], filter_dict: Dict) -> List[CaseSpec]:
         """筛选用例"""
         result = cases
         if 'case_id' in filter_dict:
-            result = [c for c in result if c.case_id == filter_dict['case_id']]
+            # case_num 是 CannCaseSpec 的特化字段，通过 hasattr 兼容
+            result = [c for c in result if hasattr(c, 'case_num') and c.case_num == filter_dict['case_id']]
         if 'dtype' in filter_dict:
             result = [c for c in result if filter_dict['dtype'].lower() in [d.lower() for d in c.dtypes]]
         return result
@@ -645,34 +698,35 @@ class Evaluator:
             )
 
             # 微扰：浮点输入加 0.01，防止 seed 偶然重合导致两次 inputs 相同
+            # F011: was perturbing only the first floating tensor (break after
+            # the first match), so a cheater that inspects later inputs to
+            # detect a re-run could still slip through. Perturb every
+            # floating-point tensor at every nesting level.
             for item in fresh_inputs:
                 if isinstance(item, torch.Tensor) and item.is_floating_point():
                     item.add_(0.01)
-                    break
                 elif isinstance(item, (list, tuple)):
                     for sub in item:
                         if isinstance(sub, torch.Tensor) and sub.is_floating_point():
                             sub.add_(0.01)
-                            break
-                    break
 
             # 重建 params + 跑 golden + 跑 AI
             case_id_str = case.get_case_id_str()
             params = self.param_builder.build_call_params(golden_func, case, fresh_inputs)
-            golden_result2 = self.op_runner.run_golden(golden_func, params, case_id_str, fresh_inputs)
+            golden_inputs = self._apply_golden_precision(fresh_inputs)
+            golden_params = self.param_builder.build_call_params(golden_func, case, golden_inputs)
+            golden_result2 = self.op_runner.run(golden_func, golden_params, case_id_str,
+                                                golden_inputs, to_device=self._get_golden_to_device())
             if not golden_result2.success:
                 return first_result   # golden 自己挂了，第二轮无意义，保持第一轮结果
 
-            ai_result2 = self.op_runner.run_ai_operator(
-                ai_op_func, params, case_id_str, fresh_inputs,
-                enable_profiler=False,   # 二次验证不需要 perf 数据
-            )
+            ai_result2 = self.op_runner.run(ai_op_func, params, case_id_str, fresh_inputs)
             if not ai_result2.success:
-                from .results import AccuracyResult
+                from ..base.result import AccuracyResult
                 return AccuracyResult(
                     passed=False, dtype=dtype, threshold=first_result.threshold,
                     mere=0.0, mare=0.0, max_diff=0.0,
-                    error_msg=f"二次验证失败：AI 算子崩溃 ({ai_result2.error_msg})",
+                    error_msg=f"二次验证失败：AI 算子崩溃 ({ai_result2.error})",
                 )
 
             return self.accuracy_evaluator.evaluate(
@@ -680,7 +734,7 @@ class Evaluator:
                 golden_output=golden_result2.outputs,
                 dtype=dtype,
                 custom_thresholds=merged_thresholds,
-                cpu_output=None,
+                native_output=None,
                 ignore_output_indices=ignore_output_indices,
             )
         except Exception as e:

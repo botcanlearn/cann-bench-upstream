@@ -28,7 +28,7 @@ from dataclasses import dataclass, asdict, field
 
 from ..config import Config, get_config
 from ..eval.evaluator import EvalCaseResult, EvalOperatorResult
-from .scoring import ScoringCalculator, ScoreInfo
+from .scoring import ScoringCalculator, OperatorScoreInfo
 
 
 @dataclass

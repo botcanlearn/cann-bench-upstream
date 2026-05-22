@@ -19,19 +19,24 @@
 2. 查找算子定义信息
 3. 通过 snake_case 名称反查算子
 
-从 evaluator.py 拆分出来，简化职责。
+继承 OperatorMatcherBase，适配 cann-bench 评测体系的 AI 算子来源。
 """
 
 from typing import Callable, Dict, List, Optional
 
-from ..data.operator_loader import OperatorLoader, OperatorInfo
+from .cann_loader import CannTaskLoader
+from .cann_spec import CannTaskSpec
 from ..utils.naming import snake_case_candidates
+from ..base.matcher import OperatorMatcherBase
 
 
-class OperatorMatcher:
-    """算子匹配器"""
+class OperatorMatcher(OperatorMatcherBase):
+    """算子匹配器（cann-bench 评测体系）
 
-    def __init__(self, operator_loader: OperatorLoader):
+    从 torch.ops.cann_bench 或 cann_bench 模块加载 AI 算子函数。
+    """
+
+    def __init__(self, operator_loader: CannTaskLoader):
         self.operator_loader = operator_loader
         self._ai_op_cache: Dict[str, Callable] = {}
 
@@ -86,14 +91,14 @@ class OperatorMatcher:
 
         raise AttributeError(f"无法找到算子 {operator_name}（已检查 torch.ops.cann_bench 和 cann_bench 模块）")
 
-    def find_operator_info(self, operator_name: str) -> Optional[OperatorInfo]:
+    def find_operator_info(self, operator_name: str) -> Optional[CannTaskSpec]:
         """查找算子定义信息
 
         Args:
             operator_name: 算子名称
 
         Returns:
-            OperatorInfo 或 None
+            CannTaskSpec 或 None
         """
         operators = self.operator_loader.list_operators()
         for op_info in operators:
@@ -101,8 +106,8 @@ class OperatorMatcher:
                 return op_info
         return None
 
-    def find_operator_info_by_snake(self, snake_name: str) -> Optional[OperatorInfo]:
-        """通过 snake_case 名称反查 OperatorInfo
+    def find_operator_info_by_snake(self, snake_name: str) -> Optional[CannTaskSpec]:
+        """通过 snake_case 名称反查 CannTaskSpec
 
         与 load_ai_operator 的 CamelCase→snake_case 规则保持一致。
 
@@ -110,7 +115,7 @@ class OperatorMatcher:
             snake_name: snake_case 形式的算子名（build_submission 里的 op 目录名）
 
         Returns:
-            OperatorInfo 或 None
+            CannTaskSpec 或 None
         """
         target = snake_name.lower()
         operators = self.operator_loader.list_operators()

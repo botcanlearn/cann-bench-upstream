@@ -117,6 +117,8 @@ def _composite_score_from_dict(op_result: Dict[str, Any]) -> Dict[str, float]:
     """
     compile_passed = op_result.get("compile_passed",
                                    op_result.get("compilation_error") is None)
+    # rel_path 用于 F058/F061 的 warn dedup key + 错误溯源
+    rel_path = op_result.get("rel_path") or op_result.get("operator") or None
     # 同时识别两种 case 列表字段名：results (EvalOperatorResult) / cases (OperatorReport)
     cases = op_result.get("results") or op_result.get("cases") or []
     total_cases = max(op_result.get("total_cases", 0), len(cases), 1)
@@ -133,13 +135,14 @@ def _composite_score_from_dict(op_result: Dict[str, Any]) -> Dict[str, float]:
             t_cand = perf.get("elapsed_us") or case.get("elapsed_us") or 0
             t_base = case.get("baseline_perf_us") or 0
             t_hw = case.get("t_hw_us") or 0
-            score_i = per_case_sol_score(t_base, t_cand, t_hw)
+            score_i = per_case_sol_score(t_base, t_cand, t_hw, rel_path=rel_path)
         case_scores.append((True, score_i))
 
     agg = aggregate_eq4(
         compile_passed=compile_passed,
         total_cases=total_cases,
         case_scores=case_scores,
+        rel_path=rel_path,
     )
     return {
         "compile_passed": compile_passed,

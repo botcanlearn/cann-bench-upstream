@@ -90,7 +90,7 @@ class TestEvalCaseResult:
         """baseline 为 0 时加速比为 0"""
         # 需要模拟 perf_result
         from kernel_eval.eval.perf_eval import PerfResult
-        perf = PerfResult(case_id="case_001", elapsed_us=50.0, op_times={})
+        perf = PerfResult(elapsed_us=50.0, op_times={})
         result = EvalCaseResult(
             case_id="case_001",
             rel_path="level1/Exp",
@@ -105,7 +105,7 @@ class TestEvalCaseResult:
     def test_get_speedup_normal(self):
         """正常加速比计算"""
         from kernel_eval.eval.perf_eval import PerfResult
-        perf = PerfResult(case_id="case_001", elapsed_us=50.0, op_times={})
+        perf = PerfResult(elapsed_us=50.0, metadata={'baseline_us': 100.0})
         result = EvalCaseResult(
             case_id="case_001",
             rel_path="level1/Exp",

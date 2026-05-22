@@ -178,8 +178,15 @@ def restore_timing_apis() -> None:
     for name, (parent, attr, original) in snapshot_items:
         try:
             setattr(parent, attr, original)
-        except Exception:
-            pass
+        except Exception as e:
+            # F008: 旧版 silent pass 吞 setattr 失败 → restore 失败完全不可见。
+            # 攻击者可让目标属性变只读描述符强制 restore 失败；运维也无法察觉。
+            # 至少记录一条 stderr 日志保留诊断线索。仍然继续循环（best-effort
+            # restore — 一个 API 失败不影响其他 API 的恢复）。
+            print(
+                f"[WARN] api_guard.restore_timing_apis: setattr {name} failed: {e}",
+                file=sys.stderr, flush=True,
+            )
 
 
 class APIGuard:

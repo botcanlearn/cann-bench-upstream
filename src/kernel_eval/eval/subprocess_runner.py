@@ -27,6 +27,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -252,7 +253,10 @@ class SubprocessRunner:
                                     bufsize=1, text=True)  # 行缓冲，文本模式
 
             # 实时输出子进程日志
-            stdout_lines = []
+            # F020: was an unbounded list — verbose / profiler-Level2 children
+            # can dump tens of thousands of lines, and only the last 10 are
+            # ever consumed. Use a bounded deque so peak memory stays small.
+            stdout_lines: deque = deque(maxlen=256)
             try:
                 for line in proc.stdout:
                     stdout_lines.append(line)
@@ -262,7 +266,7 @@ class SubprocessRunner:
                 if rc != 0:
                     return self.failure_synthesizer.synthesize_subprocess_failure(
                         operator_name, rel_path=rel_path,
-                        reason=f"subprocess exited rc={rc}, output: {''.join(stdout_lines[-10:])}",
+                        reason=f"subprocess exited rc={rc}, output: {''.join(list(stdout_lines)[-10:])}",
                         case_filter=case_filter, filter_func=filter_func,
                     )
             except subprocess.TimeoutExpired:

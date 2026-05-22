@@ -1,5 +1,47 @@
 # 版本变更记录
 
+## V0.3.0 (2026-05-19)
+
+**架构重构：基类层分离 + benches 扁平化 + Registry 完善**
+
+- **Base 层创建**：新增 `base/` 目录，统一存放抽象基类
+  - `models.py`: TaskSpec, CaseSpec, InputSpec, OutputSpec, SolutionSpec（合并原 models/ 目录）
+  - `result.py`: AccuracyResult, PerfResult, OutputResult（合并原 models/result.py）
+  - `loaders.py`: TaskLoader, CaseLoader, GoldenLoaderBase, OperatorDirMixin
+  - `checker.py`: CorrectnessChecker 抽象基类
+  - `matcher.py`: OperatorMatcherBase 抽象基类
+  - `scoring.py`: ScoringScheme 抽象基类
+
+- **Benches 层扁平化**：`benches/cann/` 子目录删除，文件平铺到 `benches/`
+  - `cann_loader.py`: CannTaskLoader, CannCaseLoader, GoldenLoader
+  - `cann_spec.py`: CANN 特化数据模型
+  - `cann_checker.py`: CannDefaultChecker, CannOutputResult
+  - `cann_matcher.py`: OperatorMatcher（重命名自 operator_matcher.py）
+  - `cann_scoring.py`: CannScoringScheme, ScoringCalculator 等
+  - `cann_solution.py`: CannSolutionSpec
+  - `cann.py`: 导出所有组件 + Registry 注册（核心入口）
+
+- **Registry 层完善**：新增 `registry/` 目录，统一管理注册机制
+  - `loader_registry.py`: TaskLoader/CaseLoader 注册
+  - `golden_registry.py`: GoldenLoader 注册
+  - `matcher_registry.py`: OperatorMatcher 注册
+  - `checker_registry.py`: Checker 注册
+  - `scoring_registry.py`: ScoringScheme 注册
+  - `bench_registry.py`: BenchConfig 聚合配置
+
+- **向后兼容别名删除**：删除所有 `models/` 目录下的兼容导入
+  - 用户应使用 `from kernel_eval.base import TaskSpec` 或 `from kernel_eval.benches.cann import CannTaskSpec`
+
+- **导入路径更新**：
+  - 基类：`from kernel_eval.base import TaskSpec, CaseSpec, TaskLoader`
+  - CANN 特化：`from kernel_eval.benches.cann import CannTaskLoader, CannDefaultChecker`
+  - Registry：`from kernel_eval.registry import LoaderRegistry, BenchRegistry`
+  - 通用 Checker：`from kernel_eval.eval import AllcloseChecker`
+
+- **文档更新**：
+  - `docs/guide/custom_benchmark_integration.md`: 更新架构图、导入路径、接入示例
+  - `docs/design/kernel_eval_architecture.md`: 更新目录结构、模块职责、数据流图
+
 ## V0.2.0 (2026-05-07)
 
 **评分体系切换为 hardware-anchored 公式 (对齐 bench.tex)**

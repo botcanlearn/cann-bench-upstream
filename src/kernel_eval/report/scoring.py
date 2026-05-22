@@ -21,10 +21,14 @@
 - Level 得分: 给定 level 标签下所有算子分数之和；总分 = Σ Level 得分
 """
 
+import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple
 
 from ..eval.evaluator import EvalOperatorResult
+
+
+_logger = logging.getLogger(__name__)
 
 
 # 权重配置（bench.tex §3.5）
@@ -34,8 +38,12 @@ WEIGHT_PERFORMANCE = 0.5  # w_p
 
 
 @dataclass
-class ScoreInfo:
-    """得分信息（per operator）"""
+class OperatorScoreInfo:
+    """算子级得分信息（per operator）
+
+    包含编译/功能/性能三轴得分，以及 per-case 调试用分数列表。
+    """
+
     operator: str = ""
     rel_path: str = ""
     pass_rate: float = 0.0
@@ -68,29 +76,43 @@ class ScoreInfo:
         }
 
 
-def per_case_sol_score(t_baseline: float, t_cand: float, t_hw: float) -> Optional[float]:
+def per_case_sol_score(
+    t_baseline: float,
+    t_cand: float,
+    t_hw: float,
+    rel_path: Optional[str] = None,
+) -> Optional[float]:
     """bench.tex Eq. 3。T_cand 或 T_HW 异常 / 分母 ≤ 0 时返回 None。
 
     设计取舍：
     - 不对返回值做上界截断——当 T_cand < T_HW 时 score > 1.0 的"超额分"
       是有意保留的，用以激励算法突破当前硬件下界。
     - T_baseline < T_HW 视为基线/T_HW 标定可疑（应在用例侧人工核查），
-      但仍计算分数继续输出，仅在 stderr 上提示一次。
+      但仍计算分数继续输出，仅 warn 一次（per rel_path × 数值组合）。
     - **T_baseline 缺失（≤ 0）但 T_HW 已知时**，按 fallback 规则取
-      ``max(T_HW * 3, 10)`` 作为代理基线继续打分；fallback 不回写到 cases，
-      仅在运行时使用（约定：让缺基线的 case 也能拿到一个合理的相对分数，
-      不会因为基线漏填整体被静默置 0）。
+      ``max(T_HW * 3, 10)`` 作为代理基线继续打分（F054：fallback 路径也 warn）；
+      fallback 不回写到 cases，仅在运行时使用（约定：让缺基线的 case 也能拿到一个
+      合理的相对分数，不会因为基线漏填整体被静默置 0）。
+
+    Args:
+        rel_path: 算子相对路径，用于日志去重 key（F058）+ 错误溯源。可选。
+
+    F057: 返回 None 的三种成因分别 warn，避免被 aggregate_eq4 统一吞为"缺锚点"。
     """
+    # F057 成因 (a): T_cand 或 T_HW 异常
     if t_cand <= 0 or t_hw <= 0:
+        _warn_invalid_anchor(rel_path, t_cand, t_hw)
         return None
     if t_baseline <= 0:
-        # baseline 缺失：用 max(T_HW * 3, 10) 作 fallback。
-        # 直觉：假设"够用的"参考实现大约比硬件下界慢 3 倍，或至少 10 us。
+        # F057 成因 (c) + F054: baseline 缺失走 fallback，warn 一次让用户感知
+        _warn_fallback_baseline(rel_path, t_hw)
         t_baseline = _fallback_baseline_from_hw(t_hw)
     elif t_baseline < t_hw:
-        _warn_baseline_below_hw(t_baseline, t_hw)
+        _warn_baseline_below_hw(t_baseline, t_hw, rel_path)
     denom = (t_cand - t_hw) + (t_baseline - t_hw)
     if denom <= 0:
+        # F057 成因 (b): denom ≤ 0（罕见，但 T_cand < T_HW 且 T_baseline ≈ T_HW 时可能）
+        _warn_denom_nonpositive(rel_path, t_baseline, t_cand, t_hw)
         return None
     return (t_baseline - t_hw) / denom
 
@@ -100,44 +122,108 @@ def _fallback_baseline_from_hw(t_hw: float) -> float:
     return max(t_hw * 3.0, 10.0)
 
 
-# 同一 (T_baseline, T_HW) 组合只提示一次，避免成批用例时刷屏。
+# 同一 (rel_path, T_baseline, T_HW) 组合只提示一次，避免成批用例时刷屏。
+# F058: key 加入 rel_path 标识，不同算子的相同数值组合不会互相抑制。
 _BASELINE_HW_WARNED: set = set()
 
 
-def _warn_baseline_below_hw(t_baseline: float, t_hw: float) -> None:
-    key = (round(t_baseline, 4), round(t_hw, 4))
+def _warn_baseline_below_hw(
+    t_baseline: float, t_hw: float, rel_path: Optional[str] = None
+) -> None:
+    """F059: 改用 _logger.warning 输出到 stderr（默认 logging handler），不污染 stdout。"""
+    key = (rel_path, round(t_baseline, 4), round(t_hw, 4))
     if key in _BASELINE_HW_WARNED:
         return
     _BASELINE_HW_WARNED.add(key)
-    print(
-        f"[WARN] per_case_sol_score: T_baseline ({t_baseline:.4f} us) < T_HW "
-        f"({t_hw:.4f} us)。请核查该用例 baseline_perf_us / t_hw_us 是否标定正确。"
+    op_prefix = f"[{rel_path}] " if rel_path else ""
+    _logger.warning(
+        "%sper_case_sol_score: T_baseline (%.4f us) < T_HW (%.4f us)。"
+        "请核查该用例 baseline_perf_us / t_hw_us 是否标定正确。",
+        op_prefix, t_baseline, t_hw,
+    )
+
+
+# F054 + F057 (c): fallback baseline 走代理值，独立 warn 让用户感知"分数基于代理基线"
+_FALLBACK_BASELINE_WARNED: set = set()
+
+
+def _warn_fallback_baseline(rel_path: Optional[str], t_hw: float) -> None:
+    key = (rel_path, round(t_hw, 4))
+    if key in _FALLBACK_BASELINE_WARNED:
+        return
+    _FALLBACK_BASELINE_WARNED.add(key)
+    proxy = _fallback_baseline_from_hw(t_hw)
+    op_prefix = f"[{rel_path}] " if rel_path else ""
+    _logger.warning(
+        "%sper_case_sol_score: baseline_perf_us 缺失/≤0，使用代理基线 "
+        "max(T_HW*3, 10) = %.2f us（T_HW=%.4f）。该用例的分数基于代理基线计算，"
+        "精度可能降低；请补 cases.yaml 的 baseline_perf_us。",
+        op_prefix, proxy, t_hw,
+    )
+
+
+# F057 (a): T_cand 或 T_HW 异常
+_INVALID_ANCHOR_WARNED: set = set()
+
+
+def _warn_invalid_anchor(rel_path: Optional[str], t_cand: float, t_hw: float) -> None:
+    key = (rel_path, round(t_cand, 4), round(t_hw, 4))
+    if key in _INVALID_ANCHOR_WARNED:
+        return
+    _INVALID_ANCHOR_WARNED.add(key)
+    op_prefix = f"[{rel_path}] " if rel_path else ""
+    _logger.warning(
+        "%sper_case_sol_score: T_cand (%.4f us) 或 T_HW (%.4f us) 非正，"
+        "本 case 性能项按 None 处理。",
+        op_prefix, t_cand, t_hw,
+    )
+
+
+# F057 (b): denom ≤ 0
+_DENOM_WARNED: set = set()
+
+
+def _warn_denom_nonpositive(
+    rel_path: Optional[str], t_baseline: float, t_cand: float, t_hw: float
+) -> None:
+    key = (rel_path, round(t_baseline, 4), round(t_cand, 4), round(t_hw, 4))
+    if key in _DENOM_WARNED:
+        return
+    _DENOM_WARNED.add(key)
+    op_prefix = f"[{rel_path}] " if rel_path else ""
+    _logger.warning(
+        "%sper_case_sol_score: denom = (T_cand-T_HW) + (T_baseline-T_HW) ≤ 0 "
+        "(T_baseline=%.4f us, T_cand=%.4f us, T_HW=%.4f us)。本 case 性能项 None。"
+        "可能 T_baseline 与 T_HW 几乎相等且 T_cand 远小于 T_HW。",
+        op_prefix, t_baseline, t_cand, t_hw,
     )
 
 
 # 一次 aggregate_eq4 调用中只打一次缺锚点告警
+# F061: key 加 rel_path，不同算子的相同 (通过数, 缺失数) 组合不会互相抑制
 _PERF_MISSING_WARNED_RUN: set = set()
 
 
-def _warn_perf_anchor_missing(n_func_pass: int, n_perf_missing: int) -> None:
+def _warn_perf_anchor_missing(
+    n_func_pass: int, n_perf_missing: int, rel_path: Optional[str] = None
+) -> None:
     """通知调用者：功能通过的 case 中有 N 个缺基线/T_HW 锚点，按 §3.3 计为 0 性能分。
 
     避免静默"系统性低估"——按 spec 设计 missing anchor → 0 是有意的，
     但用户至少应该看到这条信息，知道分数偏低是因为基线缺失，不是 kernel 慢。
+    F059: 改 _logger.warning 输出到 stderr。
     """
-    key = (n_func_pass, n_perf_missing)
+    key = (rel_path, n_func_pass, n_perf_missing)
     if key in _PERF_MISSING_WARNED_RUN:
         return
     _PERF_MISSING_WARNED_RUN.add(key)
-    print(
-        f"[WARN] aggregate_eq4: {n_perf_missing} / {n_func_pass} 个功能通过的 case "
-        f"缺 baseline_perf_us / t_hw_us 锚点，按 spec §3.3 按 0 计入性能项。"
-        f"若分数偏低，请先核查这些 case 的基线是否已填充。"
+    op_prefix = f"[{rel_path}] " if rel_path else ""
+    _logger.warning(
+        "%saggregate_eq4: %d / %d 个功能通过的 case 缺 baseline_perf_us / t_hw_us 锚点，"
+        "按 spec §3.3 按 0 计入性能项。若分数偏低，请先核查这些 case 的基线是否已填充。",
+        op_prefix, n_perf_missing, n_func_pass,
     )
 
-
-# 历史别名，保留供 scoring 模块内部使用
-_per_case_sol_score = per_case_sol_score
 
 
 def aggregate_eq4(
@@ -147,6 +233,7 @@ def aggregate_eq4(
     wc: float = WEIGHT_COMPILATION,
     wf: float = WEIGHT_FUNCTION,
     wp: float = WEIGHT_PERFORMANCE,
+    rel_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Eq.4 单算子综合分聚合——单一事实来源。
 
@@ -207,7 +294,7 @@ def aggregate_eq4(
 
     # 通过的 case 中如果有缺锚点的，打印一次警告，避免性能分被静默"系统性低估"
     if n_perf_missing > 0:
-        _warn_perf_anchor_missing(n_func_pass, n_perf_missing)
+        _warn_perf_anchor_missing(n_func_pass, n_perf_missing, rel_path)
 
     compilation_score = wc * delta_pass * 100.0
     function_score = (n_func_pass * wf / total_cases) * 100.0
@@ -237,24 +324,49 @@ class ScoringCalculator:
         self.wf = wf
         self.wp = wp
 
-    def calculate_operator_score(self, result: EvalOperatorResult) -> ScoreInfo:
+    def calculate_operator_score(self, result: EvalOperatorResult) -> OperatorScoreInfo:
         """单算子综合得分 (Eq. 4)。
 
         N = max(声明 total_cases, len(results), 1)；
         实际 Eq.4 聚合走 aggregate_eq4——dict 输入路径与本路径共用同一份实现。
+
+        F062: 空壳算子（声明 0 case + 实测 0 results）即使 compile_passed
+        也应得 0 分。旧版 N=1 给 compilation_score=wc*100=20 是 white-elephant
+        scoring，违反"无用例 → 不可评测 → 0 分"语义。
         """
         compile_passed = result.compile_passed
-        total_cases = max(result.total_cases, len(result.results), 1)
+        declared = result.total_cases
+        run = len(result.results)
+
+        # F062: 空壳算子（0 声明 + 0 实测）直接 0 分
+        if declared == 0 and run == 0:
+            return OperatorScoreInfo(
+                operator=result.operator,
+                rel_path=result.rel_path,
+                pass_rate=0.0,
+                avg_speedup=0.0,
+                compile_passed=compile_passed,
+                passed_cases=0,
+                total_cases=0,
+                compilation_score=0.0,
+                function_score=0.0,
+                performance_score=0.0,
+                total_score=0.0,
+                per_case_scores=[],
+            )
+
+        total_cases = max(declared, run, 1)
 
         case_scores: List[Tuple[bool, Optional[float]]] = []
         for case in result.results:
             if not case.success or case.perf_result is None:
                 case_scores.append((case.success, None))
                 continue
-            score_i = _per_case_sol_score(
+            score_i = per_case_sol_score(
                 case.baseline_perf_us,
                 case.perf_result.elapsed_us,
                 case.t_hw_us,
+                rel_path=result.rel_path,
             )
             case_scores.append((True, score_i))
 
@@ -263,9 +375,10 @@ class ScoringCalculator:
             total_cases=total_cases,
             case_scores=case_scores,
             wc=self.wc, wf=self.wf, wp=self.wp,
+            rel_path=result.rel_path,
         )
 
-        return ScoreInfo(
+        return OperatorScoreInfo(
             operator=result.operator,
             rel_path=result.rel_path,
             pass_rate=result.pass_rate,
@@ -280,11 +393,11 @@ class ScoringCalculator:
             per_case_scores=agg["per_case_scores"],
         )
 
-    def calculate_overall_score(self, score_infos: List[ScoreInfo]) -> float:
+    def calculate_overall_score(self, score_infos: List[OperatorScoreInfo]) -> float:
         """benchmark 总分 = Σ Level 得分 = Σ EachOperatorScore (Eq. 5)."""
         return sum(info.total_score for info in score_infos)
 
-    def calculate_average_score(self, score_infos: List[ScoreInfo]) -> float:
+    def calculate_average_score(self, score_infos: List[OperatorScoreInfo]) -> float:
         """benchmark 平均分 = 总分 / 算子数（理论满分 100，跨时间可比）。
 
         Eq. 5 的总分会随新增算子线性膨胀（每个算子满分 +100），新旧 benchmark
@@ -295,24 +408,27 @@ class ScoringCalculator:
             return 0.0
         return sum(info.total_score for info in score_infos) / len(score_infos)
 
-    def calculate_level_score(self, score_infos: List[ScoreInfo], level: str) -> float:
+    def calculate_level_score(self, score_infos: List[OperatorScoreInfo], level: str) -> float:
         """指定 Level 的得分 = Σ EachOperatorScore over ops in that level (Eq. 5)。
 
         Args:
-            score_infos: 全部算子的 ScoreInfo 列表。
+            score_infos: 全部算子的 OperatorScoreInfo 列表。
             level: Level 标签，例如 ``"level1"``、``"level3"``——按 ``rel_path``
-                首段匹配。
+                **首段精确匹配**。
 
         Returns:
             该 level 下所有算子综合得分之和；无匹配算子时返回 0.0。
+
+        F080: 旧版 `startswith(f"{level}/")` 若引入 level10 / level11 时 level1
+        会误匹配（"level1/" 也是 "level10/..." 的前缀）。改首段 `split('/', 1)[0]`
+        精确比较。
         """
-        prefix = f"{level}/"
         return sum(
             info.total_score for info in score_infos
-            if info.rel_path == level or info.rel_path.startswith(prefix)
+            if info.rel_path == level or info.rel_path.split('/', 1)[0] == level
         )
 
-    def list_levels(self, score_infos: List[ScoreInfo]) -> List[str]:
+    def list_levels(self, score_infos: List[OperatorScoreInfo]) -> List[str]:
         """收集所有出现过的 Level 标签（按出现顺序去重）。"""
         seen: List[str] = []
         for info in score_infos:
@@ -321,7 +437,7 @@ class ScoringCalculator:
                 seen.append(level)
         return seen
 
-    def calculate_ranking(self, score_infos: List[ScoreInfo]) -> List[Dict[str, Any]]:
+    def calculate_ranking(self, score_infos: List[OperatorScoreInfo]) -> List[Dict[str, Any]]:
         """计算算子排名"""
         sorted_infos = sorted(score_infos, key=lambda x: x.total_score, reverse=True)
         ranking = []

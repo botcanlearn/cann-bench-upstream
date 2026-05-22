@@ -3,7 +3,7 @@
 
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# This program is free software; you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
@@ -12,24 +12,14 @@
 # ----------------------------------------------------------------------------------------------------------
 
 """
-精度验证工具
+张量精度对比引擎
 
 职责：
-1. 提供张量对比验证功能
-2. 采用生态算子开源精度标准（MERE/MARE）
-3. 通过条件: MERE < threshold, MARE < 10 * threshold
+1. 提供 compare_tensors() — 张量对比主入口（支持多输出）
+2. SingleOutputResult / CompareResult 数据类
+3. MERE/MARE 计算 + 小值域/相消兜底判定
 
-误差指标（标准公式）：
-- MERE (平均相对误差) = avg(|actual - golden| / (|golden| + 1e-7))
-- MARE (最大相对误差) = max(|actual - golden| / (|golden| + 1e-7))
-
-特殊场景处理：
-- 小值域处理：当 |golden| < small_value_threshold 时，采用 ErrorCount 比值标准
-- 相消处理：当 output ≈ 0 且 golden 在精度边界附近时，采用 CPU 同精度对照标准
-
-理论依据：
-- IEEE 754 浮点标准：精度位数决定有效数字范围
-- Kahan 灾难性相消理论：接近大数相减导致精度丢失
+从 utils/precision.py 拆分出来；阈值查询依赖 utils/thresholds.py。
 """
 
 import logging
@@ -40,8 +30,25 @@ from dataclasses import dataclass, field
 
 import torch
 
+from .thresholds import (
+    get_threshold,
+    get_small_value_threshold,
+    get_small_value_error,
+    get_cancel_boundary,
+    get_cancel_zero_threshold,
+)
+
 
 _logger = logging.getLogger(__name__)
+
+
+# Integer dtypes that should use absolute-difference / exact comparison
+# rather than the floating-point MERE/MARE path. Must stay in sync with
+# the int threshold entries in `thresholds.py` (which declares all 8).
+_INTEGER_DTYPES = (
+    torch.int8, torch.int16, torch.int32, torch.int64,
+    torch.uint8, torch.uint16, torch.uint32, torch.uint64,
+)
 
 
 @dataclass
@@ -106,109 +113,6 @@ class SingleOutputResult:
                 return f"{dtype_str}: ❌ MERE={self.mere:.6f}, MARE={self.mare:.6f} (threshold={self.threshold:.6f}, mare_threshold={mare_threshold:.6f})"
 
 
-# 精度阈值表（采用生态算子开源精度标准）
-PRECISION_THRESHOLDS: Dict[str, float] = {
-    'float16': 2**-10,      # ≈ 0.000976
-    'bfloat16': 2**-7,      # ≈ 0.007812
-    'float32': 2**-13,      # ≈ 0.000122
-    'float64': 2**-13,      # 使用float32阈值
-    'hifloat32': 2**-11,    # ≈ 0.000488
-    # F083: 删除死代码 `float8_e4m3` 键 — PyTorch 实际 dtype 是 float8_e4m3fn
-    # 字典查找用 str(t.dtype) 仅会命中 'float8_e4m3fn'，旧键永不触发
-    'float8_e4m3fn': 2**-3, # ≈ 0.125
-    'float8_e5m2': 2**-2,   # ≈ 0.25
-    'int8': 0,              # 完全相等
-    'int16': 0,
-    'int32': 0,
-    'int64': 0,
-    'uint8': 0,
-    'uint16': 0,
-    'uint32': 0,
-    'uint64': 0,
-}
-
-# 小值域阈值表（来自 docs/kernel_bench_design_v1.0.md）
-# 当 |golden| < small_value_threshold 时，采用小值域标准
-SMALL_VALUE_THRESHOLDS: Dict[str, float] = {
-    'float16': 2**-11,      # ≈ 4.88e-4
-    'bfloat16': 2**-8,      # ≈ 3.91e-3
-    'float32': 2**-14,      # ≈ 6.10e-5
-    'float64': 2**-14,      # 使用float32阈值
-    'hifloat32': 2**-12,    # ≈ 2.44e-4
-    'float8_e4m3fn': 2**-4, # ≈ 0.0625 — F083 删 `float8_e4m3` 死键
-    'float8_e5m2': 2**-3,   # ≈ 0.125
-}
-
-# 小值域误差阈值表（来自 docs/kernel_bench_design_v1.0.md）
-# 当 |golden| < small_value_threshold 且 |actual - golden| > small_value_error 时，计入 ErrorCount
-SMALL_VALUE_ERROR_THRESHOLDS: Dict[str, float] = {
-    'float16': 2**-16,      # ≈ 1.53e-5
-    'bfloat16': 2**-16,     # ≈ 1.53e-5
-    'float32': 2**-30,      # ≈ 9.31e-10
-    'float64': 2**-30,      # 使用float32阈值
-    'hifloat32': 2**-28,    # ≈ 3.73e-9
-    'float8_e4m3fn': 2**-6, # ≈ 1.56e-2 — F083 删 `float8_e4m3` 死键
-    'float8_e5m2': 2**-5,   # ≈ 3.12e-2
-}
-
-# ============================================================================
-# 相消精度边界阈值表（基于 IEEE 754 精度位数理论）
-# ============================================================================
-#
-# 理论依据：
-# 1. IEEE 754 标准：不同 dtype 的尾数位数决定了有效数字范围
-#    - FP32: 23 位尾数，相对精度 ~2^-23 ≈ 10^-7，约 7 位有效数字
-#    - FP16: 10 位尾数，相对精度 ~2^-10 ≈ 10^-3，约 3 位有效数字
-#    - BF16: 7 位尾数，相对精度 ~2^-7 ≈ 10^-2，约 2 位有效数字
-#
-# 2. Kahan 灾难性相消理论：
-#    当两个接近的大数相减时，结果的有效位数急剧丢失。
-#    例如：FP32 中两个 ~10^4 的数相减得到 ~10^-3，但精度只够表示 7 位，
-#    结果相对于原操作数丢失精度，可能输出为 0。
-#
-# 3. 相消判定条件：
-#    - output ≈ 0：因相消丢失精度，结果接近零
-#    - golden 在精度边界附近：非零小值，但小于 dtype 能可靠表示的范围
-#    - 不在小值域内（排除极小值）
-#
-# 阈值选择原则：
-#    cancel_boundary 应覆盖因精度位数丢失可能导致相消的范围。
-#    对于 FP32，当操作数规模 ~10^4 时，结果 ~10^-3 可能相消丢失。
-#    设置 cancel_boundary = 2^-8 ≈ 0.004，覆盖常见相消场景。
-#
-CANCEL_BOUNDARY_THRESHOLDS: Dict[str, float] = {
-    # FP32: 精度 ~7 位，设置 2^-8 ≈ 0.004
-    # 当 golden < 0.004 且 output ≈ 0 时，可能是 FP32 相消导致
-    'float32': 2**-8,       # ≈ 3.91e-3 ≈ 0.004
-    'float64': 2**-8,       # 使用float32阈值
-
-    # FP16: 精度 ~3 位，设置 2^-5 ≈ 0.031
-    # 当 golden < 0.031 且 output ≈ 0 时，可能是 FP16 相消导致
-    'float16': 2**-5,       # ≈ 3.12e-2 ≈ 0.031
-
-    # BF16: 精度 ~2 位，设置 2^-3 ≈ 0.125
-    # 当 golden < 0.125 且 output ≈ 0 时，可能是 BF16 相消导致
-    'bfloat16': 2**-3,      # ≈ 1.25e-1 ≈ 0.125
-
-    'hifloat32': 2**-8,     # ≈ 3.91e-3
-    'float8_e4m3fn': 2**-1, # ≈ 0.5 — F083 删 `float8_e4m3` 死键
-    'float8_e5m2': 2**-0,   # ≈ 1.0
-}
-
-# 相消 output 零值判定阈值
-# 当 |output| < cancel_zero_threshold 时，判定 output ≈ 0（因相消丢失精度）
-CANCEL_ZERO_THRESHOLDS: Dict[str, float] = {
-    # 与 cancel_boundary 一致，确保 output 接近零时判定为相消
-    'float32': 2**-8,       # ≈ 0.004
-    'float64': 2**-8,
-    'float16': 2**-5,       # ≈ 0.031
-    'bfloat16': 2**-3,      # ≈ 0.125
-    'hifloat32': 2**-8,
-    'float8_e4m3fn': 2**-1, # F083 删 `float8_e4m3` 死键
-    'float8_e5m2': 2**-0,
-}
-
-
 @dataclass
 class CompareResult:
     """对比结果（支持多输出算子）"""
@@ -261,261 +165,19 @@ class CompareResult:
         return "\n".join(lines)
 
 
-def get_threshold(dtype_str: str) -> float:
-    """获取精度阈值"""
-    dtype_lower = dtype_str.lower()
-    if dtype_lower not in PRECISION_THRESHOLDS:
-        # 默认使用 float32 阈值
-        return PRECISION_THRESHOLDS['float32']
-    return PRECISION_THRESHOLDS[dtype_lower]
-
-
-def get_small_value_threshold(dtype_str: str) -> float:
-    """获取小值域阈值"""
-    dtype_lower = dtype_str.lower()
-    if dtype_lower not in SMALL_VALUE_THRESHOLDS:
-        return SMALL_VALUE_THRESHOLDS['float32']
-    return SMALL_VALUE_THRESHOLDS[dtype_lower]
-
-
-def get_small_value_error(dtype_str: str) -> float:
-    """获取小值域误差阈值"""
-    dtype_lower = dtype_str.lower()
-    if dtype_lower not in SMALL_VALUE_ERROR_THRESHOLDS:
-        return SMALL_VALUE_ERROR_THRESHOLDS['float32']
-    return SMALL_VALUE_ERROR_THRESHOLDS[dtype_lower]
-
-
-def get_cancel_boundary(dtype_str: str) -> float:
-    """
-    获取相消精度边界阈值（基于 IEEE 754 精度位数理论）
-
-    当 |golden| < cancel_boundary 且 |output| ≈ 0 时，判定为潜在相消位置。
-
-    理论依据：
-    - IEEE 754 尾数位数决定了有效数字范围
-    - Kahan 灾难性相消理论：接近大数相减导致精度丢失
-    """
-    dtype_lower = dtype_str.lower()
-    if dtype_lower not in CANCEL_BOUNDARY_THRESHOLDS:
-        return CANCEL_BOUNDARY_THRESHOLDS['float32']
-    return CANCEL_BOUNDARY_THRESHOLDS[dtype_lower]
-
-
-def get_cancel_zero_threshold(dtype_str: str) -> float:
-    """
-    获取相消 output 零值判定阈值
-
-    当 |output| < cancel_zero_threshold 时，判定 output ≈ 0（因相消丢失精度）。
-    """
-    dtype_lower = dtype_str.lower()
-    if dtype_lower not in CANCEL_ZERO_THRESHOLDS:
-        return CANCEL_ZERO_THRESHOLDS['float32']
-    return CANCEL_ZERO_THRESHOLDS[dtype_lower]
-
-
-def compare_tensors(
-    output: Union[torch.Tensor, Tuple, List],
-    golden: Union[torch.Tensor, Tuple, List],
-    dtype: str = 'float32',
-    threshold: Optional[float] = None,
-    cpu_output: Optional[Union[torch.Tensor, Tuple, List]] = None,
-    ignore_output_indices: Optional[List[int]] = None,
-    custom_thresholds: Optional[Dict[str, float]] = None,
-) -> CompareResult:
-    """
-    对比输出张量与Golden参考结果（采用MERE/MARE标准 + 小值域处理）
-
-    Args:
-        output: 算子输出（单个张量或多张量）
-        golden: Golden参考输出（单个张量或多张量），通常为 FP64 精度
-        dtype: 数据类型字符串
-        threshold: 精度阈值（可选，默认根据dtype自动选择）
-        cpu_output: CPU 相同精度下的输出（可选，用于小值域比较）
-                    如果不提供，则使用 golden 截断到目标精度作为 CPU 输出
-        ignore_output_indices: 需要忽略对比的输出索引列表
-        custom_thresholds: 自定义精度阈值表（优先级高于默认阈值）
-
-    Returns:
-        CompareResult: 对比结果
-
-    通过条件:
-        正常值域: MERE < threshold 且 MARE < 10 * threshold
-        小值域: ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
-    """
-    # 获取阈值（优先使用自定义阈值）
-    if custom_thresholds is None:
-        custom_thresholds = {}
-
-    def _get_output_threshold(dtype_str: str) -> float:
-        """获取单个输出的阈值（优先自定义，其次默认）"""
-        dtype_lower = dtype_str.lower()
-        if dtype_lower in custom_thresholds:
-            return custom_thresholds[dtype_lower]
-        return get_threshold(dtype_str)
-
-    if threshold is None:
-        threshold = _get_output_threshold(dtype)
-
-    try:
-        # 处理多输出情况
-        outputs = _normalize_outputs(output)
-        goldens = _normalize_outputs(golden)
-        cpu_outputs = _normalize_outputs(cpu_output) if cpu_output is not None else None
-
-        if len(outputs) != len(goldens):
-            return CompareResult(
-                passed=False,
-                dtype=dtype,
-                threshold=threshold,
-                error_msg=f"输出数量不匹配: output={len(outputs)}, golden={len(goldens)}"
-            )
-
-        if cpu_outputs is not None and len(cpu_outputs) != len(goldens):
-            return CompareResult(
-                passed=False,
-                dtype=dtype,
-                threshold=threshold,
-                error_msg=f"CPU输出数量不匹配: cpu_output={len(cpu_outputs)}, golden={len(goldens)}"
-            )
-
-        # 逐个对比
-        all_passed = True
-        mere_sum = 0.0
-        mare_max = 0.0
-        max_diff = 0.0
-        mean_diff = 0.0
-        mismatch_count = 0
-        total_count = 0
-        small_value_error_count = 0
-        small_value_cpu_error_count = 0
-        small_value_total_count = 0
-        cancel_error_count = 0
-        cancel_cpu_error_count = 0
-        cancel_total_count = 0
-
-        # 记录每个输出的独立判定结果
-        single_output_results: List[SingleOutputResult] = []
-
-        for i, (out_tensor, gold_tensor) in enumerate(zip(outputs, goldens)):
-            # 跳过不需要对比的输出
-            if ignore_output_indices and i in ignore_output_indices:
-                # 创建跳过标记的 SingleOutputResult
-                single_output_results.append(SingleOutputResult(
-                    index=i,
-                    name="",  # 名称由调用方填充
-                    dtype=str(out_tensor.dtype).replace('torch.', ''),
-                    dtype_category='int' if out_tensor.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8) else 'float',
-                    passed=True,  # 跳过的输出视为通过
-                    error_msg="(跳过对比)"
-                ))
-                continue
-
-            # 根据每个输出的实际 dtype 获取阈值（优先自定义阈值）
-            out_dtype_str = str(out_tensor.dtype).replace('torch.', '')
-            out_threshold = _get_output_threshold(out_dtype_str)
-            out_dtype_category = 'int' if out_tensor.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8) else 'float'
-
-            cpu_tensor = cpu_outputs[i] if cpu_outputs is not None else None
-            result = _compare_single_tensor(out_tensor, gold_tensor, out_threshold, out_dtype_str, cpu_tensor)
-
-            # 转换 CompareResult 到 SingleOutputResult
-            single_result = SingleOutputResult(
-                index=i,
-                name="",  # 名称由调用方填充
-                dtype=out_dtype_str,
-                dtype_category=out_dtype_category,
-                passed=result.passed,
-                threshold=out_threshold,
-                mere=result.mere,
-                mare=result.mare,
-                max_diff=result.max_diff,
-                mean_diff=result.mean_diff,
-                mismatch_count=result.mismatch_count,
-                total_count=result.total_count,
-                max_abs_diff=int(result.max_diff) if out_dtype_category == 'int' else 0,
-                small_value_error_count=result.small_value_error_count,
-                small_value_cpu_error_count=result.small_value_cpu_error_count,
-                small_value_total_count=result.small_value_total_count,
-                cancel_error_count=result.cancel_error_count,
-                cancel_cpu_error_count=result.cancel_cpu_error_count,
-                cancel_total_count=result.cancel_total_count,
-                error_msg=result.error_msg or "",
-            )
-            single_output_results.append(single_result)
-
-            is_passed = result.passed
-            all_passed = all_passed and is_passed
-            mere_sum += result.mere * result.total_count
-            mare_max = max(mare_max, result.mare)
-            max_diff = max(max_diff, result.max_diff)
-            mean_diff += result.mean_diff * result.total_count
-            mismatch_count += result.mismatch_count
-            total_count += result.total_count
-            small_value_error_count += result.small_value_error_count
-            small_value_cpu_error_count += result.small_value_cpu_error_count
-            small_value_total_count += result.small_value_total_count
-            cancel_error_count += result.cancel_error_count
-            cancel_cpu_error_count += result.cancel_cpu_error_count
-            cancel_total_count += result.cancel_total_count
-
-        if total_count > 0:
-            mere = mere_sum / total_count
-            mean_diff = mean_diff / total_count
-        else:
-            mere = 0.0
-
-        # 最终通过条件
-        passed = all_passed
-
-        # 确定返回的 dtype 和 threshold
-        # 如果有失败输出，返回第一个失败输出的阈值信息
-        # 否则返回第一个输出的阈值信息
-        result_dtype = dtype
-        result_threshold = threshold
-        for sr in single_output_results:
-            if not sr.passed and not sr.error_msg.startswith("(跳过"):
-                result_dtype = sr.dtype
-                result_threshold = sr.threshold
-                break
-
-        return CompareResult(
-            passed=passed,
-            dtype=result_dtype,
-            threshold=result_threshold,
-            mere=mere,
-            mare=mare_max,
-            max_diff=max_diff,
-            mean_diff=mean_diff,
-            mismatch_count=mismatch_count,
-            total_count=total_count,
-            mismatch_ratio=mismatch_count / total_count if total_count > 0 else 0.0,
-            small_value_error_count=small_value_error_count,
-            small_value_cpu_error_count=small_value_cpu_error_count,
-            small_value_total_count=small_value_total_count,
-            cancel_error_count=cancel_error_count,
-            cancel_cpu_error_count=cancel_cpu_error_count,
-            cancel_total_count=cancel_total_count,
-            output_results=single_output_results,  # 新增：各输出独立结果
-        )
-
-    except Exception as e:
-        # 顶层 except 会吞掉所有内部逻辑（in-place mutation、shape 比较、
-        # MERE/MARE 计算等）的 traceback。把堆栈附在 error_msg 末尾，方便排查。
-        return CompareResult(
-            passed=False,
-            dtype=dtype,
-            threshold=threshold,
-            error_msg=f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
-        )
-
-
 def _normalize_outputs(output: Any) -> List[torch.Tensor]:
-    """将输出标准化为张量列表"""
+    """将输出标准化为张量列表。
+
+    F089: 旧版静默丢弃非 tensor 元素（str / None / int / 嵌套非 tensor），
+    若 output 和 golden 各自 normalize 后 len 恰好相等但**对应位置不同**，
+    后续 zip 比较会张冠李戴。改为保留 None 占位 + 丢弃元素超过 0 时 logger 警告。
+    调用方拿到 None 占位时按"该位置无法对比"处理。
+    """
     if isinstance(output, torch.Tensor):
         return [output]
     elif isinstance(output, (tuple, list)):
-        result = []
+        result: List[Any] = []
+        dropped = 0
         for item in output:
             if isinstance(item, torch.Tensor):
                 result.append(item)
@@ -523,6 +185,21 @@ def _normalize_outputs(output: Any) -> List[torch.Tensor]:
                 for sub_item in item:
                     if isinstance(sub_item, torch.Tensor):
                         result.append(sub_item)
+                    else:
+                        result.append(None)
+                        dropped += 1
+            else:
+                # 保留 None 占位维持索引对齐
+                result.append(None)
+                if item is not None:
+                    dropped += 1
+        if dropped > 0:
+            _logger.warning(
+                "_normalize_outputs: 丢弃 %d 个非 tensor 元素（替换为 None 占位 "
+                "维持索引对齐）。若 output / golden 含同类型非 tensor 数据需调用方"
+                "在外层先做语义比较。",
+                dropped,
+            )
         return result
     else:
         return []
@@ -533,7 +210,7 @@ def _compare_single_tensor(
     golden: torch.Tensor,
     threshold: float,
     dtype: str,
-    cpu_output: Optional[torch.Tensor] = None,
+    native_output: Optional[torch.Tensor] = None,
 ) -> CompareResult:
     """对比单个张量（计算MERE/MARE + 小值域处理）
 
@@ -545,15 +222,15 @@ def _compare_single_tensor(
     小值域处理（来自 docs/kernel_bench_design_v1.0.md）：
     当 |golden| < small_value_threshold 时，采用小值域通过标准：
     - ErrorCount = 统计满足 (|golden| < threshold 且 |actual - golden| > error) 的位置数
-    - 通过标准: ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
+    - 通过标准: ErrorCount_npu / max(ErrorCount_native, 1) ≤ 2
 
     Args:
         output: NPU/算子输出张量
         golden: Golden参考输出（FP64精度）
         threshold: 精度阈值
         dtype: 数据类型字符串
-        cpu_output: CPU 相同精度下的输出（可选）
-                   如果不提供，使用 golden 截断到目标精度作为 CPU 输出
+        native_output: 同精度参考输出（可选）
+                       如果不提供，使用 golden 截断到目标精度作为参考
     """
     # Golden runs on CPU while the AI op runs on NPU.
     # Normalize both sides to CPU so subtract/equal don't trip on mixed devices.
@@ -584,6 +261,17 @@ def _compare_single_tensor(
         int_dtype = _BIT_VIEW.get(output.dtype)
         if int_dtype is not None:
             golden_cast = golden.to(output.dtype).contiguous()
+            # F093: 检测 golden 在 cast 到更窄 output.dtype 时是否新产生 inf
+            # (fp64 → fp16 时 |x|>65504 → inf)。若如此，bit-exact 比较的 fail
+            # 实际是数据范围超 dtype，而非计算错误。给出明确告警避免误判方向。
+            new_inf = torch.isinf(golden_cast) & ~torch.isinf(golden)
+            if new_inf.any().item():
+                _logger.warning(
+                    "compare(bit-exact): golden cast 到 %s 时产生 %d 处新 inf "
+                    "(数据范围超 output dtype)，bit-exact 失败可能源自数据溢出而非"
+                    "计算错误。",
+                    output.dtype, int(new_inf.sum().item()),
+                )
             output_c = output.contiguous()
             out_bits = output_c.view(int_dtype)
             gold_bits = golden_cast.view(int_dtype)
@@ -624,8 +312,7 @@ def _compare_single_tensor(
         # 不支持 view 的浮点类型 (例如 fp8) 继续走下方 MERE/MARE 路径
 
     # 对于整数类型，使用绝对差值容差比较
-    if output.dtype in (torch.int8, torch.int16, torch.int32, torch.int64,
-                        torch.uint8):
+    if output.dtype in _INTEGER_DTYPES:
         if torch.equal(output, golden):
             return CompareResult(
                 passed=True,
@@ -767,7 +454,20 @@ def _compare_single_tensor(
     valid_relative_error = relative_error[valid_mask]
 
     if len(valid_relative_error) == 0:
-        # 所有位置都是 NaN/Inf 且匹配，视为通过
+        # F090: 旧版"全 NaN/Inf 匹配 = pass" 会掩盖"两个算子在同位置都产生 NaN
+        # 但根因不同（一个溢出 / 一个除零）"的真实 bug。改为：
+        # - 全部位置都是 NaN 且位置匹配 → 视为可疑（log warn，仍 passed=True
+        #   维持兼容；调用方可基于 mismatch_count 决定是否进一步排查）
+        # - 全部位置都是 Inf 且符号匹配 → 同上（已由 inf_match_mask 保证）
+        # 若调用方需要更严格的判定，可在外层检查 (mere==0 and total>0)。
+        has_nan = torch.isnan(output).any().item() if output.numel() > 0 else False
+        if has_nan:
+            _logger.warning(
+                "compare: 所有有效位置均为 NaN/Inf 且匹配；两个算子均输出 NaN 的"
+                "极端情况可能掩盖独立的数值 bug，请人工核查 case 输入分布。"
+                " (total=%d, dtype=%s)",
+                output.numel(), dtype,
+            )
         return CompareResult(
             passed=True,
             dtype=dtype,
@@ -849,20 +549,24 @@ def _compare_single_tensor(
     small_value_npu_error_mask = small_value_mask & (diff > small_value_error)
     small_value_error_count = int(small_value_npu_error_mask.sum())
 
-    # 小值域 CPU 错误计数
-    # 重要：CPU 和 NPU 的比较基准必须一致，都使用 golden_truncated（FP64 → target_dtype → FP64）
+    # 小值域同精度参考错误计数
+    # 重要：native 和 NPU 的比较基准必须一致，都使用 golden_truncated（FP64 → target_dtype → FP64）
     # 这样才能公平比较两者在相同精度限制下与理论真值的误差差异
-    if cpu_output is not None:
-        cpu_output_fp64 = cpu_output.double()
-        # CPU 差异也与截断后的 golden 比较，保持基准一致
+    if native_output is not None:
+        # F088: native_output 应在 CPU 上但调用方契约不强制；防御性 .cpu() 后再
+        # .double() 避免 NPU 上的 .double() 失败或与 golden_truncated 跨设备运算
+        if native_output.device.type != "cpu":
+            native_output = native_output.cpu()
+        cpu_output_fp64 = native_output.double()
+        # 同精度差异也与截断后的 golden 比较，保持基准一致
         cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
     else:
-        # golden 截断到目标精度后再升到 FP64，这就是 CPU 相同精度下的"理想"输出
+        # golden 截断到目标精度后再升到 FP64，这就是同精度下的"理想"输出
         cpu_output_fp64 = golden.to(target_dtype).double()
         # 与截断后的 golden 比较（此时 cpu_output_fp64 == golden_truncated，diff = 0）
         cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
 
-    # CPU 小值域错误计数: |golden| < threshold 且 |cpu_output - golden_truncated| > error
+    # 同精度小值域错误计数: |golden| < threshold 且 |native_output - golden_truncated| > error
     cpu_small_value_mask = small_value_mask  # 直接使用 NPU 的小值域 mask，保证一致
     cpu_small_value_error_mask = cpu_small_value_mask & (cpu_diff > small_value_error)
     small_value_cpu_error_count = int(cpu_small_value_error_mask.sum())
@@ -953,6 +657,202 @@ def _compare_single_tensor(
     )
 
 
+def compare_tensors(
+    output: Union[torch.Tensor, Tuple, List],
+    golden: Union[torch.Tensor, Tuple, List],
+    dtype: str = 'float32',
+    threshold: Optional[float] = None,
+    native_output: Optional[Union[torch.Tensor, Tuple, List]] = None,
+    ignore_output_indices: Optional[List[int]] = None,
+    custom_thresholds: Optional[Dict[str, float]] = None,
+) -> CompareResult:
+    """
+    对比输出张量与Golden参考结果（采用MERE/MARE标准 + 小值域处理）
+
+    Args:
+        output: 算子输出（单个张量或多张量）
+        golden: Golden参考输出（单个张量或多张量），通常为 FP64 精度
+        dtype: 数据类型字符串
+        threshold: 精度阈值（可选，默认根据dtype自动选择）
+        native_output: 同精度参考输出（可选，用于小值域比较）
+                       如果不提供，则使用 golden 截断到目标精度作为参考
+        ignore_output_indices: 需要忽略对比的输出索引列表
+        custom_thresholds: 自定义精度阈值表（优先级高于默认阈值）
+
+    Returns:
+        CompareResult: 对比结果
+
+    通过条件:
+        正常值域: MERE < threshold 且 MARE < 10 * threshold
+        小值域: ErrorCount_npu / max(ErrorCount_native, 1) ≤ 2
+    """
+    # 获取阈值（优先使用自定义阈值）
+    if custom_thresholds is None:
+        custom_thresholds = {}
+
+    def _get_output_threshold(dtype_str: str) -> float:
+        """获取单个输出的阈值（优先自定义，其次默认）"""
+        dtype_lower = dtype_str.lower()
+        if dtype_lower in custom_thresholds:
+            return custom_thresholds[dtype_lower]
+        return get_threshold(dtype_str)
+
+    if threshold is None:
+        threshold = _get_output_threshold(dtype)
+
+    try:
+        # 处理多输出情况
+        outputs = _normalize_outputs(output)
+        goldens = _normalize_outputs(golden)
+        native_outputs = _normalize_outputs(native_output) if native_output is not None else None
+
+        if len(outputs) != len(goldens):
+            return CompareResult(
+                passed=False,
+                dtype=dtype,
+                threshold=threshold,
+                error_msg=f"输出数量不匹配: output={len(outputs)}, golden={len(goldens)}"
+            )
+
+        if native_outputs is not None and len(native_outputs) != len(goldens):
+            return CompareResult(
+                passed=False,
+                dtype=dtype,
+                threshold=threshold,
+                error_msg=f"同精度输出数量不匹配: native_output={len(native_outputs)}, golden={len(goldens)}"
+            )
+
+        # 逐个对比
+        all_passed = True
+        mere_sum = 0.0
+        mare_max = 0.0
+        max_diff = 0.0
+        mean_diff = 0.0
+        mismatch_count = 0
+        total_count = 0
+        small_value_error_count = 0
+        small_value_cpu_error_count = 0
+        small_value_total_count = 0
+        cancel_error_count = 0
+        cancel_cpu_error_count = 0
+        cancel_total_count = 0
+
+        # 记录每个输出的独立判定结果
+        single_output_results: List[SingleOutputResult] = []
+
+        for i, (out_tensor, gold_tensor) in enumerate(zip(outputs, goldens)):
+            # 跳过不需要对比的输出
+            if ignore_output_indices and i in ignore_output_indices:
+                # 创建跳过标记的 SingleOutputResult
+                single_output_results.append(SingleOutputResult(
+                    index=i,
+                    name="",  # 名称由调用方填充
+                    dtype=str(out_tensor.dtype).replace('torch.', ''),
+                    dtype_category='int' if out_tensor.dtype in _INTEGER_DTYPES else 'float',
+                    passed=True,  # 跳过的输出视为通过
+                    error_msg="(跳过对比)"
+                ))
+                continue
+
+            # 根据每个输出的实际 dtype 获取阈值（优先自定义阈值）
+            out_dtype_str = str(out_tensor.dtype).replace('torch.', '')
+            out_threshold = _get_output_threshold(out_dtype_str)
+            out_dtype_category = 'int' if out_tensor.dtype in _INTEGER_DTYPES else 'float'
+
+            native_tensor = native_outputs[i] if native_outputs is not None else None
+            result = _compare_single_tensor(out_tensor, gold_tensor, out_threshold, out_dtype_str, native_tensor)
+
+            # 转换 CompareResult 到 SingleOutputResult
+            single_result = SingleOutputResult(
+                index=i,
+                name="",  # 名称由调用方填充
+                dtype=out_dtype_str,
+                dtype_category=out_dtype_category,
+                passed=result.passed,
+                threshold=out_threshold,
+                mere=result.mere,
+                mare=result.mare,
+                max_diff=result.max_diff,
+                mean_diff=result.mean_diff,
+                mismatch_count=result.mismatch_count,
+                total_count=result.total_count,
+                max_abs_diff=int(result.max_diff) if out_dtype_category == 'int' else 0,
+                small_value_error_count=result.small_value_error_count,
+                small_value_cpu_error_count=result.small_value_cpu_error_count,
+                small_value_total_count=result.small_value_total_count,
+                cancel_error_count=result.cancel_error_count,
+                cancel_cpu_error_count=result.cancel_cpu_error_count,
+                cancel_total_count=result.cancel_total_count,
+                error_msg=result.error_msg or "",
+            )
+            single_output_results.append(single_result)
+
+            is_passed = result.passed
+            all_passed = all_passed and is_passed
+            mere_sum += result.mere * result.total_count
+            mare_max = max(mare_max, result.mare)
+            max_diff = max(max_diff, result.max_diff)
+            mean_diff += result.mean_diff * result.total_count
+            mismatch_count += result.mismatch_count
+            total_count += result.total_count
+            small_value_error_count += result.small_value_error_count
+            small_value_cpu_error_count += result.small_value_cpu_error_count
+            small_value_total_count += result.small_value_total_count
+            cancel_error_count += result.cancel_error_count
+            cancel_cpu_error_count += result.cancel_cpu_error_count
+            cancel_total_count += result.cancel_total_count
+
+        if total_count > 0:
+            mere = mere_sum / total_count
+            mean_diff = mean_diff / total_count
+        else:
+            mere = 0.0
+
+        # 最终通过条件
+        passed = all_passed
+
+        # 确定返回的 dtype 和 threshold
+        # 如果有失败输出，返回第一个失败输出的阈值信息
+        # 否则返回第一个输出的阈值信息
+        result_dtype = dtype
+        result_threshold = threshold
+        for sr in single_output_results:
+            if not sr.passed and not sr.error_msg.startswith("(跳过"):
+                result_dtype = sr.dtype
+                result_threshold = sr.threshold
+                break
+
+        return CompareResult(
+            passed=passed,
+            dtype=result_dtype,
+            threshold=result_threshold,
+            mere=mere,
+            mare=mare_max,
+            max_diff=max_diff,
+            mean_diff=mean_diff,
+            mismatch_count=mismatch_count,
+            total_count=total_count,
+            mismatch_ratio=mismatch_count / total_count if total_count > 0 else 0.0,
+            small_value_error_count=small_value_error_count,
+            small_value_cpu_error_count=small_value_cpu_error_count,
+            small_value_total_count=small_value_total_count,
+            cancel_error_count=cancel_error_count,
+            cancel_cpu_error_count=cancel_cpu_error_count,
+            cancel_total_count=cancel_total_count,
+            output_results=single_output_results,  # 新增：各输出独立结果
+        )
+
+    except Exception as e:
+        # 顶层 except 会吞掉所有内部逻辑（in-place mutation、shape 比较、
+        # MERE/MARE 计算等）的 traceback。把堆栈附在 error_msg 末尾，方便排查。
+        return CompareResult(
+            passed=False,
+            dtype=dtype,
+            threshold=threshold,
+            error_msg=f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        )
+
+
 def compare_with_custom_threshold(
     output: torch.Tensor,
     golden: torch.Tensor,
@@ -969,8 +869,10 @@ def compare_with_custom_threshold(
     Returns:
         CompareResult: 对比结果
     """
+    from .thresholds import PRECISION_THRESHOLDS as _DEFAULT_THRESHOLDS
+
     if threshold_dict is None:
-        threshold_dict = PRECISION_THRESHOLDS
+        threshold_dict = _DEFAULT_THRESHOLDS
 
     # 从张量推断dtype
     dtype_str = str(output.dtype).replace('torch.', '')

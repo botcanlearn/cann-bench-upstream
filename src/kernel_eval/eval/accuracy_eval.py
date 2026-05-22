@@ -5,7 +5,7 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
+# Please refer to the License for details. You can not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
@@ -23,120 +23,45 @@
 
 通过条件: MERE < threshold, MARE < 10 * threshold
 
-参考evaluation/core/precision_checker.py
+注意：AccuracyResult 现在从 checkers 模块导入，为统一接口。
+      trial（验证轮次）存储在 metadata 中。
 """
 
-from typing import Any, Dict, List, Optional, Union, Tuple, Callable
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import torch
 
-from ..utils.precision import compare_tensors, CompareResult, PRECISION_THRESHOLDS, SingleOutputResult
-from ..utils.tensor_utils import tensors_to_fp64_cpu, tensors_to_cpu, tensors_to_device
-from ..security.type_checker import check_output_type, check_multi_output
-
-
-@dataclass
-class AccuracyResult:
-    """精度评测结果"""
-    passed: bool
-    dtype: str
-    threshold: float  # 精度阈值
-    mere: float  # 平均相对误差
-    mare: float  # 最大相对误差
-    max_diff: float = 0.0
-    mean_diff: float = 0.0
-    mismatch_count: int = 0
-    total_count: int = 0
-    mismatch_ratio: float = 0.0
-    trial: int = 1  # 验证轮次（1或2）
-    small_value_error_count: int = 0  # 小值域 NPU 错误计数
-    small_value_cpu_error_count: int = 0  # 小值域 CPU 错误计数
-    small_value_total_count: int = 0  # 小值域总计数
-    cancel_error_count: int = 0  # 相消位置 NPU 错误计数
-    cancel_cpu_error_count: int = 0  # 相消位置 CPU 错误计数
-    cancel_total_count: int = 0  # 相消位置总计数
-    error_msg: Optional[str] = None
-    output_results: List[SingleOutputResult] = field(default_factory=list)  # 各输出独立结果
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'passed': self.passed,
-            'dtype': self.dtype,
-            'threshold': self.threshold,
-            'mere': self.mere,
-            'mare': self.mare,
-            'max_diff': self.max_diff,
-            'mean_diff': self.mean_diff,
-            'mismatch_count': self.mismatch_count,
-            'total_count': self.total_count,
-            'mismatch_ratio': self.mismatch_ratio,
-            'trial': self.trial,
-            'small_value_error_count': self.small_value_error_count,
-            'small_value_cpu_error_count': self.small_value_cpu_error_count,
-            'small_value_total_count': self.small_value_total_count,
-            'cancel_error_count': self.cancel_error_count,
-            'cancel_cpu_error_count': self.cancel_cpu_error_count,
-            'cancel_total_count': self.cancel_total_count,
-            'error_msg': self.error_msg,
-            'output_results': [r.to_dict() for r in self.output_results],
-        }
-
-    def format_all_outputs(self) -> str:
-        """格式化所有输出判定结果（用于日志）"""
-        lines = []
-        for r in self.output_results:
-            lines.append(f"  - {r.format_summary()}")
-        return "\n".join(lines)
+from ..utils.thresholds import PRECISION_THRESHOLDS
+from ..security.type_checker import check_multi_output
+from ..base.result import AccuracyResult
+from ..registry.checker_registry import get_correctness_checker, list_correctness_checkers
 
 
 class AccuracyEvaluator:
     """精度评测器"""
 
-    def __init__(self, custom_thresholds: Dict[str, float] = None):
+    def __init__(
+        self,
+        custom_thresholds: Dict[str, float] = None,
+        checker_name: str = "cann_default",
+    ):
         """
         Args:
             custom_thresholds: 自定义精度阈值表，格式为 {dtype: threshold}
+            checker_name: 精度判断器名称，默认 "cann_default"
         """
         self.thresholds = custom_thresholds or PRECISION_THRESHOLDS
+        self.checker_name = checker_name
+        self._checker = None
 
-    def compute_golden_fp64(
-        self,
-        golden_fn: Callable,
-        inputs: List[Any],
-        param_builder: Any,
-        case: Any
-    ) -> torch.Tensor:
-        """
-        在CPU fp64精度下计算Golden参考值
-
-        原理：Golden函数在CPU fp64下计算，比NPU原生dtype精度更高，
-        避免溢出/下溢同时污染参考值。精度对比时双方都cast回fp32。
-
-        Args:
-            golden_fn: Golden函数
-            inputs: 输入张量列表
-            param_builder: 参数构建器
-            case: 用例信息
-
-        Returns:
-            Golden输出Tensor
-        """
-        # 转换输入到CPU fp64 —— 只对浮点 tensor 做 upcast，整型/bool 保持原 dtype
-        fp64_inputs = tensors_to_fp64_cpu(inputs)
-
-        # 构建调用参数
-        params = param_builder.build_call_params(golden_fn, case, fp64_inputs)
-
-        # 执行Golden函数
-        with torch.no_grad():
-            golden_out = golden_fn(**params)
-
-        # 处理多输出情况
-        if isinstance(golden_out, (tuple, list)):
-            golden_out = golden_out[0] if golden_out else None
-
-        return golden_out
+    def _get_checker(self):
+        """获取精度判断器（延迟加载）"""
+        if self._checker is None:
+            self._checker = get_correctness_checker(self.checker_name)
+            if self._checker is None:
+                raise ValueError(f"未找到精度判断器: {self.checker_name}, "
+                                 f"已注册: {list_correctness_checkers()}")
+        return self._checker
 
     def evaluate(
         self,
@@ -145,8 +70,9 @@ class AccuracyEvaluator:
         dtype: str,
         trial: int = 1,
         custom_thresholds: Dict[str, float] = None,
-        cpu_output: Union[torch.Tensor, Tuple, List] = None,
+        native_output: Union[torch.Tensor, Tuple, List] = None,
         ignore_output_indices: List[int] = None,
+        checker_name: Optional[str] = None,
     ) -> AccuracyResult:
         """
         评测AI算子输出的精度（采用MERE/MARE标准 + 小值域处理）
@@ -155,13 +81,14 @@ class AccuracyEvaluator:
             ai_output: AI生成算子的输出
             golden_output: Golden参考输出（FP64精度）
             dtype: 数据类型字符串
-            trial: 验证轮次（1或2）
+            trial: 验证轮次（1或2），存储在 metadata 中
             custom_thresholds: 自定义精度阈值表，优先级高于全局配置
-            cpu_output: CPU 相同精度下的输出（用于小值域比较）
+            native_output: 同精度参考输出（用于小值域比较，可为 AI 算子的同精度 golden 执行结果）
             ignore_output_indices: 需要忽略对比的输出索引列表
+            checker_name: 精度判断器名称（可选，覆盖实例配置）
 
         Returns:
-            AccuracyResult: 精度评测结果
+            AccuracyResult: 精度评测结果（统一接口）
         """
         # 类型检查（安全防护）
         try:
@@ -170,204 +97,40 @@ class AccuracyEvaluator:
         except RuntimeError as e:
             return AccuracyResult(
                 passed=False,
-                dtype=dtype,
                 threshold=0,
-                mere=0,
-                mare=0,
-                trial=trial,
-                error_msg=str(e)
+                error_msg=str(e),
+                metadata={'trial': trial},
             )
 
         # 获取阈值（优先使用自定义阈值）
         threshold = self._get_threshold(dtype, custom_thresholds)
 
-        # 对比张量（传入 cpu_output 用于小值域比较，传入 custom_thresholds 用于多输出阈值）
-        compare_result = compare_tensors(ai_output, golden_output, dtype, threshold, cpu_output, ignore_output_indices, custom_thresholds)
-
-        return AccuracyResult(
-            passed=compare_result.passed,
-            dtype=compare_result.dtype,
-            threshold=compare_result.threshold,
-            mere=compare_result.mere,
-            mare=compare_result.mare,
-            max_diff=compare_result.max_diff,
-            mean_diff=compare_result.mean_diff,
-            mismatch_count=compare_result.mismatch_count,
-            total_count=compare_result.total_count,
-            mismatch_ratio=compare_result.mismatch_ratio,
-            trial=trial,
-            small_value_error_count=compare_result.small_value_error_count,
-            small_value_cpu_error_count=compare_result.small_value_cpu_error_count,
-            small_value_total_count=compare_result.small_value_total_count,
-            cancel_error_count=compare_result.cancel_error_count,
-            cancel_cpu_error_count=compare_result.cancel_cpu_error_count,
-            cancel_total_count=compare_result.cancel_total_count,
-            error_msg=compare_result.error_msg,
-            output_results=compare_result.output_results,  # 各输出独立结果
-        )
-
-    def evaluate_with_retry(
-        self,
-        golden_fn: Callable,
-        custom_fn: Callable,
-        inputs: List[Any],
-        param_builder: Any,
-        case: Any,
-        data_gen: Any,
-        device: str,
-        dtype: str,
-        perturb_input: bool = True
-    ) -> AccuracyResult:
-        """
-        执行二次验证评测
-
-        .. deprecated::
-            F002: 本方法是早期独立实现，**当前主评测路径未调用**。实际防作弊
-            二次验证已迁移到 :meth:`Evaluator._retry_with_fresh_inputs`
-            (见 ``src/kernel_eval/eval/evaluator.py``)，由 Evaluator 在
-            functional pass 后按 ``Config.enable_accuracy_retry`` 触发。
-
-            保留本方法是为了让旧的独立调用方（如脚本、单测）仍能运行；新代
-            码请直接走 ``Evaluator``。本方法不会被自动废弃，但**不要**作为
-            主防作弊点依赖。
-
-        原理：用新鲜输入重跑一次，防止缓存作弊。
-        如果submission缓存第一次结果或翻转"computed-once"标志，
-        第二次用不同输入会产生垃圾结果。
-
-        Args:
-            golden_fn: Golden函数
-            custom_fn: AI算子函数
-            inputs: 第一轮输入张量
-            param_builder: 参数构建器
-            case: 用例信息
-            data_gen: 数据生成器
-            device: 设备类型
-            dtype: 数据类型
-            perturb_input: 是否微扰输入（防止seed重复）
-
-        Returns:
-            AccuracyResult: 最终评测结果
-        """
-        import warnings
-        warnings.warn(
-            "AccuracyEvaluator.evaluate_with_retry is parallel to "
-            "Evaluator._retry_with_fresh_inputs and not on the main evaluation "
-            "path. Prefer constructing an Evaluator and letting it manage retry "
-            "via Config.enable_accuracy_retry. This method is kept for legacy "
-            "scripts and unit tests; do not rely on it for anti-cheat in new code.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        # 第一轮验证
-        result1 = self._single_eval(
-            golden_fn, custom_fn, inputs, param_builder, case, device, dtype, trial=1
-        )
-
-        if not result1.passed:
-            return result1
-
-        # 第二轮验证：新鲜输入
-        fresh_inputs = data_gen.generate_input_tensors_from_case(
-            case.input_shapes, case.dtypes, case.value_ranges
-        )
-
-        # 微扰输入，防止seed重复导致相同数据
-        if perturb_input:
-            for item in fresh_inputs:
-                if isinstance(item, torch.Tensor) and item.is_floating_point():
-                    item.add_(0.01)
-                    break
-                elif isinstance(item, (list, tuple)):
-                    for sub in item:
-                        if isinstance(sub, torch.Tensor) and sub.is_floating_point():
-                            sub.add_(0.01)
-                            break
-
-        result2 = self._single_eval(
-            golden_fn, custom_fn, fresh_inputs, param_builder, case, device, dtype, trial=2
-        )
-
-        # 如果第二轮失败，返回第二轮结果
-        if not result2.passed:
-            return result2
-
-        # 两轮都通过，返回第一轮结果（使用原始输入）
-        return result1
-
-    def _single_eval(
-        self,
-        golden_fn: Callable,
-        custom_fn: Callable,
-        inputs: List[Any],
-        param_builder: Any,
-        case: Any,
-        device: str,
-        dtype: str,
-        trial: int
-    ) -> AccuracyResult:
-        """单轮评测"""
-        try:
-            # Golden计算（CPU fp64）- 高精度参考
-            golden_out = self.compute_golden_fp64(golden_fn, inputs, param_builder, case)
-
-            # CPU 原精度计算 - 用于小值域比较
-            # 使用原始 dtype 的输入直接调用 golden_fn
-            cpu_inputs = tensors_to_cpu(inputs)
-            cpu_params = param_builder.build_call_params(golden_fn, case, cpu_inputs)
-            with torch.no_grad():
-                cpu_out = golden_fn(**cpu_params)
-
-            if isinstance(cpu_out, (tuple, list)):
-                cpu_out = cpu_out[0] if cpu_out else None
-
-            # Custom算子计算（NPU或CPU）
-            if device.startswith('npu'):
-                npu_inputs = tensors_to_device(inputs, device)
-                flat_inputs = [t if isinstance(t, torch.Tensor) else t[0] for t in npu_inputs]
-            else:
-                flat_inputs = [t if isinstance(t, torch.Tensor) else t[0] for t in inputs]
-
-            with torch.no_grad():
-                custom_out = custom_fn(*flat_inputs)
-
-            # 处理多输出
-            if isinstance(golden_out, (tuple, list)):
-                golden_out = golden_out[0] if golden_out else None
-            if isinstance(custom_out, (tuple, list)):
-                custom_out = custom_out[0] if custom_out else None
-
-            # 类型检查
-            if custom_out is not None:
-                check_output_type(custom_out, torch.Tensor, strict=True)
-
-            # 精度对比（双方都转CPU）
-            # 传入 cpu_out 用于小值域比较
-            if golden_out is None or custom_out is None:
-                return AccuracyResult(
-                    passed=False,
-                    dtype=dtype,
-                    threshold=0,
-                    mere=0,
-                    mare=0,
-                    trial=trial,
-                    error_msg="输出为空"
-                )
-
-            return self.evaluate(custom_out.cpu(), golden_out.cpu(), dtype, trial, cpu_output=cpu_out)
-
-        except Exception as e:
-            # 错误信息保留完整长度——check_output_type 抛出的 RuntimeError 信息
-            # 较长（含类型名+期望类型+实际类型），200 字符常会截掉关键信息。
+        # 获取精度判断器
+        checker = self._get_checker() if checker_name is None else get_correctness_checker(checker_name)
+        if checker is None:
             return AccuracyResult(
                 passed=False,
-                dtype=dtype,
-                threshold=0,
-                mere=0,
-                mare=0,
-                trial=trial,
-                error_msg=f"{type(e).__name__}: {e}",
+                threshold=threshold,
+                error_msg=f"未找到精度判断器: {checker_name or self.checker_name}",
+                metadata={'trial': trial},
             )
+
+        # 执行精度判断
+        result = checker.check(
+            ai_outputs=ai_output,
+            golden_outputs=golden_output,
+            dtype=dtype,
+            threshold=threshold,
+            native_outputs=native_output,
+            ignore_indices=ignore_output_indices,
+            custom_thresholds=custom_thresholds,
+        )
+
+        # 在 metadata 中添加 trial
+        metadata = result.get_metadata()
+        metadata['trial'] = trial
+
+        return result
 
     def evaluate_batch(
         self,
@@ -394,11 +157,8 @@ class AccuracyEvaluator:
             if ai_out is None or gold_out is None:
                 results.append(AccuracyResult(
                     passed=False,
-                    dtype=dtype,
                     threshold=0,
-                    mere=0,
-                    mare=0,
-                    error_msg=f"输出索引{i}不存在"
+                    error_msg=f"输出索引{i}不存在",
                 ))
             else:
                 results.append(self.evaluate(ai_out, gold_out, dtype))

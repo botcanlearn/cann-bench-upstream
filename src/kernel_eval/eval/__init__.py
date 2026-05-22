@@ -5,14 +5,14 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
+# Please refer to the License for details. You can not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
 """
-评测层模块
+评测层模块（通用组件）
 
 职责：
 1. 算子执行器（设备迁移、函数执行）
@@ -22,29 +22,59 @@
 5. 综合评测调度（协调精度和性能评测）
 6. 子进程执行（算子级进程隔离）
 7. 失败结果合成（编译/安全/子进程失败）
-8. 算子匹配（名称查找、AI算子加载）
-9. 结果统计公共函数
+8. 结果统计公共函数
+9. 通用精度判断器（AllcloseChecker）
+
+架构：
+- 基类从 base/ 导入
+- CANN 特化组件从 benches.cann 导入
+
+使用方式:
+    # 通用组件
+    from kernel_eval.eval import OpRunner, AccuracyEvaluator, PerfEvaluator
+
+    # CANN 特化 Checker/Matcher
+    from kernel_eval.benches.cann import CannDefaultChecker, OperatorMatcher
 """
 
 from .op_runner import OpRunner, OpRunResult
-from .accuracy_eval import AccuracyEvaluator, AccuracyResult
-from .perf_eval import PerfEvaluator, PerfResult
+from .accuracy_eval import AccuracyEvaluator
+from ..base.result import AccuracyResult, PerfResult
+from .perf_eval import PerfEvaluator
 from .input_pool import InputPool, InputPoolConfig, create_input_pool
 from .results import EvalCaseResult, EvalOperatorResult, EvalSessionResult, summarize_case_results, CaseResultSummary
 from .failure_synthesizer import FailureSynthesizer
-from .operator_matcher import OperatorMatcher
+from ..base.matcher import OperatorMatcherBase
+from ..registry.matcher_registry import OperatorMatcherRegistry, get_operator_matcher
 from .subprocess_runner import SubprocessRunner
 from .evaluator import Evaluator
 
+# 通用 Checker 实现
+from .allclose_checker import AllcloseChecker, AllcloseOutputResult
+
+# 注册接口（从 registry 导入）
+from ..registry.checker_registry import (
+    get_correctness_checker,
+    list_correctness_checkers,
+    register_correctness_checker,
+)
+
 __all__ = [
     "OpRunner", "OpRunResult",
-    "AccuracyEvaluator", "AccuracyResult",
-    "PerfEvaluator", "PerfResult",
+    "AccuracyEvaluator", "AccuracyResult", "PerfResult", "PerfEvaluator",
     "InputPool", "InputPoolConfig", "create_input_pool",
     "EvalCaseResult", "EvalOperatorResult", "EvalSessionResult",
     "summarize_case_results", "CaseResultSummary",
     "FailureSynthesizer",
-    "OperatorMatcher",
+    "OperatorMatcherBase",
+    "OperatorMatcherRegistry",
+    "get_operator_matcher",
     "SubprocessRunner",
     "Evaluator",
+    # 通用 Checker
+    "AllcloseChecker", "AllcloseOutputResult",
+    # 注册接口
+    "get_correctness_checker",
+    "list_correctness_checkers",
+    "register_correctness_checker",
 ]

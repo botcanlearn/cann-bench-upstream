@@ -26,6 +26,7 @@
 
 import csv
 import json
+import logging
 import os
 import re
 import shutil
@@ -33,29 +34,48 @@ import sys
 import tempfile
 import time
 from typing import Optional, Dict, Any, Tuple, List, Callable
-from dataclasses import dataclass, field
 
 import torch
+
+
+_logger = logging.getLogger(__name__)
 
 from ..utils.device_manager import DeviceManager
 from ..config import Config, get_config
 from .input_pool import InputPool
+from ..base.result import PerfResult, compute_speedup
 
 
 # Warmup kernel 精确形状特征（用于过滤）
-WARMUP_MATMUL_SHAPE = '"10240,10240;10240,10240"'
-WARMUP_REDUCE_SHAPE = '"96,1024,1024;3"'
+# F111: 硬编码形状会在 CANN / 驱动升级改 warmup 实现时静默失效（过滤命中率=0
+# 意味着 warmup 时间混入了实测，性能数据偏低）。允许 env 覆盖 +
+# _maybe_warn_warmup_filter_inactive 校验整体命中率。
+WARMUP_MATMUL_SHAPE = os.environ.get(
+    "CANN_BENCH_WARMUP_MATMUL_SHAPE", '"10240,10240;10240,10240"'
+)
+WARMUP_REDUCE_SHAPE = os.environ.get(
+    "CANN_BENCH_WARMUP_REDUCE_SHAPE", '"96,1024,1024;3"'
+)
+
+# 跟踪 warmup 过滤命中率：在某轮评测开始时清零，结束时检查
+_WARMUP_FILTER_STATS = {"checked": 0, "matched": 0}
 
 
-@dataclass
-class PerfResult:
-    """性能采集结果"""
-    case_id: str
-    elapsed_us: float = 0          # Kernel-only时间（平均）
-    op_times: Dict[str, Dict[str, float]] = field(default_factory=dict)
-    error: Optional[str] = None
-    _repeat: int = 1
-    warmup_used: bool = False      # 是否使用了升频清cache
+def _maybe_warn_warmup_filter_inactive() -> None:
+    """F111: 若过滤被频繁调用但命中率=0，提示 warmup 形状可能已过期。
+
+    调用方在每轮评测结束时调用。only warn once per process。
+    """
+    if _WARMUP_FILTER_STATS["checked"] >= 20 and _WARMUP_FILTER_STATS["matched"] == 0:
+        if not getattr(_maybe_warn_warmup_filter_inactive, "_warned", False):
+            _logger.warning(
+                "perf_eval: warmup-shape filter checked %d kernels but matched 0; "
+                "CANN/驱动可能已升级 warmup 形状（旧值 MATMUL=%r / REDUCE=%r）。"
+                "建议设置 env CANN_BENCH_WARMUP_MATMUL_SHAPE / "
+                "CANN_BENCH_WARMUP_REDUCE_SHAPE 覆盖。",
+                _WARMUP_FILTER_STATS["checked"], WARMUP_MATMUL_SHAPE, WARMUP_REDUCE_SHAPE,
+            )
+            _maybe_warn_warmup_filter_inactive._warned = True
 
 
 class PerfEvaluator:
@@ -123,20 +143,32 @@ class PerfEvaluator:
         Sync targets the warmup tensor's actual device — ``torch.npu.synchronize()``
         with no arg syncs the current device, which can disagree with the
         device the warmup tensors live on.
+
+        Wrapped in ``TorchOpGuard.pause()`` so warmup matmul does not trip
+        the guard's forbidden-API counter (the entire run_ai_op is wrapped
+        in a guard upstream; warmup is not candidate computation).
         """
         if self._warmup_tensors is not None:
-            mm1, mm2, reduce_input = self._warmup_tensors
-            torch.matmul(mm1, mm2)
-            torch.npu.synchronize(mm1.device)
-            torch.max(reduce_input)
-            torch.npu.synchronize(mm1.device)
+            from ..security.torch_op_guard import TorchOpGuard
+            with TorchOpGuard.pause():
+                mm1, mm2, reduce_input = self._warmup_tensors
+                torch.matmul(mm1, mm2)
+                torch.npu.synchronize(mm1.device)
+                torch.max(reduce_input)
+                torch.npu.synchronize(mm1.device)
 
     def _clear_cache(self):
-        """清空 L2 cache (在每次测量 step 前调用，保证测量间 cache 状态一致)"""
+        """清空 L2 cache (在每次测量 step 前调用，保证测量间 cache 状态一致)
+
+        Wrapped in ``TorchOpGuard.pause()`` for the same reason as
+        ``_boost_freq_and_clear_cache``.
+        """
         if self._warmup_tensors is not None:
-            _, _, reduce_input = self._warmup_tensors
-            torch.max(reduce_input)
-            torch.npu.synchronize(reduce_input.device)
+            from ..security.torch_op_guard import TorchOpGuard
+            with TorchOpGuard.pause():
+                _, _, reduce_input = self._warmup_tensors
+                torch.max(reduce_input)
+                torch.npu.synchronize(reduce_input.device)
 
     def _profile(self, fn: Callable, prof_dir: str, warmup: int, repeat: int):
         """Execute warmup + repeat calls with NPU profiler.
@@ -222,11 +254,25 @@ class PerfEvaluator:
                 with_stack=False,
                 experimental_config=experimental_config,
             ) as prof:
+                # F032: fn() exceptions used to escape the with-block, so
+                # `prof.__exit__` ran in an unfinished state — step counters
+                # mismatched and the kernel-details CSV could be truncated
+                # or never written. Catch per-iteration, advance the step
+                # counter so the profiler exits cleanly, then re-raise so
+                # the caller surfaces the failure normally.
+                fn_exc: Optional[BaseException] = None
                 for i in range(warmup + repeat):
                     if self.freq_boost and i >= warmup:
                         self._clear_cache()
-                    fn()
+                    try:
+                        fn()
+                    except BaseException as e:
+                        fn_exc = e
+                        prof.step()
+                        break
                     prof.step()
+                if fn_exc is not None:
+                    raise fn_exc
 
             # 等待 profiler 解析完成（在恢复 stdout/stderr 之前）
             # 解析器进程在 profiler context 退出后开始工作
@@ -234,8 +280,9 @@ class PerfEvaluator:
                 from torch_npu.profiler.analysis.prof_common_func._multi_process_pool import MultiProcessPool
                 pool = MultiProcessPool()
                 pool.close_pool(wait=True)  # 等待解析完成
-            except Exception:
-                pass
+            except Exception as e:
+                # F047: 不再静默吞 — debug 级日志（用户/CI 通过 LOG_LEVEL 控制）
+                _logger.debug("MultiProcessPool close_pool(wait=True) failed: %s", e)
 
         finally:
             # Restore original stdout/stderr
@@ -250,12 +297,22 @@ class PerfEvaluator:
             try:
                 with open(sink_file.name, 'r', errors='replace') as f:
                     captured = f.read()
-                # 只关心 NPU 驱动/Runtime/AICPU 类关键错误；profiler 自身的 INFO/WARN 噪声忽略
-                error_keywords = ('AICPU exception', 'Inner error', 'Runtime error',
-                                  'EZ1001', 'EZ9999', 'aicore error',
-                                  'kernel launch failed', 'failed to launch')
-                hits = [line for line in captured.splitlines()
-                        if any(kw.lower() in line.lower() for kw in error_keywords)]
+                # F110: 旧版只匹配已知关键词（AICPU/EZ1001 等），新型 NPU 错误
+                # (OOM, Malloc failed, timeout 等) 会被静默删除。补通用正则兜底，
+                # 任一含 error/fail/exception/traceback 关键词的行都计入 hits。
+                _NPU_KNOWN_ERRORS = ('AICPU exception', 'Inner error', 'Runtime error',
+                                     'EZ1001', 'EZ9999', 'aicore error',
+                                     'kernel launch failed', 'failed to launch')
+                _GENERIC_ERROR_RE = re.compile(
+                    r'\b(error|fail(?:ed|ure)?|exception|traceback|malloc|oom|timeout)\b',
+                    re.IGNORECASE,
+                )
+                hits = []
+                for line in captured.splitlines():
+                    if any(kw.lower() in line.lower() for kw in _NPU_KNOWN_ERRORS):
+                        hits.append(line)
+                    elif _GENERIC_ERROR_RE.search(line):
+                        hits.append(line)
                 if hits:
                     print(f"[WARN] Profiler 期间捕获 NPU 关键错误（{len(hits)} 条），完整日志: {sink_file.name}", flush=True)
                     for h in hits[:5]:
@@ -264,10 +321,12 @@ class PerfEvaluator:
                     # 无错误：直接删 tempfile
                     try:
                         os.unlink(sink_file.name)
-                    except OSError:
-                        pass
-            except Exception:
-                pass
+                    except OSError as e:
+                        # F047: tempfile 清理失败也 log 一下
+                        _logger.debug("tempfile unlink %s failed: %s", sink_file.name, e)
+            except Exception as e:
+                # F047: 不再静默吞 — 读 sink_file 失败时至少留痕
+                _logger.debug("perf_eval profiler-log scan failed: %s", e)
 
     def run_profiled(self, case_id: str, func: Callable, *args,
                      warmup: int = None, repeat: int = None,
@@ -294,7 +353,14 @@ class PerfEvaluator:
         warmup = warmup or self.warmup
         repeat = repeat or self.repeat
 
-        result = PerfResult(case_id=case_id, _repeat=repeat, warmup_used=self.freq_boost)
+        result = PerfResult(
+            metadata={
+                'case_id': case_id,
+                '_repeat': repeat,
+                'warmup_used': self.freq_boost,
+                'freq_boost': self.freq_boost,
+            }
+        )
 
         if not self.config.enable_profiler:
             self._measure_simple(result, func, inputs, warmup, repeat,
@@ -339,7 +405,7 @@ class PerfEvaluator:
                 pool.clear()
 
         except Exception as e:
-            result.error = str(e)
+            result.error_msg = str(e)
 
         try:
             # Locate kernel_details.csv — check common locations first.
@@ -373,9 +439,9 @@ class PerfEvaluator:
             if csv_file:
                 op_times, total_kernel_us = self._parse_kernel_details_csv(csv_file)
                 self._normalize_result(result, op_times, total_kernel_us)
-            elif not result.error:
+            elif not result.error_msg:
                 # 只在 profiler 未报错时才设置此错误，避免覆盖 profiler 异常信息
-                result.error = "no kernel_details.csv produced"
+                result.error_msg = "no kernel_details.csv produced"
 
         finally:
             # Clean up temp dir (non-archive mode).
@@ -474,8 +540,9 @@ class PerfEvaluator:
             pool = MultiProcessPool()
             # close_pool(wait=False) 不等待 fork 子进程完成，直接关闭
             pool.close_pool(wait=False)
-        except Exception:
-            pass
+        except Exception as e:
+            # F047: 不再静默吞 — debug 日志便于排查 profiler shutdown 失败
+            _logger.debug("MultiProcessPool close_pool(wait=False) failed: %s", e)
 
     def _parse_kernel_details_csv(self, csv_file: str) -> Tuple[Dict[str, Dict[str, float]], float]:
         """解析 kernel_details.csv，提取 NPU kernel 执行时间（取中位数）
@@ -585,19 +652,28 @@ class PerfEvaluator:
     def _is_warmup_kernel(self, op_type: str, input_shapes: str) -> bool:
         """判断是否为 warmup kernel（通过精确形状匹配）
 
-        Warmup kernel 特征：
-        - MatMulV3: Input Shapes = '"10240,10240;10240,10240"'
-        - ReduceMax: Input Shapes = '"96,1024,1024;3"'
+        Warmup kernel 特征（可通过 env 覆盖）：
+        - MatMulV3: Input Shapes = WARMUP_MATMUL_SHAPE
+        - ReduceMax: Input Shapes = WARMUP_REDUCE_SHAPE
+
+        F111: 同步更新命中统计；若整轮命中率=0 由 _maybe_warn_warmup_filter_inactive
+        触发 warning，提示 CANN/驱动升级可能让形状失效。
         """
         if not op_type or not input_shapes:
             return False
 
+        # 仅对预期的 op_type 统计命中率（避免 op_type=Cast/Add 等非 warmup 候选拉低统计）
+        if op_type in ('MatMulV3', 'ReduceMax'):
+            _WARMUP_FILTER_STATS["checked"] += 1
+
         # 精确匹配 MatMulV3 warmup
         if op_type == 'MatMulV3' and WARMUP_MATMUL_SHAPE in input_shapes:
+            _WARMUP_FILTER_STATS["matched"] += 1
             return True
 
         # 精确匹配 ReduceMax warmup
         if op_type == 'ReduceMax' and WARMUP_REDUCE_SHAPE in input_shapes:
+            _WARMUP_FILTER_STATS["matched"] += 1
             return True
 
         return False

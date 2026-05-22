@@ -312,8 +312,9 @@ class PackageManager:
             os.chmod(run_path, 0o755)
 
             # 执行安装
+            abs_run_path = str(run_file.resolve())
             result = subprocess.run(
-                [run_path, "--install"],
+                [abs_run_path, "--install"],
                 cwd=str(run_file.parent),
                 capture_output=True,
                 text=True,
@@ -431,22 +432,17 @@ class PackageManager:
         except ImportError:
             pass
 
-        # 2. 尝试从 torch.ops.cann_bench 扫描
-        # 先尝试导入 cann_bench_golden 以注册 ops
+        # 2. 尝试从 torch.ops.cann_bench 扫描（由 cann_bench 模块注册）
         try:
-            import cann_bench_golden
             import torch
             if hasattr(torch.ops, 'cann_bench'):
-                # torch.library注册的ops不会在dir()中显示，需要从golden_impls获取名称
-                from cann_bench_golden import golden_impls
-                for func_name in dir(golden_impls):
-                    if func_name.startswith('_'):
-                        continue
-                    # 尝试获取对应的op（小写名称）
-                    op_name = func_name.lower()
+                # torch.library 注册的 ops 需要从已扫描的接口或模块推断名称
+                # 如果 cann_bench 已导入，从其模块属性推断
+                for interface in interfaces:
+                    op_name = interface.name.lower()
                     if hasattr(torch.ops.cann_bench, op_name):
                         op = getattr(torch.ops.cann_bench, op_name)
-                        if callable(op):
+                        if callable(op) and op not in [i.callable for i in interfaces]:
                             interfaces.append(InterfaceInfo(
                                 name=op_name,
                                 callable=op,
@@ -491,9 +487,9 @@ class PackageManager:
         根据接口名称，匹配tasks 中的算子定义
         返回匹配到的算子名称列表
         """
-        from .operator_loader import OperatorLoader
+        from ..registry.loader_registry import get_task_loader
 
-        operator_loader = OperatorLoader(self.config.tasks_root)
+        operator_loader = get_task_loader(tasks_root=self.config.tasks_root)
         all_operators = operator_loader.list_operators()  # 获取所有算子
 
         matched = []

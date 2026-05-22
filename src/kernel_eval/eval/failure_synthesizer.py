@@ -25,8 +25,8 @@
 from typing import Dict, List, Optional, Any
 
 from .results import EvalCaseResult, EvalOperatorResult
-from ..data.case_loader import CaseLoader
-from ..data.operator_loader import OperatorInfo
+from ..data import CaseLoader
+from ..base.models import TaskSpec
 
 
 class FailureSynthesizer:
@@ -35,109 +35,107 @@ class FailureSynthesizer:
     def __init__(self, case_loader: CaseLoader):
         self.case_loader = case_loader
 
+    # ------------------------------------------------------------------
+    # 统一内部实现
+    # ------------------------------------------------------------------
+
+    def _synthesize_failure(
+        self,
+        error_text: str,
+        error_prefix: str,
+        error_field: str,
+        operator_name: str,
+        rel_path: str,
+        case_filter: Optional[Dict] = None,
+        filter_func: Optional[callable] = None,
+    ) -> EvalOperatorResult:
+        """为无法评测的算子生成一条 all-FAIL 的 EvalOperatorResult。
+
+        三个公有方法（compile / security / subprocess）的共享实现，
+        仅 error_prefix 与 diagnostic error_field 不同。
+
+        Args:
+            error_text: 错误原文（全文存入诊断字段）
+            error_prefix: 单用例 error_msg 前缀，如 ``"compile failed:"``
+            error_field: 算子级诊断字段名，``"compilation_error"`` 或
+                ``"subprocess_failure_reason"``
+            operator_name: 算子名称
+            rel_path: 相对路径
+        """
+        try:
+            cases = self.case_loader.scan_by_operator(operator_name)
+            if case_filter and filter_func:
+                cases = filter_func(cases, case_filter)
+        except Exception:
+            cases = []
+
+        first_line = (error_text.strip().splitlines() or ["(no detail)"])[0]
+        reason_short = f"{error_prefix} {first_line[:180]}"
+
+        case_results: List[EvalCaseResult] = []
+        for c in cases:
+            case_results.append(EvalCaseResult(
+                case_id=str(getattr(c, "case_id", "")),
+                rel_path=rel_path,
+                operator=operator_name,
+                case_num=getattr(c, "case_num", 0),
+                success=False,
+                error_msg=reason_short,
+            ))
+
+        kwargs: Dict[str, Any] = {
+            "rel_path": rel_path,
+            "operator": operator_name,
+            "total_cases": len(case_results),
+            "passed_cases": 0,
+            "failed_cases": len(case_results),
+            "skipped_cases": 0,
+            "results": case_results,
+            "pass_rate": 0.0,
+            "avg_speedup": 0.0,
+        }
+        kwargs[error_field] = error_text
+
+        return EvalOperatorResult(**kwargs)
+
+    # ------------------------------------------------------------------
+    # 公有方法（薄封装）
+    # ------------------------------------------------------------------
+
     def synthesize_compile_failure(
         self,
-        op_info: OperatorInfo,
+        op_info: TaskSpec,
         error_excerpt: str,
         case_filter: Optional[Dict] = None,
         filter_func: Optional[callable] = None,
     ) -> EvalOperatorResult:
-        """为编译失败的算子生成一条 all-FAIL 的 EvalOperatorResult
-
-        Args:
-            op_info: 算子信息
-            error_excerpt: 错误摘要
-            case_filter: 用例筛选条件
-            filter_func: 筛选函数（可选）
-
-        Returns:
-            EvalOperatorResult: 全 FAIL 的算子结果
-        """
-        try:
-            cases = self.case_loader.scan_by_operator(op_info.name)
-            if case_filter and filter_func:
-                cases = filter_func(cases, case_filter)
-        except Exception:
-            cases = []
-
-        # 取错误摘要的第一行做 case-level detail
-        first_line = (error_excerpt.strip().splitlines() or ["(no detail)"])[0]
-        reason_short = f"compile failed: {first_line[:180]}"
-
-        case_results: List[EvalCaseResult] = []
-        for c in cases:
-            case_results.append(EvalCaseResult(
-                case_id=str(getattr(c, "case_id", 0)),
-                rel_path=op_info.rel_path,
-                operator=op_info.name,
-                case_num=int(getattr(c, "case_id", 0)),
-                success=False,
-                error_msg=reason_short,
-            ))
-
-        return EvalOperatorResult(
+        """为编译失败的算子生成一条 all-FAIL 的 EvalOperatorResult"""
+        return self._synthesize_failure(
+            error_text=error_excerpt,
+            error_prefix="compile failed:",
+            error_field="compilation_error",
+            operator_name=op_info.name,
             rel_path=op_info.rel_path,
-            operator=op_info.name,
-            total_cases=len(case_results),
-            passed_cases=0,
-            failed_cases=len(case_results),
-            skipped_cases=0,
-            results=case_results,
-            pass_rate=0.0,
-            avg_speedup=0.0,
-            compilation_error=error_excerpt,
+            case_filter=case_filter,
+            filter_func=filter_func,
         )
 
     def synthesize_security_failure(
         self,
-        op_info: OperatorInfo,
+        op_info: TaskSpec,
         security_error: str,
         case_filter: Optional[Dict] = None,
         filter_func: Optional[callable] = None,
     ) -> EvalOperatorResult:
-        """为安全检查失败的算子生成一条 all-FAIL 的 EvalOperatorResult
-
-        Args:
-            op_info: 算子信息
-            security_error: 安全错误信息
-            case_filter: 用例筛选条件
-            filter_func: 筛选函数（可选）
-
-        Returns:
-            EvalOperatorResult: 全 FAIL 的算子结果
-        """
-        try:
-            cases = self.case_loader.scan_by_operator(op_info.name)
-            if case_filter and filter_func:
-                cases = filter_func(cases, case_filter)
-        except Exception:
-            cases = []
-
-        first_line = (security_error.strip().splitlines() or ["(no detail)"])[0]
-        reason_short = f"security check failed: {first_line[:180]}"
-
-        case_results: List[EvalCaseResult] = []
-        for c in cases:
-            case_results.append(EvalCaseResult(
-                case_id=str(getattr(c, "case_id", 0)),
-                rel_path=op_info.rel_path,
-                operator=op_info.name,
-                case_num=int(getattr(c, "case_id", 0)),
-                success=False,
-                error_msg=reason_short,
-            ))
-
-        return EvalOperatorResult(
+        """为安全检查失败的算子生成一条 all-FAIL 的 EvalOperatorResult"""
+        return self._synthesize_failure(
+            error_text=security_error,
+            error_prefix="security check failed:",
+            error_field="subprocess_failure_reason",
+            operator_name=op_info.name,
             rel_path=op_info.rel_path,
-            operator=op_info.name,
-            total_cases=len(case_results),
-            passed_cases=0,
-            failed_cases=len(case_results),
-            skipped_cases=0,
-            results=case_results,
-            pass_rate=0.0,
-            avg_speedup=0.0,
-            subprocess_failure_reason=security_error,
+            case_filter=case_filter,
+            filter_func=filter_func,
         )
 
     def synthesize_subprocess_failure(
@@ -148,46 +146,13 @@ class FailureSynthesizer:
         case_filter: Optional[Dict] = None,
         filter_func: Optional[callable] = None,
     ) -> EvalOperatorResult:
-        """子进程超时 / 崩溃时合成 all-FAIL 的 EvalOperatorResult
-
-        Args:
-            operator_name: 算子名称
-            rel_path: 相对路径
-            reason: 失败原因
-            case_filter: 用例筛选条件
-            filter_func: 筛选函数（可选）
-
-        Returns:
-            EvalOperatorResult: 全 FAIL 的算子结果
-        """
-        try:
-            cases = self.case_loader.scan_by_operator(operator_name)
-            if case_filter and filter_func:
-                cases = filter_func(cases, case_filter)
-        except Exception:
-            cases = []
-
-        short = f"subprocess failed: {reason}"
-        case_results: List[EvalCaseResult] = []
-        for c in cases:
-            case_results.append(EvalCaseResult(
-                case_id=str(getattr(c, "case_id", 0)),
-                rel_path=rel_path,
-                operator=operator_name,
-                case_num=int(getattr(c, "case_id", 0)),
-                success=False,
-                error_msg=short,
-            ))
-
-        return EvalOperatorResult(
+        """子进程超时 / 崩溃时合成 all-FAIL 的 EvalOperatorResult"""
+        return self._synthesize_failure(
+            error_text=reason,
+            error_prefix="subprocess failed:",
+            error_field="subprocess_failure_reason",
+            operator_name=operator_name,
             rel_path=rel_path,
-            operator=operator_name,
-            total_cases=len(case_results),
-            passed_cases=0,
-            failed_cases=len(case_results),
-            skipped_cases=0,
-            results=case_results,
-            pass_rate=0.0,
-            avg_speedup=0.0,
-            subprocess_failure_reason=reason,
+            case_filter=case_filter,
+            filter_func=filter_func,
         )

@@ -27,7 +27,7 @@ from kernel_eval.report.scoring import (
     WEIGHT_COMPILATION,
     WEIGHT_FUNCTION,
     WEIGHT_PERFORMANCE,
-    ScoreInfo,
+    OperatorScoreInfo,
     ScoringCalculator,
     aggregate_eq4,
     per_case_sol_score,
@@ -81,13 +81,12 @@ class TestPerCaseSolScore:
         # (t_cand - t_hw) + (t_base - t_hw) == 0
         assert per_case_sol_score(t_baseline=50, t_cand=50, t_hw=50) is None
 
-    def test_baseline_below_hw_emits_warning(self, capsys):
-        # 应警告但仍返回数值（按用户设计）
-        score = per_case_sol_score(t_baseline=40, t_cand=80, t_hw=50)
+    def test_baseline_below_hw_emits_warning(self, caplog):
+        # F059: _warn_baseline_below_hw 改用 _logger.warning → stderr
+        score = per_case_sol_score(t_baseline=40, t_cand=80, t_hw=50, rel_path="test")
         assert score is not None
-        captured = capsys.readouterr()
-        assert "T_baseline" in captured.out
-        assert "< T_HW" in captured.out
+        assert "T_baseline" in caplog.text
+        assert "< T_HW" in caplog.text
 
 
 class TestAggregateEq4:
@@ -156,7 +155,7 @@ class TestScoringCalculator:
 
     @staticmethod
     def _make_case(success, baseline_us, t_hw, elapsed_us):
-        perf = PerfResult(case_id="c", elapsed_us=elapsed_us) if elapsed_us else None
+        perf = PerfResult(elapsed_us=elapsed_us, metadata={'baseline_us': baseline_us, 't_hw_us': t_hw}) if elapsed_us else None
         return EvalCaseResult(
             case_id="c", rel_path="level1/exp", operator="Exp",
             case_num=0, success=success, perf_result=perf,
@@ -192,15 +191,16 @@ class TestScoringCalculator:
         assert info.total_cases == 10
         assert info.function_score == pytest.approx(2 * WEIGHT_FUNCTION / 10 * 100)
 
-    def test_total_cases_floors_at_one_for_empty_results(self):
+    def test_empty_operator_returns_zero(self):
+        # F062: 空壳算子（0 声明 + 0 实测）直接 0 分，不适用 max(..., 1) floor
         op = EvalOperatorResult(
             rel_path="level1/exp", operator="Exp",
             total_cases=0, passed_cases=0, failed_cases=0, skipped_cases=0,
             results=[], pass_rate=0.0, avg_speedup=0.0,
         )
         info = ScoringCalculator().calculate_operator_score(op)
-        assert info.total_cases == 1  # max(0, 0, 1)
-        assert info.function_score == 0.0
+        assert info.total_cases == 0
+        assert info.total_score == 0.0
 
     def test_compile_failed_zeroes_function_and_perf(self):
         cases = [self._make_case(True, 100, 50, 50)]
@@ -222,7 +222,7 @@ class TestLevelAndOverallScores:
 
     @staticmethod
     def _make_info(rel_path, total_score):
-        return ScoreInfo(operator="op", rel_path=rel_path, total_score=total_score)
+        return OperatorScoreInfo(operator="op", rel_path=rel_path, total_score=total_score)
 
     def test_overall_score_sums_all(self):
         infos = [

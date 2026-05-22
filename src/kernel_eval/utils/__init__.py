@@ -28,7 +28,8 @@
 from .device_manager import DeviceManager, DeviceConfig
 from .dtype_mapper import str_to_torch_dtype, torch_dtype_to_str, is_float_dtype, is_int_dtype
 from .param_builder import ParamBuilder
-from .precision import compare_tensors, CompareResult, PRECISION_THRESHOLDS
+from .compare import compare_tensors, CompareResult
+from .thresholds import PRECISION_THRESHOLDS
 from .baseline_resolver import (
     BaselineResolver, BaselineInfo,
     resolve_baseline_us, resolve_baseline_info,

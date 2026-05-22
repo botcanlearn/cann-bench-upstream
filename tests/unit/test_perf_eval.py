@@ -44,7 +44,7 @@ class TestProfileOperatorTempDirCleanup:
                 "L1/Add/0001", dummy_func, warmup=1, repeat=2,
             )
             # profiler 异常信息应被保留，不被 CSV 解析覆盖
-            assert "crash" in (result.error or "")
+            assert "crash" in (result.error_msg or "")
             # finally 块应执行了清理
             assert mock_rmtree.call_count >= 1
 
@@ -99,4 +99,4 @@ class TestMeasureSimple:
         )
 
         assert result.elapsed_us >= 0
-        assert result.error is None
+        assert result.error_msg is None

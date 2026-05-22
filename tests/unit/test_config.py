@@ -225,7 +225,7 @@ class TestConfigPrecisionSettings:
         config = Config()
         expected_dtypes = [
             "float16", "bfloat16", "float32", "hifloat32",
-            "float8_e4m3", "float8_e5m2",
+            "float8_e4m3fn", "float8_e5m2",
             "int8", "int16", "int32", "int64",
             "uint8", "uint16", "uint32", "uint64",
         ]

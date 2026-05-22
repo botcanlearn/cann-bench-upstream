@@ -35,7 +35,7 @@ def create_mock_case_result(success: bool, has_accuracy: bool = False, speedup: 
     mock = MagicMock()
     mock.success = success
     mock.accuracy_result = AccuracyResult(
-        passed=False, dtype='float32', threshold=0.001, mare=0.01, mere=0.01
+        passed=False, threshold=0.001, metadata={'mare': 0.01, 'mere': 0.01}
     ) if has_accuracy else None
     mock.get_speedup = MagicMock(return_value=speedup)
     return mock
@@ -184,7 +184,7 @@ class TestSummarizeCaseResultsIntegration:
                 operator="Exp",
                 case_num=1,
                 success=True,
-                perf_result=PerfResult(case_id="case_1", elapsed_us=100),
+                perf_result=PerfResult(elapsed_us=100, metadata={'baseline_us': 200}),
                 baseline_perf_us=200,  # speedup = 2.0
             ),
             EvalCaseResult(
@@ -193,7 +193,7 @@ class TestSummarizeCaseResultsIntegration:
                 operator="Exp",
                 case_num=2,
                 success=True,
-                perf_result=PerfResult(case_id="case_2", elapsed_us=50),
+                perf_result=PerfResult(elapsed_us=50, metadata={'baseline_us': 200}),
                 baseline_perf_us=200,  # speedup = 4.0
             ),
             EvalCaseResult(
@@ -203,7 +203,7 @@ class TestSummarizeCaseResultsIntegration:
                 case_num=3,
                 success=False,
                 accuracy_result=AccuracyResult(
-                    passed=False, dtype='float32', threshold=0.001, mare=0.1, mere=0.1
+                    passed=False, threshold=0.001, metadata={'mare': 0.1, 'mere': 0.1}
                 ),
             ),
         ]

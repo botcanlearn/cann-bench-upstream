@@ -60,63 +60,11 @@ import torch
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.kernel_eval.data.case_loader import CaseLoader
+from src.kernel_eval.benches import CannCaseLoader
 from src.kernel_eval.eval.evaluator import EvalOperatorResult
 from src.kernel_eval.eval.process_pool import ProcessPoolCoordinator, ProcessConfig
 from src.kernel_eval.config import get_config, set_config, Config
-from src.kernel_eval.data.golden_packager import GoldenPackager
 from src.kernel_eval.utils.path_resolver import resolve_task_dir
-
-
-def ensure_golden_package_installed(bench_root: str, verbose: bool = False) -> bool:
-    """确保 cann_bench_golden 已安装
-
-    Args:
-        bench_root: bench 目录路径
-        verbose: 是否显示详细输出
-
-    Returns:
-        是否成功安装/已存在
-    """
-    try:
-        import cann_bench_golden
-        if verbose:
-            print(f"[INFO] cann_bench_golden 已安装")
-        return True
-    except ImportError:
-        pass
-
-    # 未安装，自动打包
-    print("[INFO] cann_bench_golden 未安装，正在自动打包...")
-    import subprocess
-    import tempfile
-
-    output_dir = Path(tempfile.mkdtemp(prefix="golden_whl_"))
-    try:
-        packager = GoldenPackager(bench_root, str(output_dir))
-        whl_path = packager.package(clean_up=True)
-
-        # 使用 --no-deps 安装，避免触发 torch 依赖安装
-        result = subprocess.run(
-            ["pip", "install", str(whl_path), "--no-deps", "--force-reinstall"],
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode != 0:
-            print(f"[ERROR] 安装失败: {result.stderr}")
-            return False
-
-        print(f"[INFO] cann_bench_golden 安装成功")
-
-        # 清理 whl 文件
-        whl_path.unlink(missing_ok=True)
-        output_dir.rmdir()
-
-        return True
-    except Exception as e:
-        print(f"[ERROR] 打包安装失败: {e}")
-        return False
 
 
 def parse_args():
@@ -205,7 +153,7 @@ def run_cpu_mode(args) -> dict:
     device_mgr = DeviceManager(DeviceConfig(type="cpu", device_id=0, auto_fallback=True))
     runner = OpRunner(device_mgr, None)
 
-    loader = CaseLoader(bench_root)
+    loader = CannCaseLoader(bench_root)
     all_cases = loader.scan_all_cases()
 
     # 如果指定了筛选前缀，筛选该前缀下的用例
@@ -293,13 +241,8 @@ def run_npu_mode(args) -> EvalOperatorResult:
     config.tasks_root = bench_root
     set_config(config)
 
-    # 确保 cann_bench_golden 已安装
-    if not ensure_golden_package_installed(bench_root, args.verbose):
-        print("[ERROR] 无法安装 cann_bench_golden，退出")
-        return None
-
     # 加载用例
-    loader = CaseLoader(bench_root)
+    loader = CannCaseLoader(bench_root)
     all_cases = loader.scan_all_cases()
 
     # 如果指定了筛选前缀，筛选该前缀下的用例

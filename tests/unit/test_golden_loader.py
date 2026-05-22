@@ -29,7 +29,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from kernel_eval.data.golden_loader import GoldenLoader
+from kernel_eval.benches.cann_loader import GoldenLoader
 
 
 class TestGoldenLoaderLoadModule:

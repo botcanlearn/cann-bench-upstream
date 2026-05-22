@@ -31,7 +31,7 @@ def _default_precision_thresholds() -> dict:
 
     在函数体内延迟 import 是为了打破 utils <-> config 的潜在循环依赖。
     """
-    from .utils.precision import PRECISION_THRESHOLDS
+    from .utils.thresholds import PRECISION_THRESHOLDS
     return dict(PRECISION_THRESHOLDS)
 
 
@@ -84,6 +84,13 @@ class Config:
     # 允许 caller 在不污染模块级常量的前提下自定义阈值（例如 op_info.precision_thresholds
     # 通过 dict.update 覆盖单 dtype）。
     precision_thresholds: dict = field(default_factory=lambda: _default_precision_thresholds())
+
+    # 精度判断器名称
+    # 支持选择不同的精度判断标准：
+    # - "cann_default": MERE/MARE + 小值域 + 相消处理（默认，完整精度标准）
+    # - "allclose": torch.allclose 简化对比（快速验证/调试）
+    # 可通过注册机制添加自定义判断器
+    checker_name: str = "cann_default"
 
     def __post_init__(self):
         """初始化后自动设置默认路径"""

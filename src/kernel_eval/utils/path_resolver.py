@@ -83,8 +83,7 @@ def resolve_task_dir(
     # 检查是否为算子目录
     is_operator_dir = False
     if check_operator_dir:
-        required_files = ['proto.yaml', 'cases.yaml', 'golden.py']
-        is_operator_dir = all((dir_path / f).exists() for f in required_files)
+        is_operator_dir = is_operator_directory(dir_path)
 
     # 向上查找 bench_root（tasks 目录）
     bench_root = dir_path
@@ -120,8 +119,8 @@ def is_operator_directory(dir_path: Path) -> bool:
     Returns:
         是否为算子目录
     """
-    required_files = ['proto.yaml', 'cases.yaml', 'golden.py']
-    return all((dir_path / f).exists() for f in required_files)
+    from ..base.loaders import OperatorDirMixin
+    return all((dir_path / f).exists() for f in OperatorDirMixin.REQUIRED_FILES)
 
 
 def find_bench_root(dir_path: Path, project_root: Path) -> Path:

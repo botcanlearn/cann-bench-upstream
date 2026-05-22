@@ -39,22 +39,24 @@ from src.kernel_eval.eval.process_pool import (
     ProcessPoolCoordinator,
 )
 from src.kernel_eval.eval.results import EvalOperatorResult, EvalCaseResult
-from src.kernel_eval.data.case_loader import CaseInfo
+from src.kernel_eval.benches import CannCaseSpec
 from src.kernel_eval.config import Config
 
 
 def make_case(operator, case_id, input_shapes=None, dtypes=None, value_ranges=None, rel_path="level1/test"):
     """创建测试用例的辅助函数"""
-    return CaseInfo(
+    # value_ranges should be List[Dict[str, float]] format
+    vr = value_ranges or [{"min": -1, "max": 1}]
+    return CannCaseSpec(
+        case_id=f"{rel_path}_{case_id}",
         rel_path=rel_path,
         operator=operator,
-        case_id=case_id,
+        case_num=case_id,
         input_shapes=input_shapes or [[1024, 1024]],
         dtypes=dtypes or ["float32"],
         attrs={},
-        value_ranges=value_ranges or [[-1, 1]],
-        note="test case",
-        yaml_path="",
+        value_ranges=vr,
+        metadata={},
     )
 
 
@@ -118,7 +120,7 @@ class TestProcessWorker(unittest.TestCase):
         serialized = worker._serialize_cases(cases)
         self.assertEqual(len(serialized), 2)
         self.assertEqual(serialized[0]['operator'], "Sigmoid")
-        self.assertEqual(serialized[0]['case_id'], 1)
+        self.assertEqual(serialized[0]['case_id'], "level1/test_1")
         self.assertEqual(serialized[1]['input_shapes'], [[2048, 2048]])
 
     @patch('subprocess.Popen')

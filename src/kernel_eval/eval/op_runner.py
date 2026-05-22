@@ -28,7 +28,6 @@ from dataclasses import dataclass
 import torch
 
 from ..utils.device_manager import DeviceManager
-from ..utils.tensor_utils import tensors_to_fp64_cpu
 from .perf_eval import PerfEvaluator, PerfResult
 
 
@@ -51,29 +50,47 @@ class OpRunner:
         self.device_manager = device_manager
         self.perf_evaluator = perf_evaluator
 
-    def run(self, func: Callable, params: Dict, case_id: str, input_tensors: List) -> OpRunResult:
-        """执行函数"""
+    def run(self, func: Callable, params: Dict, case_id: str, input_tensors: List,
+            to_device: bool = True) -> OpRunResult:
+        """执行函数
+
+        Args:
+            func: 要执行的函数
+            params: 调用参数字典
+            case_id: 用例标识
+            input_tensors: 输入张量列表
+            to_device: 是否将输入迁移到设备端。Golden 参考计算时设为 False。
+        """
         try:
             # 迁移输入到设备
-            device_tensors = self.device_manager.to_device_batch(input_tensors)
-            updated_params = self._update_params(params, device_tensors)
+            if to_device:
+                device_tensors = self.device_manager.to_device_batch(input_tensors)
+                updated_params = self._update_params(params, device_tensors)
+            else:
+                updated_params = self._update_params(params, input_tensors)
 
             # 执行
-            use_profiler = (self.perf_evaluator is not None
+            use_profiler = (to_device
+                         and self.perf_evaluator is not None
                          and self.perf_evaluator.config.enable_profiler
                          and self.device_manager.is_npu_mode())
             if use_profiler:
                 # 提取位置参数（保持参数顺序），避免kwargs导致torch_npu profiler解析ERROR
                 args = [updated_params[k] for k in params.keys()]
                 outputs, perf_result = self.perf_evaluator.run_profiled(case_id, func, *args)
-                # 等待当前 case 的解析完成，获取性能数据
                 self.perf_evaluator.wait_all()
                 elapsed_us = perf_result.elapsed_us
             else:
-                self.device_manager.synchronize()
+                if to_device:
+                    self.device_manager.synchronize()
                 t0 = time.perf_counter()
-                outputs = func(**updated_params)
-                self.device_manager.synchronize()
+                if to_device:
+                    outputs = func(**updated_params)
+                else:
+                    with torch.no_grad():
+                        outputs = func(**updated_params)
+                if to_device:
+                    self.device_manager.synchronize()
                 elapsed_us = (time.perf_counter() - t0) * 1_000_000
                 perf_result = None
 
@@ -82,7 +99,7 @@ class OpRunner:
                 outputs=outputs,
                 elapsed_us=elapsed_us,
                 perf_result=perf_result,
-                device=self.device_manager.get_device()
+                device="cpu" if not to_device else self.device_manager.get_device()
             )
 
         except Exception as e:
@@ -91,50 +108,8 @@ class OpRunner:
                 success=False,
                 error=str(e),
                 elapsed_us=0,
-                device=self.device_manager.get_device(),
+                device="cpu" if not to_device else self.device_manager.get_device(),
                 traceback=tb_str
-            )
-
-    def run_golden(self, golden_func: Callable, params: Dict, case_id: str, input_tensors: List) -> OpRunResult:
-        """Execute the golden reference on CPU. Single shot, no profiler, no
-        device transfer — golden is the precision reference, not the
-        performance subject.
-
-        Floats are promoted to fp64 so the reference is more precise than
-        the device's native dtype; the accuracy checker casts both sides
-        back to fp32 for MERE/MARE so thresholds stay keyed to the device
-        dtype. Integer/bool tensors keep their dtype — some ops refuse a
-        Double substitute.
-
-        Running golden on the device instead of on CPU isn't safe in general:
-        some device kernels can be orders of magnitude slower than CPU for
-        certain dtype/shape combinations, and a subset return wrong values
-        on edge cases, which would silently corrupt the reference and flip
-        correct AI ops to FAIL. Golden is for correctness, not performance.
-        """
-        try:
-            cpu_tensors = tensors_to_fp64_cpu(input_tensors)
-            updated_params = self._update_params(params, cpu_tensors)
-
-            t0 = time.perf_counter()
-            with torch.no_grad():
-                outputs = golden_func(**updated_params)
-            elapsed_us = (time.perf_counter() - t0) * 1_000_000
-
-            return OpRunResult(
-                success=True,
-                outputs=outputs,
-                elapsed_us=elapsed_us,
-                device="cpu",
-            )
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            return OpRunResult(
-                success=False,
-                error=str(e),
-                elapsed_us=0,
-                device="cpu",
-                traceback=tb_str,
             )
 
     def run_ai_op(self, ai_op_func: Callable, params: Dict, case_id: str, input_tensors: List,

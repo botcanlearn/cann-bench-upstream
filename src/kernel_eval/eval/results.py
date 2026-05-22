@@ -140,33 +140,41 @@ class EvalCaseResult:
         perf_result = None
         if perf_data:
             perf_result = PerfResult(
-                case_id=data.get('case_id', ''),
                 elapsed_us=perf_data.get('elapsed_us', 0),
                 op_times=perf_data.get('op_times', {}),
+                error_msg=perf_data.get('error_msg'),
+                metadata={
+                    'case_id': data.get('case_id', ''),
+                    'baseline_us': perf_data.get('baseline_us', 0),
+                    't_hw_us': perf_data.get('t_hw_us', 0),
+                }
             )
 
         accuracy_data = data.get('accuracy')
         accuracy_result = None
         if accuracy_data:
+            # 将旧字段放入 metadata
             accuracy_result = AccuracyResult(
                 passed=accuracy_data.get('passed', True),
-                dtype=accuracy_data.get('dtype', 'float32'),
                 threshold=accuracy_data.get('threshold', 0.001),
-                mare=accuracy_data.get('mare', 0.0),
-                mere=accuracy_data.get('mere', 0.0),
-                max_diff=accuracy_data.get('max_diff', 0.0),
-                mean_diff=accuracy_data.get('mean_diff', 0.0),
-                mismatch_count=accuracy_data.get('mismatch_count', 0),
-                total_count=accuracy_data.get('total_count', 0),
-                mismatch_ratio=accuracy_data.get('mismatch_ratio', 0.0),
-                trial=accuracy_data.get('trial', 1),
-                small_value_error_count=accuracy_data.get('small_value_error_count', 0),
-                small_value_cpu_error_count=accuracy_data.get('small_value_cpu_error_count', 0),
-                small_value_total_count=accuracy_data.get('small_value_total_count', 0),
-                cancel_error_count=accuracy_data.get('cancel_error_count', 0),
-                cancel_cpu_error_count=accuracy_data.get('cancel_cpu_error_count', 0),
-                cancel_total_count=accuracy_data.get('cancel_total_count', 0),
                 error_msg=accuracy_data.get('error_msg'),
+                metadata={
+                    'dtype': accuracy_data.get('dtype', 'float32'),
+                    'mare': accuracy_data.get('mare', 0.0),
+                    'mere': accuracy_data.get('mere', 0.0),
+                    'max_diff': accuracy_data.get('max_diff', 0.0),
+                    'mean_diff': accuracy_data.get('mean_diff', 0.0),
+                    'mismatch_count': accuracy_data.get('mismatch_count', 0),
+                    'total_count': accuracy_data.get('total_count', 0),
+                    'mismatch_ratio': accuracy_data.get('mismatch_ratio', 0.0),
+                    'trial': accuracy_data.get('trial', 1),
+                    'small_value_error_count': accuracy_data.get('small_value_error_count', 0),
+                    'small_value_cpu_error_count': accuracy_data.get('small_value_cpu_error_count', 0),
+                    'small_value_total_count': accuracy_data.get('small_value_total_count', 0),
+                    'cancel_error_count': accuracy_data.get('cancel_error_count', 0),
+                    'cancel_cpu_error_count': accuracy_data.get('cancel_cpu_error_count', 0),
+                    'cancel_total_count': accuracy_data.get('cancel_total_count', 0),
+                }
             )
 
         return cls(
