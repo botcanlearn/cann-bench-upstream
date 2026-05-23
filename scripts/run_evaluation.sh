@@ -27,11 +27,12 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="${PROJECT_ROOT}/src"
 TASKS_ROOT="${PROJECT_ROOT}/tasks"
-REPORTS_DIR="${PROJECT_ROOT}/reports"
+# REPORTS_DIR 默认值在 main() 中根据 BENCH_NAME 动态设置
 
 # 默认配置
 SOURCE_DIR=""
 TASK_DIR=""
+BENCH_NAME="cann"  # 评测集名称：cann 或 stanford
 OPERATOR=""
 CASE_ID=""
 DEVICE_ID=""  # 空表示多卡模式，指定值表示单卡模式
@@ -69,9 +70,13 @@ print_help() {
     echo "                            默认: eval"
     echo "  --source-dir <dir>        AI生成的算子源码目录（显式指定，与位置参数等效）"
     echo ""
+    echo "评测集配置:"
+    echo "  --bench-name <name>       评测集名称: cann, stanford（默认: cann）"
+    echo "                            stanford 会自动使用 thirdparty/KernelBench 目录"
+    echo ""
     echo "目录配置:"
     echo "  --task-dir <path>         指定评测目录（bench根目录或算子目录）"
-    echo "                            默认: tasks"
+    echo "                            默认: tasks (cann) 或 thirdparty/KernelBench (stanford)"
     echo "                            支持: tasks, tasks/level1, tasks/level1/exp 等"
     echo ""
     echo "设备配置:"
@@ -98,6 +103,15 @@ print_help() {
     echo "  -h, --help                显示帮助信息"
     echo ""
     echo "示例:"
+    echo "  # CANN 评测（默认）"
+    echo "  $0 --operator Exp"
+    echo ""
+    echo "  # StanfordBench 评测"
+    echo "  $0 --bench-name stanford --operator Softmax"
+    echo ""
+    echo "  # StanfordBench 从源码目录评测"
+    echo "  $0 --bench-name stanford --source-dir examples/stanfordbench/Softmax --operator Softmax"
+    echo ""
     echo "  # 从源码目录评测（推荐）"
     echo "  $0 /path/to/ai_ops"
     echo ""
@@ -165,6 +179,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --operator)
             OPERATOR="$2"
+            shift 2
+            ;;
+        --bench-name)
+            BENCH_NAME="$2"
             shift 2
             ;;
         --case-id)
@@ -257,6 +275,20 @@ check_tasks() {
     log_info "tasks 目录: ${TASKS_ROOT}"
 }
 
+# 检查 StanfordBench 数据目录
+check_stanford_data() {
+    KERNELBENCH_DIR="${PROJECT_ROOT}/thirdparty/KernelBench"
+    if [[ ! -d "${KERNELBENCH_DIR}" ]]; then
+        log_info "StanfordBench 数据目录不存在，正在下载..."
+        bash "${PROJECT_ROOT}/scripts/download_benchmarks.sh" --stanfordbench
+        if [[ ! -d "${KERNELBENCH_DIR}" ]]; then
+            log_error "下载失败: ${KERNELBENCH_DIR}"
+            exit 1
+        fi
+    fi
+    log_info "StanfordBench 数据目录: ${KERNELBENCH_DIR}"
+}
+
 # 创建报告目录
 ensure_reports_dir() {
     if [[ ! -d "${REPORTS_DIR}" ]]; then
@@ -272,6 +304,10 @@ build_cmd_args() {
     case "${ACTION}" in
         eval)
             CMD_ARGS="eval"
+            # 评测集名称（必须传递）
+            CMD_ARGS="${CMD_ARGS} --bench-name ${BENCH_NAME}"
+            # 报告目录（按 bench_name 分目录）
+            CMD_ARGS="${CMD_ARGS} --reports-dir ${REPORTS_DIR}"
             if [[ -n "${SOURCE_DIR}" ]]; then
                 CMD_ARGS="${CMD_ARGS} --source-dir ${SOURCE_DIR}"
             fi
@@ -316,6 +352,7 @@ build_cmd_args() {
             ;;
         list)
             CMD_ARGS="list"
+            CMD_ARGS="${CMD_ARGS} --bench-name ${BENCH_NAME}"
             if [[ -n "${TASK_DIR}" ]]; then
                 CMD_ARGS="${CMD_ARGS} --task-dir ${TASK_DIR}"
             fi
@@ -354,11 +391,35 @@ main() {
     log_info "项目根目录: ${PROJECT_ROOT}"
     log_info "操作: ${ACTION}"
 
+    # 推断 bench_name 和 task_dir（支持双向推断）
+    # 反向推断：task_dir → bench_name
+    if [[ -n "${TASK_DIR}" ]] && [[ "${TASK_DIR}" == *thirdparty/KernelBench* ]]; then
+        BENCH_NAME="stanford"
+    fi
+
+    # 正向推断：bench_name → task_dir 默认值
+    if [[ "${BENCH_NAME}" == "stanford" ]] && [[ -z "${TASK_DIR}" ]]; then
+        TASK_DIR="thirdparty/KernelBench/KernelBench"
+    elif [[ "${BENCH_NAME}" == "cann" ]] && [[ -z "${TASK_DIR}" ]]; then
+        TASK_DIR="tasks"
+    fi
+
+    log_info "评测集: ${BENCH_NAME}"
+
+    # 根据 bench_name 设置 reports_dir
+    REPORTS_DIR="${PROJECT_ROOT}/reports/${BENCH_NAME}"
+
     check_python
     uninstall_packages
 
-    if [[ "${ACTION}" == "eval" ]]; then
+    # 检查数据目录
+    if [[ "${BENCH_NAME}" == "stanford" ]]; then
+        check_stanford_data
+    else
         check_tasks
+    fi
+
+    if [[ "${ACTION}" == "eval" ]]; then
         ensure_reports_dir
 
         if [[ -n "${SOURCE_DIR}" ]]; then

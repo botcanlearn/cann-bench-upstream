@@ -146,10 +146,12 @@ class TaskSpec:
     rel_path: str = ""                      # 相对路径（用于定位算子目录）
     difficulty: DifficultyLevel = DifficultyLevel.L1
     description: str = ""
+    category: str = ""                      # 算子类别（如 activation, normalization 等）
     inputs: List[InputSpec] = field(default_factory=list)
     outputs: List[OutputSpec] = field(default_factory=list)
     attrs: List[AttrSpec] = field(default_factory=list)
     reference: Optional[str] = None
+    precision_thresholds: Dict[str, float] = field(default_factory=dict)  # 自定义精度阈值
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def get_level_id(self) -> int:
@@ -178,6 +180,7 @@ class TaskSpec:
             'outputs': [out.to_dict() for out in self.outputs],
             'attrs': [attr.to_dict() for attr in self.attrs],
             'reference': self.reference,
+            'precision_thresholds': self.precision_thresholds,
             'metadata': self.metadata,
         }
 
@@ -188,12 +191,21 @@ class TaskSpec:
 class CaseSpec:
     """用例规格基类"""
     case_id: str
+    operator: str = ""                     # 算子名称
+    rel_path: str = ""                     # 相对路径
+    case_num: int = 0                      # 用例编号
+    baseline_perf_us: float = 0.0          # 基线性能（微秒）
+    t_hw_us: float = 0.0                   # 理论硬件下界（微秒）
     input_shapes: List[List[int]] = field(default_factory=list)
     dtypes: List[str] = field(default_factory=list)
     attrs: Dict[str, Any] = field(default_factory=dict)
     value_ranges: List[Dict[str, float]] = field(default_factory=list)
     tolerance: Dict[str, float] = field(default_factory=lambda: {"rtol": 1e-4, "atol": 1e-4})
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def get_case_id_str(self) -> str:
+        """获取用例标识字符串（基类默认实现）"""
+        return self.case_id
 
     def to_dict(self) -> Dict[str, Any]:
         return {

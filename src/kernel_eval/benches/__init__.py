@@ -32,6 +32,7 @@
 
 # 导入所有评测集模块，触发注册
 from . import cann
+from . import stanford
 
 # 重新导出 CANN 组件（便于直接从 benches 导入）
 from .cann import (
@@ -60,24 +61,39 @@ from .cann import (
     aggregate_eq4,
 )
 
+# 重新导出 Stanford 组件
+from .stanford import (
+    # Loader
+    StanfordTaskLoader,
+    StanfordCaseLoader,
+    StanfordGoldenLoader,
+    # Checker
+    StanfordChecker,
+    # Matcher
+    StanfordMatcher,
+    # Scoring
+    StanfordScoringScheme,
+)
+
 __all__ = [
     'cann',
-    # Loader
+    'stanford',
+    # CANN Loader
     "CannTaskLoader",
     "CannCaseLoader",
     "GoldenLoader",
-    # Models
+    # CANN Models
     "CannTaskSpec",
     "CannCaseSpec",
     "CannInputSpec",
     "CannOutputSpec",
     "CannSolutionSpec",
-    # Checker
+    # CANN Checker
     "CannDefaultChecker",
     "CannOutputResult",
-    # Matcher
+    # CANN Matcher
     "OperatorMatcher",
-    # Scoring
+    # CANN Scoring
     "CannScoringScheme",
     "SimpleComparisonScheme",
     "RecordingOnlyScheme",
@@ -85,4 +101,14 @@ __all__ = [
     "OperatorScoreInfo",
     "per_case_sol_score",
     "aggregate_eq4",
+    # Stanford Loader
+    "StanfordTaskLoader",
+    "StanfordCaseLoader",
+    "StanfordGoldenLoader",
+    # Stanford Checker
+    "StanfordChecker",
+    # Stanford Matcher
+    "StanfordMatcher",
+    # Stanford Scoring
+    "StanfordScoringScheme",
 ]

@@ -43,6 +43,8 @@ class DeviceManager:
         self.config = config
         self._npu_available = self._check_npu()
         self._device = self._resolve_device()
+        if self._npu_available:
+            torch.npu.set_device(self.config.device_id)
 
     def _check_npu(self) -> bool:
         """检测NPU是否可用"""

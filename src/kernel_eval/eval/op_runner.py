@@ -51,7 +51,7 @@ class OpRunner:
         self.perf_evaluator = perf_evaluator
 
     def run(self, func: Callable, params: Dict, case_id: str, input_tensors: List,
-            to_device: bool = True) -> OpRunResult:
+            to_device: bool = True, enable_profiler: bool = False) -> OpRunResult:
         """执行函数
 
         Args:
@@ -59,7 +59,8 @@ class OpRunner:
             params: 调用参数字典
             case_id: 用例标识
             input_tensors: 输入张量列表
-            to_device: 是否将输入迁移到设备端。Golden 参考计算时设为 False。
+            to_device: 是否将输入迁移到设备端
+            enable_profiler: 是否启用 profiler 采集性能（仅 AI 算子启用，Golden 不启用）
         """
         try:
             # 迁移输入到设备
@@ -70,7 +71,7 @@ class OpRunner:
                 updated_params = self._update_params(params, input_tensors)
 
             # 执行
-            use_profiler = (to_device
+            use_profiler = (enable_profiler
                          and self.perf_evaluator is not None
                          and self.perf_evaluator.config.enable_profiler
                          and self.device_manager.is_npu_mode())
@@ -122,7 +123,8 @@ class OpRunner:
         with TorchOpGuard(mode=guard_mode):
             # 如果需要性能采集且evaluator可用，临时启用
             if enable_perf and self.perf_evaluator:
-                return self.run(ai_op_func, params, case_id, input_tensors)
+                return self.run(ai_op_func, params, case_id, input_tensors,
+                                enable_profiler=enable_perf)
             else:
                 # 不采集性能，简单执行
                 return self._run_simple(ai_op_func, params, input_tensors)

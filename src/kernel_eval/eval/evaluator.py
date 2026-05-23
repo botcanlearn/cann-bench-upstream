@@ -206,7 +206,8 @@ class Evaluator:
             else:
                 golden_params = self.param_builder.build_call_params(golden_func, case, golden_inputs)
             golden_result = self.op_runner.run(golden_func, golden_params, case_id_str,
-                                               golden_inputs, to_device=self._get_golden_to_device())
+                                               golden_inputs, to_device=self._get_golden_to_device(),
+                                               enable_profiler=False)  # Golden 不启用 profiler
             if not golden_result.success:
                 return EvalCaseResult(
                     case_id=case_id_str,
@@ -214,7 +215,7 @@ class Evaluator:
                     operator=case.operator,
                     case_num=case.case_id,
                     success=False,
-                    golden_run_result=golden_result,
+                    golden_run_result=self._release_outputs(golden_result),
                     error_msg=f"Golden执行失败: {golden_result.error}",
                     baseline_perf_us=case.baseline_perf_us,
                     t_hw_us=case.t_hw_us,
@@ -233,7 +234,7 @@ class Evaluator:
                         operator=case.operator,
                         case_num=case.case_num,
                         success=False,
-                        golden_run_result=golden_result,
+                        golden_run_result=self._release_outputs(golden_result),
                         error_msg=f"AI算子加载失败: {load_err}",
                         baseline_perf_us=case.baseline_perf_us,
                         t_hw_us=case.t_hw_us,
@@ -252,8 +253,8 @@ class Evaluator:
                     operator=case.operator,
                     case_num=case.case_id,
                     success=False,
-                    golden_run_result=golden_result,
-                    ai_run_result=ai_result,
+                    golden_run_result=self._release_outputs(golden_result),
+                    ai_run_result=self._release_outputs(ai_result),
                     error_msg=f"AI算子执行失败: {ai_result.error}",
                     baseline_perf_us=case.baseline_perf_us,
                     t_hw_us=case.t_hw_us,
@@ -275,7 +276,8 @@ class Evaluator:
                 else:
                     native_params = self.param_builder.build_call_params(golden_func, case, native_inputs)
                 native_result = self.op_runner.run(golden_func, native_params, case_id_str,
-                                                   native_inputs, to_device=False)
+                                                   native_inputs, to_device=False,
+                                                   enable_profiler=False)  # 同精度参考不启用 profiler
                 native_out = native_result.outputs if native_result.success else None
 
             ignore_output_indices = self._get_ignore_output_indices(case.rel_path)
@@ -355,8 +357,8 @@ class Evaluator:
                 success=accuracy_result.is_passed(),
                 accuracy_result=accuracy_result,
                 perf_result=perf_result,
-                golden_run_result=golden_result,
-                ai_run_result=ai_result,
+                golden_run_result=self._release_outputs(golden_result),
+                ai_run_result=self._release_outputs(ai_result),
                 error_msg=error_msg,
                 baseline_perf_us=case.baseline_perf_us,
                 t_hw_us=case.t_hw_us,
@@ -716,11 +718,14 @@ class Evaluator:
             golden_inputs = self._apply_golden_precision(fresh_inputs)
             golden_params = self.param_builder.build_call_params(golden_func, case, golden_inputs)
             golden_result2 = self.op_runner.run(golden_func, golden_params, case_id_str,
-                                                golden_inputs, to_device=self._get_golden_to_device())
+                                                golden_inputs, to_device=self._get_golden_to_device(),
+                                                enable_profiler=False)  # 二次验证 Golden 不启用 profiler
             if not golden_result2.success:
                 return first_result   # golden 自己挂了，第二轮无意义，保持第一轮结果
 
-            ai_result2 = self.op_runner.run(ai_op_func, params, case_id_str, fresh_inputs)
+            # 二次验证 AI 算子也不启用 profiler，仅验证精度
+            ai_result2 = self.op_runner.run(ai_op_func, params, case_id_str, fresh_inputs,
+                                             enable_profiler=False)
             if not ai_result2.success:
                 from ..base.result import AccuracyResult
                 return AccuracyResult(
@@ -755,6 +760,16 @@ class Evaluator:
                 torch_npu.npu.empty_cache()
         except Exception:
             pass
+
+    def _release_outputs(self, op_run_result: OpRunResult) -> OpRunResult:
+        """释放 outputs tensor，保留元数据
+
+        outputs 从未被使用（to_dict 只取 elapsed_us），清除避免批跑时内存累积导致 OOM。
+        """
+        if op_run_result is None:
+            return None
+        op_run_result.outputs = None
+        return op_run_result
 
     def shutdown(self):
         """关闭评测器"""

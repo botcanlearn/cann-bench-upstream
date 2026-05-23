@@ -315,10 +315,39 @@ def _cmd_eval_source(args, config: Config, report_generator: ReportGenerator,
                      operator_filter: list, case_filter: dict,
                      subprocess_isolation: bool, op_timeout_sec: int,
                      case_timeout_sec: int, case_subprocess_isolation: bool,
-                     iterative_compile: bool) -> int:
+                     iterative_compile: bool, bench_name: str = "cann") -> int:
     """从源码目录评测"""
-    evaluator = Evaluator(config)
+    evaluator = Evaluator(config, bench_name=bench_name)
 
+    # StanfordBench: 直接设置 source_dir 到 matcher，不需要编译安装
+    if bench_name == "stanford":
+        print(f"[INFO] StanfordBench 模式: 直接加载 ai_op.py")
+        evaluator.operator_matcher.set_source_dir(args.source_dir)
+
+        if args.operator:
+            op_info = _resolve_operator_info(args.operator, config, bench_name)
+            result = evaluator.evaluate_operator(
+                operator=args.operator,
+                rel_path=op_info.rel_path if op_info else args.operator,
+                case_filter=case_filter,
+            )
+            report_generator.add_operator_result(result)
+        else:
+            # 无 operator 篮选时，列出所有算子并评测
+            from .registry.loader_registry import get_task_loader
+            task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+            tasks = task_loader.list_tasks()
+            for task in tasks:
+                result = evaluator.evaluate_operator(
+                    operator=task.name,
+                    rel_path=task.rel_path,
+                    case_filter=case_filter,
+                )
+                report_generator.add_operator_result(result)
+        evaluator.shutdown()
+        return 0
+
+    # CANN: 使用编译安装流程
     session_result = evaluator.evaluate_from_source(
         source_dir=args.source_dir,
         operator_filter=operator_filter,
@@ -349,7 +378,7 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
     guard = APIGuard()
     guard.snapshot()
 
-    evaluator = Evaluator(config)
+    evaluator = Evaluator(config, bench_name=bench_name)
 
     if args.operator:
         op_info = _resolve_operator_info(args.operator, config, bench_name)
@@ -383,7 +412,7 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
 def _cmd_eval_golden(args, config: Config, report_generator: ReportGenerator,
                      operator_filter: list, case_filter: dict, bench_name: str = "cann") -> int:
     """单卡 Golden 模式评测"""
-    evaluator = Evaluator(config)
+    evaluator = Evaluator(config, bench_name=bench_name)
 
     if args.operator:
         op_info = _resolve_operator_info(args.operator, config, bench_name)
@@ -394,12 +423,27 @@ def _cmd_eval_golden(args, config: Config, report_generator: ReportGenerator,
         )
         report_generator.add_operator_result(result)
     else:
-        session_result = evaluator.evaluate_skip_build(
-            operator_filter=operator_filter,
-            case_filter=case_filter,
-        )
-        for op_result in session_result.operators:
-            report_generator.add_operator_result(op_result)
+        # StanfordBench: 遍历所有算子进行自验证
+        if bench_name == "stanford":
+            from .registry.loader_registry import get_task_loader
+            task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+            tasks = task_loader.list_tasks()
+            print(f"[INFO] StanfordBench 自验证模式: 共 {len(tasks)} 个算子")
+            for task in tasks:
+                result = evaluator.evaluate_operator(
+                    operator=task.name,
+                    rel_path=task.rel_path,
+                    case_filter=case_filter,
+                )
+                report_generator.add_operator_result(result)
+        else:
+            # CANN: 使用 evaluate_skip_build 扫描已安装的 cann_bench
+            session_result = evaluator.evaluate_skip_build(
+                operator_filter=operator_filter,
+                case_filter=case_filter,
+            )
+            for op_result in session_result.operators:
+                report_generator.add_operator_result(op_result)
     evaluator.shutdown()
     return 0
 
@@ -448,7 +492,7 @@ def cmd_eval(args):
     elif args.source_dir and not skip_install:
         ret = _cmd_eval_source(args, config, report_generator, operator_filter, case_filter,
                                subprocess_isolation, op_timeout_sec, case_timeout_sec,
-                               case_subprocess_isolation, iterative_compile)
+                               case_subprocess_isolation, iterative_compile, bench_name)
     elif args.source_dir and skip_install:
         ret = _cmd_eval_skip_install(args, config, report_generator, operator_filter,
                                      case_filter, subprocess_isolation, bench_name)
@@ -475,12 +519,14 @@ def cmd_list(args):
     """列出算子/用例"""
     from .registry import get_task_loader, get_case_loader
 
-    config = get_config()
+    project_root = get_project_root()
     bench_name = getattr(args, 'bench_name', 'cann')
+
+    bench_root, _ = resolve_task_dir(args.task_dir, project_root)
 
     if args.cases:
         # 列出用例
-        case_loader = get_case_loader(bench_name, tasks_root=config.tasks_root)
+        case_loader = get_case_loader(bench_name, tasks_root=bench_root)
 
         if args.operator:
             cases = case_loader.scan_by_operator(args.operator)
@@ -495,7 +541,7 @@ def cmd_list(args):
 
     else:
         # 列出算子
-        task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+        task_loader = get_task_loader(bench_name, tasks_root=bench_root)
         operators = task_loader.list_tasks()
 
         print(f"\n[{bench_name}] 共 {len(operators)} 个算子:")
@@ -513,10 +559,12 @@ def cmd_info(args):
     """显示算子详细信息"""
     from .registry import get_task_loader, get_case_loader
 
-    config = get_config()
+    project_root = get_project_root()
     bench_name = getattr(args, 'bench_name', 'cann')
 
-    task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
+    bench_root, _ = resolve_task_dir(args.task_dir, project_root)
+
+    task_loader = get_task_loader(bench_name, tasks_root=bench_root)
 
     op_info = task_loader.get_task_by_name(args.operator)
     if op_info is None:
@@ -546,7 +594,7 @@ def cmd_info(args):
         print(f"  - {attr.name}: {attr.type}{default_str}")
 
     # 显示用例统计
-    case_loader = get_case_loader(bench_name, tasks_root=config.tasks_root)
+    case_loader = get_case_loader(bench_name, tasks_root=bench_root)
     cases = case_loader.scan_by_operator(args.operator)
     print(f"\n用例数: {len(cases)}")
 
