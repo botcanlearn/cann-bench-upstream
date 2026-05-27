@@ -38,7 +38,7 @@ fi
 
 # Extract version from setup.py
 VERSION=$(python3 -c "import setup; print(setup.VERSION)" 2>/dev/null || echo "1.0.0")
-WHEEL_FILENAME="cann_bench-${VERSION}-cp38-abi3-linux_aarch64.whl"
+WHEEL_FILENAME="cann_bench-${VERSION}-cp38-abi3-linux_$(uname -m).whl"
 
 # Rename if needed
 if [[ "$(basename "${WHEEL_FILE}")" != "${WHEEL_FILENAME}" ]]; then

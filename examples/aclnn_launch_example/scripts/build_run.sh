@@ -75,7 +75,7 @@ fi
 # Generate versioned filename if not already named correctly
 RUN_BASENAME=$(basename "${RUN_PACKAGE}")
 VERSION=$(date +%Y%m%d)
-RUN_FILENAME="cann_bench_${VERSION}_linux_aarch64.run"
+RUN_FILENAME="cann_bench_${VERSION}_linux_$(uname -m).run"
 
 if [[ ! "${RUN_BASENAME}" =~ ^cann_bench.*\.run$ ]]; then
     cp "${RUN_PACKAGE}" "${DIST_DIR}/${RUN_FILENAME}"

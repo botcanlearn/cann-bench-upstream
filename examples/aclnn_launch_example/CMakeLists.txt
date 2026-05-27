@@ -5,6 +5,8 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(custom_ops_prj VERSION 1.0.0)
 
+set(SYSTEM_PREFIX ${CMAKE_SYSTEM_PROCESSOR}-linux)
+
 # ================================== ACLNN Operator Build ==================================
 find_package(ASC REQUIRED)
 
@@ -51,21 +53,21 @@ npu_op_code_gen(
     PACKAGE ${package_name}
     OUT_DIR ${ASCEND_AUTOGEN_PATH}
     COMPILE_OPTIONS
-        -I$ENV{ASCEND_HOME_PATH}/aarch64-linux/include
-        -I$ENV{ASCEND_HOME_PATH}/aarch64-linux/asc/include/tiling
-        -I$ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc
-        -I$ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc/op_common
-        -I$ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc/base
+        -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include
+        -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/asc/include/tiling
+        -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc
+        -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/op_common
+        -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/base
 )
 
 # Tiling library
 npu_op_library(cust_optiling TILING ${ALL_HOST_OPS_SRCS})
 target_include_directories(cust_optiling PRIVATE
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/include
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/asc/include/tiling
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc/op_common
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc/base
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/asc/include/tiling
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/op_common
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/base
     ${ALL_TILING_INCLUDE_DIRS}
 )
 
@@ -73,12 +75,12 @@ target_include_directories(cust_optiling PRIVATE
 npu_op_library(cust_opapi ACLNN ${ALL_API_OPS_SRCS})
 target_include_directories(cust_opapi PRIVATE
     ${ALL_API_INCLUDE_DIRS}
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/include
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/include/aclnn
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/asc/include
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc/op_common
-    $ENV{ASCEND_HOME_PATH}/aarch64-linux/pkg_inc/base
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include/aclnn
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/asc/include
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/op_common
+    $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/base
 )
 
 # Kernel sources - 从注册信息生成
@@ -135,7 +137,7 @@ if(BUILD_PYTHON_EXT)
     set(LINK_DIRECTORIES
         ${TORCH_NPU_LIB_PATH}
         ${ASCEND_DIR}/lib64
-        $ENV{ASCEND_HOME_PATH}/aarch64-linux/lib64
+        $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/lib64
     )
 
     set(LINK_LIBRARIES
@@ -167,8 +169,8 @@ if(BUILD_PYTHON_EXT)
     target_include_directories(${PLUGIN_TARGET} PRIVATE
         ${ALL_PLUGIN_INCLUDE_DIRS}
         ${INCLUDE_DIRECTORIES}
-        $ENV{ASCEND_HOME_PATH}/aarch64-linux/include
-        $ENV{ASCEND_HOME_PATH}/aarch64-linux/include/aclnn
+        $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include
+        $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include/aclnn
     )
 
     # Create shared library

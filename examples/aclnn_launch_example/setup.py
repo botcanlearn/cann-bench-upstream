@@ -70,7 +70,7 @@ class ABI3Wheel(bdist_wheel):
         python, abi, plat = super().get_tag()
         python = "cp38"
         abi = "abi3"
-        plat = "linux_aarch64"
+        # plat 由父类自动检测，不硬编码
         return python, abi, plat
 
     def run(self):
