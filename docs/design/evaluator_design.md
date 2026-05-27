@@ -1,8 +1,8 @@
 # 算子评测工程设计
 
-**文档版本：V0.2.0**
+**文档版本：参见 [changelog](../changelog.md)**
 
-**V0.2.0 更新说明**（2026-04-30）：
+**更新说明参见 [changelog](../changelog.md)**：
 - 安全层集成：APIGuard 在 evaluate_from_source() 中调用
 - Config 依赖注入：Evaluator 等组件通过构造函数接收 Config
 - 进程隔离简化：取消用例级隔离，保留算子级隔离

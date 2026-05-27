@@ -50,7 +50,7 @@
 - 单算子综合评分改版：`EachOperatorScore = [w_c·δ_pass + Σ δ_acc,i (w_f + w_p·score_i) / N] · 100`，归一化到 [0, 100]（bench.tex Eq. 4）
 - 权重调整：`(w_c, w_f, w_p) = (0.2, 0.3, 0.5)`（原 `(2, 3, 5)`）
 - 新增字段 `t_hw_us`：每个用例新增硬件下界 `T_HW`，写入 cases.yaml 与 cases.csv，加载链路 (case_loader / EvalCaseResult / report_generator) 同步打通
-- 工具更新：`inner/generate_cases_csv.py`、`scripts/utils/yaml_to_csv.py`、`inner/validate_cases.py` 均加入新字段；`src/kernel_eval/report/scoring.py` 与 `summary_generator.py` 重写为新公式
+- 工具更新：`scripts/utils/yaml_to_csv.py` 加入新字段；`src/kernel_eval/report/scoring.py` 与 `summary_generator.py` 重写为新公式
 - 几何平均加速比保留为诊断字段
 
 ## V0.1.1 (2026-04-29)

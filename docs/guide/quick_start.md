@@ -1,6 +1,6 @@
 # 快速入门
 
-**文档版本：V0.2.0**
+**文档版本：参见 [changelog](../changelog.md)**
 
 本文档介绍如何使用评测工程进行算子代码生成评测。
 
@@ -138,32 +138,6 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 - `reports/eval_report.md`：Markdown 格式报告
 - `reports/summary.md`：摘要报告
 - `reports/prof_data/`：性能采集数据
-
-## 跑测试：inner/tests/
-
-整合后所有测试集中在 `inner/tests/`：
-
-```bash
-# task 一致性（CPU-only，ubuntu-latest CI 必跑）
-uv run python -m pytest inner/tests/task/ -v
-
-# baseline-bench（需要 NPU 自托管 runner，CANN 9.0.0）
-CANN_BENCH_DEVICE=0 uv run python -m pytest inner/tests/baseline/ -v
-
-# 把 NPU 测试结果回填 cases.yaml + cases.csv
-# --dry-run 看 diff（不写盘）
-uv run python inner/tests/apply_baselines.py --dry-run \
-    --input inner/tests/baseline/results/baseline_perf_*.json
-# --apply 默认只填 null 项 (保护人工录入); rebaseline 已有 baseline 必加 --force
-uv run python inner/tests/apply_baselines.py --apply --force \
-    --input inner/tests/baseline/results/baseline_perf_*.json
-
-# Drift gate (CI 上 self-hosted 跑)
-uv run python inner/tests/apply_baselines.py --check --tolerance 0.20 \
-    --input inner/tests/baseline/results/baseline_perf_*.json
-```
-
-详见 [部署文档](self_hosted_runner_cann9.md) 关于 NPU runner 容器化。
 
 ## 下一步
 

@@ -1,10 +1,10 @@
 # 性能采集设计文档
 
-**文档版本：V0.2.0**
+**文档版本：参见 [changelog](../changelog.md)**
 
 本文档详细描述评测工程的性能采集机制设计，包括 NPU Profiler 采集、kernel_details.csv 解析、升频清 Cache、Warmup Kernel 精确过滤等核心机制。
 
-**V0.2.0 更新说明**（2026-04-30）：
+**更新说明参见 [changelog](../changelog.md)**：
 - Profiling 升级为 Level1（默认）/ Level2（可选），删除 Level0 支持
 - 数据源改为 kernel_details.csv（47列），支持 Input Shapes 精确形状匹配过滤 warmup
 - 删除 `_suppress_cann_profiler_errors()`（Level1/Level2 有完整数据，无需抑制）
@@ -473,7 +473,7 @@ def _is_warmup_kernel(op_type: str, input_shapes: str) -> bool:
 
 **现状**：已从平均值改为中位数统计。
 
-**原因**：中位数对异常值更稳定，与 inner/perf_engine.py 保持一致。
+**原因**：中位数对异常值更稳定。
 
 ---
 

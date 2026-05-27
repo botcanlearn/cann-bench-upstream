@@ -1,10 +1,10 @@
 # CANN 算子代码生成评测文档
 
-**文档版本：V0.2.0**
+**文档版本：参见 [changelog](changelog.md)**
 
 本目录包含算子代码生成评测体系的完整文档，按主题分类组织。
 
-**V0.2.0 更新说明**（2026-04-30）：
+**更新说明参见 [changelog](changelog.md)**：
 - Profiling 升级为 Level1/Level2（删除 Level0）
 - 安全层 APIGuard 系统性集成
 - Config 依赖注入（支持多实例并行评测）
