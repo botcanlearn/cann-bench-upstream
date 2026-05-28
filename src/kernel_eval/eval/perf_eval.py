@@ -374,6 +374,11 @@ class PerfEvaluator:
         if self.archive_prof:
             prof_dir = os.path.join(self.prof_data_dir, rel_path, caseid)
             os.makedirs(prof_dir, exist_ok=True)
+            # 清理上次评测遗留的时间戳子目录，避免读取到脏数据
+            for entry in os.listdir(prof_dir):
+                entry_path = os.path.join(prof_dir, entry)
+                if os.path.isdir(entry_path):
+                    shutil.rmtree(entry_path, ignore_errors=True)
         else:
             prof_dir = tempfile.mkdtemp(prefix="cann_prof_")
 
