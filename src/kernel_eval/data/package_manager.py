@@ -298,8 +298,8 @@ class PackageManager:
     def install_run_package(self, run_path: str) -> bool:
         """安装run包（NPU内核包）
 
-        run包安装方式取决于包的实际格式，常见方式：
-        - 直接执行: ./xxx.run --install
+        run包为 makeself 格式，使用 --quiet 参数静默安装。
+        安装失败时抛出 RuntimeError，不静默忽略。
         """
         run_file = Path(run_path)
         if not run_file.exists():
@@ -311,10 +311,10 @@ class PackageManager:
             # 设置可执行权限
             os.chmod(run_path, 0o755)
 
-            # 执行安装
+            # 执行安装（makeself .run 包使用 --quiet 静默安装）
             abs_run_path = str(run_file.resolve())
             result = subprocess.run(
-                [abs_run_path, "--install"],
+                [abs_run_path, "--quiet"],
                 cwd=str(run_file.parent),
                 capture_output=True,
                 text=True,
@@ -322,19 +322,20 @@ class PackageManager:
             )
 
             if result.returncode != 0:
-                print(f"[WARN] run包安装可能失败: {result.stderr}")
-                # run包安装可能不需要特定参数，继续执行
-                return True
+                output = result.stderr or result.stdout
+                raise RuntimeError(
+                    f"run包安装失败 (rc={result.returncode}): {output}"
+                )
 
             print(f"[INFO] run包安装成功")
             return True
 
         except subprocess.TimeoutExpired:
-            print(f"[WARN] run包安装超时")
-            return False
+            raise RuntimeError(f"run包安装超时 (120s): {run_file.name}")
+        except RuntimeError:
+            raise
         except Exception as e:
-            print(f"[WARN] run包安装异常: {e}")
-            return False
+            raise RuntimeError(f"run包安装异常: {e}")
 
     def install_whl_package(self, whl_path: str) -> bool:
         """安装whl包（Python包）
@@ -380,12 +381,12 @@ class PackageManager:
     def install_packages(self, package_info: PackageInfo) -> bool:
         """安装所有包（run包 + whl包）
 
-        安装顺序：先安装run包，再安装whl包
+        安装顺序：先安装run包，再安装whl包。
+        run包安装失败时抛出 RuntimeError，不继续安装whl包。
         """
-        # 安装run包（如果存在）
+        # 安装run包（如果存在）—— 失败即 raise，不继续
         if package_info.run_path:
-            if not self.install_run_package(package_info.run_path):
-                print(f"[WARN] run包安装失败，继续安装whl包")
+            self.install_run_package(package_info.run_path)
 
         # 安装whl包（必须成功）
         if package_info.whl_path:

@@ -14,9 +14,9 @@
 /*!
  * \file aclnn_common.h
  * \brief ACLNN_CMD macro and helpers for invoking aclnn ops from a
- *        torch_npu plugin. Symbols are resolved via dlsym from
- *        libcust_opapi.so (customize bundle) with fallback to
- *        libopapi.so (stock dispatcher).
+ *        torch_npu plugin. Symbols are resolved via dlsym exclusively from
+ *        libcust_opapi.so (customize bundle). There is no fallback to the
+ *        stock libopapi.so — evaluation must use the custom op package.
  */
 
 #ifndef CANN_BENCH_ACLNN_COMMON_H_
@@ -94,7 +94,6 @@ constexpr aclDataType kATenScalarTypeToAclDataTypeTable[static_cast<int64_t>(at:
 
 #define GET_OP_API_FUNC(apiName) reinterpret_cast<_##apiName>(GetOpApiFuncAddr(#apiName))
 
-inline const char *GetOpApiLibName(void) { return "libopapi.so"; }
 inline const char *GetCustOpApiLibName(void) { return "libcust_opapi.so"; }
 
 inline void *GetOpApiFuncAddrInLib(void *handler, const char *libName, const char *apiName)
@@ -118,17 +117,19 @@ inline void *GetOpApiLibHandler(const char *libName)
 inline void *GetOpApiFuncAddr(const char *apiName)
 {
     static auto custOpApiHandler = GetOpApiLibHandler(GetCustOpApiLibName());
-    if (custOpApiHandler != nullptr) {
-        auto funcAddr = GetOpApiFuncAddrInLib(custOpApiHandler, GetCustOpApiLibName(), apiName);
-        if (funcAddr != nullptr) {
-            return funcAddr;
-        }
-    }
-    static auto opApiHandler = GetOpApiLibHandler(GetOpApiLibName());
-    if (opApiHandler == nullptr) {
+    if (custOpApiHandler == nullptr) {
+        ASCEND_LOGE("dlopen %s failed, cannot resolve symbol '%s'. "
+                     "Ensure the run package is installed correctly. "
+                     "dlerror: %s", GetCustOpApiLibName(), apiName, dlerror());
         return nullptr;
     }
-    return GetOpApiFuncAddrInLib(opApiHandler, GetOpApiLibName(), apiName);
+    auto funcAddr = GetOpApiFuncAddrInLib(custOpApiHandler, GetCustOpApiLibName(), apiName);
+    if (funcAddr == nullptr) {
+        ASCEND_LOGE("symbol '%s' not found in %s. "
+                     "The operator may not be included in the custom op package.",
+                     apiName, GetCustOpApiLibName());
+    }
+    return funcAddr;
 }
 
 inline c10::Scalar ConvertTensorToScalar(const at::Tensor &tensor)
@@ -416,7 +417,8 @@ auto DecodeDevice(Ts &...args) -> at::Device
         static const auto releaseMemAddr = GetOpApiFuncAddr("ReleaseHugeMem");                              \
         TORCH_CHECK(getWorkspaceSizeFuncAddr != nullptr && opApiFuncAddr != nullptr,                        \
             #aclnn_api, " or ", #aclnn_api "GetWorkspaceSize",                                              \
-            " not found in libcust_opapi.so or ", GetOpApiLibName(), ".");                                  \
+            " not found in libcust_opapi.so. ",                                                             \
+            "Ensure the run package is installed correctly.");                                  \
         auto acl_stream = c10_npu::getCurrentNPUStream().stream(false);                                     \
         uint64_t workspace_size = 0;                                                                        \
         uint64_t *workspace_size_addr = &workspace_size;                                                    \
