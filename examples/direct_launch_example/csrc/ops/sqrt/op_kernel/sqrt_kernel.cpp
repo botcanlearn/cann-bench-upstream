@@ -117,7 +117,7 @@ __global__ __aicore__ __vector__ void sqrt_kernel(GM_ADDR x, GM_ADDR z, int64_t 
 
 // Returns (numBlocks, blockLength, tileSize) where tileSize is element count
 // per UB tile. 2048 comfortably fits the two in/out queues plus the two fp32
-// cast buffers on 910b's UB.
+// cast buffers comfortably fit on 910b/950 UB.
 std::tuple<int64_t, int64_t, int64_t> calc_sqrt_tiling_params(int64_t totalLength)
 {
     constexpr static int64_t MIN_ELEMS_PER_CORE = 1024;

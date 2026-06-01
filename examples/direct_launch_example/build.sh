@@ -16,12 +16,34 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-NPU_ARCH="ascend910b"
+# Auto-detect SoC version from npu-smi if not specified
+detect_soc_version() {
+    local torch_soc=$(python3 -c "
+import torch, torch_npu
+print(torch.npu.get_device_name(0))
+" 2>/dev/null)
+    if [ -n "${torch_soc}" ]; then
+        case "${torch_soc}" in
+            Ascend910B*)  echo "ascend910b" ; return ;;
+            Ascend910_93*) echo "ascend910_93" ; return ;;
+            Ascend950*)   echo "ascend950" ; return ;;
+        esac
+    fi
+    local npu_name=$(npu-smi info 2>/dev/null | grep -oP 'Ascend\S+' | head -1)
+    case "${npu_name}" in
+        Ascend910B1|Ascend910B2|Ascend910B3|Ascend910B4) echo "ascend910b" ;;
+        Ascend910_93*)  echo "ascend910_93" ;;
+        Ascend950*)     echo "ascend950" ;;
+        *)              echo "ascend910b" ;;
+    esac
+}
+
+SOC_VERSION=""
 INSTALL=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --soc=*)
-            NPU_ARCH="${1#*=}"
+            SOC_VERSION="${1#*=}"
             shift
             ;;
         --install)
@@ -33,6 +55,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [ -z "${SOC_VERSION}" ]; then
+    SOC_VERSION=$(detect_soc_version)
+    echo "[INFO] Auto-detected SoC: ${SOC_VERSION}"
+fi
+export NPU_ARCH="${SOC_VERSION}"
 
 echo "=== Building cann_bench wheel package ==="
 echo "NPU_ARCH: ${NPU_ARCH}"

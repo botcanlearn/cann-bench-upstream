@@ -29,6 +29,7 @@ cases.yaml格式：
       910b2: 40.2
       910b1: 45.1
       910a: 50.0
+      950: 30.0
 
 参考evaluation/evaluate.py中的resolve_baseline_us函数
 

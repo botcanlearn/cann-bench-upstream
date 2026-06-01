@@ -61,11 +61,13 @@ class TestResolveBaselineUs:
                 "910b2": 40.2,
                 "910b1": 45.1,
                 "910a": 50.0,
+                "950": 30.0,
             }
         }
         assert resolve_baseline_us(case_raw, "910b2") == 40.2
         assert resolve_baseline_us(case_raw, "910b1") == 45.1
         assert resolve_baseline_us(case_raw, "910a") == 50.0
+        assert resolve_baseline_us(case_raw, "950") == 30.0
 
     def test_dict_baseline_missing_hardware(self):
         """多硬件 baseline（缺少指定硬件）"""
@@ -308,19 +310,23 @@ class TestBaselineResolver:
         """不同硬件"""
         resolver_910a = BaselineResolver(hardware="910a")
         resolver_910b2 = BaselineResolver(hardware="910b2")
+        resolver_950 = BaselineResolver(hardware="950")
 
         case_raw = {
             "baseline_perf_us": {
                 "910a": 50.0,
                 "910b2": 40.0,
+                "950": 30.0,
             }
         }
 
         info_a = resolver_910a.resolve(case_raw, "Exp", 0)
         info_b = resolver_910b2.resolve(case_raw, "Exp", 0)
+        info_c = resolver_950.resolve(case_raw, "Exp", 0)
 
         assert info_a.yaml_us == 50.0
         assert info_b.yaml_us == 40.0
+        assert info_c.yaml_us == 30.0
 
 
 class TestBaselineInfo:

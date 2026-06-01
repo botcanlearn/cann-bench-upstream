@@ -683,6 +683,7 @@ cases:
       910b2: 40.2
       910b1: 45.1
       910a: 50.0
+      950: 30.0
 ```
 
 ### 4.4 报告生成设计
@@ -711,6 +712,8 @@ def geometric_mean_speedup(speedups):
   "operators": [...]
 }
 ```
+> 可指定其他硬件如 `"hardware": "950"`。
+```
 
 **Markdown格式**：包含表格摘要和详细用例结果。
 
@@ -718,7 +721,7 @@ def geometric_mean_speedup(speedups):
 ```markdown
 # 算子评测报告
 **评测代号**: eval_20260422_xxx
-**硬件**: 910b2
+**硬件**: 910b2（或 950 等其他支持的硬件）
 
 ## 总体结果
 - **通过率**: 90.00%

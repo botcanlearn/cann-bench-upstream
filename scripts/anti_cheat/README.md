@@ -37,7 +37,7 @@ bash scripts/anti_cheat/disable_builtin_kernels.sh --yes      # 跳过确认
 bash scripts/anti_cheat/restore_builtin_kernels.sh
 ```
 
-可选参数：`--soc=ascend910b`、`--list=<file>`、`--backup-dir=<dir>`（默认 `$HOME/.cann_bench_kernel_backup`）。
+可选参数：`--soc=ascend910b`（Ascend 910B/910_93/950）、`--list=<file>`、`--backup-dir=<dir>`（默认 `$HOME/.cann_bench_kernel_backup`）。
 
 ## ⚠️ 风险与安全保护
 
