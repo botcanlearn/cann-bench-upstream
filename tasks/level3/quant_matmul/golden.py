@@ -51,23 +51,31 @@ def quant_matmul(
     Returns:
         out: [..., m, n] float16 或 bfloat16
     """
-    # 矩阵乘（int8 用 float32 等效计算）
-    mm = torch.matmul(x1.float(), x2.float())
+    # 矩阵乘 (int8/int32 用 int64 累加 → fp64 中间精度，避免 fp32 24-bit 尾数溢出)
+    # PR-001: int8 × int8 单乘积 ≤ 127² = 16129；K 个累加最大 |mm| = 16129·K。
+    # fp32 尾数 24-bit (2^24 ≈ 1.68e7)，K > 1024 时累加可能溢出 fp32 精度，
+    # 后续 `mm.to(int32)` 截断在边界 case 误差最大 ~3。改用 int64 精确累加，
+    # 然后 lossless 转 fp64 (尾数 52-bit, 安全到 K ≈ 2^49)，scale 路径保 fp64。
+    if x1.dtype in (torch.int8, torch.int32) and x2.dtype in (torch.int8, torch.int32):
+        mm = torch.matmul(x1.long(), x2.long()).double()
+    else:
+        # bf16/fp16 输入路径维持原 fp32 等效计算
+        mm = torch.matmul(x1.float(), x2.float()).double()
 
     # int32 bias 在反量化前累加 (pre-scale)
     if bias is not None and bias.dtype == torch.int32:
-        mm = mm + bias.float()
+        mm = mm + bias.double()
 
     # 反量化 scale
-    y = mm * scale.float()
+    y = mm * scale.double()
 
     # pertoken_scale 沿 m 维广播
     if pertoken_scale is not None:
-        y = y * pertoken_scale.float().unsqueeze(-1)
+        y = y * pertoken_scale.double().unsqueeze(-1)
 
     # 浮点 bias 在反量化后相加 (post-scale)
     if bias is not None and bias.dtype != torch.int32:
-        y = y + bias.float()
+        y = y + bias.double()
 
     # 输出 dtype，默认 float16
     if output_dtype is None or output_dtype == "float16":
