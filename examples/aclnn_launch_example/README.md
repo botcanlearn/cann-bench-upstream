@@ -47,7 +47,7 @@ aclnn_launch_example/
 
 ```bash
 bash build.sh --soc=ascend910b
-# 或指定其他 SoC 如 --soc=ascend950
+# 或指定其他 SoC 如 --soc=ascend910_93 / --soc=ascend950
 ```
 
 输出到 `dist/` 目录:
@@ -234,7 +234,7 @@ register_aclnn_plugin("${MUL_PLUGIN_SRCS}" op_api)
 
 ```bash
 bash build.sh --soc=ascend910b
-# 或指定其他 SoC 如 --soc=ascend950
+# 或指定其他 SoC 如 --soc=ascend910_93 / --soc=ascend950
 ```
 
 **无需修改任何公共CMakeLists.txt文件！**

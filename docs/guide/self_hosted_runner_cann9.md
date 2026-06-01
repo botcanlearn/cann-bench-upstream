@@ -42,7 +42,7 @@
 
 | 项 | 最低 | 推荐 |
 |---|---|---|
-| NPU | 1× Ascend 910B / 910A / 310P / 950 | 1× Ascend 910B（与 cann-bench baseline 历史数据一致的 a3 平台） |
+| NPU | 1× Ascend 910B / 910_93 / 950 | 1× Ascend 910B（与 cann-bench baseline 历史数据一致的 a3 平台） |
 | CPU | 16 core | 32+ core |
 | RAM | 64 GB | 128 GB |
 | 磁盘 | 200 GB SSD | 500 GB NVMe（msprof profile 数据 / runner 缓存） |

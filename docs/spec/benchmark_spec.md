@@ -361,7 +361,7 @@ $$
 - T_cand = T_HW ⇒ score = 1.0（达到硬件下界）
 - T_cand → ∞ ⇒ score → 0（远低于基准）
 
-T_HW 由 cases.yaml 中 `t_hw_us` 字段给出，是该用例在对应硬件上的硬件下界（支持 910B2 / 950 等多硬件）。`baseline_perf_us` 同 yaml 同行。
+T_HW 由 cases.yaml 中 `t_hw_us` 字段给出，是该用例在对应硬件上的硬件下界（支持 910B2 / 910_93 / 950 等多硬件）。`baseline_perf_us` 同 yaml 同行。
 
 **单算子综合评分** (bench.tex Eq. 4)：
 
