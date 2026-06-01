@@ -38,7 +38,7 @@ class EvalResult:
     operator: str = ""
     case_id: int = 0
     status: str = ""  # success / failed / skipped
-    elapsed_us: float = 0
+    elapsed_us: Optional[float] = 0  # None 表示未采集性能(--no-perf / 非 profiler 路径)
     op_times: Optional[Dict[str, Dict[str, float]]] = None
     error_msg: Optional[str] = None
     device: str = ""
@@ -69,7 +69,7 @@ class EvalResult:
             operator=result.operator,
             case_id=result.case_num,
             status="success" if result.success else "failed",
-            elapsed_us=result.perf_result.elapsed_us if result.perf_result else 0,
+            elapsed_us=result.perf_result.elapsed_us if result.perf_result else None,
             op_times=result.perf_result.op_times if result.perf_result else {},
             error_msg=result.error_msg,
             accuracy=result.accuracy_result.to_dict() if result.accuracy_result else None,
@@ -300,8 +300,10 @@ class ReportGenerator:
                         accuracy_str = f"{max_diff:.6f}"
                     else:
                         accuracy_str = case.error_msg or "N/A"
+                    # elapsed_us 为 None 表示未做性能采集(--no-perf / 非 profiler 路径)
+                    elapsed_str = "N/A" if case.elapsed_us is None else f"{case.elapsed_us:.2f}"
                     lines.append(
-                        f"| {case.case_id} | {status_icon} | {case.elapsed_us:.2f} "
+                        f"| {case.case_id} | {status_icon} | {elapsed_str} "
                         f"| {speedup_str} | {accuracy_str} |"
                     )
                 lines.append(f"")

@@ -32,7 +32,6 @@ import re
 import shutil
 import sys
 import tempfile
-import time
 from typing import Optional, Dict, Any, Tuple, List, Callable
 
 import torch
@@ -363,8 +362,8 @@ class PerfEvaluator:
         )
 
         if not self.config.enable_profiler:
-            self._measure_simple(result, func, inputs, warmup, repeat,
-                                 use_input_pool, args, kwargs)
+            # 不应到达此处(run_profiled 仅在 enable_profiler 时被调用);保留防御性早退,
+            # 不做墙钟计时——非 profiler 路径由 op_runner 直接产出 perf_result=None。
             return None, result
 
         if self.freq_boost:
@@ -456,42 +455,6 @@ class PerfEvaluator:
                     pass
 
         return last_outputs, result
-
-    def _measure_simple(self, result: PerfResult, func: Callable,
-                        inputs: List, warmup: int, repeat: int,
-                        use_input_pool: bool, args: tuple, kwargs: dict):
-        """CPU fallback: wall-clock time via time.perf_counter()."""
-        if inputs and use_input_pool:
-            pool = InputPool(inputs, warmup + repeat)
-            def fn():
-                return func(*pool.get_next())
-        else:
-            pool = None
-            def fn():
-                return func(*args, **kwargs)
-
-        try:
-            for _ in range(warmup):
-                fn()
-        except Exception as warmup_err:
-            # warmup 失败本身不让评测中断，但必须可见——否则 measurement 阶段
-            # 若侥幸不挂会得到误导性的性能数据。
-            print(f"[WARN] perf_eval warmup 异常被忽略: {type(warmup_err).__name__}: {warmup_err}")
-
-        times = []
-        for _ in range(repeat):
-            if hasattr(torch, 'npu') and torch.npu.is_available():
-                torch.npu.synchronize()
-            t0 = time.perf_counter()
-            fn()
-            if hasattr(torch, 'npu') and torch.npu.is_available():
-                torch.npu.synchronize()
-            times.append((time.perf_counter() - t0) * 1_000_000)
-
-        if pool:
-            pool.clear()
-
-        result.elapsed_us = round(sum(times) / len(times), 2) if times else 0
 
     def _parse_case_id(self, case_id: str) -> Tuple[str, str]:
         """Parse case_id like ``level2/scatter_1`` into ``(rel_path, case_num)``.

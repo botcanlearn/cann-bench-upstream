@@ -20,7 +20,6 @@
 3. 返回执行结果
 """
 
-import time
 import traceback
 from typing import Callable, Dict, Optional, Any, List
 from dataclasses import dataclass
@@ -80,17 +79,16 @@ class OpRunner:
                 self.perf_evaluator.wait_all()
                 elapsed_us = perf_result.elapsed_us
             else:
-                if to_device:
-                    self.device_manager.synchronize()
-                t0 = time.perf_counter()
+                # 非 profiler 路径(--no-perf / CPU / golden):只跑出 outputs 供精度比对,
+                # 不再用墙钟计时(受环境影响大、与 profiler 设备时间不可比)。perf_result=None,
+                # 由评分侧将该 case 的 perf 分按 0 计入,不影响 function/total。
                 if to_device:
                     outputs = func(**updated_params)
+                    self.device_manager.synchronize()
                 else:
                     with torch.no_grad():
                         outputs = func(**updated_params)
-                if to_device:
-                    self.device_manager.synchronize()
-                elapsed_us = (time.perf_counter() - t0) * 1_000_000
+                elapsed_us = 0.0
                 perf_result = None
 
             return OpRunResult(
@@ -135,11 +133,10 @@ class OpRunner:
             device_tensors = self.device_manager.to_device_batch(input_tensors)
             updated_params = self._update_params(params, device_tensors)
 
-            self.device_manager.synchronize()
-            t0 = time.perf_counter()
+            # 不采集性能:只跑出 outputs(墙钟已弃用,perf 由 profiler 路径专责)。
             outputs = func(**updated_params)
             self.device_manager.synchronize()
-            elapsed_us = (time.perf_counter() - t0) * 1_000_000
+            elapsed_us = 0.0
 
             return OpRunResult(
                 success=True,

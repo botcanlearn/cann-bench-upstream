@@ -116,6 +116,7 @@ class Evaluator:
             failure_synthesizer=self.failure_synthesizer,
             device_id=self.config.device_id,
             kernel_eval_root=kernel_eval_root,
+            config=self.config,
         )
 
     def load_ai_operator(self, operator_name: str) -> Callable:
@@ -316,15 +317,9 @@ class Evaluator:
 
             # 8. 性能数据已在上面的 profiler 运行中采集，直接提取
             if accuracy_result.is_passed():
-                if ai_result.perf_result is not None:
-                    perf_result = ai_result.perf_result
-                elif ai_result.elapsed_us > 0:
-                    perf_result = PerfResult(
-                        elapsed_us=ai_result.elapsed_us,
-                        metadata={'case_id': case_id_str}
-                    )
-                else:
-                    perf_result = None
+                # perf 仅来自 profiler 路径;非 profiler(--no-perf/CPU)时 perf_result 为 None,
+                # 评分侧会把该 case 的 perf 分按 0 计入(不再回退到墙钟)。
+                perf_result = ai_result.perf_result
                 error_msg = None
             else:
                 perf_result = None

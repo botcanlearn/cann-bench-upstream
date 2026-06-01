@@ -44,10 +44,70 @@ class SubprocessRunner:
         failure_synthesizer: FailureSynthesizer,
         device_id: int = 0,
         kernel_eval_root: str = None,
+        config=None,
     ):
         self.failure_synthesizer = failure_synthesizer
         self.device_id = device_id
         self.kernel_eval_root = kernel_eval_root or str(get_project_root() / "src")
+        # 父进程的评测配置，用于把性能/profiler flag 透传给隔离子进程
+        self.config = config
+
+    def _build_child_cmd(
+        self,
+        operator_name: str,
+        frag_path: str,
+        source_dir: str,
+        case_filter: Optional[Dict] = None,
+        unbuffered: bool = False,
+    ) -> List[str]:
+        """构造隔离子进程的 kernel_eval.cli eval 命令。
+
+        子进程默认 enable_profiler=True、warmup/repeat/profiler_level 取 argparse
+        默认值。若不把父进程的配置透传过去，--no-perf / --warmup / --repeat /
+        --profiler-level 在默认隔离路径下会被静默忽略（gitcode issue #11）。
+
+        --no-subprocess-isolation + --skip-install 用于避免无限递归与重复安装。
+        """
+        cmd = [sys.executable]
+        if unbuffered:
+            # 强制无缓冲输出，确保所有 case 日志都被实时捕获
+            cmd.append("-u")
+        cmd += [
+            "-m", "kernel_eval.cli", "eval",
+            "--source-dir", str(source_dir),
+            "--operator", operator_name,
+            "--child-json-output", frag_path,
+            "--no-subprocess-isolation",
+            "--skip-install",
+        ]
+        if case_filter and "case_id" in case_filter:
+            cmd += ["--case-id", str(case_filter["case_id"])]
+
+        cmd += self._forward_config_flags()
+        return cmd
+
+    def _forward_config_flags(self) -> List[str]:
+        """把父进程的性能/profiler 相关配置透传给隔离子进程。
+
+        config 缺省时返回空列表（子进程沿用默认配置）。
+        """
+        cfg = self.config
+        if cfg is None:
+            return []
+        flags: List[str] = []
+        if not getattr(cfg, "enable_profiler", True):
+            flags.append("--no-perf")
+        if getattr(cfg, "warmup", None) is not None:
+            flags += ["--warmup", str(cfg.warmup)]
+        if getattr(cfg, "repeat", None) is not None:
+            flags += ["--repeat", str(cfg.repeat)]
+        profiler_level = getattr(cfg, "profiler_level", None)
+        if profiler_level:
+            flags += ["--profiler-level", str(profiler_level)]
+        device_id = getattr(cfg, "device_id", None)
+        if device_id is not None:
+            flags += ["--device-id", str(device_id)]
+        return flags
 
     def run_operator_subprocess(
         self,
@@ -77,17 +137,11 @@ class SubprocessRunner:
         fd, frag_path = tempfile.mkstemp(suffix=".json", prefix="cannbench_child_")
         os.close(fd)
         try:
-            # 子进程命令
-            cmd = [
-                sys.executable, "-m", "kernel_eval.cli", "eval",
-                "--source-dir", str(source_dir),
-                "--operator", operator_name,
-                "--child-json-output", frag_path,
-                "--no-subprocess-isolation",
-                "--skip-install",
-            ]
-            if case_filter and "case_id" in case_filter:
-                cmd += ["--case-id", str(case_filter["case_id"])]
+            # 子进程命令（透传父进程的性能/profiler 配置）
+            cmd = self._build_child_cmd(
+                operator_name, frag_path, source_dir=source_dir,
+                case_filter=case_filter,
+            )
 
             print(f"[INFO] {operator_name}: subprocess (timeout {timeout_sec}s)")
 
@@ -212,16 +266,12 @@ class SubprocessRunner:
         try:
             # 使用 kernel_eval.cli 代替 run_simple.py
             # 使用 -u 参数强制无缓冲输出，确保所有case日志都被捕获
-            cmd = [
-                sys.executable, "-u", "-m", "kernel_eval.cli", "eval",
-                "--source-dir", "tasks",
-                "--operator", operator_name,
-                "--child-json-output", frag_path,
-                "--no-subprocess-isolation",
-                "--skip-install",
-            ]
-            if case_filter and "case_id" in case_filter:
-                cmd += ["--case-id", str(case_filter["case_id"])]
+            # source-dir 优先用父进程配置，回退到 "tasks"（透传性能/profiler 配置）
+            source_dir = getattr(self.config, "source_dir", "") or "tasks"
+            cmd = self._build_child_cmd(
+                operator_name, frag_path, source_dir=source_dir,
+                case_filter=case_filter, unbuffered=True,
+            )
 
             # 设置 PYTHONPATH
             env = os.environ.copy()
