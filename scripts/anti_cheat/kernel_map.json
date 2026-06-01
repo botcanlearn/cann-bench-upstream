@@ -1,0 +1,186 @@
+{
+  "AdaptiveAvgPool3D": [
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2",
+    "ops_nn/adaptive_avg_pool3d"
+  ],
+  "AddRmsNormDynamicQuant": [
+    "ops_nn/add_rms_norm_dynamic_quant",
+    "ops_nn/add_rms_norm_dynamic_quant_v2"
+  ],
+  "ApplyAdamW": [
+    "ops_legacy/apply_adam_w",
+    "ops_nn/apply_adam_w_v2"
+  ],
+  "ApplyRotaryPosEmb": [
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2",
+    "ops_transformer/apply_rotary_pos_emb"
+  ],
+  "ArgMax": [
+    "ops_legacy/arg_max_v2"
+  ],
+  "Conv2D": [
+    "ops_legacy/conv2d"
+  ],
+  "Conv3DBackpropFilter": [
+    "ops_legacy/conv3d_backprop_filter",
+    "ops_nn/conv3d_backprop_filter_v2"
+  ],
+  "CrossEntropyLoss": [
+    "ops_legacy/log_softmax_v2",
+    "ops_legacy/nll_loss",
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2",
+    "ops_nn/cross_entropy_loss"
+  ],
+  "Cummin": [
+    "ops_legacy/cummin",
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2"
+  ],
+  "DepthwiseConv2D": [
+    "ops_legacy/conv2d"
+  ],
+  "DequantSwigluQuant": [
+    "ops_nn/dequant_swiglu_quant"
+  ],
+  "DynamicQuant": [
+    "ops_nn/dynamic_quant",
+    "ops_nn/dynamic_quant_v2"
+  ],
+  "Exp": [
+    "ops_legacy/exp"
+  ],
+  "ForeachAddcdivScalar": [
+    "ops_nn/foreach_addcdiv_scalar"
+  ],
+  "ForeachNorm": [
+    "ops_legacy/lp_norm_reduce",
+    "ops_legacy/lp_norm_reduce_v2",
+    "ops_legacy/lp_norm_update",
+    "ops_legacy/lp_norm_update_v2",
+    "ops_legacy/lp_norm_update_v3",
+    "ops_legacy/lp_norm_v2",
+    "ops_nn/foreach_norm"
+  ],
+  "GQA": [
+    "ops_transformer/fused_infer_attention_score"
+  ],
+  "Gather": [
+    "ops_legacy/gather",
+    "ops_legacy/gather_elements",
+    "ops_legacy/gather_v2",
+    "ops_legacy/gather_v3",
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2",
+    "ops_nn/gather_elements_v2"
+  ],
+  "Gcd": [
+    "ops_legacy/gcd"
+  ],
+  "Gelu": [
+    "ops_legacy/gelu",
+    "ops_legacy/gelu_v2"
+  ],
+  "GridSampler3D": [
+    "ops_cv/grid_sample",
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2"
+  ],
+  "GroupNorm": [
+    "ops_legacy/group_norm",
+    "ops_legacy/group_norm_v2",
+    "ops_nn/group_norm_silu"
+  ],
+  "GroupedMatmul": [
+    "ops_transformer/grouped_matmul"
+  ],
+  "GroupedMatmulSwigluQuant": [
+    "ops_transformer/grouped_matmul_swiglu_quant",
+    "ops_transformer/grouped_matmul_swiglu_quant_v2"
+  ],
+  "LSTM": [
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2",
+    "ops_nn/dynamic_rnn"
+  ],
+  "MHA": [
+    "ops_transformer/fused_infer_attention_score"
+  ],
+  "MLA": [
+    "ops_transformer/fused_infer_attention_score"
+  ],
+  "MaskedScale": [
+    "ops_legacy/masked_scale"
+  ],
+  "Maximum": [
+    "ops_legacy/maximum"
+  ],
+  "MhcSinkhorn": [],
+  "Mish": [
+    "ops_legacy/mish"
+  ],
+  "MlaProlog": [
+    "ops_transformer/mla_prolog",
+    "ops_transformer/mla_prolog_v2",
+    "ops_transformer/mla_prolog_v3"
+  ],
+  "MoeFinalizeRouting": [
+    "ops_transformer/moe_finalize_routing",
+    "ops_transformer/moe_finalize_routing_v2"
+  ],
+  "MoeGatingTopKSoftmax": [
+    "ops_transformer/moe_gating_top_k_softmax",
+    "ops_transformer/moe_gating_top_k_softmax_v2"
+  ],
+  "MoeReRouting": [
+    "ops_transformer/moe_re_routing"
+  ],
+  "QuantMatmul": [
+    "ops_legacy/quant_batch_matmul",
+    "ops_nn/quant_batch_matmul_v3",
+    "ops_nn/quant_batch_matmul_v4"
+  ],
+  "ROIAlign": [
+    "ops_legacy/roi_align"
+  ],
+  "ResizeBilinear": [
+    "ops_cv/upsample_bilinear2d",
+    "ops_legacy/resize_bilinear_v2"
+  ],
+  "RmsNorm": [
+    "ops_nn/rms_norm"
+  ],
+  "Scatter": [
+    "ops_legacy/scatter",
+    "ops_legacy/scatter_elements",
+    "ops_nn/linear_index",
+    "ops_nn/linear_index_v2",
+    "ops_nn/scatter_elements_v2"
+  ],
+  "Sigmoid": [
+    "ops_legacy/sigmoid"
+  ],
+  "Softmax": [
+    "ops_legacy/softmax_v2"
+  ],
+  "SparseFlashAttention": [
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2",
+    "ops_transformer/sparse_flash_attention"
+  ],
+  "SwiGlu": [
+    "ops_nn/swi_glu"
+  ],
+  "Transpose": [
+    "ops_legacy/transpose",
+    "ops_math/transpose_v2"
+  ],
+  "UnsortedSegmentSum": [
+    "ops_legacy/inplace_index_add",
+    "ops_legacy/unsorted_segment_sum",
+    "ops_nn/inplace_index_add_with_sorted",
+    "ops_nn/inplace_scatter_add"
+  ]
+}

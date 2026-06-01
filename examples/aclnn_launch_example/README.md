@@ -57,6 +57,13 @@ bash build.sh --soc=ascend910b
 
 ## 新增算子详细步骤
 
+> ℹ️ **关于待评测算子与内置算子**
+>
+> 为保证公平，评测机会禁用被评测算子的 CANN 内置 kernel 二进制（见 `scripts/anti_cheat/`），
+> 因此提交无法通过调用同名 stock 算子（`aclnn<Op>`）"蹭"内置实现——必须自带 kernel。
+> 注意区分：kernel 内的 `AscendC::Add` 等是**设备侧 intrinsic**，编译进你的 kernel，
+> 与内置算子二进制无关，不受影响。下面以 `Mul` 为例。
+
 ### 第一步：创建算子目录结构
 
 ```bash
@@ -139,7 +146,7 @@ class Mul {
 **op_api/aclnn_mul.cpp** - L2 API：
 ```cpp
 #include "aclnn_mul.h"
-// aclnnMulGetWorkspaceSize, aclnnMul实现
+// aclnnMulGetWorkspaceSize, aclnnMul 实现
 ```
 
 **op_api/mul.cpp** - L0 API：
@@ -281,7 +288,10 @@ endforeach()
 
 ### run包安装
 ```bash
-./dist/cann_bench_*.run --install
+# --quiet：非交互安装(Makeself 选项，自动接受 EULA)。勿用 --install(非法选项，会跳过安装)
+./dist/cann_bench_*.run --quiet
+# 安装后按提示将 op_api/lib 加入库搜索路径：
+export LD_LIBRARY_PATH=$ASCEND_HOME_PATH/opp/vendors/custom_ops/op_api/lib/:${LD_LIBRARY_PATH}
 ```
 
 ### wheel包安装
