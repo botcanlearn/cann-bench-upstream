@@ -29,6 +29,7 @@ from dataclasses import dataclass, asdict, field
 from ..config import Config, get_config
 from ..eval.evaluator import EvalCaseResult, EvalOperatorResult
 from .scoring import ScoringCalculator, OperatorScoreInfo
+from .setup_info import collect_setup_info
 
 
 @dataclass
@@ -131,6 +132,7 @@ class EvalReport:
     overall_score: float
     operators: List[OperatorReport]
     summary: Dict[str, Any]
+    setup_info: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -144,6 +146,7 @@ class EvalReport:
             'failed_cases': self.failed_cases,
             'overall_score': self.overall_score,
             'summary': self.summary,
+            'setup_info': self.setup_info,
             'operators': [asdict(op) for op in self.operators],
         }
 
@@ -219,6 +222,7 @@ class ReportGenerator:
             overall_score=overall_score,
             operators=operator_reports,
             summary=summary,
+            setup_info=collect_setup_info(self.config),
         )
 
     def save_json(self, report: EvalReport, filename: str = None) -> Path:
@@ -315,7 +319,27 @@ class ReportGenerator:
         return {
             'json': self.save_json(report),
             'markdown': self.save_markdown(report),
+            'html': self.save_html(report),
         }
+
+    def save_html(self, report: EvalReport, filename: str = None) -> Path:
+        """保存 HTML 报告"""
+        filename = filename or f"{self.eval_code}.html"
+        output_path = self.output_dir / filename
+
+        from .html_generator import render_html_report
+        from ..config import get_project_root
+
+        # Determine description path
+        index_path = get_project_root() / "tasks" / "description.html"
+
+        html_content = render_html_report(report, report.setup_info, str(index_path))
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+        print(f"[INFO] HTML报告已保存到: {output_path}")
+        return output_path
 
     def print_summary(self, report: EvalReport):
         """打印摘要"""

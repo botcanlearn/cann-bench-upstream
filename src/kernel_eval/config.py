@@ -44,6 +44,10 @@ class Config:
     reports_dir: str = ""        # 报告输出目录
     bench_name: str = "cann"    # 评测集名称
 
+    # AI 模型信息（由用户配置，用于报告摘要；为空时摘要中不体现）
+    agent_skill: str = ""
+    base_model: str = ""
+
     # 源码目录（AI生成的算子源码，通过参数传入）
     source_dir: str = ""        # AI生成的算子源码目录
 
