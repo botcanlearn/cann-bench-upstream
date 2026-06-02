@@ -671,7 +671,7 @@ def cmd_config(args):
     return 0
 
 
-def _evaluate_cases_batch(evaluator, cases, golden_loader, process_id="0"):
+def _evaluate_cases_batch(evaluator, cases, process_id="0"):
     """评测一批用例，打印进度，返回 EvalCaseResult 列表。
 
     从 cmd_eval_process 的 rel_paths / cases_file 两处重复循环中抽取。
@@ -681,8 +681,10 @@ def _evaluate_cases_batch(evaluator, cases, golden_loader, process_id="0"):
         case_id_str = case.get_case_id_str()
         print(f"[Process {process_id}] [{i}/{len(cases)}] {case_id_str}")
 
-        golden_func = golden_loader.get_golden_function(case.rel_path)
-        result = evaluator.evaluate_case(case, golden_func)
+        # AI 算子由 evaluator 内部通过 OperatorMatcher 从提交的 whl 解析；
+        # 不要在此预加载 golden 并传入，否则 golden 会被当成 AI 算子执行，
+        # 精度对比退化为 golden(npu) vs golden(cpu)，恒过。
+        result = evaluator.evaluate_case(case)
         case_results.append(result)
 
         status = "✅" if result.success else "❌"
@@ -809,7 +811,6 @@ def cmd_eval_process(args):
     case_spec_cls = bench_config.get_case_spec_cls()
     task_loader = bench_config.get_task_loader(tasks_root=config.tasks_root)
     case_loader = bench_config.get_case_loader(tasks_root=config.tasks_root)
-    golden_loader = bench_config.get_golden_loader(bench_root=config.tasks_root)
 
     config.bench_name = bench_name
     if args.reports_dir:
@@ -844,7 +845,7 @@ def cmd_eval_process(args):
 
                 # 评测每个用例
                 case_results = _evaluate_cases_batch(
-                    evaluator, cases, golden_loader, args.process_id)
+                    evaluator, cases, args.process_id)
 
                 results.append(_build_op_result_dict(rel_path, operator_name, case_results))
                 n_passed = sum(1 for r in case_results if r.success)
@@ -864,7 +865,7 @@ def cmd_eval_process(args):
             print(f"[Process {args.process_id}] 评测用例: {len(cases)} 个 ({operator})")
 
             case_results = _evaluate_cases_batch(
-                evaluator, cases, golden_loader, args.process_id)
+                evaluator, cases, args.process_id)
 
             results.append(_build_op_result_dict(rel_path, operator, case_results))
 

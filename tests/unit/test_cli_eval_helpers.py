@@ -71,38 +71,39 @@ class TestEvaluateCasesBatch:
         cases = [_make_case("t_1", case_num=1), _make_case("t_2", case_num=2)]
         mock_evaluator = MagicMock()
         mock_evaluator.evaluate_case.return_value = _make_eval_case_result("t_1", case_num=1)
-        mock_golden = MagicMock()
-        mock_golden.get_golden_function.return_value = lambda *a, **kw: None
 
-        results = _evaluate_cases_batch(mock_evaluator, cases, mock_golden, process_id="99")
+        results = _evaluate_cases_batch(mock_evaluator, cases, process_id="99")
 
         assert len(results) == 2
         assert mock_evaluator.evaluate_case.call_count == 2
 
-    def test_passes_golden_func_to_evaluator(self):
-        """golden_loader.get_golden_function 的结果应传给 evaluator"""
+    def test_does_not_pass_ai_op_func_to_evaluator(self):
+        """回归：评测时不得向 evaluator 传入第二个位置参数。
+
+        曾经的 bug 是把 golden_func 作为 ai_op_func 位置参数传入，导致
+        evaluator 跳过 load_ai_operator，直接把 golden 当成 AI 算子执行，
+        精度对比退化为 golden(npu) vs golden(cpu) 而恒过。
+        evaluate_case 必须只收到 case，由 evaluator 内部解析提交的算子。
+        """
         from kernel_eval.cli import _evaluate_cases_batch
 
         cases = [_make_case("t_1")]
         mock_evaluator = MagicMock()
         mock_evaluator.evaluate_case.return_value = _make_eval_case_result("t_1")
-        mock_golden = MagicMock()
-        fake_func = lambda: "golden"
-        mock_golden.get_golden_function.return_value = fake_func
 
-        _evaluate_cases_batch(mock_evaluator, cases, mock_golden, process_id="0")
+        _evaluate_cases_batch(mock_evaluator, cases, process_id="0")
 
         call_args = mock_evaluator.evaluate_case.call_args
-        assert call_args[0][0] == cases[0]
-        assert call_args[0][1] is fake_func
+        # 只有 case 一个位置参数，且没有 ai_op_func 关键字参数
+        assert call_args[0] == (cases[0],)
+        assert "ai_op_func" not in call_args[1]
 
     def test_empty_cases_returns_empty_list(self):
         """空用例列表应返回空结果"""
         from kernel_eval.cli import _evaluate_cases_batch
 
         mock_evaluator = MagicMock()
-        mock_golden = MagicMock()
-        results = _evaluate_cases_batch(mock_evaluator, [], mock_golden, process_id="0")
+        results = _evaluate_cases_batch(mock_evaluator, [], process_id="0")
         assert results == []
 
 

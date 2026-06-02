@@ -123,7 +123,7 @@ class Evaluator:
         """加载AI生成的算子函数（委托给 OperatorMatcher）"""
         return self.operator_matcher.load_ai_operator(operator_name)
 
-    def evaluate_case(self, case: CaseSpec, ai_op_func: Callable = None) -> EvalCaseResult:
+    def evaluate_case(self, case: CaseSpec, *, ai_op_func: Callable = None) -> EvalCaseResult:
         """评测单个用例。
 
         评测流程：
