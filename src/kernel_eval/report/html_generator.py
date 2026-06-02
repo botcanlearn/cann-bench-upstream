@@ -289,23 +289,48 @@ def _render_top_tables(ops: List[OperatorReport]) -> str:
 # Section 4: Operator Details
 # ---------------------------------------------------------------------------
 
-def _render_operator_table(ops: List[OperatorReport]) -> str:
-    rows = ''
-    for i, o in enumerate(ops, 1):
-        sp = o.avg_speedup
-        lv = o.rel_path[5:6] if o.rel_path and len(o.rel_path) > 5 else '1'
-        rows += f'''          <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>—</td><td>L{lv}</td><td>{o.total_cases}</td><td>{o.passed_cases}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_sp(sp)}">{_fsp(sp)}</td><td class="score-cell {_cls_score(o.score)}">{_fs(o.score)}</td></tr>\n'''
+def _get_category(rel_path: str) -> str:
+    """从 proto.yaml 获取算子 category"""
+    if not rel_path:
+        return '—'
+    try:
+        from kernel_eval.config import get_project_root
+        proto = get_project_root() / "tasks" / rel_path / "proto.yaml"
+        if proto.exists():
+            import yaml
+            with open(proto) as f:
+                data = yaml.safe_load(f)
+            return data.get('operator', {}).get('category', '—')
+    except Exception:
+        pass
+    return '—'
 
-    return f'''  <!-- ============================================================ -->
-  <!-- 4. OPERATOR DETAILS                                            -->
-  <!-- ============================================================ -->
-  <div class="section">
-    <h3><span class="sec-num">4.</span> Operator Details / 算子明细</h3>
 
-    <h4>4.1 Operator Results / 算子评测详情</h4>
+def _render_operator_tables(ops: List[OperatorReport]) -> str:
+    """按 Level 分组渲染算子详情表"""
+    from collections import defaultdict
+    levels = defaultdict(list)
+    for o in ops:
+        lv = int(o.rel_path[5:6]) if o.rel_path and len(o.rel_path) > 5 else 1
+        levels[lv].append(o)
+
+    lv_labels = {1: '基础算子', 2: '中级算子', 3: '高级算子', 4: '复杂算子'}
+    result = ''
+    table_idx = 4
+    for lv in sorted(levels):
+        lv_ops = levels[lv]
+        rows = ''
+        for i, o in enumerate(lv_ops, 1):
+            sp = o.avg_speedup
+            cat = _get_category(o.rel_path)
+            lv_s = o.rel_path[5:6] if o.rel_path and len(o.rel_path) > 5 else str(lv)
+            rows += f'''          <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>{cat}</td><td>L{lv_s}</td><td>{o.total_cases}</td><td>{o.passed_cases}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_sp(sp)}">{_fsp(sp)}</td><td class="score-cell {_cls_score(o.score)}">{_fs(o.score)}</td></tr>\n'''
+
+        label = lv_labels.get(lv, f'Level {lv}')
+        result += f'''    <h4>4.{lv} Level {lv} — {label}</h4>
     <div class="table-wrap">
       <table>
-        <caption>Table 4. Evaluated Operator Results</caption>
+        <caption>Table {table_idx}. Level {lv} Operator Results</caption>
         <thead><tr>
           <th>#</th><th>Operator</th><th>Category</th><th>Level</th><th>Cases</th><th>Passed</th><th>Pass Rate</th><th>Avg Precision</th><th>Avg Speedup</th><th>Total Score</th>
         </tr></thead>
@@ -313,7 +338,16 @@ def _render_operator_table(ops: List[OperatorReport]) -> str:
 {rows}        </tbody>
       </table>
     </div>
-  </div>
+'''
+        table_idx += 1
+
+    return f'''  <!-- ============================================================ -->
+  <!-- 4. OPERATOR DETAILS                                            -->
+  <!-- ============================================================ -->
+  <div class="section">
+    <h3><span class="sec-num">4.</span> Operator Details / 算子明细</h3>
+
+{result}  </div>
 
 '''
 
@@ -460,7 +494,7 @@ def render_html_report(
     html += '  </div>\n'
 
     # 4. Section 4: Operator Details
-    html += '\n' + _render_operator_table(report.operators)
+    html += '\n' + _render_operator_tables(report.operators)
 
     # 5. Certification Seal + closing tags
     html += '\n' + SEAL_HTML
