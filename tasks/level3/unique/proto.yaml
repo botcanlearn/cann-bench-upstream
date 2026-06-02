@@ -55,7 +55,7 @@ operator:
     - int64
     - uint8
   - name: inverse
-    description: 逆索引，满足 x = y[inverse]
+    description: 逆索引，满足 x = y[inverse]（仅当 return_inverse=True 时返回；return_inverse=False 时仅返回 y）
     dtype:
     - int64
   schema: unique(Tensor x, bool return_inverse) -> (Tensor y, Tensor inverse)

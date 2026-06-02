@@ -73,27 +73,10 @@ $$
 
 ## 3. 接口规范
 
-### 函数签名
+### 算子原型
 
 ```python
-def mla_pre(
-    token_x,           # [B, S, He] - 输入 hidden states, bfloat16
-    w_dq,              # [He, Hcq] - query 下投影权重, bfloat16
-    w_uq_qr,           # [Hcq, N*(D+Dr)] - query 上投影+RoPE 权重(合并), bfloat16
-    w_uk,              # [N, D, Hckv] - key 上投影权重(吸收到 query 侧), bfloat16
-    w_dkv_kr,          # [He, Hckv+Dr] - KV 下投影+Key RoPE 权重(合并), bfloat16
-    rmsnorm_gamma_cq,  # [Hcq] - c_q 的 RMSNorm gamma, bfloat16
-    rmsnorm_gamma_ckv, # [Hckv] - c_kv 的 RMSNorm gamma, bfloat16
-    rope_sin,          # [B, S, Dr] - RoPE 正弦(已按位置索引), bfloat16
-    rope_cos,          # [B, S, Dr] - RoPE 余弦(已按位置索引), bfloat16
-    n_heads,           # int - 注意力头数 N
-    rmsnorm_epsilon_cq=1e-5,   # float - c_q RMSNorm epsilon
-    rmsnorm_epsilon_ckv=1e-5,  # float - c_kv RMSNorm epsilon
-) -> Tuple[Tensor, Tensor, Tensor, Tensor]
-    # query:      [B, S, N, Hckv] - q^N (吸收后的 query), bfloat16
-    # query_rope: [B, S, N, Dr]   - q^R (query 位置编码), bfloat16
-    # c_kv:       [B, S, Hckv]    - k^C (压缩 KV), bfloat16
-    # k_rope:     [B, S, Dr]      - k^R (key 位置编码), bfloat16
+cann_bench.mla_prolog(Tensor token_x, Tensor w_dq, Tensor w_uq_qr, Tensor w_uk, Tensor w_dkv_kr, Tensor rmsnorm_gamma_cq, Tensor rmsnorm_gamma_ckv, Tensor rope_sin, Tensor rope_cos, int n_heads, float rmsnorm_epsilon_cq=1e-5, float rmsnorm_epsilon_ckv=1e-5) -> (Tensor query, Tensor query_rope, Tensor c_kv, Tensor k_rope)
 ```
 
 ### 输入参数
@@ -278,7 +261,7 @@ def apply_rope(x, rope_cos, rope_sin):
     return (xf * cos + rotated * sin).bfloat16()
 
 
-def mla_pre_golden(
+def mla_prolog(
     token_x, w_dq, w_uq_qr, w_uk, w_dkv_kr,
     rmsnorm_gamma_cq, rmsnorm_gamma_ckv,
     rope_sin, rope_cos, n_heads,

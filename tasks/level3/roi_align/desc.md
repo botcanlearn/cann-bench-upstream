@@ -161,7 +161,10 @@ def _bilinear_interpolate(input, roi_batch_ind, y, x, ymask, xmask):
     return outer_prod(hy, hx)*v1 + outer_prod(hy, lx)*v2 + outer_prod(ly, hx)*v3 + outer_prod(ly, lx)*v4
 
 
-def _roi_align_fallback(x, boxes, pooled_height, pooled_width, spatial_scale, sample_ratio, aligned):
+def _roi_align_fallback(
+    x, boxes, outputHeight, outputWidth, spatial_scale, sampling_ratio, aligned,
+):
+    """纯 Python fallback，对标 torchvision.ops.roi_align 的纯 Python 参考实现。"""
     orig_dtype = x.dtype
     x_fp32 = x.float(); boxes_fp32 = boxes.float()
     _, channels, height, width = x_fp32.size()
@@ -174,10 +177,10 @@ def _roi_align_fallback(x, boxes, pooled_height, pooled_width, spatial_scale, sa
     roi_width = roi_end_w - roi_start_w; roi_height = roi_end_h - roi_start_h
     if not aligned:
         roi_width = roi_width.clamp(min=1.0); roi_height = roi_height.clamp(min=1.0)
-    bin_size_h = roi_height / pooled_height; bin_size_w = roi_width / pooled_width
-    exact_sampling = sample_ratio > 0
-    roi_bin_grid_h = sample_ratio if exact_sampling else torch.ceil(roi_height / pooled_height)
-    roi_bin_grid_w = sample_ratio if exact_sampling else torch.ceil(roi_width / pooled_width)
+    bin_size_h = roi_height / outputHeight; bin_size_w = roi_width / outputWidth
+    exact_sampling = sampling_ratio > 0
+    roi_bin_grid_h = sampling_ratio if exact_sampling else torch.ceil(roi_height / outputHeight)
+    roi_bin_grid_w = sampling_ratio if exact_sampling else torch.ceil(roi_width / outputWidth)
     if exact_sampling:
         count = max(roi_bin_grid_h * roi_bin_grid_w, 1)
         iy = torch.arange(roi_bin_grid_h, device=x.device); ix = torch.arange(roi_bin_grid_w, device=x.device)
@@ -187,8 +190,8 @@ def _roi_align_fallback(x, boxes, pooled_height, pooled_width, spatial_scale, sa
         iy = torch.arange(height, device=x.device); ix = torch.arange(width, device=x.device)
         ymask = iy[None, :] < roi_bin_grid_h[:, None]; xmask = ix[None, :] < roi_bin_grid_w[:, None]
     def from_K(t): return t[:, None, None]
-    y = from_K(roi_start_h) + torch.arange(pooled_height, device=x.device)[None, :, None] * from_K(bin_size_h) + (iy[None, None, :] + 0.5).to(x_fp32.dtype) * from_K(bin_size_h / roi_bin_grid_h)
-    x_pos = from_K(roi_start_w) + torch.arange(pooled_width, device=x.device)[None, :, None] * from_K(bin_size_w) + (ix[None, None, :] + 0.5).to(x_fp32.dtype) * from_K(bin_size_w / roi_bin_grid_w)
+    y = from_K(roi_start_h) + torch.arange(outputHeight, device=x.device)[None, :, None] * from_K(bin_size_h) + (iy[None, None, :] + 0.5).to(x_fp32.dtype) * from_K(bin_size_h / roi_bin_grid_h)
+    x_pos = from_K(roi_start_w) + torch.arange(outputWidth, device=x.device)[None, :, None] * from_K(bin_size_w) + (ix[None, None, :] + 0.5).to(x_fp32.dtype) * from_K(bin_size_w / roi_bin_grid_w)
     val = _bilinear_interpolate(x_fp32, roi_batch_ind, y, x_pos, ymask, xmask)
     if not exact_sampling:
         val = torch.where(ymask[:, None, None, None, :, None], val, 0)
@@ -200,18 +203,18 @@ def _roi_align_fallback(x, boxes, pooled_height, pooled_width, spatial_scale, sa
 
 
 def roi_align(
-    x: torch.Tensor, boxes: torch.Tensor, pooled_height: int, pooled_width: int,
-    spatial_scale: float = 1.0, sample_ratio: int = -1, aligned: bool = False,
+    x: torch.Tensor, boxes: torch.Tensor, outputHeight: int, outputWidth: int,
+    spatial_scale: float, sampling_ratio: int = -1, aligned: bool = False,
 ) -> torch.Tensor:
     """
     池化层，用于非均匀输入尺寸的特征图
     公式: y = roi_align(x, boxes, output_size)
     """
     if HAS_TORCHVISION:
-        return _tv_roi_align(x, boxes, (pooled_height, pooled_width),
-            spatial_scale=spatial_scale, sampling_ratio=sample_ratio, aligned=aligned)
-    return _roi_align_fallback(x, boxes, pooled_height, pooled_width,
-        spatial_scale, sample_ratio, aligned)
+        return _tv_roi_align(x, boxes, (outputHeight, outputWidth),
+            spatial_scale=spatial_scale, sampling_ratio=sampling_ratio, aligned=aligned)
+    return _roi_align_fallback(x, boxes, outputHeight, outputWidth,
+        spatial_scale, sampling_ratio, aligned)
 ```
 
 ## 6. 额外信息

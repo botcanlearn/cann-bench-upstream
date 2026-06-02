@@ -38,7 +38,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.resize_bilinear(Tensor x, int[] output_size, bool align_corners=false, float[] scale_factor=null) -> Tensor y
+cann_bench.resize_bilinear(Tensor x, int[]? output_size=None, bool align_corners=false, float[]? scale_factor=None) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -46,9 +46,9 @@ cann_bench.resize_bilinear(Tensor x, int[] output_size, bool align_corners=false
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入张量，形状为 (N, C, H, W) |
-| output_size | int[] | 必选 | 输出尺寸 [output_height, output_width] |
+| output_size | int[] | None | 输出尺寸 [output_height, output_width]，与 scale_factor 二选一 |
 | align_corners | bool | false | 是否对齐角点 |
-| scale_factor | float[] | null | 缩放因子 [scale_height, scale_width]，与 output_size 互斥 |
+| scale_factor | float[] | None | 缩放因子 [scale_height, scale_width]，与 output_size 互斥 |
 
 ### 输出
 

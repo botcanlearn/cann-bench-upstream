@@ -43,4 +43,4 @@ operator:
     - float16
     - float32
     - bfloat16
-  schema: exp(Tensor x, float base, float scale, float shift) -> Tensor y
+  schema: exp(Tensor x, float base=-1.0, float scale=1.0, float shift=0.0) -> Tensor y

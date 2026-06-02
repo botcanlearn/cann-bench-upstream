@@ -25,11 +25,6 @@ operator:
     default: null
     description: 输出数据类型，取值 "float16"（默认）或 "bfloat16"
     required: false
-  - name: group_sizes
-    type: int[]
-    default: null
-    description: 分组量化粒度 [group_m, group_n, group_k]，取值范围 [0, 65535]
-    required: false
   inputs:
   - name: x1
     description: 左矩阵，int8
@@ -69,4 +64,4 @@ operator:
     - float16
     - bfloat16
     shape: '[..., m, n]'
-  schema: quant_matmul(Tensor x1, Tensor x2, Tensor scale, *, Tensor? pertoken_scale=None, Tensor? bias=None, str? output_dtype=None, int[]? group_sizes=None) -> Tensor out
+  schema: quant_matmul(Tensor x1, Tensor x2, Tensor scale, *, Tensor? pertoken_scale=None, Tensor? bias=None, str? output_dtype=None) -> Tensor out

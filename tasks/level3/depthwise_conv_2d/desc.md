@@ -161,7 +161,11 @@ def depthwise_conv_2d(
     stride_val = (stride[0], stride[1])
     padding_val = (padding[0], padding[1])
     dilation_val = (dilation[0], dilation[1])
-    
+
+    # spec 的 weight shape 是 [C, K_h, K_w]；torch.conv2d 要 [C_out, C_in/groups, K_h, K_w]，
+    # depthwise 下 C_in/groups = 1，unsqueeze 这个冗余维供 PyTorch API 用。
+    weight = weight.unsqueeze(1)
+
     y = torch.nn.functional.conv2d(x, weight, bias, stride=stride_val, padding=padding_val, dilation=dilation_val, groups=groups)
     return y
 ```

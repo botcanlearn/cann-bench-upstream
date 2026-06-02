@@ -12,7 +12,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import List, Optional, Union
+from typing import List, Optional
 
 """
 GroupedMatmul 算子 Torch Golden 参考实现
@@ -30,7 +30,7 @@ def grouped_matmul(
     group_list=None,  # List[int]，cumsum 语义；不加 type annotation 避免 param_builder 误判
     split_item: int = 0,
     transpose_weight: bool = False,
-) -> Union[torch.Tensor, List[torch.Tensor]]:
+) -> List[torch.Tensor]:
     """
     分组矩阵乘法算子
 
@@ -48,7 +48,7 @@ def grouped_matmul(
 
     Returns:
         split_item ∈ {0, 1}: List[Tensor] 长度 E，每个 [m_i, N]
-        split_item ∈ {2, 3}: 单 tensor [M, N]
+        split_item ∈ {2, 3}: List[Tensor] 长度 1，单 tensor [M, N]
     """
     assert x.dim() == 2, "x must be 2D [M, K]"
     assert weight.dim() == 3, "weight must be 3D [E, K, N] or [E, N, K]"
@@ -91,4 +91,4 @@ def grouped_matmul(
 
     if split_item in (0, 1):
         return [y[starts[g]:ends[g]] for g in range(E)]
-    return y
+    return [y]

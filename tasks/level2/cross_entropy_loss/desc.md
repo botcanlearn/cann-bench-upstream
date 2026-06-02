@@ -155,7 +155,7 @@ Parameters:
 
 
 def cross_entropy_loss(
-    x: torch.Tensor,
+    input: torch.Tensor,
     target: torch.Tensor,
     reduction: str = 'mean',
     ignore_index: int = -100
@@ -164,7 +164,7 @@ def cross_entropy_loss(
     计算交叉熵损失
 
     Args:
-        x: 输入 logits 张量，shape (N, C) 或 (N, C, d1, d2, ...)
+        input: 输入 logits 张量，shape (N, C) 或 (N, C, d1, d2, ...)
            N = batch size, C = 类别数（channel_first 约定）
            注意：输入应为 logits（未经 softmax），内部会自动应用 log_softmax
         target: 目标标签
@@ -185,12 +185,12 @@ def cross_entropy_loss(
         >>> N, C = 16, 10  # 16个样本，10个类别
         >>> x = torch.randn(N, C)
         >>> target = torch.randint(0, C, (N,))
-        >>> loss = cross_entropy_loss(x, target)
+        >>> loss = cross_entropy_loss(input, target)
     """
     # 直接调用 PyTorch 标准 CrossEntropyLoss 实现
     # torch.nn.functional.cross_entropy 内部会自动应用 log_softmax
     loss = torch.nn.functional.cross_entropy(
-        input=x,
+        input=input,
         target=target,
         reduction=reduction,
         ignore_index=ignore_index

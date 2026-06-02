@@ -58,10 +58,10 @@ operator:
     optional: true
   outputs:
   - name: y
-    description: 输出 tensor，split_item=2/3 时为单 tensor [M, N]，0/1 时为 List[Tensor] 长度 E（每组 [m_i, N]）
+    description: 输出 tensor list，split_item=0/1 时长度 E（每组 [m_i, N]），split_item=2/3 时长度 1（单 tensor [M, N]）
     dtype:
     - float16
     - bfloat16
     - float32
-    shape: '[M, N]'
-  schema: grouped_matmul(Tensor x, Tensor weight, Tensor? bias, int[] group_list, int split_item=0, bool transpose_weight=False) -> Tensor y
+    shape: 'List[Tensor]：split_item=0/1 时长度 E，每组 [m_i, N]；split_item=2/3 时长度 1，[M, N]'
+  schema: grouped_matmul(Tensor x, Tensor weight, Tensor? bias, int[] group_list, int split_item=0, bool transpose_weight=False) -> Tensor[] y

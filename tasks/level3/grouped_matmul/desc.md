@@ -48,7 +48,7 @@ cann_bench.grouped_matmul(
     int[] group_list,
     int split_item = 0,
     bool transpose_weight = False,
-) -> Tensor y
+) -> Tensor[] y
 ```
 
 ### 输入参数
@@ -66,7 +66,7 @@ cann_bench.grouped_matmul(
 
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
-| y | `[M, N]`（split_item=2/3）或 List[Tensor] 长度 E（0/1） | 与 x 相同 | 每组 `[m_i, N]` |
+| y | Tensor[] | 与 x 相同 | split_item=0/1 时长度 E（每组 `[m_i, N]`），split_item=2/3 时长度 1（`[M, N]`） |
 
 ### 数据类型
 
@@ -80,8 +80,8 @@ cann_bench.grouped_matmul(
 
 | split_item | 输出形式 | 说明 |
 |------------|---------|------|
-| 0 / 1 | `List[Tensor]` 长度 E | 按 `group_list` 把 `y` 切回每组 `[m_i, N]`；空组返回长度 0 的 `[0, N]` 张量 |
-| 2 / 3 | 单 Tensor `[M, N]` | 直接返回沿 M 轴拼接好的结果 |
+| 0 / 1 | `Tensor[]` 长度 E | 按 `group_list` 把 `y` 切回每组 `[m_i, N]`；空组返回长度 0 的 `[0, N]` 张量 |
+| 2 / 3 | `Tensor[]` 长度 1 | 返回沿 M 轴拼接好的 `[M, N]` 单元素列表 |
 
 ### 规则与约束
 
@@ -106,7 +106,7 @@ cann_bench.grouped_matmul(
 | `N`（输出维） | 1 ~ 8192 | cases.csv 实测 32 ~ 2048（含非 2 幂奇数 255 / 1023、非 2 幂 1056） |
 | `m_i`（每组 token 数） | 0 ~ `M` | cases.csv 实测 0 ~ 1751；允许 `m_i = 0` 表示空组（case_7 含 idx=2,5 两个空组） |
 | `group_list` | 长度 `E`，单调非递减，末值 = `M` | cumsum 语义；相邻相等表示空组；元素类型 int64 |
-| `split_item` | {0, 1, 2, 3} | cases.csv 实测 0 / 2 / 3；0/1 → `List[Tensor]` 长度 `E`，2/3 → 单 Tensor `[M, N]` |
+| `split_item` | {0, 1, 2, 3} | cases.csv 实测 0 / 2 / 3；0/1 → `Tensor[]` 长度 `E`，2/3 → `Tensor[]` 长度 1（`[M, N]`） |
 | `transpose_weight` | {false, true} | cases.csv 实测均覆盖；false → weight `[E, K, N]`，true → weight `[E, N, K]` 需对最后两维 transpose |
 | `bias` | 可选（None 或 `[E, N]`） | cases.csv 实测含 bias / 无 bias 均覆盖；提供时 dtype 与 x 一致或 fp32 |
 
@@ -147,7 +147,7 @@ cann_bench.grouped_matmul(
 
 ```python
 import torch
-from typing import List, Optional, Union
+from typing import List, Optional
 
 """
 GroupedMatmul 算子 Torch Golden 参考实现
@@ -165,7 +165,7 @@ def grouped_matmul(
     group_list=None,
     split_item: int = 0,
     transpose_weight: bool = False,
-) -> Union[torch.Tensor, List[torch.Tensor]]:
+) -> List[torch.Tensor]:
     M, K = x.shape
     E = weight.shape[0]
     if transpose_weight:
@@ -196,7 +196,7 @@ def grouped_matmul(
 
     if split_item in (0, 1):
         return [y[starts[g]:ends[g]] for g in range(E)]
-    return y
+    return [y]
 ```
 
 ## 6. 额外信息
@@ -214,15 +214,16 @@ weight = torch.randn(E, K, N, dtype=torch.float16, device="npu")
 bias = torch.randn(E, N, dtype=torch.float16, device="npu")
 group_list = [32, 64, 96, 128]   # cumsum 语义，最后值 = M
 
-# split_item=2: 输出单 tensor [M, N]
-y = cann_bench.grouped_matmul(x, weight, bias, group_list, split_item=2, transpose_weight=False)
-# y shape: [128, 512]
+# split_item=2: 输出 Tensor[] 长度 1，[M, N]
+y_list = cann_bench.grouped_matmul(x, weight, bias, group_list, split_item=2, transpose_weight=False)
+# y_list = [Tensor[128,512]]
+y = y_list[0]  # 取单 tensor
 
-# split_item=0: 输出 List[Tensor] 长度 E
+# split_item=0: 输出 Tensor[] 长度 E
 y_list = cann_bench.grouped_matmul(x, weight, bias, group_list, split_item=0, transpose_weight=False)
 # y_list = [Tensor[32,512], Tensor[32,512], Tensor[32,512], Tensor[32,512]]
 
 # transpose_weight=True: weight 形状 [E, N, K]，需 transpose 后 matmul
 weight_t = torch.randn(E, N, K, dtype=torch.float16, device="npu")
-y = cann_bench.grouped_matmul(x, weight_t, bias, group_list, split_item=2, transpose_weight=True)
+y_list = cann_bench.grouped_matmul(x, weight_t, bias, group_list, split_item=2, transpose_weight=True)
 ```

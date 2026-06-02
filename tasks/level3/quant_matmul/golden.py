@@ -12,7 +12,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import Optional, List
+from typing import Optional
 
 """
 QuantMatmul 算子 Torch Golden 参考实现
@@ -34,7 +34,6 @@ def quant_matmul(
     pertoken_scale: Optional[torch.Tensor] = None,
     bias: Optional[torch.Tensor] = None,
     output_dtype: Optional[str] = None,
-    group_sizes: Optional[List[int]] = None,
 ) -> torch.Tensor:
     """
     量化矩阵乘法
@@ -46,7 +45,6 @@ def quant_matmul(
         pertoken_scale: [m] per-token scale (float32)
         bias: [n] 或 [batch, 1, n] 偏置，int32 走 pre-scale，浮点走 post-scale
         output_dtype: 输出类型 "float16"（默认）或 "bfloat16"
-        group_sizes: 分组量化粒度 [group_m, group_n, group_k]
 
     Returns:
         out: [..., m, n] float16 或 bfloat16

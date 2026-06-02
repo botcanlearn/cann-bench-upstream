@@ -143,7 +143,7 @@ cann_bench.quant_matmul(
 
 ```python
 import torch
-from typing import Optional, List
+from typing import Optional
 
 def quant_matmul(
     x1: torch.Tensor,
@@ -152,7 +152,6 @@ def quant_matmul(
     pertoken_scale: Optional[torch.Tensor] = None,
     bias: Optional[torch.Tensor] = None,
     output_dtype: Optional[str] = None,
-    group_sizes: Optional[List[int]] = None,
 ) -> torch.Tensor:
     """
     量化矩阵乘法，对标 torch_npu.npu_quant_matmul（int8 输入，fp16/bf16 输出）

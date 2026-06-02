@@ -56,7 +56,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, TensorList? bias_ih, TensorList? bias_hh, Tensor? h0, Tensor? c0, int inputSize, int hiddenSize, int numLayers, bool bias, bool batchFirst, float dropout, bool bidirectional, int projSize) -> (Tensor y, Tensor hn, Tensor cn)
+cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, int inputSize, int hiddenSize, int numLayers, bool bias=True, bool batchFirst=False, float dropout=0.0, bool bidirectional=False, int projSize=0, TensorList? bias_ih=None, TensorList? bias_hh=None, Tensor? h0=None, Tensor? c0=None) -> (Tensor y, Tensor hn, Tensor cn)
 ```
 
 ### 输入参数说明
@@ -66,10 +66,6 @@ cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, TensorList
 | x | Tensor | 必选 | 输入序列张量，shape 为 (S, B, input_size) 或 (B, S, input_size) |
 | weight_ih | TensorList | 必选 | 输入到隐藏层权重列表，每层/每个方向独立 tensor。详见权重列表格式 |
 | weight_hh | TensorList | 必选 | 隐藏层到隐藏层权重列表，每个 tensor shape 为 (4*hiddenSize, hiddenSize) |
-| bias_ih | TensorList | None | 输入到隐藏层偏置列表（可选），每个 tensor shape 为 (4*hiddenSize) |
-| bias_hh | TensorList | None | 隐藏层到隐藏层偏置列表（可选），每个 tensor shape 为 (4*hiddenSize) |
-| h0 | Tensor | None | 初始隐藏状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
-| c0 | Tensor | None | 初始细胞状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
 | inputSize | int | 必选 | 输入特征维度 |
 | hiddenSize | int | 必选 | 隐藏状态特征维度 |
 | numLayers | int | 1 | 循环层数 |
@@ -78,6 +74,10 @@ cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, TensorList
 | dropout | float | 0.0 | Dropout 概率（层间） |
 | bidirectional | bool | false | 是否双向 LSTM |
 | projSize | int | 0 | 投影维度（>0 时启用 LSTM with Projection） |
+| bias_ih | TensorList | None | 输入到隐藏层偏置列表（可选），每个 tensor shape 为 (4*hiddenSize) |
+| bias_hh | TensorList | None | 隐藏层到隐藏层偏置列表（可选），每个 tensor shape 为 (4*hiddenSize) |
+| h0 | Tensor | None | 初始隐藏状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
+| c0 | Tensor | None | 初始细胞状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
 
 ### 权重列表格式
 
@@ -191,18 +191,18 @@ def lstm(
     x: torch.Tensor,
     weight_ih: List[torch.Tensor],
     weight_hh: List[torch.Tensor],
-    bias_ih: Optional[List[torch.Tensor]] = None,
-    bias_hh: Optional[List[torch.Tensor]] = None,
-    h0: Optional[torch.Tensor] = None,
-    c0: Optional[torch.Tensor] = None,
-    inputSize: int = 0,
-    hiddenSize: int = 0,
+    inputSize: int,
+    hiddenSize: int,
     numLayers: int = 1,
     bias: bool = True,
     batchFirst: bool = False,
     dropout: float = 0.0,
     bidirectional: bool = False,
-    projSize: int = 0
+    projSize: int = 0,
+    bias_ih: Optional[List[torch.Tensor]] = None,
+    bias_hh: Optional[List[torch.Tensor]] = None,
+    h0: Optional[torch.Tensor] = None,
+    c0: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     num_directions = 2 if bidirectional else 1
     effective_hidden_size = projSize if projSize > 0 else hiddenSize
@@ -261,14 +261,15 @@ weight_ih = [torch.randn(4 * hidden_size, input_size, dtype=torch.float32, devic
 weight_hh = [torch.randn(4 * hidden_size, hidden_size, dtype=torch.float32, device="npu")]
 bias_ih = [torch.randn(4 * hidden_size, dtype=torch.float32, device="npu")]
 bias_hh = [torch.randn(4 * hidden_size, dtype=torch.float32, device="npu")]
-y, hn, cn = cann_bench.lstm(x, weight_ih, weight_hh, bias_ih, bias_hh, None, None,
+y, hn, cn = cann_bench.lstm(x, weight_ih, weight_hh,
                                inputSize=input_size, hiddenSize=hidden_size, numLayers=1,
-                               bias=True, batchFirst=False, bidirectional=False)
+                               bias=True, batchFirst=False, bidirectional=False,
+                               bias_ih=bias_ih, bias_hh=bias_hh)
 
 # 双向 LSTM
 weight_ih_bi = [torch.randn(4 * hidden_size, input_size), torch.randn(4 * hidden_size, input_size)]
 weight_hh_bi = [torch.randn(4 * hidden_size, hidden_size), torch.randn(4 * hidden_size, hidden_size)]
-y_bi, hn_bi, cn_bi = cann_bench.lstm(x, weight_ih_bi, weight_hh_bi, None, None, None, None,
+y_bi, hn_bi, cn_bi = cann_bench.lstm(x, weight_ih_bi, weight_hh_bi,
                                         inputSize=input_size, hiddenSize=hidden_size, numLayers=1,
                                         bias=False, bidirectional=True)
 ```

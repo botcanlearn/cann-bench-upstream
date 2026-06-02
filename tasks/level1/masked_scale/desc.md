@@ -26,7 +26,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.masked_scale(Tensor x, Tensor mask, float scale) -> Tensor y
+cann_bench.masked_scale(Tensor x, Tensor mask, float scale=1.0) -> Tensor y
 ```
 
 ### 输入参数说明

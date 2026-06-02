@@ -40,7 +40,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.softmax(Tensor x, int dim) -> Tensor y
+cann_bench.softmax(Tensor x, int dim=-1) -> Tensor y
 ```
 
 ### 输入参数说明

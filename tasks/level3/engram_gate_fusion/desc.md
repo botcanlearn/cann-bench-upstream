@@ -76,7 +76,7 @@ $$
 ### 算子原型
 
 ```python
-torch_npu.npu_engram_gate_fusion(
+cann_bench.engram_gate_fusion(
     Tensor keys,
     Tensor hidden_states,
     Tensor value,
@@ -228,50 +228,66 @@ def engram_gate_fusion(
     B, L, HC, D = keys.shape
     state_len = (kernel_size - 1) * dilation
 
+    assert HC == hc_mult and D == hidden_size
+    assert hidden_states.shape == (B, L, HC, D)
+    assert value.shape == (B, L, D)
+    assert norm1_weight.shape == (HC, D)
+    assert norm2_weight.shape == (HC, D)
+    assert conv_norm_weight.shape == (HC, D)
+    assert conv_weight.shape == (HC * D, 1, kernel_size)
+    if conv_state is not None:
+        assert conv_state.shape == (B, HC * D, state_len)
+
+    input_dtype = keys.dtype
+    output_dtype = input_dtype
+    compute_dtype = torch.float32
+
     def rms_norm(x, w, eps):
-        # x: [B,L,HC,D], w: [HC,D]
-        w = w.view(1, 1, HC, D)
-        rms = x.float().pow(2).mean(dim=-1, keepdim=True).add(eps).sqrt()
-        return (x.float() / rms * w.float()).to(x.dtype)
+        x_hp = x.to(compute_dtype)
+        w_view = w.view(1, 1, HC, D).to(compute_dtype)
+        rms = x_hp.pow(2).mean(dim=-1, keepdim=True).add(eps).sqrt()
+        return x_hp / rms * w_view
 
     # Step 1 & 2: dual RMSNorm
     normed_keys = rms_norm(keys, norm1_weight, norm_eps)
     normed_qs = rms_norm(hidden_states, norm2_weight, norm_eps)
 
-    # Step 3: scaled dot-product gate (FP32 accumulation)
-    raw_gate = (normed_keys.float() * normed_qs.float()).sum(dim=-1) / math.sqrt(D)
+    # Step 3: scaled dot-product gate
+    raw_gate = (normed_keys * normed_qs).sum(dim=-1) / math.sqrt(D)
 
-    # Step 4: nonlinear + sigmoid gate (FP32 → activation dtype)
+    # Step 4: nonlinear + sigmoid gate
     safe_abs = raw_gate.abs().clamp_min(1e-6)
     gate = torch.sigmoid(safe_abs.sqrt() * raw_gate.sign()).unsqueeze(-1)
-    gate = gate.to(value.dtype)
 
     # Step 5: broadcast gating
-    value_gated = gate * value.unsqueeze(2)  # [B,L,HC,D]
+    value_hp = value.to(compute_dtype)
+    value_gated = gate * value_hp.unsqueeze(2)
 
-    # Step 6: ShortConv (causal dilated depthwise + SiLU)
+    # Step 6: ShortConv
     normed_vg = rms_norm(value_gated, conv_norm_weight, norm_eps)
     x = normed_vg.permute(0, 2, 3, 1).reshape(B, HC * D, L)
 
     if conv_state is None:
         x_cat = F.pad(x, (state_len, 0))
     else:
-        x_cat = torch.cat([conv_state.to(x.dtype), x], dim=-1)
+        x_cat = torch.cat([conv_state.to(compute_dtype), x], dim=-1)
 
-    conv_state_out = (x_cat[:, :, -state_len:].contiguous()
-                      if state_len > 0 else x_cat[:, :, :0])
+    conv_state_out_hp = x_cat[:, :, -state_len:].contiguous() if state_len > 0 else x_cat[:, :, :0]
 
     y = F.conv1d(
         x_cat,
-        conv_weight.to(x_cat.dtype),
+        conv_weight.to(compute_dtype),
         dilation=dilation,
         groups=HC * D,
     )
     y = F.silu(y)
-    conv_out = y.reshape(B, HC, D, L).permute(0, 3, 1, 2)  # [B,L,HC,D]
+    conv_out = y.reshape(B, HC, D, L).permute(0, 3, 1, 2)
 
     # Step 7: residual
-    output = value_gated + conv_out
+    output_hp = value_gated + conv_out
+
+    output = output_hp.to(output_dtype)
+    conv_state_out = conv_state_out_hp.to(output_dtype)
     return output, conv_state_out
 ```
 

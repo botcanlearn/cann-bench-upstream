@@ -41,7 +41,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.rms_norm(Tensor x, Tensor gamma, float epsilon) -> Tensor y
+cann_bench.rms_norm(Tensor x, Tensor gamma, float epsilon=1e-6) -> Tensor y
 ```
 
 ### 输入参数说明

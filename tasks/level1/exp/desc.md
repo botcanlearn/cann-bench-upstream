@@ -43,7 +43,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.exp(Tensor x, float base, float scale, float shift) -> Tensor y
+cann_bench.exp(Tensor x, float base=-1.0, float scale=1.0, float shift=0.0) -> Tensor y
 ```
 
 ### 输入参数说明

@@ -36,7 +36,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin, int layout, str rotaryMode) -> (Tensor query_out, Tensor key_out)
+cann_bench.apply_rotary_pos_emb(Tensor query, Tensor key, Tensor cos, Tensor sin, int layout=0, str rotaryMode="half") -> (Tensor query_out, Tensor key_out)
 ```
 
 ### 输入参数说明
@@ -166,6 +166,22 @@ def apply_rotary_pos_emb(
         >>> q_out, k_out = apply_rotary_pos_emb(query, key, cos, sin)
     """
 
+    # 检测输入 dtype
+    input_dtype = query.dtype
+
+    # FP16/BF16 输入需要升到 FP32 计算以保证精度
+    # FP32/FP64 输入保持原样计算
+    if input_dtype in (torch.float16, torch.bfloat16):
+        compute_dtype = torch.float32
+    else:
+        compute_dtype = input_dtype
+
+    # 转换到计算精度
+    query_compute = query.to(compute_dtype)
+    key_compute = key.to(compute_dtype)
+    cos_compute = cos.to(compute_dtype)
+    sin_compute = sin.to(compute_dtype)
+
     def rotate_half(x: torch.Tensor, mode: str) -> torch.Tensor:
         """
         旋转输入张量的一半维度
@@ -222,17 +238,33 @@ def apply_rotary_pos_emb(
             sin = sin.transpose(1, 2)
 
         # 重复 cos/sin 到完整的 head_dim
-        cos = cos.repeat(1, 1, 1, 2) if cos.dim() == 4 else cos.repeat_interleave(2, dim=-1)
-        sin = sin.repeat(1, 1, 1, 2) if sin.dim() == 4 else sin.repeat_interleave(2, dim=-1)
+        # interleaved 模式需要 cos/sin 也是 interleaved 格式
+        if mode == 'interleaved':
+            # interleaved 格式: [c1, c1, c2, c2, ...]
+            cos_full = torch.zeros_like(cos.repeat(1, 1, 1, 2))
+            sin_full = torch.zeros_like(sin.repeat(1, 1, 1, 2))
+            cos_full[..., ::2] = cos  # 偶数位置
+            cos_full[..., 1::2] = cos  # 奇数位置
+            sin_full[..., ::2] = sin
+            sin_full[..., 1::2] = sin
+            cos = cos_full
+            sin = sin_full
+        else:
+            # half 格式: [c1, c2, ..., c1, c2, ...]
+            cos = cos.repeat(1, 1, 1, 2)
+            sin = sin.repeat(1, 1, 1, 2)
 
         # 应用 RoPE 公式
         x_rotate = rotate_half(x, mode)
         return (x * cos) + (x_rotate * sin)
 
     # 对 query 和 key 分别应用 RoPE
-    query_out = apply_rotary(query, cos, sin, rotaryMode)
-    key_out = apply_rotary(key, cos, sin, rotaryMode)
+    query_out = apply_rotary(query_compute, cos_compute, sin_compute, rotaryMode)
+    key_out = apply_rotary(key_compute, cos_compute, sin_compute, rotaryMode)
 
+    # 转回原始 dtype
+    if input_dtype in (torch.float16, torch.bfloat16):
+        return query_out.to(input_dtype), key_out.to(input_dtype)
     return query_out, key_out
 ```
 

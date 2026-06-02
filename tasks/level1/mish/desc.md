@@ -121,10 +121,7 @@ def mish(
     Returns:
         输出张量，Mish激活结果
     """
-
-    softplus = torch.nn.functional.softplus(x)
-    y = x * torch.tanh(softplus)
-    return y
+    return torch.nn.functional.mish(x)
 ```
 
 ## 6. 额外信息

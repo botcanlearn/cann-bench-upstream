@@ -43,7 +43,11 @@ cann_bench.unique(Tensor x, bool return_inverse) -> (Tensor y, Tensor inverse)
 | 参数 | Shape | dtype | 描述 |
 |------|-------|-------|------|
 | y | 由唯一值数量决定 | 与输入 x 相同 | 输出张量，唯一值 |
-| inverse | 与输入 x 展平后相同 | int64 | 逆索引，满足 x = y[inverse]（当 return_inverse=True 时） |
+| inverse | 与输入 x 展平后相同 | int64 | 逆索引，满足 x = y[inverse]（仅当 return_inverse=True 时返回） |
+
+**返回行为**（对标 PyTorch `torch.unique`）：
+- `return_inverse=True`：返回 `(y, inverse)` 元组
+- `return_inverse=False`：仅返回 `y`（单个 Tensor）
 
 ### 数据类型
 
@@ -124,11 +128,12 @@ bit-exact 判定通过 `src/kernel_eval/utils/precision.py` 中浮点 `threshold
 
 ```python
 import torch
+from typing import Tuple, Union
 
 def unique(
     x: torch.Tensor,
     return_inverse: bool = False
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
     """
     去除张量中的重复元素
 
@@ -139,16 +144,14 @@ def unique(
         return_inverse: 是否返回逆索引，用于重建原始张量
 
     Returns:
-        y: 唯一值张量
-        inverse: 逆索引，满足 x = y[inverse] (当 return_inverse=True 时)
+        return_inverse=True:  (y, inverse)  唯一值 + 逆索引
+        return_inverse=False: y             仅唯一值
     """
 
+    y, inverse = torch.unique(x, return_inverse=True)
     if return_inverse:
-        y, inverse = torch.unique(x, return_inverse=True)
         return y, inverse
-    else:
-        y = torch.unique(x, return_inverse=False)
-        return y, None
+    return y
 ```
 
 ## 6. 额外信息
@@ -163,5 +166,5 @@ x = torch.tensor([1, 2, 3, 2, 1, 4, 3], dtype=torch.int32, device="npu")
 y, inverse = cann_bench.unique(x, True)  # y=[1,2,3,4], inverse=[0,1,2,1,0,3,2]
 
 x = torch.randn(1024, 1024, dtype=torch.float16, device="npu")
-y, _ = cann_bench.unique(x, False)  # 仅返回唯一值
+y = cann_bench.unique(x, False)  # 仅返回唯一值
 ```

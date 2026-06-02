@@ -12,7 +12,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 """
 Unique 算子 Torch Golden 参考实现

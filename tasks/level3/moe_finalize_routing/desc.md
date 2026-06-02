@@ -161,7 +161,7 @@ from copy import deepcopy
 
 def moe_finalize_routing(
     expanded_permuted_rows: torch.Tensor,
-    expanded_src_to_dst_row: torch.Tensor = None,
+    expanded_src_to_dst_row: torch.Tensor,
     skip1: torch.Tensor = None,
     skip2: torch.Tensor = None,
     bias: torch.Tensor = None,

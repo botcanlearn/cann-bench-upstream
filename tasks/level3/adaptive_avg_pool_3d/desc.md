@@ -29,7 +29,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.adaptive_avg_pool_3d(Tensor x, list[int] output_size) -> Tensor y
+cann_bench.adaptive_avg_pool_3d(Tensor x, int[] output_size) -> Tensor y
 ```
 
 ### 输入参数说明
@@ -37,7 +37,7 @@ cann_bench.adaptive_avg_pool_3d(Tensor x, list[int] output_size) -> Tensor y
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | x | Tensor | 必选 | 输入张量，shape 为 [N, C, D, H, W] 的5维张量 |
-| output_size | list[int] | 必选 | 输出尺寸，格式为 [output_d, output_h, output_w] |
+| output_size | int[] | 必选 | 输出尺寸，格式为 [output_d, output_h, output_w] |
 
 ### 输出
 
