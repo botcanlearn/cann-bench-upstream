@@ -113,6 +113,10 @@ def create_parser() -> argparse.ArgumentParser:
                              choices=['Level1', 'Level2'],
                              help='Profiler 级别（默认: Level1）。Level1 产出 47 列 CSV，'
                                   'Level2 增加更详细的 AICPU 采集。')
+    eval_parser.add_argument('--eval-seed', type=int, default=0,
+                             help='输入生成确定性种子（默认: 0 = 基于case_id自动确定）。'
+                                  '改变 seed 可获得不同但可复现的输入。'
+                                  '设为 -1 表示纯随机模式（不推荐，会导致 flaky 测试）。')
     # 内部开关：子进程模式下由父进程传入，不要手工设置
     eval_parser.add_argument('--skip-install', action='store_true',
                              help=argparse.SUPPRESS)
@@ -235,6 +239,10 @@ def _create_config_from_args(args, bench_root: str) -> Config:
         config.enable_profiler = False
     if hasattr(args, 'profiler_level'):
         config.profiler_level = args.profiler_level
+
+    # 评测种子：-1 表示纯随机（转换为 None），其他值为确定性种子
+    eval_seed_raw = getattr(args, 'eval_seed', 0)
+    config.eval_seed = None if eval_seed_raw == -1 else eval_seed_raw
 
     set_config(config)
     return config

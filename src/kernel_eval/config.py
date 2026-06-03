@@ -97,6 +97,12 @@ class Config:
     # 可通过注册机制添加自定义判断器
     checker_name: str = "relative_error"
 
+    # 输入生成确定性种子
+    # 0（默认）: 基于case_id自动确定种子，确保可复现
+    # N（正整数）: 用 (N + case_id_hash) % 2^31 作为种子，不同N给出不同但可复现的输入
+    # None: 纯随机模式（不推荐，会导致 flaky 测试）。CLI中通过 --eval-seed -1 启用。
+    eval_seed: Optional[int] = 0
+
     def __post_init__(self):
         """初始化后自动设置默认路径"""
         if not self.tasks_root:

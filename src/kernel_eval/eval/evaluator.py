@@ -75,12 +75,14 @@ class Evaluator:
         self.device_manager = DeviceManager(device_config)
 
         # 初始化性能评测器
+        perf_strategy = self.bench_config.get_perf_metric_strategy()
         self.perf_evaluator = PerfEvaluator(
             config=self.config,
             device_manager=self.device_manager,
             warmup=self.config.warmup,
             repeat=self.config.repeat,
             archive_prof=True,
+            perf_metric_strategy=perf_strategy,
         )
 
         # 初始化算子执行器
@@ -142,11 +144,26 @@ class Evaluator:
             # 1. 获取golden函数
             golden_func = self.golden_loader.get_golden_function(case.rel_path)
 
-            # 2. 生成输入数据
+            # 1.5 计算确定性种子（默认始终开启，确保评测可复现）
+            # eval_seed=0: 基于 case_id hash；eval_seed=N: 用 N+case_id hash
+            # eval_seed=None: 纯随机模式（不推荐，会导致 flaky 测试）
+            # 注意：使用 hashlib 而非 Python hash()，因为 Python 3 的 hash()
+            # 在跨进程时不可复现（PYTHONHASHSEED 随机化）。
+            if self.config.eval_seed is not None:
+                import hashlib
+                # SHA256 hash of case_id_str, 取前 8 字节作为 int，确保跨进程可复现
+                digest = hashlib.sha256(case_id_str.encode('utf-8')).digest()
+                deterministic_hash = int.from_bytes(digest[:8], byteorder='big') % (2**31)
+                case_seed = (self.config.eval_seed + deterministic_hash) % (2**31)
+            else:
+                case_seed = None  # 纯随机模式
+
+            # 2. 生成输入数据（使用确定性种子确保可复现）
             input_tensors = self.data_generator.generate_input_tensors_from_case(
                 input_shapes=case.input_shapes,
                 dtypes=case.dtypes,
                 value_ranges=case.value_ranges,
+                seed=case_seed,
             )
 
             # 2.5 调用 get_input 预处理（如果存在）
@@ -308,6 +325,7 @@ class Evaluator:
                     merged_thresholds=merged_thresholds,
                     ignore_output_indices=ignore_output_indices,
                     first_result=accuracy_result,
+                    case_seed=case_seed,
                 )
 
             # 填充 output_results 中的输出名称
@@ -716,21 +734,26 @@ class Evaluator:
 
     def _retry_with_fresh_inputs(self, case, golden_func, ai_op_func, dtype,
                                   merged_thresholds, ignore_output_indices,
-                                  first_result):
+                                  first_result, case_seed=None):
         """防作弊二次验证：用一组新鲜（微扰过的）输入再跑一遍 golden + AI，
         两次都过才记为 pass；任何一次失败把 first_result 替换成失败 result。
 
         启用条件：Config.enable_accuracy_retry=True 且第一轮已通过。
         参考 AccuracyEvaluator.evaluate_with_retry 的设计思路。
+
+        Args:
+            case_seed: 第一轮使用的确定性种子。二次验证使用偏移后的种子。
         """
         try:
             import torch
 
-            # 生成新鲜输入（DataGenerator 每次调用 seed 不同）
+            # 二次验证使用偏移种子（+1），确保输入不同但可复现
+            retry_seed = (case_seed + 1) if case_seed is not None else None
             fresh_inputs = self.data_generator.generate_input_tensors_from_case(
                 input_shapes=case.input_shapes,
                 dtypes=case.dtypes,
                 value_ranges=case.value_ranges,
+                seed=retry_seed,
             )
 
             # 微扰：浮点输入加 0.01，防止 seed 偶然重合导致两次 inputs 相同

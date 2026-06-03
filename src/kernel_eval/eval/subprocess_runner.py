@@ -129,6 +129,10 @@ class SubprocessRunner:
         device_id = getattr(cfg, "device_id", None)
         if device_id is not None:
             flags += ["--device-id", str(device_id)]
+        # 透传评测种子（确保子进程输入生成可复现）
+        eval_seed = getattr(cfg, "eval_seed", None)
+        if eval_seed is not None:
+            flags += ["--eval-seed", str(eval_seed)]
         return flags
 
     def run_operator_subprocess(

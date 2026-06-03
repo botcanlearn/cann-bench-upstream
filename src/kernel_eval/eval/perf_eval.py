@@ -18,19 +18,15 @@
 1. NPU 模式下使用 torch_npu.profiler 采集性能数据
 2. 支持 NPU 升频 + L2 cache 清空，保证测量一致性
 3. 非 profiler 路径不做墙钟计时，perf_result 由调用侧置空
-4. 按 CANN_BENCH_PERF_SOURCE 解析 kernel_details.csv 或 trace_view.json
+4. 定位 profiler 产出文件（CSV + trace_view），交由 PerfMetricStrategy 解析
 5. 归档 profiling 中间目录到 reports/prof_data/{rel_path}/{caseid}/
 
 参考evaluation/core/profiler_manager.py
 """
 
-import csv
-import json
 import logging
 import os
-import re
 import shutil
-import sys
 import tempfile
 import traceback
 from typing import Optional, Dict, Any, Tuple, List, Callable
@@ -44,59 +40,15 @@ from ..utils.device_manager import DeviceManager
 from ..config import Config, get_config
 from .input_pool import InputPool
 from ..base.result import PerfResult, compute_speedup
+from ..base.perf_strategy import PerfMetricStrategy, ProfFileLocations
 
-
+# Deprecated: CANN_BENCH_PERF_SOURCE 环境变量已废弃。
+# 请改用 BenchConfig.perf_metric_strategy 配置策略。
+# 若检测到该环境变量，启动时打印一次 deprecation warn。
+# 注意：TraceViewStrategy 仅适用于使用 tilefwk/PYPTO 实现的算子，
+# tilefwk/PYPTO 事件的存在取决于算子实现方式，而非 profiler level。
 PERF_SOURCE_ENV = "CANN_BENCH_PERF_SOURCE"
-PERF_SOURCE_KERNEL_DETAILS = "kernel_details"
-PERF_SOURCE_TRACE_VIEW = "trace_view"
-
-# Warmup kernel 精确形状特征（用于过滤）
-# F111: 硬编码形状会在 CANN / 驱动升级改 warmup 实现时静默失效（过滤命中率=0
-# 意味着 warmup 时间混入了实测，性能数据偏低）。允许 env 覆盖 +
-# _maybe_warn_warmup_filter_inactive 校验整体命中率。
-WARMUP_MATMUL_SHAPE = os.environ.get(
-    "CANN_BENCH_WARMUP_MATMUL_SHAPE", '"10240,10240;10240,10240"'
-)
-WARMUP_REDUCE_SHAPE = os.environ.get(
-    "CANN_BENCH_WARMUP_REDUCE_SHAPE", '"96,1024,1024;3"'
-)
-
-# 跟踪 warmup 过滤命中率：在某轮评测开始时清零，结束时检查
-_WARMUP_FILTER_STATS = {"checked": 0, "matched": 0}
-
-
-def _maybe_warn_warmup_filter_inactive() -> None:
-    """F111: 若过滤被频繁调用但命中率=0，提示 warmup 形状可能已过期。
-
-    调用方在每轮评测结束时调用。only warn once per process。
-    """
-    if _WARMUP_FILTER_STATS["checked"] >= 20 and _WARMUP_FILTER_STATS["matched"] == 0:
-        if not getattr(_maybe_warn_warmup_filter_inactive, "_warned", False):
-            _logger.warning(
-                "perf_eval: warmup-shape filter checked %d kernels but matched 0; "
-                "CANN/驱动可能已升级 warmup 形状（旧值 MATMUL=%r / REDUCE=%r）。"
-                "建议设置 env CANN_BENCH_WARMUP_MATMUL_SHAPE / "
-                "CANN_BENCH_WARMUP_REDUCE_SHAPE 覆盖。",
-                _WARMUP_FILTER_STATS["checked"], WARMUP_MATMUL_SHAPE, WARMUP_REDUCE_SHAPE,
-            )
-            _maybe_warn_warmup_filter_inactive._warned = True
-
-
-def _perf_source_from_env() -> str:
-    raw = os.environ.get(PERF_SOURCE_ENV, PERF_SOURCE_KERNEL_DETAILS)
-    value = str(raw).strip().lower().replace("-", "_")
-    if value in ("", "kernel", "kernel_detail", PERF_SOURCE_KERNEL_DETAILS, "csv"):
-        return PERF_SOURCE_KERNEL_DETAILS
-    if value in ("trace", PERF_SOURCE_TRACE_VIEW, "pypto"):
-        return PERF_SOURCE_TRACE_VIEW
-
-    _logger.warning(
-        "unsupported %s=%r; falling back to %s",
-        PERF_SOURCE_ENV,
-        raw,
-        PERF_SOURCE_KERNEL_DETAILS,
-    )
-    return PERF_SOURCE_KERNEL_DETAILS
+_deprecation_warned = False
 
 
 # ---------------------------------------------------------------------------
@@ -194,18 +146,19 @@ class PerfEvaluator:
 
     使用 torch_npu.profiler 采集 NPU 性能数据。
     默认使用 Level1（47列CSV），支持 Level2 配置。
-    通过解析 kernel_details.csv 获取设备内核时间，使用精确形状匹配过滤 warmup kernel。
+    文件定位后交由 PerfMetricStrategy 解析性能指标。
     每次测量前执行 MatMul + ReduceMax 升频并清空 L2 cache。
 
     使用方法：
         config = Config(profiler_level="Level1")
-        perf_eval = PerfEvaluator(config=config, device_manager=device_mgr)
+        perf_eval = PerfEvaluator(config=config, device_manager=device_mgr,
+                                  perf_metric_strategy=KernelDetailsStrategy())
         outputs, perf_result = perf_eval.run_profiled(case_id, func, *args)
     """
 
     def __init__(self, config: Config = None, device_manager: DeviceManager = None,
                  warmup: int = 3, repeat: int = 5, archive_prof: bool = True,
-                 freq_boost: bool = True):
+                 freq_boost: bool = True, perf_metric_strategy: PerfMetricStrategy = None):
         """
         Args:
             config: 配置对象（含 profiler_level）
@@ -214,6 +167,7 @@ class PerfEvaluator:
             repeat: 采集次数
             archive_prof: 是否归档profiling数据
             freq_boost: 是否启用NPU升频清cache
+            perf_metric_strategy: 性能指标解析策略（负责文件解析，不 fallback）
         """
         self.config = config or get_config()
         self.device_manager = device_manager
@@ -221,6 +175,7 @@ class PerfEvaluator:
         self.repeat = repeat
         self.archive_prof = archive_prof
         self.freq_boost = freq_boost
+        self.perf_metric_strategy = perf_metric_strategy
 
         # 性能数据归档目录
         self.prof_data_dir = os.path.join(self.config.reports_dir, "prof_data")
@@ -228,10 +183,16 @@ class PerfEvaluator:
         # Warmup tensors（升频清cache）
         self._warmup_tensors: Optional[Tuple] = None
 
-        # 跨 case 状态：上一个 profiler session 是否失败（诊断用途）。
-        # run_profiled() 在 CSV 搜索后更新此值，用于诊断日志追踪。
-        # TODO: evaluator 重构为"先精度后性能"后，此字段可移除（精度验证自然门卫）。
-        self._last_prof_failed: bool = True
+        # Deprecation warn: CANN_BENCH_PERF_SOURCE 环境变量已废弃
+        global _deprecation_warned
+        if not _deprecation_warned and os.environ.get(PERF_SOURCE_ENV):
+            _logger.warning(
+                "perf_eval: CANN_BENCH_PERF_SOURCE=%r is DEPRECATED — "
+                "please use BenchConfig.perf_metric_strategy instead. "
+                "This env var will be ignored.",
+                os.environ.get(PERF_SOURCE_ENV),
+            )
+            _deprecation_warned = True
 
     def _prepare_warmup_tensors(self):
         """准备升频清cache的tensors
@@ -571,57 +532,35 @@ class PerfEvaluator:
             result.metadata["profile_exception_traceback"] = traceback.format_exc()
 
         try:
-            perf_source = _perf_source_from_env()
-            result.metadata["perf_source"] = perf_source
+            # 定位 profiler 产出文件（只返回路径，不做解析）
+            prof_files = self._locate_prof_files(prof_dir)
 
-            if perf_source == PERF_SOURCE_TRACE_VIEW:
-                if not self._normalize_trace_view_result(result, prof_dir) and not result.error_msg:
-                    result.error_msg = "no valid trace_view metrics produced"
-            else:
-                # Locate kernel_details.csv — check common locations first.
-                csv_file = None
-
-                # 1) Directly in prof_dir
-                direct = os.path.join(prof_dir, "kernel_details.csv")
-                if os.path.isfile(direct):
-                    csv_file = direct
-                else:
-                    # 2) One level down (torch_npu wraps in a timestamped subdir)
-                    try:
-                        for entry in os.listdir(prof_dir):
-                            candidate = os.path.join(prof_dir, entry, "kernel_details.csv")
-                            if os.path.isfile(candidate):
-                                csv_file = candidate
-                                break
-                    except OSError:
-                        pass
-
-                    # 3) Fallback: deeper walk (should rarely be needed)
-                    if csv_file is None:
-                        for root, dirs, files in os.walk(prof_dir):
-                            for f in files:
-                                if f == "kernel_details.csv":
-                                    csv_file = os.path.join(root, f)
-                                    break
-                            if csv_file:
-                                break
-
-                if csv_file:
-                    op_times, total_kernel_us = self._parse_kernel_details_csv(csv_file)
-                    self._normalize_result(result, op_times, total_kernel_us)
-                elif not result.error_msg:
-                    result.error_msg = "no kernel_details.csv produced"
-
-            # 诊断日志：记录 CSV 搜索结果和 PROF_* 目录状态
+            # 诊断日志：记录文件定位结果
             prof_dirs = [e for e in os.listdir(prof_dir)
                          if e.startswith("PROF") and os.path.isdir(os.path.join(prof_dir, e))]
-            _logger.info("perf_eval: case %s — csv_found=%s, PROF dirs: %s, error_msg=%s",
-                         case_id, csv_file, prof_dirs, result.error_msg)
+            _logger.info(
+                "perf_eval: case %s — prof_files: csv=%s, trace_view=%s, "
+                "ascend_output=%s, PROF dirs: %s",
+                case_id, prof_files.csv_path, prof_files.trace_view_path,
+                prof_files.ascend_output_dir, prof_dirs,
+            )
 
-            # 更新跨 case 状态：下一个 case 是否需要做 pre-flight 检查。
-            # CSV 找到 → profiler session 正常 → 下一个 case 无需 pre-flight。
-            # CSV 缺失 → profiler session 异常 → 下一个 case 需要 pre-flight 防污染。
-            self._last_prof_failed = (csv_file is None)
+            # 交由 strategy 解析性能数据
+            if self.perf_metric_strategy:
+                result = self.perf_metric_strategy.parse(prof_files, result)
+            else:
+                result.elapsed_us = 0.0
+                result.error_msg = "no perf_metric_strategy configured"
+
+            _logger.info(
+                "perf_eval: case %s — strategy=%s, elapsed_us=%.2f, "
+                "data_source=%s, error_msg=%s",
+                case_id,
+                self.perf_metric_strategy.get_strategy_name() if self.perf_metric_strategy else "none",
+                result.elapsed_us,
+                result.metadata.get("data_source", "?"),
+                result.error_msg,
+            )
 
         finally:
             # Clean up temp dir (non-archive mode).
@@ -655,45 +594,74 @@ class PerfEvaluator:
 
         return case_id or "unknown", "0"
 
-    def _normalize_result(self, result: PerfResult,
-                           op_times: Dict[str, Dict[str, float]],
-                           total_kernel_us: float):
-        """Normalize op_times and populate result.
+    def _locate_prof_files(self, prof_dir: str) -> ProfFileLocations:
+        """定位 profiler 产出文件，不做任何解析。
 
-        Note: _parse_kernel_details_csv 已经返回中位数，无需再除以 repeat。
+        搜索策略：
+        1. 三层搜索 kernel_details.csv（direct → one-level → walk）
+        2. 从 CSV 路径推算 ASCEND_PROFILER_OUTPUT 目录 + trace_view.json
+        3. Fallback: 找 ascend* 子目录 → ASCEND_PROFILER_OUTPUT/
+
+        Returns:
+            ProfFileLocations（csv_path, trace_view_path, ascend_output_dir）
         """
-        for cat in op_times:
-            for name in op_times[cat]:
-                op_times[cat][name] = round(op_times[cat][name], 2)
-        total_kernel_us = round(total_kernel_us, 2)
-        result.op_times = op_times
-        result.elapsed_us = total_kernel_us
-        result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
+        csv_file = None
+        ascend_output_dir = None
 
-    def _normalize_trace_view_result(self, result: PerfResult, prof_dir: str) -> bool:
-        trace_result = self.parse_trace_view_prof(prof_dir)
-        prof_metrics = trace_result.get("prof", {}) if isinstance(trace_result, dict) else {}
-        if not isinstance(prof_metrics, dict):
-            return False
+        # 三层 CSV 搜索
+        direct = os.path.join(prof_dir, "kernel_details.csv")
+        if os.path.isfile(direct):
+            csv_file = direct
+        else:
+            try:
+                for entry in os.listdir(prof_dir):
+                    candidate = os.path.join(prof_dir, entry, "kernel_details.csv")
+                    if os.path.isfile(candidate):
+                        csv_file = candidate
+                        break
+            except OSError:
+                pass
 
-        try:
-            elapsed_us = float(prof_metrics.get("aicore_e2e", 0))
-        except (TypeError, ValueError):
-            return False
-        if elapsed_us <= 0:
-            return False
+            if csv_file is None:
+                for root, dirs, files in os.walk(prof_dir):
+                    for f in files:
+                        if f == "kernel_details.csv":
+                            csv_file = os.path.join(root, f)
+                            break
+                    if csv_file:
+                        break
 
-        normalized_prof = {}
-        for name, value in prof_metrics.items():
-            if isinstance(value, (int, float)):
-                normalized_prof[name] = round(float(value), 2)
-            else:
-                normalized_prof[name] = value
+        # 从 CSV 路径推算 ASCEND_PROFILER_OUTPUT + trace_view
+        if csv_file:
+            ascend_output_dir = os.path.dirname(csv_file)
 
-        result.op_times = {PERF_SOURCE_TRACE_VIEW: normalized_prof}
-        result.elapsed_us = round(elapsed_us, 2)
-        result.metadata["elapsed_us_source"] = "trace_view.aicore_e2e"
-        return True
+        # Fallback: 只找 ascend* 目录（无 CSV 时）
+        if not ascend_output_dir:
+            try:
+                for entry in os.listdir(prof_dir):
+                    if "ascend" in entry:
+                        candidate_dir = os.path.join(prof_dir, entry, "ASCEND_PROFILER_OUTPUT")
+                        if os.path.isdir(candidate_dir):
+                            ascend_output_dir = candidate_dir
+                            break
+            except OSError:
+                pass
+
+        # 确定 trace_view.json 路径
+        trace_view_path = None
+        if ascend_output_dir:
+            tv_candidate = os.path.join(ascend_output_dir, "trace_view.json")
+            if os.path.isfile(tv_candidate):
+                trace_view_path = tv_candidate
+
+        return ProfFileLocations(
+            ascend_output_dir=ascend_output_dir,
+            csv_path=csv_file,
+            trace_view_path=trace_view_path,
+            prof_dir=prof_dir,
+        )
+
+    # --- 以下方法已迁移到 PerfMetricStrategy，保留仅用于兼容性 ---
 
     def wait_all(self):
         """兼容旧接口，当前为同步解析，无需等待。"""
@@ -714,160 +682,29 @@ class PerfEvaluator:
             # F047: 不再静默吞 — debug 日志便于排查 profiler shutdown 失败
             _logger.debug("MultiProcessPool close_pool(wait=False) failed: %s", e)
 
-    def _parse_kernel_details_csv(self, csv_file: str) -> Tuple[Dict[str, Dict[str, float]], float]:
-        """解析 kernel_details.csv，提取 NPU kernel 执行时间（取中位数）
-
-        Level1/Level2 产出的 kernel_details.csv 包含 47 列，包括：
-        - Step Id: 步骤ID（warmup阶段可能为空，需要过滤）
-        - Type: 算子类型
-        - Input Shapes: 输入形状（用于精确过滤 warmup kernel）
-        - Duration(us): 执行时间
-
-        Warmup kernel 过滤：
-        1. 排除 Step Id 为空的 kernel（profiler 内部记录）
-        2. 精确形状匹配 MatMulV3/ReduceMax 升频清cache kernel
-
-        性能指标计算：
-        - 对每个 kernel，收集所有 Step 的时间值，取中位数（减少异常值影响）
-        - 总时间为所有 kernel 中位数之和
-        """
-        if not csv_file or not os.path.exists(csv_file):
-            return {}, 0.0
-
-        # 按 Step 分组收集每个 kernel 的时间
-        step_kernel_times: Dict[str, Dict[str, List[float]]] = {}
-
-        try:
-            with open(csv_file, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    # 获取 Step Id，过滤无效/空值（warmup阶段残留）
-                    step_id = row.get('Step Id', '').strip()
-                    if not step_id:
-                        continue
-
-                    # 获取执行时间
-                    duration_str = row.get('Duration(us)', '0')
-                    try:
-                        duration = float(duration_str)
-                    except (ValueError, TypeError):
-                        continue
-
-                    if duration <= 0:
-                        continue
-
-                    # 获取算子名称和输入形状
-                    op_type = row.get('Type', '')
-                    input_shapes = row.get('Input Shapes', '')
-
-                    # 精确过滤 warmup kernel（升频清cache）
-                    if self._is_warmup_kernel(op_type, input_shapes):
-                        continue
-
-                    # 记录 kernel 名称
-                    name = row.get('Name', op_type)
-
-                    # 按 step 和 kernel 收集时间列表
-                    if step_id not in step_kernel_times:
-                        step_kernel_times[step_id] = {}
-                    if name not in step_kernel_times[step_id]:
-                        step_kernel_times[step_id][name] = []
-                    step_kernel_times[step_id][name].append(duration)
-
-        except Exception as parse_err:
-            # CSV 文件为空、列缺失、编码错误等都会进到这里。
-            # 静默吞掉会让外层得到 elapsed_us=0 且无任何提示——必须可见。
-            print(f"[WARN] kernel_details.csv 解析失败 ({csv_file}): "
-                  f"{type(parse_err).__name__}: {parse_err}")
-
-        if not step_kernel_times:
-            return {}, 0.0
-
-        # 收集每个 kernel 在所有 Step 中的时间，然后取中位数
-        all_kernel_times: Dict[str, List[float]] = {}
-        for step_id, kernels in step_kernel_times.items():
-            for name, times in kernels.items():
-                # 每个 kernel 在该 step 的总时间（可能有多个同名 kernel）
-                step_total = sum(times)
-                if name not in all_kernel_times:
-                    all_kernel_times[name] = []
-                all_kernel_times[name].append(step_total)
-
-        # 计算每个 kernel 的时间中位数
-        device_kernels: Dict[str, float] = {}
-        total_kernel_us = 0.0
-
-        for name, times in all_kernel_times.items():
-            median_time = self._median(times)
-            device_kernels[name] = round(median_time, 2)
-            total_kernel_us += median_time
-
-        op_times = {}
-        if device_kernels:
-            op_times["device_kernels"] = device_kernels
-
-        return op_times, total_kernel_us
-
-    def _median(self, values: List[float]) -> float:
-        """计算中位数"""
-        if not values:
-            return 0.0
-        sorted_vals = sorted(values)
-        n = len(sorted_vals)
-        if n % 2 == 1:
-            return sorted_vals[n // 2]
-        else:
-            return (sorted_vals[n // 2 - 1] + sorted_vals[n // 2]) / 2
-
-    def _is_warmup_kernel(self, op_type: str, input_shapes: str) -> bool:
-        """判断是否为 warmup kernel（通过精确形状匹配）
-
-        Warmup kernel 特征（可通过 env 覆盖）：
-        - MatMulV3: Input Shapes = WARMUP_MATMUL_SHAPE
-        - ReduceMax: Input Shapes = WARMUP_REDUCE_SHAPE
-
-        F111: 同步更新命中统计；若整轮命中率=0 由 _maybe_warn_warmup_filter_inactive
-        触发 warning，提示 CANN/驱动升级可能让形状失效。
-        """
-        if not op_type or not input_shapes:
-            return False
-
-        # 仅对预期的 op_type 统计命中率（避免 op_type=Cast/Add 等非 warmup 候选拉低统计）
-        if op_type in ('MatMulV3', 'ReduceMax'):
-            _WARMUP_FILTER_STATS["checked"] += 1
-
-        # 精确匹配 MatMulV3 warmup
-        if op_type == 'MatMulV3' and WARMUP_MATMUL_SHAPE in input_shapes:
-            _WARMUP_FILTER_STATS["matched"] += 1
-            return True
-
-        # 精确匹配 ReduceMax warmup
-        if op_type == 'ReduceMax' and WARMUP_REDUCE_SHAPE in input_shapes:
-            _WARMUP_FILTER_STATS["matched"] += 1
-            return True
-
-        return False
 
     @staticmethod
-    def parse_trace_view_prof(log_path: str = None, op_func=None, *op_args,
-                              warmup: int = 3, repeat: int = 5,
-                              **op_kwargs) -> Dict[str, Dict[str, float]]:
-        """按 PyPTO trace_view.json 口径解析性能数据。
+    def parse_trace_view_prof(log_path=None, op_func=None, *op_args,
+                              warmup=3, repeat=5,
+                              **op_kwargs):
+        """Compatible shim: delegates to TraceViewStrategy.parse().
 
-        两种模式：
-        A) 仅解析已有数据（旧行为）:
+        Two modes (same as original):
+        A) Parse existing data:
            PerfEvaluator.parse_trace_view_prof("/path/to/profiling")
-        B) 运行算子 + 采集 + 解析（新增）:
+        B) Run op + collect + parse:
            PerfEvaluator.parse_trace_view_prof(op_func=ReLU_wrapper, x=x_tensor)
 
-        输入目录要求与参考 parse_prof 保持一致：
-        ``log_path/<ascend*>/ASCEND_PROFILER_OUTPUT/trace_view.json``。
-        返回结构保持为 ``{"prof": {...}}``。
+        Note: now delegates to TraceViewStrategy.
+        If trace_view.json has no tilefwk/PYPTO events (Level1 default),
+        returns {"prof": {}} - same behavior as original (no fallback).
         """
+        from ..base.perf_strategy import TraceViewStrategy
+
+        strategy = TraceViewStrategy()
         prof_dir = None
 
         if op_func is not None:
-            # --- Mode B: 运行算子 + 采集性能 ---
             prof_dir = tempfile.mkdtemp(prefix="trace_prof_")
             try:
                 if op_args:
@@ -885,81 +722,78 @@ class PerfEvaluator:
                     shutil.rmtree(prof_dir, ignore_errors=True)
                 return {"prof": {}}
 
-        # --- Parse trace_view.json ---
         if not log_path or not os.path.isdir(log_path):
             return {"prof": {}}
 
-        profilingdir = ""
-        pathlisttemp = os.listdir(log_path)
-        for dirname in pathlisttemp:
-            if "ascend" in dirname:
-                profilingdir = dirname
-                break
+        # Locate files
+        prof_files = PerfEvaluator._locate_prof_files_static(log_path)
 
-        trace_view_json = os.path.join(
-            log_path, profilingdir, "ASCEND_PROFILER_OUTPUT", "trace_view.json"
-        )
-        prof_per = {"prof": {}}
-        if not os.path.isfile(trace_view_json):
+        # Delegate to strategy
+        result = PerfResult(metadata={"case_id": "parse_trace_view_prof"})
+        result = strategy.parse(prof_files, result)
+
+        # Convert to old return format {"prof": {...}}
+        if result.elapsed_us > 0 and result.op_times.get("trace_view"):
+            trace_data = result.op_times["trace_view"]
             if prof_dir and os.path.isdir(prof_dir):
                 shutil.rmtree(prof_dir, ignore_errors=True)
-            return prof_per
-
-        with open(trace_view_json, "r") as f:
-            trace_view_data = json.load(f)
-
-        perf_data = {"aicore_e2e": [], "aicpu_kernel": []}
-        for data in trace_view_data:
-            name = data.get("name", "")
-            if name == "KERNEL_AICPU":
-                data["end_time"] = float(data["ts"]) + data["dur"]
-                perf_data["aicpu_kernel"].append(data)
-            if "tilefwk" in name or "PYPTO" in name:
-                data["end_time"] = float(data["ts"]) + data["dur"]
-                perf_data["aicore_e2e"].append(data)
-
-        # 过滤离群点，解析 aicore_e2e 时间
-        perf_data_filter = {"aicore_e2e": [], "aicpu_kernel": []}
-        if not perf_data["aicore_e2e"]:
-            if prof_dir and os.path.isdir(prof_dir):
-                shutil.rmtree(prof_dir, ignore_errors=True)
-            return prof_per
-        min_aicore_dur = min([data["dur"] for data in perf_data["aicore_e2e"]])
-        aicore_e2e_time_list = []
-        for sample in perf_data["aicore_e2e"]:
-            if (sample["dur"] - min_aicore_dur) < max(50, 1.5 * min_aicore_dur):
-                perf_data_filter["aicore_e2e"].append(sample)
-                aicore_e2e_time_list.append([float(sample["ts"]), sample["end_time"]])
-        aicore_e2e_list = [data["dur"] for data in perf_data_filter["aicore_e2e"]]
-        aicore_e2e_list.sort()
-        aicore_e2e = round(sum(aicore_e2e_list) / len(aicore_e2e_list), 2)
-
-        # 解析 aicore_e2e 抖动时间，取后 40 轮数据，(max(data) - min(data)) / min(data)
-        aicore_e2e_jitter_list = [
-            data["dur"] for data in perf_data["aicore_e2e"]
-        ][-40:]
-        aicore_e2e_jitter = (
-            (max(aicore_e2e_jitter_list) - min(aicore_e2e_jitter_list))
-            / min(aicore_e2e_jitter_list)
-        )
-
-        # 解析 aicpu_kernel 时间
-        for data in perf_data["aicpu_kernel"]:
-            s = float(data["ts"])
-            e = data["end_time"]
-            for aicore_e2e_time in aicore_e2e_time_list:
-                if s <= aicore_e2e_time[0] and e >= aicore_e2e_time[-1]:
-                    aicore_e2e_time.append(e)
-                    break
-        gap_list = []
-        for data in aicore_e2e_time_list:
-            gap = 0 if len(data) == 2 else max(data[-1] - data[-2], 0)
-            gap_list.append(gap)
-
-        prof_per["prof"]["aicore_e2e"] = aicore_e2e
-        prof_per["prof"]["aicpukernel_gap"] = round(sum(gap_list) / len(gap_list), 2)
-        prof_per["prof"]["aicore_e2e_jitter"] = round(aicore_e2e_jitter, 2)
+            return {"prof": dict(trace_data)}
 
         if prof_dir and os.path.isdir(prof_dir):
             shutil.rmtree(prof_dir, ignore_errors=True)
-        return prof_per
+        return {"prof": {}}
+
+    @staticmethod
+    def _locate_prof_files_static(prof_dir):
+        """Static version of _locate_prof_files (for parse_trace_view_prof)"""
+        csv_file = None
+        ascend_output_dir = None
+
+        direct = os.path.join(prof_dir, "kernel_details.csv")
+        if os.path.isfile(direct):
+            csv_file = direct
+        else:
+            try:
+                for entry in os.listdir(prof_dir):
+                    candidate = os.path.join(prof_dir, entry, "kernel_details.csv")
+                    if os.path.isfile(candidate):
+                        csv_file = candidate
+                        break
+            except OSError:
+                pass
+
+            if csv_file is None:
+                for root, dirs, files in os.walk(prof_dir):
+                    for f in files:
+                        if f == "kernel_details.csv":
+                            csv_file = os.path.join(root, f)
+                            break
+                    if csv_file:
+                        break
+
+        if csv_file:
+            ascend_output_dir = os.path.dirname(csv_file)
+
+        if not ascend_output_dir:
+            try:
+                for entry in os.listdir(prof_dir):
+                    if "ascend" in entry:
+                        candidate_dir = os.path.join(prof_dir, entry, "ASCEND_PROFILER_OUTPUT")
+                        if os.path.isdir(candidate_dir):
+                            ascend_output_dir = candidate_dir
+                            break
+            except OSError:
+                pass
+
+        trace_view_path = None
+        if ascend_output_dir:
+            tv_candidate = os.path.join(ascend_output_dir, "trace_view.json")
+            if os.path.isfile(tv_candidate):
+                trace_view_path = tv_candidate
+
+        return ProfFileLocations(
+            ascend_output_dir=ascend_output_dir,
+            csv_path=csv_file,
+            trace_view_path=trace_view_path,
+            prof_dir=prof_dir,
+        )

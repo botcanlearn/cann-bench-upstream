@@ -48,6 +48,7 @@ WARMUP=3
 REPEAT=5
 NO_PERF=false
 PROFILER_LEVEL="Level1"
+EVAL_SEED=""  # 评测种子（默认: 0 = 确定性，-1 = 纯随机）
 
 # 颜色输出
 RED='\033[0;31m'
@@ -97,6 +98,8 @@ print_help() {
     echo "  --repeat <n>              采集次数（默认: 5）"
     echo "  --no-perf                 关闭性能采集，仅做精度验证"
     echo "  --profiler-level <level>  Profiler 级别: Level1, Level2（默认: Level1）"
+    echo "  --eval-seed <n>           输入生成确定性种子（默认: 0 = 自动确定性）。"
+    echo "                            改变种子可获得不同但可复现的输入。-1 表示纯随机。"
     echo ""
     echo "其他选项:"
     echo "  -v, --verbose             详细输出"
@@ -221,6 +224,10 @@ while [[ $# -gt 0 ]]; do
             PROFILER_LEVEL="$2"
             shift 2
             ;;
+        --eval-seed)
+            EVAL_SEED="$2"
+            shift 2
+            ;;
         -v|--verbose)
             VERBOSE=true
             shift
@@ -337,6 +344,11 @@ build_cmd_args() {
             CMD_ARGS="${CMD_ARGS} --warmup ${WARMUP}"
             CMD_ARGS="${CMD_ARGS} --repeat ${REPEAT}"
             CMD_ARGS="${CMD_ARGS} --profiler-level ${PROFILER_LEVEL}"
+
+            # 评测种子（确保可复现）
+            if [[ -n "${EVAL_SEED}" ]]; then
+                CMD_ARGS="${CMD_ARGS} --eval-seed ${EVAL_SEED}"
+            fi
 
             if [[ "${NO_PERF}" == true ]]; then
                 CMD_ARGS="${CMD_ARGS} --no-perf"

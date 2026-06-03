@@ -1786,9 +1786,9 @@ def _eval_env(
     bench_name: str,
 ) -> Dict[str, str]:
     env = {}
-    if _is_pypto_cann_eval(agent_type=agent_type, bench_name=bench_name):
-        env[PERF_SOURCE_ENV] = "trace_view"
-    return env
+        # PERF_SOURCE_ENV is deprecated — perf source is now controlled
+        # via BenchConfig.perf_metric_strategy, not via environment variable.
+        return env
 
 
 def _is_pypto_cann_eval(*, agent_type: str, bench_name: str) -> bool:

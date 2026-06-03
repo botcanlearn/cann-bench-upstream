@@ -249,8 +249,8 @@ class EvalOperatorResult:
 
     @property
     def compile_passed(self) -> bool:
-        """δ_pass：编译通过标记。无 compilation_error 视为通过。"""
-        return self.compilation_error is None
+        """δ_pass：编译通过标记。无 compilation_error 且无 subprocess_failure_reason 视为通过。"""
+        return self.compilation_error is None and self.subprocess_failure_reason is None
 
     def to_dict(self) -> Dict[str, Any]:
         d = {

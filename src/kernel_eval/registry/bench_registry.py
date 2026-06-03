@@ -55,6 +55,10 @@ class BenchConfig:
     #   native_npu: 保持原始精度在 NPU 上计算
     golden_precision: str = "fp64_cpu"
     precision_thresholds: Dict[str, float] = field(default_factory=dict)
+    # 性能指标策略：
+    #   kernel_details（默认）: Σ kernel Duration 中位数，trace_view 为主 + CSV warmup 过滤
+    #   trace_view: PYPTO 口径 — tilefwk/PYPTO aicore_e2e，需要 Level2 profiler 配置
+    perf_metric_strategy: str = "kernel_details"
     default_tasks_root: str = ""
     description: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -94,6 +98,11 @@ class BenchConfig:
         from ..utils.thresholds import PRECISION_THRESHOLDS
         return dict(PRECISION_THRESHOLDS)
 
+    def get_perf_metric_strategy(self):
+        """获取性能指标策略实例"""
+        from .perf_strategy_registry import get_perf_metric_strategy
+        return get_perf_metric_strategy(self.perf_metric_strategy)
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
@@ -107,6 +116,7 @@ class BenchConfig:
             'case_spec_cls': self.case_spec_cls,
             'golden_precision': self.golden_precision,
             'precision_thresholds': self.precision_thresholds,
+            'perf_metric_strategy': self.perf_metric_strategy,
             'default_tasks_root': self.default_tasks_root,
             'description': self.description,
             'metadata': self.metadata,

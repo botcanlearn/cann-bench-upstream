@@ -101,10 +101,15 @@ class OpRunner:
                 elapsed_us = perf_result.elapsed_us
                 # profiler 路径：异常被 run_profiled 捕获存在 error_msg 中，outputs 为 None
                 if outputs is None and perf_result.error_msg:
-                    raise RuntimeError(
+                    error_msg = (
                         f"算子执行失败: {perf_result.error_msg}"
                         f"（请检查算子是否支持 {self._infer_dtype(input_tensors)}）"
                     )
+                    # 如果有 traceback，追加到错误信息中
+                    tb = perf_result.metadata.get('profile_exception_traceback')
+                    if tb:
+                        error_msg = f"{error_msg}\n{tb}"
+                    raise RuntimeError(error_msg)
             else:
                 # 非 profiler 路径(--no-perf / CPU / golden):只跑出 outputs 供精度比对,
                 # 不再用墙钟计时(受环境影响大、与 profiler 设备时间不可比)。perf_result=None,

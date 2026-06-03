@@ -110,7 +110,11 @@ class RelativeErrorOutputResult(OutputResult):
                 mare_threshold = 10 * threshold
                 mere_str = f"{mere:.6e}" if mere != 0 and mere < 0.001 else f"{mere:.6f}"
                 mare_str = f"{mare:.6e}" if mare != 0 and mare < 0.001 else f"{mare:.6f}"
-                return f"{dtype_str}: ❌ MERE={mere_str}, MARE={mare_str} (threshold={threshold:.6e}, mare_threshold={mare_threshold:.6e})"
+                base_msg = f"{dtype_str}: ❌ MERE={mere_str}, MARE={mare_str} (threshold={threshold:.6e}, mare_threshold={mare_threshold:.6e})"
+                # 如果有 error_msg（如 NaN位置不匹配），追加显示
+                if self.error_msg:
+                    return f"{base_msg}, {self.error_msg}"
+                return base_msg
 
 
 def _convert_to_output_result(sr: SingleOutputResult) -> RelativeErrorOutputResult:

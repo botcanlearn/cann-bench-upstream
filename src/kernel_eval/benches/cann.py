@@ -86,6 +86,8 @@ def _register_cann_components():
     from ..registry.scoring_registry import ScoringSchemeRegistry
     from ..registry.bench_registry import BenchRegistry, BenchConfig
     from ..registry.case_spec_registry import CaseSpecRegistry
+    from ..registry.perf_strategy_registry import PerfMetricStrategyRegistry
+    from ..base.perf_strategy import KernelDetailsStrategy, TraceViewStrategy
     from ..utils.thresholds import PRECISION_THRESHOLDS
 
     # 注册 Loader
@@ -115,6 +117,12 @@ def _register_cann_components():
         ScoringSchemeRegistry.register('simple_comparison', SimpleComparisonScheme())
     if 'recording_only' not in ScoringSchemeRegistry._items:
         ScoringSchemeRegistry.register('recording_only', RecordingOnlyScheme())
+
+    # 注册 PerfMetricStrategy
+    if 'kernel_details' not in PerfMetricStrategyRegistry._items:
+        PerfMetricStrategyRegistry.register('kernel_details', KernelDetailsStrategy())
+    if 'trace_view' not in PerfMetricStrategyRegistry._items:
+        PerfMetricStrategyRegistry.register('trace_view', TraceViewStrategy())
 
     # 注册 BenchConfig
     if 'cann' not in BenchRegistry._items:

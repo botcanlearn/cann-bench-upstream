@@ -216,6 +216,22 @@ class TestScoringCalculator:
         assert info.function_score == 0.0
         assert info.performance_score == 0.0
 
+    def test_subprocess_failed_zeroes_compilation_score(self):
+        """子进程失败的算子不应获得编译分"""
+        cases = [self._make_case(True, 100, 50, 50)]
+        op = EvalOperatorResult(
+            rel_path="level1/exp", operator="Exp",
+            total_cases=1, passed_cases=0, failed_cases=1, skipped_cases=0,
+            results=cases, pass_rate=0.0, avg_speedup=0.0,
+            subprocess_failure_reason="subprocess timeout",
+        )
+        info = ScoringCalculator().calculate_operator_score(op)
+        assert info.compile_passed is False
+        assert info.compilation_score == 0.0
+        assert info.function_score == 0.0
+        assert info.performance_score == 0.0
+        assert info.total_score == 0.0
+
 
 class TestLevelAndOverallScores:
     """Eq.5: overall = Σ EachOperatorScore; level_score(level) 过滤 rel_path."""
