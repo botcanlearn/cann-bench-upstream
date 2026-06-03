@@ -181,6 +181,7 @@ class SubprocessRunner:
             # 继承 CANN/Ascend 环境变量，确保子进程能正确访问 NPU
             cann_env_vars = [
                 "ASCEND_HOME_PATH", "ASCEND_TOOLKIT_HOME", "ASCEND_OPP_PATH",
+                "ASCEND_CUSTOM_OPP_PATH",
                 "ASCEND_AICPU_PATH", "ASCEND_VISIBLE_DEVICES",
                 "LD_LIBRARY_PATH", "PATH", "TBE_IMPL_PATH",
                 "ASCEND_CACHE_PATH", "ASCEND_WORK_PATH",
@@ -314,6 +315,7 @@ class SubprocessRunner:
             # 继承 CANN/Ascend 环境变量
             cann_env_vars = [
                 "ASCEND_HOME_PATH", "ASCEND_TOOLKIT_HOME", "ASCEND_OPP_PATH",
+                "ASCEND_CUSTOM_OPP_PATH",
                 "ASCEND_AICPU_PATH", "ASCEND_VISIBLE_DEVICES",
                 "LD_LIBRARY_PATH", "PATH", "TBE_IMPL_PATH",
                 "ASCEND_CACHE_PATH", "ASCEND_WORK_PATH",

@@ -21,13 +21,32 @@
 """
 
 import traceback
+import io
+import sys
 from typing import Callable, Dict, Optional, Any, List
 from dataclasses import dataclass
+from contextlib import contextmanager
 
 import torch
 
 from ..utils.device_manager import DeviceManager
 from .perf_eval import PerfEvaluator, PerfResult
+
+
+@contextmanager
+def capture_output():
+    """捕获 stdout/stderr 输出，用于记录算子执行时的日志"""
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+    try:
+        sys.stdout = captured_out
+        sys.stderr = captured_err
+        yield captured_out, captured_err
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
 
 
 @dataclass
@@ -40,6 +59,7 @@ class OpRunResult:
     perf_result: Optional[PerfResult] = None
     device: str = ""
     traceback: Optional[str] = None
+    captured_output: Optional[str] = None  # 捕获的 stdout/stderr
 
 
 class OpRunner:
@@ -61,6 +81,7 @@ class OpRunner:
             to_device: 是否将输入迁移到设备端
             enable_profiler: 是否启用 profiler 采集性能（仅 AI 算子启用，Golden 不启用）
         """
+        captured_output = ""
         try:
             # 迁移输入到设备
             if to_device:
@@ -78,29 +99,38 @@ class OpRunner:
                 outputs, perf_result = self.perf_evaluator.run_profiled(case_id, func, **updated_params)
                 self.perf_evaluator.wait_all()
                 elapsed_us = perf_result.elapsed_us
-                if perf_result.error_msg and outputs is None:
-                    tb_str = perf_result.metadata.get("profile_exception_traceback")
-                    return OpRunResult(
-                        success=False,
-                        outputs=outputs,
-                        error=self._format_perf_error(perf_result),
-                        elapsed_us=elapsed_us,
-                        perf_result=perf_result,
-                        device=self.device_manager.get_device(),
-                        traceback=tb_str,
+                # profiler 路径：异常被 run_profiled 捕获存在 error_msg 中，outputs 为 None
+                if outputs is None and perf_result.error_msg:
+                    raise RuntimeError(
+                        f"算子执行失败: {perf_result.error_msg}"
+                        f"（请检查算子是否支持 {self._infer_dtype(input_tensors)}）"
                     )
             else:
                 # 非 profiler 路径(--no-perf / CPU / golden):只跑出 outputs 供精度比对,
                 # 不再用墙钟计时(受环境影响大、与 profiler 设备时间不可比)。perf_result=None,
                 # 由评分侧将该 case 的 perf 分按 0 计入,不影响 function/total。
-                if to_device:
-                    outputs = func(**updated_params)
-                    self.device_manager.synchronize()
-                else:
-                    with torch.no_grad():
-                        outputs = func(**updated_params)
+                try:
+                    with capture_output() as (cap_out, cap_err):
+                        if to_device:
+                            outputs = func(**updated_params)
+                            self.device_manager.synchronize()
+                        else:
+                            with torch.no_grad():
+                                outputs = func(**updated_params)
+                    captured_output = cap_out.getvalue() + cap_err.getvalue()
+                except Exception:
+                    # 异常发生时也要保存捕获的输出
+                    captured_output = cap_out.getvalue() + cap_err.getvalue()
+                    raise
                 elapsed_us = 0.0
                 perf_result = None
+
+            # 检查输出：函数返回 None 通常意味着算子不支持当前 dtype 或执行静默失败
+            if outputs is None:
+                raise RuntimeError(
+                    "算子执行返回 None，可能不支持当前 dtype "
+                    f"（请检查算子是否支持 {self._infer_dtype(input_tensors)}）"
+                )
 
             return OpRunResult(
                 success=True,
@@ -112,12 +142,16 @@ class OpRunner:
 
         except Exception as e:
             tb_str = traceback.format_exc()
+            error_msg = str(e)
+            if captured_output.strip():
+                error_msg += f"\n算子执行期间输出:\n{captured_output.strip()}"
             return OpRunResult(
                 success=False,
-                error=str(e),
+                error=error_msg,
                 elapsed_us=0,
                 device="cpu" if not to_device else self.device_manager.get_device(),
-                traceback=tb_str
+                traceback=tb_str,
+                captured_output=captured_output if captured_output.strip() else None
             )
 
     @staticmethod
@@ -148,13 +182,29 @@ class OpRunner:
 
     def _run_simple(self, func: Callable, params: Dict, input_tensors: List) -> OpRunResult:
         """简单执行（不采集性能）"""
+        captured_output = ""
         try:
             device_tensors = self.device_manager.to_device_batch(input_tensors)
             updated_params = self._update_params(params, device_tensors)
 
             # 不采集性能:只跑出 outputs(墙钟已弃用,perf 由 profiler 路径专责)。
-            outputs = func(**updated_params)
-            self.device_manager.synchronize()
+            try:
+                with capture_output() as (cap_out, cap_err):
+                    outputs = func(**updated_params)
+                    self.device_manager.synchronize()
+                captured_output = cap_out.getvalue() + cap_err.getvalue()
+            except Exception:
+                # 异常发生时也要保存捕获的输出
+                captured_output = cap_out.getvalue() + cap_err.getvalue()
+                raise
+
+            # 检查输出
+            if outputs is None:
+                raise RuntimeError(
+                    "算子执行返回 None，可能不支持当前 dtype "
+                    f"（请检查算子是否支持 {self._infer_dtype(input_tensors)}）"
+                )
+
             elapsed_us = 0.0
 
             return OpRunResult(
@@ -166,12 +216,16 @@ class OpRunner:
 
         except Exception as e:
             tb_str = traceback.format_exc()
+            error_msg = str(e)
+            if captured_output.strip():
+                error_msg += f"\n算子执行期间输出:\n{captured_output.strip()}"
             return OpRunResult(
                 success=False,
-                error=str(e),
+                error=error_msg,
                 elapsed_us=0,
                 device=self.device_manager.get_device(),
-                traceback=tb_str
+                traceback=tb_str,
+                captured_output=captured_output if captured_output.strip() else None
             )
 
     def _update_params(self, params: Dict, device_tensors: List) -> Dict:
@@ -210,3 +264,15 @@ class OpRunner:
                 updated[key] = value
 
         return updated
+
+    def _infer_dtype(self, input_tensors: List) -> str:
+        """从输入张量推断 dtype（用于错误信息）"""
+        import torch
+        for t in input_tensors:
+            if isinstance(t, torch.Tensor):
+                return str(t.dtype).replace('torch.', '')
+            elif isinstance(t, (list, tuple)) and t:
+                for sub in t:
+                    if isinstance(sub, torch.Tensor):
+                        return str(sub.dtype).replace('torch.', '')
+        return "unknown"

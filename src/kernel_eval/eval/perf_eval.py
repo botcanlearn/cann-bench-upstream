@@ -228,6 +228,11 @@ class PerfEvaluator:
         # Warmup tensors（升频清cache）
         self._warmup_tensors: Optional[Tuple] = None
 
+        # 跨 case 状态：上一个 profiler session 是否失败（诊断用途）。
+        # run_profiled() 在 CSV 搜索后更新此值，用于诊断日志追踪。
+        # TODO: evaluator 重构为"先精度后性能"后，此字段可移除（精度验证自然门卫）。
+        self._last_prof_failed: bool = True
+
     def _prepare_warmup_tensors(self):
         """准备升频清cache的tensors
 
@@ -334,6 +339,29 @@ class PerfEvaluator:
         if self.freq_boost:
             self._boost_freq_and_clear_cache()
 
+        # 预检（pre-flight）：每个 profiler session 启动前，先不带 profiler 执行 fn()。
+        # 若 fn() 抛异常（EZ1001 dtype 不支持等），直接 raise 不启动 profiler —
+        # 避免破损的 profiler session 残留 "CANN path ''" parser 进程，
+        # 污染下一个 case 的 profiler session（导致 N/A 性能数据）。
+        # 条件性 pre-flight（仅在上一个 case 失败时）无法防止首次失败进入 profiler，
+        # 因此必须无条件执行。开销：1 次 fn() call，profiler 本身跑 8 次 (3+5)，
+        # pre-flight 仅增 ~12%。
+        #
+        # TODO: 后续优化提升性能 — 重构 evaluator 流程为先跑精度（不带 profiler），
+        # 精度通过的 case 才继续跑性能验证（带 profiler），避免重复执行 fn()。
+        # 精度验证自然成为 profiler 的门卫，无需额外 pre-flight。
+        try:
+            fn()
+        except BaseException:
+            _logger.info("perf_eval: fn() pre-flight failed — skipping profiler session")
+            raise
+
+        # 诊断日志：记录 profiler session 开始前的 PROF_* 目录状态
+        pre_prof_dirs = [e for e in os.listdir(prof_dir)
+                         if e.startswith("PROF") and os.path.isdir(os.path.join(prof_dir, e))]
+        _logger.info("perf_eval: _profile start — prof_dir=%s, pre-existing PROF dirs: %s",
+                     prof_dir, pre_prof_dirs)
+
         # Save original stdout/stderr file descriptors
         # 使用 os.dup2 在系统级别重定向，影响所有子进程
         # 重定向到 tempfile 而非 /dev/null：profiler 退出后扫描其中的 NPU
@@ -385,17 +413,30 @@ class PerfEvaluator:
                 if fn_exc is not None:
                     raise fn_exc
 
-            # 等待 profiler 解析完成（在恢复 stdout/stderr 之前）
-            # 解析器进程在 profiler context 退出后开始工作
+            # ACL 硬件复位等待：保留极小缓冲防调度抖动。
+            # 注意：sleep(0.5) / sleep(5.0) 均无法解决 PROF_* 缺失问题
+            # （根因是 fn() 异常导致 parser pool 残留而非 ACL 时间）。
+            time.sleep(0.1)
+
+            # 诊断日志：记录 profiler session 完成后的 PROF_* 目录状态
+            post_prof_dirs = [e for e in os.listdir(prof_dir)
+                              if e.startswith("PROF") and os.path.isdir(os.path.join(prof_dir, e))]
+            _logger.info("perf_eval: _profile done — prof_dir=%s, PROF dirs after session: %s",
+                         prof_dir, post_prof_dirs)
+
+        finally:
+            # 等待 profiler 解析子进程池完成 — 必须在 finally 中以确保 fn() 异常时也能执行。
+            # 当 fn() 抛异常（EZ1001 等），raise fn_exc 跳过 with 块后面的代码，
+            # 导致 parser 子进程池以空路径("CANN path ''")残留，污染下一个 profiler session。
+            # close_pool(wait=True) 等待子进程完成（空路径时它们会快速失败退出），
+            # 确保 pool 完全清理后再启动下一个 session。
             try:
                 from torch_npu.profiler.analysis.prof_common_func._multi_process_pool import MultiProcessPool
                 pool = MultiProcessPool()
-                pool.close_pool(wait=True)  # 等待解析完成
+                pool.close_pool(wait=True)
             except Exception as e:
-                # F047: 不再静默吞 — debug 级日志（用户/CI 通过 LOG_LEVEL 控制）
-                _logger.debug("MultiProcessPool close_pool(wait=True) failed: %s", e)
+                _logger.debug("perf_eval: finally close_pool(wait=True) failed: %s", e)
 
-        finally:
             # Restore original stdout/stderr
             os.dup2(saved_stdout_fd, 1)
             os.dup2(saved_stderr_fd, 2)
@@ -570,6 +611,17 @@ class PerfEvaluator:
                     self._normalize_result(result, op_times, total_kernel_us)
                 elif not result.error_msg:
                     result.error_msg = "no kernel_details.csv produced"
+
+            # 诊断日志：记录 CSV 搜索结果和 PROF_* 目录状态
+            prof_dirs = [e for e in os.listdir(prof_dir)
+                         if e.startswith("PROF") and os.path.isdir(os.path.join(prof_dir, e))]
+            _logger.info("perf_eval: case %s — csv_found=%s, PROF dirs: %s, error_msg=%s",
+                         case_id, csv_file, prof_dirs, result.error_msg)
+
+            # 更新跨 case 状态：下一个 case 是否需要做 pre-flight 检查。
+            # CSV 找到 → profiler session 正常 → 下一个 case 无需 pre-flight。
+            # CSV 缺失 → profiler session 异常 → 下一个 case 需要 pre-flight 防污染。
+            self._last_prof_failed = (csv_file is None)
 
         finally:
             # Clean up temp dir (non-archive mode).

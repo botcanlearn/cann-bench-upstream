@@ -327,7 +327,9 @@ class Evaluator:
                 # 使用新的多输出格式显示失败原因
                 if hasattr(accuracy_result, 'format_all_outputs') and accuracy_result.output_results:
                     output_details = accuracy_result.format_all_outputs()
-                    error_msg = f"精度不达标:\n{output_details}"
+                    # 用 " | " 连接多输出摘要，保持单行便于 console 显示
+                    output_details_single_line = output_details.replace('\n', ' | ')
+                    error_msg = f"精度不达标: {output_details_single_line}"
                 else:
                     # 兼容旧格式（从 metadata 获取 mere/mare）
                     metadata = accuracy_result.get_metadata()
@@ -335,16 +337,14 @@ class Evaluator:
                     mare = metadata.get('mare', 0.0)
                     mare_threshold = 10 * accuracy_result.threshold if accuracy_result.threshold and accuracy_result.threshold > 0 else 0
                     fail_reasons = []
-                    if accuracy_result.error_msg and accuracy_result.threshold == 0:
-                        fail_reasons.append(accuracy_result.error_msg)
-                    elif mare >= mare_threshold:
-                        fail_reasons.append(f"MARE({mare:.6f}) >= mare_threshold({mare_threshold:.6f})")
-                    if accuracy_result.threshold and mere >= accuracy_result.threshold:
-                        fail_reasons.append(f"MERE({mere:.6f}) >= threshold({accuracy_result.threshold:.6f})")
+                    # 只有当 mare 或 threshold 非零时才判断相对误差超标
+                    if mare > 0 and mare_threshold > 0 and mare >= mare_threshold:
+                        fail_reasons.append(f"MARE({mare:.6e}) >= mare_threshold({mare_threshold:.6e})")
+                    if accuracy_result.threshold and accuracy_result.threshold > 0 and mere >= accuracy_result.threshold:
+                        fail_reasons.append(f"MERE({mere:.6e}) >= threshold({accuracy_result.threshold:.6e})")
                     if accuracy_result.error_msg:
-                        if accuracy_result.error_msg not in fail_reasons:
-                            fail_reasons.append(accuracy_result.error_msg)
-                    error_msg = f"精度不达标: {', '.join(fail_reasons)}"
+                        fail_reasons.append(accuracy_result.error_msg)
+                    error_msg = f"精度不达标: {', '.join(fail_reasons)}" if fail_reasons else "精度不达标"
 
             self._cleanup_memory()
 
@@ -414,14 +414,15 @@ class Evaluator:
                     mare_str = f"MARE={mare:.6f}" if mare is not None else ""
                     mere_str = f"MERE={mere:.6f}" if mere is not None else ""
                     acc_str = f", {mare_str}, {mere_str}" if mare_str or mere_str else ""
-                    print(
-                        f"[{i}/{len(cases)}] {case_id_str}: {status_icon} "
-                        f"(耗时: {elapsed_str}, 加速比: {speedup_str}{acc_str})"
-                    )
+                print(
+                    f"[{i}/{len(cases)}] {case_id_str}: {status_icon} "
+                    f"(耗时: {elapsed_str}, 加速比: {speedup_str}{acc_str})"
+                )
             elif result.success:
                 print(f"[{i}/{len(cases)}] {case_id_str}: {status_icon} (耗时: {elapsed_str}, 加速比: {speedup_str})")
             else:
-                error_hint = result.error_msg[:50] if result.error_msg else ""
+                # 错误信息可能包含多行，只显示第一行（通常包含关键错误原因）
+                error_hint = result.error_msg.split('\n')[0] if result.error_msg else ""
                 print(f"[{i}/{len(cases)}] {case_id_str}: {status_icon} {error_hint}")
 
         passed = sum(1 for r in results if r.success)

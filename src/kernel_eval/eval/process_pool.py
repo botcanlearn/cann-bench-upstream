@@ -212,8 +212,9 @@ class OperatorScheduler:
         # 继承 CANN 环境变量（日志抑制）
         cann_env_vars = [
             "ASCEND_HOME_PATH", "ASCEND_TOOLKIT_HOME", "ASCEND_OPP_PATH",
+            "ASCEND_CUSTOM_OPP_PATH",
             "ASCEND_AICPU_PATH", "ASCEND_VISIBLE_DEVICES",
-            "TBE_IMPL_PATH",
+            "LD_LIBRARY_PATH", "PATH", "TBE_IMPL_PATH",
         ]
         for var in cann_env_vars:
             if var in os.environ:
@@ -440,8 +441,9 @@ class ProcessWorker:
         # 继承关键的 CANN/Ascend 环境变量（确保子进程能正确访问 NPU）
         cann_env_vars = [
             "ASCEND_HOME_PATH", "ASCEND_TOOLKIT_HOME", "ASCEND_OPP_PATH",
+            "ASCEND_CUSTOM_OPP_PATH",
             "ASCEND_AICPU_PATH", "ASCEND_VISIBLE_DEVICES",
-            "TBE_IMPL_PATH",
+            "LD_LIBRARY_PATH", "PATH", "TBE_IMPL_PATH",
         ]
         for var in cann_env_vars:
             if var in os.environ:

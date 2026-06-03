@@ -102,10 +102,15 @@ class RelativeErrorOutputResult(OutputResult):
             mare = self.metadata.get('mare', 0)
             threshold = self.metadata.get('threshold', 0.0)
             if self.passed:
-                return f"{dtype_str}: ✅ MERE={mere:.6f}, MARE={mare:.6f}"
+                # 智能格式：小数值用科学计数法，大数值用定点
+                mere_str = f"{mere:.6e}" if mere != 0 and mere < 0.001 else f"{mere:.6f}"
+                mare_str = f"{mare:.6e}" if mare != 0 and mare < 0.001 else f"{mare:.6f}"
+                return f"{dtype_str}: ✅ MERE={mere_str}, MARE={mare_str}"
             else:
                 mare_threshold = 10 * threshold
-                return f"{dtype_str}: ❌ MERE={mere:.6f}, MARE={mare:.6f} (threshold={threshold:.6f}, mare_threshold={mare_threshold:.6f})"
+                mere_str = f"{mere:.6e}" if mere != 0 and mere < 0.001 else f"{mere:.6f}"
+                mare_str = f"{mare:.6e}" if mare != 0 and mare < 0.001 else f"{mare:.6f}"
+                return f"{dtype_str}: ❌ MERE={mere_str}, MARE={mare_str} (threshold={threshold:.6e}, mare_threshold={mare_threshold:.6e})"
 
 
 def _convert_to_output_result(sr: SingleOutputResult) -> RelativeErrorOutputResult:

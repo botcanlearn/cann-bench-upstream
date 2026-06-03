@@ -77,6 +77,36 @@ def _detect_opp_path() -> str:
     return opp
 
 
+def _get_arch_str() -> str:
+    """返回当前平台架构字符串，用于拼装 tiling 库路径。"""
+    import platform
+    machine = platform.machine().lower()
+    return "aarch64" if machine in ("aarch64", "arm64") else "x86_64"
+
+
+def _add_vendor_lib_dirs(vendor_path: Path) -> None:
+    """将 vendor 目录下的 .so 搜索路径加入 LD_LIBRARY_PATH。
+
+    除了 op_api/lib（set_env.bash 已包含的路径），还需加入 tiling 目录，
+    因为 CANN framework 在部分场景下不自动加载 tiling 库时，
+    LD_LIBRARY_PATH 中的 tiling 路径可以作为 dlopen 搜索的兜底。
+    """
+    arch = _get_arch_str()
+    lib_dirs = [
+        vendor_path / "op_api" / "lib",
+        vendor_path / "op_impl" / "ai_core" / "tbe" / "op_tiling",
+        vendor_path / "op_impl" / "ai_core" / "tbe" / "op_tiling" / "lib" / "linux" / arch,
+    ]
+    cur = os.environ.get("LD_LIBRARY_PATH", "")
+    for lib_dir in lib_dirs:
+        if lib_dir.is_dir():
+            lib_str = str(lib_dir)
+            if lib_str not in cur:
+                cur = f"{lib_str}:{cur}" if cur else lib_str
+                print(f"[INFO] 已将 {lib_str} 加入 LD_LIBRARY_PATH")
+    os.environ["LD_LIBRARY_PATH"] = cur
+
+
 @dataclass
 class PackageInfo:
     """包信息"""
@@ -369,6 +399,16 @@ class PackageManager:
             # 设到当前进程，确保 dlopen 能找到 libcust_opapi.so
             self._source_set_env_bash(opp_path)
 
+            # 校验：ASCEND_CUSTOM_OPP_PATH 必须包含当前 vendor 路径。
+            # CANN framework 依赖此变量定位 custom vendor 目录中的 tiling 库；
+            # 若缺失，dlopen libcust_opapi.so (BIND_NOW) 会因 tiling 符号未解析而失败。
+            vendor_path = Path(opp_path) / _CANN_OPP_VENDOR_SUBDIR
+            vendor_str = str(vendor_path)
+            cur_opp = os.environ.get("ASCEND_CUSTOM_OPP_PATH", "")
+            if vendor_str not in cur_opp:
+                os.environ["ASCEND_CUSTOM_OPP_PATH"] = f"{vendor_str}:{cur_opp}" if cur_opp else vendor_str
+                print(f"[INFO] 兜底设置 ASCEND_CUSTOM_OPP_PATH={vendor_str}")
+
             return True
 
         except subprocess.TimeoutExpired:
@@ -391,14 +431,17 @@ class PackageManager:
 
         if not set_env_path.exists():
             print(f"[WARN] set_env.bash 不存在: {set_env_path}")
-            # 兜底：直接将 op_api/lib 加入 LD_LIBRARY_PATH
-            lib_dir = vendor_path / "op_api" / "lib"
-            if lib_dir.is_dir():
-                cur = os.environ.get("LD_LIBRARY_PATH", "")
-                lib_str = str(lib_dir)
-                if lib_str not in cur:
-                    os.environ["LD_LIBRARY_PATH"] = f"{lib_str}:{cur}" if cur else lib_str
-                    print(f"[INFO] 已将 {lib_str} 加入 LD_LIBRARY_PATH（兜底）")
+            # 兜底：设置 ASCEND_CUSTOM_OPP_PATH + 补全 LD_LIBRARY_PATH
+            # ASCEND_CUSTOM_OPP_PATH 是关键：CANN framework 用它定位 custom vendor 目录，
+            # 内部构造 tiling 库绝对路径并 dlopen(RTLD_GLOBAL)，使 BIND_NOW 符号解析成功。
+            # 若未设置，dlopen libcust_opapi.so 会因 tiling 符号缺失而失败。
+            vendor_str = str(vendor_path)
+            cur_opp = os.environ.get("ASCEND_CUSTOM_OPP_PATH", "")
+            if vendor_str not in cur_opp:
+                os.environ["ASCEND_CUSTOM_OPP_PATH"] = f"{vendor_str}:{cur_opp}" if cur_opp else vendor_str
+                print(f"[INFO] 已设置 ASCEND_CUSTOM_OPP_PATH={vendor_str}（兜底）")
+            # 补全 LD_LIBRARY_PATH：op_api/lib + tiling 目录
+            _add_vendor_lib_dirs(vendor_path)
             return
 
         content = set_env_path.read_text()
@@ -413,6 +456,9 @@ class PackageManager:
             )
             os.environ[var_name] = var_value
             print(f"[INFO] source: {var_name}={var_value}")
+
+        # set_env.bash 仅含 op_api/lib，不含 tiling 目录 —— 补全遗漏的路径
+        _add_vendor_lib_dirs(vendor_path)
 
     def install_whl_package(self, whl_path: str) -> bool:
         """安装whl包（Python包）

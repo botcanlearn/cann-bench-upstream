@@ -176,9 +176,8 @@ def calculate_operator_summary(op_result: Dict[str, Any]) -> OperatorSummary:
     pass_rate = passed_cases / total_cases if total_cases > 0 else 0.0
 
     # 计算几何平均加速比 / MERE / MARE。
-    # case 形状有两种：
-    #   mere/mare 来自 metadata 展开（仅 RelativeErrorChecker 产生，
-    #   AllCloseChecker 不会产生这些指标，列表为空时 avg=0）
+    # mere/mare 存在 accuracy.metadata 中（RelativeErrorChecker 产生），
+    # AllCloseChecker 不产生这些指标。兼容旧格式（top-level）和新格式（metadata 嵌套）。
     speedups = []
     meres = []
     mares = []
@@ -188,10 +187,11 @@ def calculate_operator_summary(op_result: Dict[str, Any]) -> OperatorSummary:
         if speedup and speedup > 0:
             speedups.append(speedup)
         accuracy = case.get("accuracy") or {}
-        mere = accuracy.get("mere", case.get("mere"))
+        acc_meta = accuracy.get("metadata") or {}
+        mere = acc_meta.get("mere") or accuracy.get("mere") or case.get("mere")
         if mere:
             meres.append(mere)
-        mare = accuracy.get("mare", case.get("mare"))
+        mare = acc_meta.get("mare") or accuracy.get("mare") or case.get("mare")
         if mare:
             mares.append(mare)
 

@@ -300,7 +300,9 @@ class ReportGenerator:
                     speedup_str = f"{case.speedup:.2f}x" if case.speedup > 0 else "N/A"
                     accuracy_str = ""
                     if case.accuracy:
-                        max_diff = case.accuracy.get('max_diff', 0)
+                        # max_diff 在 metadata 子字典中（新格式），兼容旧格式（顶层）
+                        acc_meta = case.accuracy.get('metadata') or {}
+                        max_diff = acc_meta.get('max_diff', case.accuracy.get('max_diff', 0))
                         accuracy_str = f"{max_diff:.6f}"
                     else:
                         accuracy_str = case.error_msg or "N/A"
