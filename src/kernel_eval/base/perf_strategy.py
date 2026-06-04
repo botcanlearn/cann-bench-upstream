@@ -480,10 +480,19 @@ class KernelDetailsStrategy(PerfMetricStrategy):
     """默认策略：Σ kernel Duration 中位数 作为 elapsed_us。
 
     数据源尝试顺序（找到即停，不 fallback）：
-    1. trace_view.json kernel 级事件 + CSV Input Shapes warmup 过滤
-    2. kernel_details.csv（trace_view 不可用时）
+    1. kernel_details.csv kernel 级事件 + Input Shapes warmup 过滤（权威源）
+    2. trace_view.json kernel 级事件（CSV 不可用时的兜底）
 
     两者都不可用 → 明确报错。
+
+    为什么 CSV 优先：kernel_details.csv 列出了**每一个** kernel（既包括
+    aclnn 辅助 kernel，也包括 direct-launch / 自定义 AscendC kernel，如
+    ``*_custom``），并带有 Type / Duration(us) / Step Id / Input Shapes。
+    而 ``parse_trace_view_kernels`` 只识别 ``aclnn*AiCore_`` 命名，会**静默
+    漏掉**自定义 kernel——当一个 case 同时含小的 ACLNN 辅助 kernel 和大的
+    自定义 kernel 时，trace_view 口径只统计到辅助 kernel，导致 elapsed_us
+    偏小、speedup 虚高。因此 elapsed 口径以 CSV 为准，trace_view 仅用于
+    补充 tilefwk/PYPTO 指标，或在 CSV 缺失时兜底。
     """
 
     def parse(self, prof_files: ProfFileLocations, result: Any) -> Any:
@@ -492,7 +501,45 @@ class KernelDetailsStrategy(PerfMetricStrategy):
 
         warmup_names = extract_warmup_names_from_csv(prof_files.csv_path)
 
-        # 优先使用 trace_view kernel 事件
+        # 优先使用 kernel_details.csv —— 完整 kernel 列表（含自定义 kernel）
+        if prof_files.csv_path:
+            kernel_data = parse_csv_kernels(prof_files.csv_path, warmup_names)
+            if kernel_data.get("total_kernel_us") and kernel_data["total_kernel_us"] > 0:
+                result.elapsed_us = kernel_data["total_kernel_us"]
+                result.op_times = {"device_kernels": kernel_data["device_kernels"]}
+                result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
+                result.metadata["data_source"] = "kernel_details_csv"
+
+                # trace_view 提供 tilefwk/PYPTO 等独有补充指标（存在时附加）
+                if prof_files.trace_view_path:
+                    tilefwk_metrics = parse_tilefwk_metrics(
+                        prof_files.trace_view_path, warmup_names
+                    )
+                    if tilefwk_metrics:
+                        result.op_times["trace_view"] = tilefwk_metrics
+
+                    # sanity check：若 trace_view kernel 口径明显小于 CSV，
+                    # 说明它漏掉了 CSV 中的 kernel（典型为自定义 kernel）。
+                    # 此时 elapsed 已用 CSV，不受影响，仅记一条诊断告警。
+                    tv = parse_trace_view_kernels(prof_files.trace_view_path, warmup_names)
+                    tv_total = tv.get("total_kernel_us") or 0.0
+                    csv_total = kernel_data["total_kernel_us"]
+                    if tv_total and tv_total < csv_total * 0.9:
+                        missing = sorted(
+                            set(kernel_data["device_kernels"]) - set(tv.get("device_kernels", {}))
+                        )
+                        _logger.warning(
+                            "trace_view kernel total (%.2fus) < CSV total (%.2fus); "
+                            "trace_view dropped %d kernel(s) %s (likely custom / "
+                            "direct-launch). Using CSV total.",
+                            tv_total, csv_total, len(missing), missing[:5],
+                        )
+                return result
+
+        # CSV 不可用 → 兜底使用 trace_view kernel 事件
+        # 注意：parse_trace_view_kernels 仅识别 aclnn*AiCore_ 命名，自定义
+        # kernel 不会被统计；此分支仅在 CSV 缺失（通常不会发生，因为
+        # trace_view 路径是从 CSV 所在目录推导的）时兜底。
         if prof_files.trace_view_path:
             kernel_data = parse_trace_view_kernels(
                 prof_files.trace_view_path, warmup_names
@@ -503,23 +550,11 @@ class KernelDetailsStrategy(PerfMetricStrategy):
                 result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
                 result.metadata["data_source"] = "trace_view"
 
-                # 附加 trace_view 独有指标
                 tilefwk_metrics = parse_tilefwk_metrics(
                     prof_files.trace_view_path, warmup_names
                 )
                 if tilefwk_metrics:
                     result.op_times["trace_view"] = tilefwk_metrics
-
-                return result
-
-        # trace_view 不可用 → 使用 CSV
-        if prof_files.csv_path:
-            kernel_data = parse_csv_kernels(prof_files.csv_path, warmup_names)
-            if kernel_data.get("total_kernel_us") and kernel_data["total_kernel_us"] > 0:
-                result.elapsed_us = kernel_data["total_kernel_us"]
-                result.op_times = {"device_kernels": kernel_data["device_kernels"]}
-                result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
-                result.metadata["data_source"] = "kernel_details_csv"
                 return result
 
         # 两者都不可用 → 明确报错
