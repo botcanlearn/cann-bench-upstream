@@ -41,6 +41,9 @@ def conv_3d_backprop_filter(
         filter梯度，shape与filter_size相同
     """
 
+    if filter_size is None:
+        raise ValueError("filter_size is required (proto.yaml declares it as a required attr)")
+
     # pads 是 6 元素格式，对称 padding 时取 (D_front, H_top, W_left)
     # 即 pads[0], pads[2], pads[4]
     padding = (pads[0], pads[2], pads[4])

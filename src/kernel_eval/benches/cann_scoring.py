@@ -30,6 +30,7 @@ CANN 评分模块
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -119,10 +120,10 @@ def per_case_sol_score(
     F057: 返回 None 的三种成因分别 warn，避免被 aggregate_eq4 统一吞为"缺锚点"。
     """
     # F057 成因 (a): T_cand 或 T_HW 异常
-    if t_cand <= 0 or t_hw <= 0:
+    if math.isnan(t_cand) or math.isnan(t_hw) or t_cand <= 0 or t_hw <= 0:
         _warn_invalid_anchor(rel_path, t_cand, t_hw)
         return None
-    if t_baseline <= 0:
+    if math.isnan(t_baseline) or t_baseline <= 0:
         # F057 成因 (c) + F054: baseline 缺失走 fallback，warn 一次让用户感知
         _warn_fallback_baseline(rel_path, t_hw)
         t_baseline = _fallback_baseline_from_hw(t_hw)
@@ -254,7 +255,7 @@ def aggregate_eq4(
                 continue
             n_func_pass += 1
             per_case_scores.append(score_i)
-            if score_i is None:
+            if score_i is None or math.isnan(score_i):
                 n_perf_missing += 1
                 perf_score_sum += 0.0
             else:
