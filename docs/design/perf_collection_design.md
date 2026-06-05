@@ -516,10 +516,9 @@ profiler 相关配置见 §10；CLI 完整参数表（多卡 / 子进程隔离 /
 
 | 脚本 | 职责 | 独特能力 |
 |------|------|----------|
-| `src/kernel_eval/cli.py` | **核心评测入口** | 所有评测能力：`--dir`、多卡并行、`--no-perf`、`--source-dir` |
-| `tests/run_simple.py` | **Golden 特化** | Golden 伪装（NPU 模式）、CPU 模式验证 |
+| `src/kernel_eval/cli.py` | **核心评测入口** | 所有评测能力：`--task-dir`、多卡并行、`--no-perf`、`--source-dir` |
+| `scripts/utils/build_golden_wheel.sh` | **Golden whl 打包** | 将 golden 函数打包成 cann_bench whl，注册到 torch.ops.cann_bench |
 | `scripts/run_evaluation.sh` | CLI 封装 | 无（纯参数转发） |
-| `scripts/run_test.sh` | run_simple.py 封装 | 无（纯参数转发） |
 
 ### 13.2 CLI 核心能力
 
@@ -563,22 +562,16 @@ use_multi_card = (
 - 进程间无通信，通过文件传递结果
 - 每进程独立初始化 `torch_npu.profiler`
 
-### 13.4 run_simple.py 保留能力
+### 13.4 Golden 自验证
 
-`tests/run_simple.py` 仅保留两个特化能力：
-
-1. **Golden 伪装**：将 golden 函数伪装成 AI 算子，用于 NPU 模式验证
-2. **CPU 模式**：纯 CPU 验证 golden 可执行，不采集性能
+Golden 自验证（验证 golden(NPU) 与 golden(CPU fp64) 精度一致性）通过 `build_golden_wheel.sh` 打包 golden 函数为 `cann_bench` whl，再用 `run_evaluation.sh` 评测：
 
 ```bash
-# CPU 模式（run_simple.py 特化）
-python tests/run_simple.py --cpu --operator Exp
+# 构建 golden whl 并安装
+./scripts/utils/build_golden_wheel.sh --install
 
-# NPU 模式 + Golden 伪装（run_simple.py 特化）
-python tests/run_simple.py --npu --operator Exp
-
-# NPU 多卡并行（应使用 CLI）
-python -m kernel_eval.cli eval --operator Exp
+# 评测（golden 作为 AI 算子，golden(CPU fp64) 作为参考）
+./scripts/run_evaluation.sh --task-dir tasks/level1/exp --no-perf
 ```
 
 ---

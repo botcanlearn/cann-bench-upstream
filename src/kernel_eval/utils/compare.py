@@ -104,6 +104,8 @@ class CompareResult:
     cancel_error_count: int = 0  # 相消位置 NPU 错误计数
     cancel_cpu_error_count: int = 0  # 相消位置 CPU 错误计数
     cancel_total_count: int = 0  # 相消位置总计数
+    small_value_passed: bool = True  # 小值域兜底判定是否通过
+    cancel_passed: bool = True       # 相消兜底判定是否通过
     error_msg: Optional[str] = None
     output_results: List[SingleOutputResult] = field(default_factory=list)  # 各输出独立结果
 
@@ -125,6 +127,8 @@ class CompareResult:
             'cancel_error_count': self.cancel_error_count,
             'cancel_cpu_error_count': self.cancel_cpu_error_count,
             'cancel_total_count': self.cancel_total_count,
+            'small_value_passed': self.small_value_passed,
+            'cancel_passed': self.cancel_passed,
             'error_msg': self.error_msg,
             'output_results': [r.to_dict() for r in self.output_results],
         }
@@ -658,6 +662,8 @@ def _compare_single_tensor(
         cancel_error_count=cancel_error_count,
         cancel_cpu_error_count=cancel_cpu_error_count,
         cancel_total_count=cancel_total_count,
+        small_value_passed=small_value_passed,
+        cancel_passed=cancel_passed,
     )
 
 
@@ -740,6 +746,8 @@ def compare_tensors(
         cancel_error_count = 0
         cancel_cpu_error_count = 0
         cancel_total_count = 0
+        all_small_value_passed = True
+        all_cancel_passed = True
 
         # 记录每个输出的独立判定结果
         single_output_results: List[SingleOutputResult] = []
@@ -789,6 +797,8 @@ def compare_tensors(
                     'cancel_error_count': result.cancel_error_count,
                     'cancel_cpu_error_count': result.cancel_cpu_error_count,
                     'cancel_total_count': result.cancel_total_count,
+                    'small_value_passed': result.small_value_passed,
+                    'cancel_passed': result.cancel_passed,
                 },
             )
             single_output_results.append(single_result)
@@ -807,6 +817,8 @@ def compare_tensors(
             cancel_error_count += result.cancel_error_count
             cancel_cpu_error_count += result.cancel_cpu_error_count
             cancel_total_count += result.cancel_total_count
+            all_small_value_passed = all_small_value_passed and result.small_value_passed
+            all_cancel_passed = all_cancel_passed and result.cancel_passed
 
         if total_count > 0:
             mere = mere_sum / total_count
@@ -845,6 +857,8 @@ def compare_tensors(
             cancel_error_count=cancel_error_count,
             cancel_cpu_error_count=cancel_cpu_error_count,
             cancel_total_count=cancel_total_count,
+            small_value_passed=all_small_value_passed,
+            cancel_passed=all_cancel_passed,
             output_results=single_output_results,  # 新增：各输出独立结果
         )
 

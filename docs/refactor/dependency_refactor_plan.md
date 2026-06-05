@@ -310,7 +310,7 @@ BenchRegistry.register('cann', BenchConfig(
 ### 6.2 新增依赖方向测试
 
 ```python
-# tests/unit/test_dependency_direction.py
+# tests/ut/test_dependency_direction.py
 
 def test_registry_no_cann_import():
     """Registry 不应直接 import CannTaskLoader"""

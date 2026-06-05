@@ -25,8 +25,8 @@ src/auto_pipeline/generator/registry.py
 src/auto_pipeline/converter/registry.py
 src/auto_pipeline/core.py
 src/auto_pipeline/config/*.yaml
-tests/unit/test_<agent_name>_agent.py
-tests/unit/test_<agent_name>_to_<benchmark>_converter.py
+tests/ut/test_<agent_name>_agent.py
+tests/ut/test_<agent_name>_to_<benchmark>_converter.py
 ```
 
 核心 contract：

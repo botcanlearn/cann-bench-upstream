@@ -362,3 +362,148 @@ class TestBitExactFloat:
             result = compare_tensors(output, golden_fp64, dtype_str,
                                      custom_thresholds=self.BIT_EXACT)
             assert result.passed, f"{target_dtype} round-trip via fp64 should pass bit-exact"
+
+
+class TestCompareResultFallbackFlags:
+    """CompareResult 兜底判定标志传播测试"""
+
+    def test_small_value_passed_and_cancel_passed_in_result(self):
+        """CompareResult 应包含 small_value_passed / cancel_passed 字段"""
+        # 正常通过的场景：默认 True
+        golden = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
+        output = golden.clone()
+        result = compare_tensors(output, golden, "float32")
+        assert result.small_value_passed is True
+        assert result.cancel_passed is True
+
+    def test_small_value_passed_false_propagated(self):
+        """小值域兜底未通过时，small_value_passed 应为 False"""
+        from kernel_eval.utils.thresholds import get_small_value_threshold, get_small_value_error
+        # 构造小值域兜底失败场景：CPU 无错误，NPU 有错误
+        n = 100
+        golden = torch.zeros(n, dtype=torch.float64)
+        golden[:50] = 1e-6  # 小值域
+        golden[50:] = 1.0
+        # NPU 在小值域有巨大误差
+        output = golden.half()
+        output[:50] = 100.0  # 小值域位置严重偏离
+
+        result = compare_tensors(output, golden, "float16")
+
+        # 验证 small_value_passed 为 False（当 CPU 无错误时，NPU 有小值域错误应判定为未通过）
+        if result.small_value_error_count > 0 and result.small_value_cpu_error_count == 0:
+            assert result.small_value_passed is False
+
+    def test_small_value_passed_reflected_in_output_metadata(self):
+        """small_value_passed 应通过 output_results metadata 传播"""
+        from kernel_eval.checkers.relative_error_checker import RelativeErrorChecker
+        n = 100
+        golden = torch.zeros(n, dtype=torch.float64)
+        golden[:50] = 1e-6
+        golden[50:] = 1.0
+        output = golden.half()
+        output[:50] = 100.0
+
+        checker = RelativeErrorChecker()
+        accuracy = checker.check(
+            ai_outputs=output,
+            golden_outputs=golden,
+            dtype='float16',
+            threshold=2**-10,
+        )
+
+        # 验证 output_results metadata 包含 small_value_passed
+        for or_ in accuracy.output_results:
+            assert 'small_value_passed' in or_.metadata
+            assert 'cancel_passed' in or_.metadata
+
+    def test_format_summary_shows_small_value_failure_when_both_fail(self):
+        """当相对误差和兜底判定都失败时，format_summary 应同时展示两者"""
+        from kernel_eval.checkers.relative_error_checker import RelativeErrorOutputResult
+        # 构造一个 passed=False 且 small_value_passed=False 的结果
+        result = RelativeErrorOutputResult(
+            index=0,
+            dtype='float16',
+            passed=False,
+            error_msg='',
+            mismatch_count=10,
+            total_count=100,
+            metadata={
+                'dtype_category': 'float',
+                'threshold': 2**-10,
+                'mere': 0.5,
+                'mare': 2.0,
+                'small_value_error_count': 5,
+                'small_value_cpu_error_count': 0,
+                'small_value_total_count': 10,
+                'cancel_error_count': 0,
+                'cancel_cpu_error_count': 0,
+                'cancel_total_count': 0,
+                'small_value_passed': False,
+                'cancel_passed': True,
+            },
+        )
+        summary = result.format_summary()
+        # 验证摘要中包含小值域兜底失败信息
+        assert '❌' in summary
+        assert '小值域兜底❌' in summary
+        assert 'NPU/CPU错误=5/0' in summary
+
+    def test_format_summary_shows_cancel_failure_when_both_fail(self):
+        """当相对误差和相消兜底判定都失败时，format_summary 应同时展示两者"""
+        from kernel_eval.checkers.relative_error_checker import RelativeErrorOutputResult
+        result = RelativeErrorOutputResult(
+            index=0,
+            dtype='float16',
+            passed=False,
+            error_msg='',
+            mismatch_count=5,
+            total_count=100,
+            metadata={
+                'dtype_category': 'float',
+                'threshold': 2**-10,
+                'mere': 0.3,
+                'mare': 1.5,
+                'small_value_error_count': 0,
+                'small_value_cpu_error_count': 0,
+                'small_value_total_count': 0,
+                'cancel_error_count': 3,
+                'cancel_cpu_error_count': 0,
+                'cancel_total_count': 5,
+                'small_value_passed': True,
+                'cancel_passed': False,
+            },
+        )
+        summary = result.format_summary()
+        assert '❌' in summary
+        assert '相消兜底❌' in summary
+        assert 'NPU/CPU错误=3/0' in summary
+
+    def test_format_summary_no_fallback_info_when_all_passed(self):
+        """当只有相对误差失败但兜底都通过时，不追加兜底信息"""
+        from kernel_eval.checkers.relative_error_checker import RelativeErrorOutputResult
+        result = RelativeErrorOutputResult(
+            index=0,
+            dtype='float32',
+            passed=False,
+            error_msg='',
+            metadata={
+                'dtype_category': 'float',
+                'threshold': 2**-13,
+                'mere': 0.5,
+                'mare': 2.0,
+                'small_value_passed': True,
+                'cancel_passed': True,
+                'small_value_error_count': 0,
+                'small_value_cpu_error_count': 0,
+                'small_value_total_count': 0,
+                'cancel_error_count': 0,
+                'cancel_cpu_error_count': 0,
+                'cancel_total_count': 0,
+            },
+        )
+        summary = result.format_summary()
+        assert '小值域兜底❌' not in summary
+        assert '相消兜底❌' not in summary
+        # 只显示 MERE/MARE
+        assert 'MERE=' in summary

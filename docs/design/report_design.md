@@ -104,13 +104,13 @@ eval_YYYYMMDD_HHMMSS.html    ← 完整 HTML 报告
 → reports/cann/eval_xxx.{json,md,html}（三份同时输出）
 ```
 
-**方式二：从已有 JSON 重新生成（`run_report.sh`）**
+**方式二：从已有 JSON 重新生成（`gen_report.sh`）**
 ```
-./scripts/run_report.sh reports/cann/eval_xxx.json
+./scripts/utils/gen_report.sh reports/cann/eval_xxx.json
 → reports/cann/eval_xxx.html（独立生成，不重新评测）
 
 # 指定自定义摘要/第一章模板
-./scripts/run_report.sh --json eval.json --template custom/template.html
+./scripts/utils/gen_report.sh --json eval.json --template custom/template.html
 ```
 
 ### 2.3 摘要数据替换
@@ -359,8 +359,8 @@ ReportGenerator.save_all(report)
                 ├── Section 4 (算子详情)
                 └── 认证印章
 
-# 或通过 run_report.sh 从已有 JSON 重新生成 HTML：
-run_report.sh
+# 或通过 gen_report.sh 从已有 JSON 重新生成 HTML：
+gen_report.sh
     │
     └── 读取 eval_xxx.json
         ├── 反序列化为 EvalReport + OperatorReport
@@ -379,7 +379,7 @@ run_report.sh
 - [x] 实现 `html_generator.py`：正则替换 + HTML 拼接渲染
 - [x] 扩展 `report_generator.py`：新增 `save_html()` 输出
 - [x] 扩展 `config.py`：新增 `agent_skill` / `base_model` 字段
-- [x] 创建 `scripts/run_report.sh`：从 JSON 独立生成评测报告，支持 `--template` 自定义模板
+- [x] 创建 `scripts/utils/gen_report.sh`：从 JSON 独立生成评测报告，支持 `--template` 自定义模板
 - [x] 集成测试通过（`./scripts/run_evaluation.sh --source-dir examples/aclnn_launch_example`）
 
 ### 6.2 待完成

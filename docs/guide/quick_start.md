@@ -112,22 +112,16 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 > ```
 > cli 完整参数表见 [evaluator_design.md §3.3](../design/evaluator_design.md#33-命令行参数)。
 
-## 测试脚本
+## Golden 自验证
 
-使用 `tests/run_simple.py` 进行 Golden 验证：
+将 golden 函数打包成 `cann_bench` whl，通过 `run_evaluation.sh` 验证 golden(NPU) 与 golden(CPU fp64) 的精度一致性：
 
 ```bash
-# CPU 简单验证
-./scripts/run_test.sh --cpu --operator Exp
+# 1. 构建 golden whl 并安装
+./scripts/utils/build_golden_wheel.sh --install
 
-# NPU 模拟评测（Golden 伪装成 AI 算子）
-./scripts/run_test.sh --npu --operator Exp
-
-# 指定设备 ID
-./scripts/run_test.sh --npu --device-id 1 --operator Exp
-
-# 多卡并行
-./scripts/run_test.sh --npu --operator Exp
+# 2. 评测（golden 作为 AI 算子，golden(CPU fp64) 作为参考）
+./scripts/run_evaluation.sh --task-dir tasks/level1/exp --no-perf
 ```
 
 ## 评测报告

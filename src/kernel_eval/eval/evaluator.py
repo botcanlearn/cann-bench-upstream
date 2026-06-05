@@ -724,10 +724,6 @@ class Evaluator:
 
         return EvalSessionResult(operators=results)
 
-    def evaluate_golden_only(self, operator: str, rel_path: str, case_filter: Dict = None) -> EvalOperatorResult:
-        """仅执行Golden验证"""
-        return self.evaluate_operator(operator=operator, rel_path=rel_path, case_filter=case_filter)
-
     # ---- 辅助方法 ----
 
     def _apply_golden_precision(self, input_tensors: List) -> List:

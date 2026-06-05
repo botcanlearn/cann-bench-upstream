@@ -125,6 +125,22 @@ class RelativeErrorOutputResult(OutputResult):
                 mere_str = f"{mere:.6e}" if mere != 0 and mere < 0.001 else f"{mere:.6f}"
                 mare_str = f"{mare:.6e}" if mare != 0 and mare < 0.001 else f"{mare:.6f}"
                 base_msg = f"{dtype_str}: ❌ MERE={mere_str}, MARE={mare_str} (threshold={threshold:.6e}, mare_threshold={mare_threshold:.6e})"
+                # 失败时也展示小值域/相消兜底判定信息
+                # 当相对误差超标且兜底判定也未通过时，只显示 MERE/MARE 会遗漏关键失败原因
+                sv_passed = self.metadata.get('small_value_passed', True)
+                cancel_passed = self.metadata.get('cancel_passed', True)
+                sv_err = self.metadata.get('small_value_error_count', 0)
+                sv_cpu_err = self.metadata.get('small_value_cpu_error_count', 0)
+                sv_total = self.metadata.get('small_value_total_count', 0)
+                cancel_err = self.metadata.get('cancel_error_count', 0)
+                cancel_cpu_err = self.metadata.get('cancel_cpu_error_count', 0)
+                cancel_total = self.metadata.get('cancel_total_count', 0)
+                # 小值域兜底未通过时追加信息
+                if not sv_passed and sv_total > 0:
+                    base_msg += f", 小值域兜底❌(NPU/CPU错误={sv_err}/{sv_cpu_err}, 总={sv_total})"
+                # 相消兜底未通过时追加信息
+                if not cancel_passed and cancel_total > 0:
+                    base_msg += f", 相消兜底❌(NPU/CPU错误={cancel_err}/{cancel_cpu_err}, 总={cancel_total})"
                 # 如果有 error_msg（如 NaN位置不匹配），追加显示
                 if self.error_msg:
                     return f"{base_msg}, {self.error_msg}"
@@ -221,6 +237,8 @@ class RelativeErrorChecker(CorrectnessChecker):
             'cancel_error_count': compare_result.cancel_error_count,
             'cancel_cpu_error_count': compare_result.cancel_cpu_error_count,
             'cancel_total_count': compare_result.cancel_total_count,
+            'small_value_passed': compare_result.small_value_passed,
+            'cancel_passed': compare_result.cancel_passed,
         }
 
         return AccuracyResult(

@@ -432,43 +432,6 @@ def _cmd_eval_skip_install(args, config: Config, report_generator: ReportGenerat
     return 0
 
 
-def _cmd_eval_golden(args, config: Config, report_generator: ReportGenerator,
-                     operator_filter: list, case_filter: dict, bench_name: str = "cann") -> int:
-    """单卡 Golden 模式评测"""
-    evaluator = Evaluator(config, bench_name=bench_name)
-
-    if args.operator:
-        op_info = _resolve_operator_info(args.operator, config, bench_name)
-        result = evaluator.evaluate_golden_only(
-            operator=args.operator,
-            rel_path=op_info.rel_path if op_info else args.operator,
-            case_filter=case_filter,
-        )
-        report_generator.add_operator_result(result)
-    else:
-        # StanfordBench: 遍历所有算子进行自验证
-        if bench_name == "stanford":
-            from .registry.loader_registry import get_task_loader
-            task_loader = get_task_loader(bench_name, tasks_root=config.tasks_root)
-            tasks = task_loader.list_tasks()
-            print(f"[INFO] StanfordBench 自验证模式: 共 {len(tasks)} 个算子")
-            for task in tasks:
-                result = evaluator.evaluate_operator(
-                    operator=task.name,
-                    rel_path=task.rel_path,
-                    case_filter=case_filter,
-                )
-                report_generator.add_operator_result(result)
-        else:
-            # CANN: 使用 evaluate_skip_build 扫描已安装的 cann_bench
-            session_result = evaluator.evaluate_skip_build(
-                operator_filter=operator_filter,
-                case_filter=case_filter,
-            )
-            for op_result in session_result.operators:
-                report_generator.add_operator_result(op_result)
-    evaluator.shutdown()
-    return 0
 
 
 def cmd_eval(args):
@@ -520,7 +483,10 @@ def cmd_eval(args):
         ret = _cmd_eval_skip_install(args, config, report_generator, operator_filter,
                                      case_filter, subprocess_isolation, bench_name)
     else:
-        ret = _cmd_eval_golden(args, config, report_generator, operator_filter, case_filter, bench_name)
+        # 无 --source-dir 时：跳过编译安装，直接从已安装的 cann_bench 加载 AI 算子
+        # （原 _cmd_eval_golden 与 _cmd_eval_skip_install 功能完全重复，已合并）
+        ret = _cmd_eval_skip_install(args, config, report_generator, operator_filter,
+                                     case_filter, subprocess_isolation, bench_name)
 
     # 生成报告
     report = report_generator.generate()

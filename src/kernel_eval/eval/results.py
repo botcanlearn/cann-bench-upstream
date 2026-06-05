@@ -190,6 +190,8 @@ class EvalCaseResult:
                     'cancel_error_count': accuracy_data.get('cancel_error_count', 0),
                     'cancel_cpu_error_count': accuracy_data.get('cancel_cpu_error_count', 0),
                     'cancel_total_count': accuracy_data.get('cancel_total_count', 0),
+                    'small_value_passed': accuracy_data.get('small_value_passed', True),
+                    'cancel_passed': accuracy_data.get('cancel_passed', True),
                 }
             if 'trial' not in metadata:
                 metadata['trial'] = accuracy_data.get('trial', 1)

@@ -11,14 +11,14 @@
 # CANN-Bench 报告生成脚本
 #
 # 用法:
-#   ./scripts/run_report.sh eval_xxx.json                          # 从 JSON 生成 HTML
-#   ./scripts/run_report.sh --json eval_xxx.json                   # 同上
-#   ./scripts/run_report.sh --json eval_xxx.json --template custom/index.html  # 指定摘要模板
-#   ./scripts/run_report.sh --help
+#   ./scripts/utils/gen_report.sh eval_xxx.json                          # 从 JSON 生成 HTML
+#   ./scripts/utils/gen_report.sh --json eval_xxx.json                   # 同上
+#   ./scripts/utils/gen_report.sh --json eval_xxx.json --template custom/index.html  # 指定摘要模板
+#   ./scripts/utils/gen_report.sh --help
 #
 set -e
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC_DIR="${PROJECT_ROOT}/src"
 DEFAULT_TEMPLATE="${PROJECT_ROOT}/tasks/description.html"
 

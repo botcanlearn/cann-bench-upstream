@@ -428,7 +428,12 @@ main() {
     fi
 
     check_python
-    uninstall_packages
+
+    # 仅在有 source-dir 时卸载 cann_bench（避免与即将编译安装的包冲突）
+    # 无 source-dir 时保留已安装的包（golden whl 或 submission whl）
+    if [[ -n "${SOURCE_DIR}" ]]; then
+        uninstall_packages
+    fi
 
     # 检查数据目录
     if [[ "${BENCH_NAME}" == "stanford" ]]; then

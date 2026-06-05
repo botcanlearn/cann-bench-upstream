@@ -67,9 +67,9 @@ cann-bench/
 ├── docs/                   # 规范 / 设计 / 指南文档
 ├── scripts/                # 评测/测试入口脚本
 │   ├── run_evaluation.sh   # AI 算子评测入口（编译→安装→评测）
-│   ├── run_report.sh       # 从 JSON 重新生成评测报告
-│   ├── run_test.sh         # Golden 功能验证
-│   └── run_ut.sh           # 单元测试
+│   ├── run_test.sh         # 测试入口（ut/e2e）
+│   └── utils/              # 工具脚本
+│       ├── gen_report.sh   # 从 JSON 生成评测报告
 ├── src/                    # 源代码
 │   └── kernel_eval/        # 算子评测模块（CLI / 数据 / 评测 / 报告 / 安全）
 ├── tests/                  # 测试代码（含 docs/test_report.md）
@@ -123,10 +123,10 @@ pip install -r requirements.txt
 3. **生成评测报告**（从已有 JSON 重新生成）
    ```bash
    # 使用默认模板 (tasks/description.html)
-   ./scripts/run_report.sh reports/cann/eval_xxx.json
+   ./scripts/utils/gen_report.sh reports/cann/eval_xxx.json
 
    # 指定自定义模板
-   ./scripts/run_report.sh --json eval.json --template custom/index.html
+   ./scripts/utils/gen_report.sh --json eval.json --template custom/index.html
    ```
 
 ## 📋 Test Case Structure
