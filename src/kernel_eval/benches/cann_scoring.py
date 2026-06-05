@@ -99,9 +99,13 @@ def per_case_sol_score(
 ) -> Optional[float]:
     """bench.tex Eq. 3。T_cand 或 T_HW 异常 / 分母 ≤ 0 时返回 None。
 
+    注意 Eq.3 是**饱和型**指标，不是加速比（speedup）：它衡量候选逼近硬件
+    理论上界 T_HW 的程度，而非比 baseline 快多少倍。baseline 很慢
+    （T_baseline ≫ T_HW）时，即使 speedup 巨大，本分数也只趋近 1 而非线性放大。
+
     设计取舍：
     - 不对返回值做上界截断——当 T_cand < T_HW 时 score > 1.0 的"超额分"
-      是有意保留的，用以激励算法突破当前硬件下界。
+      是有意保留的，用以激励算法突破当前硬件下界（单算子分因此可能 > 100）。
     - T_baseline < T_HW 视为基线/T_HW 标定可疑（应在用例侧人工核查），
       但仍计算分数继续输出，仅 warn 一次（per rel_path × 数值组合）。
     - **T_baseline 缺失（≤ 0）但 T_HW 已知时**，按 fallback 规则取

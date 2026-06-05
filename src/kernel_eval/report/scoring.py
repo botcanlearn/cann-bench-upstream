@@ -56,7 +56,7 @@ class OperatorScoreInfo:
     compilation_score: float = 0.0
     function_score: float = 0.0
     performance_score: float = 0.0
-    total_score: float = 0.0  # 单算子综合得分，[0, 100]
+    total_score: float = 0.0  # 单算子综合得分，常规区间 [0, 100]；T_cand<T_HW 时可 >100（不截断）
     # 调试用：每个用例的 hardware-anchored 分数，None 表示数据不全或未通过功能门
     per_case_scores: List[Optional[float]] = field(default_factory=list)
 
@@ -413,7 +413,7 @@ class ScoringCalculator:
         return sum(info.total_score for info in score_infos)
 
     def calculate_average_score(self, score_infos: List[OperatorScoreInfo]) -> float:
-        """benchmark 平均分 = 总分 / 算子数（理论满分 100，跨时间可比）。
+        """benchmark 平均分 = 总分 / 算子数（常规区间每算子满分约 100，T_cand<T_HW 时可 >100，跨时间可比）。
 
         Eq. 5 的总分会随新增算子线性膨胀（每个算子满分 +100），新旧 benchmark
         分数不可比。平均分（normalized to per-operator 100 满分）可以在算子集

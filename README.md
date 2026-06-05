@@ -40,6 +40,10 @@ $$
 $$
 
 其中 `T_HW = t_hw_us` 为硬件理论性能上界，已在 cases.yaml 中提供；`T_baseline = baseline_perf_us` 为CANN基线性能，也已在 cases.yaml 中提供（由于torch接口功能限制，部分基线实现由算子拼接得到）；`T_cand` 为候选 kernel 实测时间。这个公式的设计保证了如果性能低于基线（T_cand > T_baseline），HAP 为 0-0.5；如果性能优于基线（T_cand < T_baseline），HAP 0.5 以上；如果性能达到硬件上界或更高（T_cand <= T_HW），HAP 为 1 以上。
+
+> **HAP 是饱和型指标，不是加速比（speedup）。** 它衡量的是“候选 kernel 逼近硬件理论上界的程度”，而非“比 baseline 快多少倍”。当 baseline 本身很慢（$T_{\text{baseline}} \gg T_{\text{HW}}$）时，即使候选相对 baseline 有巨大的 speedup，HAP 也只会趋近于 1 附近而不会线性放大；只有 $T_{\text{cand}} < T_{\text{HW}}$（快于硬件理论上界）时 HAP 才会 > 1。
+>
+> **边界与异常取值。** 当锚点非法（$T_{\text{cand}} \le 0$ 或 $T_{\text{HW}} \le 0$），或分母 $(T_{\text{cand}}-T_{\text{HW}}) + (T_{\text{baseline}}-T_{\text{HW}}) \le 0$（罕见，例如 $T_{\text{baseline}} \approx T_{\text{HW}}$ 且 $T_{\text{cand}} < T_{\text{HW}}$）时，当前实现对该用例的 HAP 返回 `None`（该用例不计入性能项），**不会输出 $\pm\infty$ 或负分**。
 ![HAP 示例曲线](docs/assets/perf_score.png)
 **单算子综合评分** ：
 
@@ -47,7 +51,7 @@ $$
 \text{EachOperatorScore} = \left[ w_c \cdot \delta_{\text{pass}} + \sum_{i \in \text{cases}} \frac{\delta_{\text{accuracy},i} (w_f + w_p \cdot \text{HAP}_i)}{|\text{cases}|} \right] \cdot 100
 $$
 
-- 单个算子满分 100，编译失败时 `δ_pass=0` ⇒ 整算子计 0， 某个用例精度不过则只扣除改用例得分（`δ_accuracy,i=0`），HAP 按用例总和计算。
+- 在 $T_{\text{cand}} \ge T_{\text{HW}}$ 的常规物理有效区间内，单算子满分约 100；若候选快于硬件理论上界（$T_{\text{cand}} < T_{\text{HW}}$），HAP 与算子分**允许超过 100**（不做上界截断）。编译失败时 `δ_pass=0` ⇒ 整算子计 0；某个用例精度不过则只扣除该用例得分（`δ_accuracy,i=0`），HAP 按用例总和计算。
 - Level-N 得分 = 该 level 内算子 EachOperatorScore 总合
 - benchmark 总分 = 全部算子 EachOperatorScore（= Level1 + Level2 + Level3 + Level4）总和
 

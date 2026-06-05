@@ -54,7 +54,7 @@ class OperatorSummary:
     compilation_score: float = 0.0
     function_score: float = 0.0
     performance_score: float = 0.0
-    composite_score: float = 0.0  # EachOperatorScore，[0, 100]
+    composite_score: float = 0.0  # EachOperatorScore，常规区间 [0, 100]；T_cand<T_HW 时可 >100（不截断）
     # 可选字段：当算子跑不起来时的原因（编译失败 / 子进程超时或崩溃）。
     # 为 None 时渲染普通的 case 表；非空时在小节头下方优先渲染原因块。
     compilation_error: Optional[str] = None
@@ -76,7 +76,7 @@ class EvaluationSummary:
     # bench.tex Eq. 5: Σ EachOperatorScore (跨算子求和) 与各 Level 的小计
     benchmark_total_score: float = 0.0
     level_scores: Dict[str, float] = None  # type: ignore[assignment]
-    # F023: 归一化总分——每算子满分 100，total / num_operators 跨算子集可比。
+    # F023: 归一化总分——每算子满分约 100（T_cand<T_HW 时可 >100），total / num_operators 跨算子集可比。
     # Σ 总分会随算子数线性膨胀，跨 benchmark 版本/不同 Level 子集不可比；
     # 平均分作为额外维度让"系统变好" vs "系统变大"能被区分。
     benchmark_avg_score: float = 0.0
