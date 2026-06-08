@@ -1,31 +1,39 @@
 [project]
 name = "cann-bench"
-dynamic = ["version"]
-description = "CANN domain benchmark framework for evaluating AI-generated Ascend C operator code"
+version = "0.3.0"  # 跟随 VERSION;package=false 故用静态版本(dynamic 在 uv 下有歧义)
+description = "CANN operator benchmark — kernel_eval framework + tasks (deps managed via uv; run with PYTHONPATH=src)"
 license = {text = "CANN Open Software License v2.0"}
-requires-python = ">=3.8"
-
+requires-python = ">=3.10"
+# 对齐 tests/st/docker CI 镜像;torch/torch_npu 钉 2.9.0,其余精确版本交 uv.lock。
 dependencies = [
-    "pyyaml>=6.0",
+    "torch==2.9.0",
     "numpy>=1.21.0",
+    "pyyaml>=6.0",
+    "scipy",
+    "pandas",
+    "decorator",
+    "attrs",
+    "cloudpickle",
+    "ml-dtypes",
+    "psutil",
+    "tornado",
+    "expecttest",
+    "protobuf",
+    "ruamel.yaml>=0.18",
+    "torch_npu==2.9.0",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "pytest-timeout>=2.1.0",
-    "black>=23.0",
-    "flake8>=6.0",
-    "isort>=5.12",
-]
-npu = [
-    "torch>=2.4.0",
-    "torchvision>=0.18.0",
-    "torch_npu>=2.4.0",
-]
+vision = ["torchvision>=0.18.0"]  # 仅 roi_align/nms 的 golden 用到 → uv sync --extra vision
 
-[tool.setuptools.dynamic]
-version = {file = "VERSION"}
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-timeout>=2.1.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -41,3 +49,14 @@ line-length = 120
 [tool.isort]
 profile = "black"
 line_length = 120
+
+[tool.uv]
+package = false  # 只做依赖管理,不打 wheel,以 PYTHONPATH=src 运行
+# 只在 Ascend NPU(linux-aarch64)跑;torch_npu 无 mac wheel,故只锁此平台。
+environments = ["sys_platform == 'linux' and platform_machine == 'aarch64'"]
+
+[[tool.uv.index]]
+# torch/torch_npu 走华为云镜像;区域外可 UV_INDEX_URL 覆盖
+name = "huaweicloud"
+url = "https://mirrors.huaweicloud.com/repository/pypi/simple"
+default = true

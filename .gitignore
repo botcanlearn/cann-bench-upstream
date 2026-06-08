@@ -79,3 +79,7 @@ docs/superpowers/
 # inner/tests/baseline/results/ 是 runtime msprof JSON 落盘点，每次跑都更新
 inner/tests/baseline/results/*.json
 !inner/tests/baseline/results/.gitkeep
+
+# st/ golden-candidate ST output (junit + kernel_eval reports), ST-owned; never the shared build/
+/tests/st/_artifacts/
+/tests/st/_artifacts.*/
