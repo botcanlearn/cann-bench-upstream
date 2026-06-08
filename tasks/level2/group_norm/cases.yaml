@@ -18,8 +18,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 8, epsilon: 1.0e-5}
   value_range: [-1, 1]
-  baseline_perf_us: 11.02
-  t_hw_us: 1.57
   note: "S-float16-1M-aligned-groups8-C32-symmetric-small | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 2
@@ -30,8 +28,6 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 16, epsilon: 1.0e-5}
   value_range: [-2, 2]
-  baseline_perf_us: 27.30
-  t_hw_us: 8.74
   note: "M-float32-4M-aligned-groups16-C64-symmetric-small | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 3
@@ -42,8 +38,6 @@ cases:
   dtype: [bfloat16, bfloat16, bfloat16]
   attrs: {num_groups: 32, epsilon: 1.0e-5}
   value_range: [-3, 3]
-  baseline_perf_us: 62.51
-  t_hw_us: 25.17
   note: "M-bfloat16-16M-aligned-groups32-C128-symmetric-small | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 4
@@ -54,8 +48,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 1, epsilon: 1.0e-5}
   value_range: [-10, 10]
-  baseline_perf_us: 37.38
-  t_hw_us: 6.12
   note: "S-float16-4M-nonaligned-groups1-InstanceNorm-equiv-symmetric-mid | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 5
@@ -66,8 +58,6 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 2, epsilon: 1.0e-5}
   value_range: [-100, 100]
-  baseline_perf_us: 61.47
-  t_hw_us: 2.18
   note: "S-float32-1M-nonaligned-groups2-symmetric-large | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 6
@@ -78,8 +68,6 @@ cases:
   dtype: [bfloat16, bfloat16, bfloat16]
   attrs: {num_groups: 4, epsilon: 1.0e-5}
   value_range: [-5, 5]
-  baseline_perf_us: 13.64
-  t_hw_us: 1
   note: "S-bfloat16-524K-aligned-3D-input-groups4 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 7
@@ -90,8 +78,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 16, epsilon: 1.0e-5}
   value_range: [-0.1, 0.1]
-  baseline_perf_us: 33.05
-  t_hw_us: 12.58
   note: "M-float16-8M-aligned-groups16-C256-symmetric-tiny | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 8
@@ -102,8 +88,6 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 1, epsilon: 1.0e-6}
   value_range: [-1, 1]
-  baseline_perf_us: 43.30
-  t_hw_us: 4.33
   note: "S-float32-2M-nonaligned-epsilon1e6-groups1 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 9
@@ -114,8 +98,6 @@ cases:
   dtype: [bfloat16, bfloat16, bfloat16]
   attrs: {num_groups: 8, epsilon: 1.0e-3}
   value_range: [-0.5, 0.5]
-  baseline_perf_us: 10.44
-  t_hw_us: 1.18
   note: "S-bfloat16-786K-aligned-3D-input-epsilon1e3-groups8 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 10
@@ -126,8 +108,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 4, epsilon: 1.0e-4}
   value_range: [-1, 2]
-  baseline_perf_us: 10.42
-  t_hw_us: 1.38
   note: "S-float16-917K-nonaligned-spatial-prime-groups4 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 11
@@ -138,8 +118,6 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 8, epsilon: 1.0e-4}
   value_range: [-50, 100]
-  baseline_perf_us: 23.39
-  t_hw_us: 6.55
   note: "M-float32-3M-nonaligned-spatial-prime-groups8 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 12
@@ -150,8 +128,6 @@ cases:
   dtype: [bfloat16, bfloat16, bfloat16]
   attrs: {num_groups: 6, epsilon: 1.0e-4}
   value_range: [-3, 6]
-  baseline_perf_us: 9.68
-  t_hw_us: 1
   note: "S-bfloat16-514K-nonaligned-C48-groups6 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 13
@@ -162,8 +138,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 1, epsilon: 1.0e-6}
   value_range: [-1, 1]
-  baseline_perf_us: 45.88
-  t_hw_us: 1
   note: "S-float16-263K-nonaligned-2D-input-groups1 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 14
@@ -174,8 +148,6 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 4, epsilon: 1.0e-5}
   value_range: [-10, 10]
-  baseline_perf_us: 34.42
-  t_hw_us: 4.2
   note: "S-float32-2M-nonaligned-5D-input-groups4 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 15
@@ -186,8 +158,6 @@ cases:
   dtype: [bfloat16, bfloat16, bfloat16]
   attrs: {num_groups: 1, epsilon: 1.0e-8}
   value_range: [-.inf, .inf]
-  baseline_perf_us: 212.42
-  t_hw_us: 11.72
   note: "M-bfloat16-7M-nonaligned-prime-spatial-inf-special | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 16
@@ -198,8 +168,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 8, epsilon: 1.0e-7}
   value_range: [.nan, .nan]
-  baseline_perf_us: 9.47
-  t_hw_us: 1
   note: "S-float16-608K-nonaligned-prime-spatial-nan-special | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 17
@@ -210,8 +178,6 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 1, epsilon: 1.0e-4}
   value_range: [0, 0]
-  baseline_perf_us: 42.20
-  t_hw_us: 2.17
   note: "S-float32-1M-nonaligned-groups1-zero-special-value | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 18
@@ -222,8 +188,6 @@ cases:
   dtype: [bfloat16, bfloat16, bfloat16]
   attrs: {num_groups: 16, epsilon: 1.0e-5}
   value_range: [-0.2, 0.2]
-  baseline_perf_us: 34.90
-  t_hw_us: 12.58
   note: "M-bfloat16-8M-nonaligned-C256-groups16-symmetric-tiny | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 19
@@ -234,8 +198,6 @@ cases:
   dtype: [float16, float16, float16]
   attrs: {num_groups: 32, epsilon: 1.0e-3}
   value_range: [-65504, 65504]
-  baseline_perf_us: 95.67
-  t_hw_us: 50.33
   note: "M-float16-33M-nonaligned-float16-boundary-groups32 | baseline_kernels: GroupNormSilu×1"
 - operator: GroupNorm
   case_id: 20
@@ -246,6 +208,4 @@ cases:
   dtype: [float32, float32, float32]
   attrs: {num_groups: 3, epsilon: 1.0e-6}
   value_range: [-20, 40]
-  baseline_perf_us: 103.65
-  t_hw_us: 4.24
   note: "S-float32-2M-nonaligned-large-channel-groups3-asymmetric-range | baseline_kernels: GroupNormSilu×1"

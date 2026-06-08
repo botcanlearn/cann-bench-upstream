@@ -27,6 +27,7 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict, field
 
 from ..config import Config, get_config
+from .._version import FRAMEWORK_VERSION, TASKS_VERSION
 from ..eval.evaluator import EvalCaseResult, EvalOperatorResult
 from .scoring import ScoringCalculator, OperatorScoreInfo
 from .setup_info import collect_setup_info
@@ -135,7 +136,8 @@ class OperatorReport:
 @dataclass
 class EvalReport:
     """完整评测报告"""
-    version: str
+    framework_version: str
+    tasks_version: str
     eval_code: str
     timestamp: str
     device: str
@@ -150,7 +152,8 @@ class EvalReport:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'version': self.version,
+            'framework_version': self.framework_version,
+            'tasks_version': self.tasks_version,
             'eval_code': self.eval_code,
             'timestamp': self.timestamp,
             'device': self.device,
@@ -167,8 +170,6 @@ class EvalReport:
 
 class ReportGenerator:
     """报告生成器"""
-
-    VERSION = "1.0"
 
     def __init__(self, output_dir: str = None, eval_code: str = None, config: Config = None):
         self.config = config or get_config()
@@ -238,7 +239,8 @@ class ReportGenerator:
         }
 
         return EvalReport(
-            version=self.VERSION,
+            framework_version=FRAMEWORK_VERSION,
+            tasks_version=TASKS_VERSION,
             eval_code=self.eval_code,
             timestamp=datetime.now().isoformat(),
             device=self._get_device_info(),
@@ -284,7 +286,8 @@ class ReportGenerator:
             f"**评测代号**: {report.eval_code}",
             f"**评测时间**: {report.timestamp}",
             f"**设备**: {report.device}",
-            f"**版本**: {report.version}",
+            f"**框架版本**: V{report.framework_version}",
+            f"**评测集版本**: tasks-v{report.tasks_version}",
             f"",
             f"## 概览",
             f"",

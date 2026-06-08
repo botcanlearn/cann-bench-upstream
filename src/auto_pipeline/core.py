@@ -703,7 +703,7 @@ class CannBenchClient:
             candidates.append(selector)
         else:
             candidates.append(self.cann_bench_root / selector)
-            default_root = self.cann_bench_root / "thirdparty" / "KernelBench" / "KernelBench"
+            default_root = self.cann_bench_root / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench"
             if selector.suffix == ".py":
                 candidates.append(default_root / selector)
             else:
@@ -724,7 +724,7 @@ class CannBenchClient:
             return py_path.stem
 
     def _stanford_bench_root_for(self, py_path: Path) -> Path:
-        default_root = (self.cann_bench_root / "thirdparty" / "KernelBench" / "KernelBench").resolve()
+        default_root = (self.cann_bench_root / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench").resolve()
         try:
             py_path.relative_to(default_root)
             return default_root

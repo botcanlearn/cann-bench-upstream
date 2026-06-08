@@ -11,7 +11,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 1023]
-  baseline_perf_us: null
   note: S-int64-小规模-keys1024-bucket1024-emb128
 
 # 中规模
@@ -25,7 +24,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 16383]
-  baseline_perf_us: null
   note: M-int64-中规模-keys16384-bucket16384-emb256
 
 # 大规模
@@ -39,7 +37,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 131071]
-  baseline_perf_us: null
   note: L-int64-大规模-keys131072-bucket131072-emb512
 
 # ========== 不同 embedding_dim ==========
@@ -53,7 +50,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 8191]
-  baseline_perf_us: null
   note: M-int64-emb64-keys8192
 
 - operator: EmbeddingHashTableLookupOrInsert
@@ -66,7 +62,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 4095]
-  baseline_perf_us: null
   note: M-int64-emb1024-keys4096
 
 # ========== 多维 keys ==========
@@ -81,7 +76,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 65535]
-  baseline_perf_us: null
   note: M-int64-2D-keys-bucket65536-emb128
 
 # 3D keys
@@ -95,7 +89,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 262143]
-  baseline_perf_us: null
   note: M-int64-3D-keys-bucket262144-emb256
 
 # ========== 带 default_value ==========
@@ -109,7 +102,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 4095]
-  baseline_perf_us: null
   note: S-int64-default_value=0.5
 
 - operator: EmbeddingHashTableLookupOrInsert
@@ -122,7 +114,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 2047]
-  baseline_perf_us: null
   note: S-int64-default_value=1.0
 
 # ========== 带 filter_key 功能 ==========
@@ -136,7 +127,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 2047]
-  baseline_perf_us: null
   note: S-int64-filter_key启用
 
 - operator: EmbeddingHashTableLookupOrInsert
@@ -149,7 +139,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 8191]
-  baseline_perf_us: null
   note: M-int64-filter_key=-1不生效
 
 # ========== 带多属性组合 ==========
@@ -163,7 +152,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 16383]
-  baseline_perf_us: null
   note: M-int64-default_value+filter_key组合
 
 # ========== 非对齐场景（质数） ==========
@@ -178,7 +166,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 1020]
-  baseline_perf_us: null
   note: S-int64-质数bucket1021-keys1009
 
 # 质数 embedding_dim
@@ -192,7 +179,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 4095]
-  baseline_perf_us: null
   note: M-int64-质数emb511-keys2048
 
 # ========== 边界值测试 ==========
@@ -207,7 +193,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 127]
-  baseline_perf_us: null
   note: XS-int64-最小规模-keys64-bucket128-emb32
 
 # 最小 embedding_dim
@@ -221,7 +206,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 511]
-  baseline_perf_us: null
   note: XS-int64-最小emb8-keys256
 
 # 大 key 值
@@ -235,7 +219,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 1048575]
-  baseline_perf_us: null
   note: M-int64-大bucket1M-keys1024
 
 # ========== key 重复场景 ==========
@@ -250,7 +233,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 255]
-  baseline_perf_us: null
   note: S-int64-key重复场景-bucket256-keys512
 
 # ========== 超大规模 ==========
@@ -264,7 +246,6 @@ cases:
   value_range:
   - [0, 0]
   - [0, 262143]
-  baseline_perf_us: null
   note: XL-int64-超大规模-keys262144-emb1024
 
 - operator: EmbeddingHashTableLookupOrInsert
@@ -277,5 +258,4 @@ cases:
   value_range:
   - [0, 0]
   - [0, 524287]
-  baseline_perf_us: null
   note: XL-int64-超大规模-keys524288-emb512

@@ -73,11 +73,11 @@ print_help() {
     echo ""
     echo "评测集配置:"
     echo "  --bench-name <name>       评测集名称: cann, stanford（默认: cann）"
-    echo "                            stanford 会自动使用 thirdparty/KernelBench 目录"
+    echo "                            stanford 会自动使用 bench_lab/stanford_bench/KernelBench 目录"
     echo ""
     echo "目录配置:"
     echo "  --task-dir <path>         指定评测目录（bench根目录或算子目录）"
-    echo "                            默认: tasks (cann) 或 thirdparty/KernelBench (stanford)"
+    echo "                            默认: tasks (cann) 或 bench_lab/stanford_bench/KernelBench/KernelBench (stanford)"
     echo "                            支持: tasks, tasks/level1, tasks/level1/exp 等"
     echo ""
     echo "设备配置:"
@@ -284,10 +284,10 @@ check_tasks() {
 
 # 检查 StanfordBench 数据目录
 check_stanford_data() {
-    KERNELBENCH_DIR="${PROJECT_ROOT}/thirdparty/KernelBench"
+    KERNELBENCH_DIR="${PROJECT_ROOT}/bench_lab/stanford_bench/KernelBench"
     if [[ ! -d "${KERNELBENCH_DIR}" ]]; then
         log_info "StanfordBench 数据目录不存在，正在下载..."
-        bash "${PROJECT_ROOT}/scripts/download_benchmarks.sh" --stanfordbench
+        bash "${PROJECT_ROOT}/bench_lab/stanford_bench/download.sh"
         if [[ ! -d "${KERNELBENCH_DIR}" ]]; then
             log_error "下载失败: ${KERNELBENCH_DIR}"
             exit 1
@@ -411,7 +411,7 @@ main() {
 
     # 正向推断：bench_name → task_dir 默认值
     if [[ "${BENCH_NAME}" == "stanford" ]] && [[ -z "${TASK_DIR}" ]]; then
-        TASK_DIR="thirdparty/KernelBench/KernelBench"
+        TASK_DIR="bench_lab/stanford_bench/KernelBench/KernelBench"
     elif [[ "${BENCH_NAME}" == "cann" ]] && [[ -z "${TASK_DIR}" ]]; then
         TASK_DIR="tasks"
     fi

@@ -46,8 +46,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 19.81
   note: 'M-float16-BSND-B2S128Nq128Nkv1-dnope512drope64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 2
@@ -86,8 +84,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 473.57
-  t_hw_us: 103.53
   note: 'L-bfloat16-BSND-B4S256Nq128Nkv1-dnope512drope64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 3
@@ -126,8 +122,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 8.87
   note: M-bfloat16-BSND-B2S128Nq64Nkv1-dnope448drope64-causal
 - operator: MLA
   case_id: 4
@@ -166,8 +160,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 159.44
-  t_hw_us: 51.56
   note: 'M-float16-BSND-B2Sq256Skv128Nq128-dnope512-cross | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 5
@@ -206,8 +198,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 247.82
-  t_hw_us: 51.77
   note: 'L-float16-BSND-B2S256Nq128-dnope512-long-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 6
@@ -246,8 +236,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 91.00
   note: L-float16-BSND-B2S256Nq128-dnope448-long-prefill
 - operator: MLA
   case_id: 7
@@ -286,8 +274,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 1.61
   note: 'S-float16-BSND-B1S1Skv2048Nq128-decode-single-batch | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 8
@@ -326,8 +312,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 117.96
-  t_hw_us: 25.78
   note: 'M-float16-BSND-B16S1Skv2048Nq128-decode | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 9
@@ -366,8 +350,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 187.72
-  t_hw_us: 51.56
   note: 'L-bfloat16-BSND-B32S1Skv2048Nq128-decode | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 10
@@ -406,8 +388,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 287.75
-  t_hw_us: 96.68
   note: 'L-float16-BSND-B60S1Skv2048Nq128-dnope512-decode-large-batch | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 11
@@ -446,8 +426,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 322.85
-  t_hw_us: 103.13
   note: 'L-float16-BSND-B128S1Skv4096Nq128-dnope512-decode-large-batch | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 12
@@ -486,8 +464,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 272.99
-  t_hw_us: 76.03
   note: 'L-float16-BSND-B60S1Skv2048Nq64-dnope512-decode-large-batch | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 13
@@ -526,8 +502,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 19.81
   note: 'M-float16-BNSD-B2Nq128S128-dnope512drope64-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 14
@@ -566,8 +540,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 17.61
   note: M-float16-BNSD-B2Nq128S128-dnope448drope64-prefill-causal
 - operator: MLA
   case_id: 15
@@ -606,8 +578,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 706.15
-  t_hw_us: 206.66
   note: 'L-bfloat16-BNSD-B2Nq128S512-dnope512-long-prefill-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 16
@@ -646,8 +616,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 293.71
-  t_hw_us: 96.68
   note: 'L-float16-BNSD-B60Nq128S1Skv2048-decode-large-batch | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 17
@@ -686,8 +654,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 145.84
-  t_hw_us: 51.55
   note: 'L-float16-BSND-B16Sq2Skv2048Nq128-dnope512-MTP-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 18
@@ -726,8 +692,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 548.55
-  t_hw_us: 309.31
   note: 'L-bfloat16-BSND-B96Sq2Skv4096Nq128-dnope512-MTP-large-batch-causal | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 19
@@ -766,8 +730,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 140.66
-  t_hw_us: 51.56
   note: 'L-float16-BNSD-B16Nq128Sq2Skv2048-dnope512-MTP | baseline_kernels: FusedInferAttentionScore×1'
 - operator: MLA
   case_id: 20
@@ -806,6 +768,4 @@ cases:
   value_range:
   - 0
   - 0
-  baseline_perf_us: null
-  t_hw_us: 19.81
   note: 'M-float16-BSND-zero-input-causal | baseline_kernels: FusedInferAttentionScore×1'

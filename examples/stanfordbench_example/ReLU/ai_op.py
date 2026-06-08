@@ -14,7 +14,7 @@ StanfordBench AI 算子示例：ReLU
 这是一个 Triton 实现的 ReLU 激活函数，用于演示如何测试 StanfordBench 格式的 AI 算子。
 
 测试方式:
-    ./scripts/run_evaluation.sh --bench-name stanford --task-dir thirdparty/KernelBench/KernelBench --operator ReLU --source-dir examples/stanfordbench_example/ReLU
+    ./scripts/run_evaluation.sh --bench-name stanford --task-dir bench_lab/stanford_bench/KernelBench/KernelBench --operator ReLU --source-dir examples/stanfordbench_example/ReLU
 """
 
 import torch

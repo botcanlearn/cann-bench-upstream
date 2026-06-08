@@ -10,30 +10,8 @@
 # ----------------------------------------------------------------------------------------------------------
 set -e
 
-DOWNLOAD_STANFORDBENCH=false
-
-for arg in "$@"; do
-  if [ "$arg" = "--stanfordbench" ]; then
-    DOWNLOAD_STANFORDBENCH=true
-  elif [ "$arg" = "--help" ] || [ "$arg" = "-h" ]; then
-    echo "用法: bash scripts/download_benchmarks.sh [选项]"
-    echo ""
-    echo "选项:"
-    echo "  --stanfordbench    下载 StanfordBench 数据集（原 KernelBench）"
-    echo "  --help, -h         显示帮助信息"
-    exit 0
-  fi
-done
-
-if ! $DOWNLOAD_STANFORDBENCH; then
-  echo "错误: 请指定下载选项 (--stanfordbench)"
-  echo "运行 bash scripts/download_benchmarks.sh --help 查看帮助"
-  exit 1
-fi
-
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-THIRDPARTY_DIR="${PROJECT_ROOT}/thirdparty"
-KERNELBENCH_DIR="${THIRDPARTY_DIR}/KernelBench"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+KERNELBENCH_DIR="${PROJECT_ROOT}/bench_lab/stanford_bench/KernelBench"
 
 KERNELBENCH_REPO_URL="https://github.com/ScalingIntelligence/KernelBench.git"
 KERNELBENCH_COMMIT="21fbe5a642898cd60b8f60c7aefb43d475e11f33"
@@ -47,8 +25,6 @@ function check_git() {
 
 function download_stanfordbench() {
   check_git
-
-  mkdir -p "${THIRDPARTY_DIR}"
 
   if [ -d "${KERNELBENCH_DIR}" ]; then
     echo "StanfordBench 数据已存在: ${KERNELBENCH_DIR}，跳过下载。如需重新下载，请先删除该目录。"
@@ -68,9 +44,7 @@ function download_stanfordbench() {
   echo "  注意: 数据目录名为 KernelBench（GitHub 仓库原名），评测时使用 --bench-name stanford"
 }
 
-if $DOWNLOAD_STANFORDBENCH; then
-  download_stanfordbench
-fi
+download_stanfordbench
 
 echo ""
 echo "========== 下载完成 =========="

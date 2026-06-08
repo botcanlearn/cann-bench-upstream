@@ -64,8 +64,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 2
@@ -122,8 +120,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 3
@@ -180,8 +176,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 4
@@ -238,8 +232,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 5
@@ -296,8 +288,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B8 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 6
@@ -354,8 +344,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 7
@@ -412,8 +400,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B4 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 8
@@ -470,8 +456,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 9
@@ -528,8 +512,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B8 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 10
@@ -586,8 +568,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B16 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 11
@@ -644,8 +624,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 12
@@ -702,8 +680,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B4 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 13
@@ -760,8 +736,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B8 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 14
@@ -818,8 +792,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 15
@@ -876,8 +848,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B16 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 16
@@ -934,8 +904,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 17
@@ -992,8 +960,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 18
@@ -1050,8 +1016,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1 reference-aligned coverage; block_size=64, sink_size=128
 - operator: FlashAttentionSinkPa
   case_id: 19
@@ -1108,8 +1072,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1 reference-aligned coverage; block_size=64, sink_size=64
 - operator: FlashAttentionSinkPa
   case_id: 20
@@ -1166,6 +1128,4 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1 reference-aligned coverage; block_size=64, sink_size=128

@@ -24,8 +24,6 @@ cases:
   - [-1.0, 1.0]
   - [-1.0, 1.0]
   - [0.5, 1.0]
-  baseline_perf_us: 36.86
-  t_hw_us: 13.11
   note: "M-float32-y=x1+x2/x3*scalar-TensorList_len=2-对齐-小比值范围 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 2
@@ -45,8 +43,6 @@ cases:
   - [-2.0, 2.0]
   - [-2.0, 2.0]
   - [1.0, 2.0]
-  baseline_perf_us: 89.62
-  t_hw_us: 39.32
   note: "M-float16-y=x1+x2/x3*scalar-TensorList_len=3-对齐-小比值范围 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 3
@@ -60,8 +56,6 @@ cases:
   - [-3.0, 3.0]
   - [-3.0, 3.0]
   - [0.3, 3.0]
-  baseline_perf_us: 115.76
-  t_hw_us: 52.43
   note: "M-bfloat16-y=x1+x2/x3*scalar-16M-对齐-对称小值域 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 4
@@ -75,8 +69,6 @@ cases:
   - [1.0, 10.0]
   - [-10.0, 10.0]
   - [5.0, 10.0]
-  baseline_perf_us: 892.00
-  t_hw_us: 419.43
   note: "L-float32-scalar=0.5-67M-对齐-结果远离0 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 5
@@ -93,8 +85,6 @@ cases:
   - [-100.0, 100.0]
   - [-100.0, 100.0]
   - [50.0, 100.0]
-  baseline_perf_us: 481.27
-  t_hw_us: 209.72
   note: "L-float16-scalar=2.0-TensorList_len=2-对齐-小比值范围 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 6
@@ -108,8 +98,6 @@ cases:
   - [-0.1, 0.1]
   - [-0.1, 0.1]
   - [0.1, 0.1]
-  baseline_perf_us: 18.70
-  t_hw_us: 3.27
   note: "S-bfloat16-scalar=-1.0-1M-非对齐-对称微小值域 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 7
@@ -123,8 +111,6 @@ cases:
   - [-1.0, 2.0]
   - [-1.0, 2.0]
   - [1.0, 2.0]
-  baseline_perf_us: 25.32
-  t_hw_us: 6.44
   note: "M-float32-scalar=1.5-1M-质数非对齐-小比值范围 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 8
@@ -138,8 +124,6 @@ cases:
   - [-5.0, 10.0]
   - [-5.0, 10.0]
   - [0.1, 10.0]
-  baseline_perf_us: 21.44
-  t_hw_us: 3.69
   note: "S-float16-1M-非对齐-非对称中值域 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 9
@@ -156,8 +140,6 @@ cases:
   - [-50.0, 100.0]
   - [-50.0, 100.0]
   - [0.1, 100.0]
-  baseline_perf_us: 767.63
-  t_hw_us: 310.57
   note: "L-bfloat16-TensorList_len=2-质数非对齐-非对称大值域-3D | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 10
@@ -171,8 +153,6 @@ cases:
   - [-65504.0, 65504.0]
   - [-65504.0, 65504.0]
   - [1.0, 65504.0]
-  baseline_perf_us: 24.28
-  t_hw_us: 6.57
   note: "M-float32-1M-非对齐-类型边界值 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 11
@@ -189,8 +169,6 @@ cases:
   - [-88.0, 88.0]
   - [-88.0, 88.0]
   - [0.1, 88.0]
-  baseline_perf_us: 31.92
-  t_hw_us: 6.83
   note: "M-float16-TensorList_len=2-质数非对齐-float32边界值-4D | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 12
@@ -204,8 +182,6 @@ cases:
   - [-.inf, .inf]
   - [-.inf, .inf]
   - [0.1, .inf]
-  baseline_perf_us: 22.98
-  t_hw_us: 6.25
   note: "M-float32-scalar=inf-inf特殊值-1D-质数非对齐 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 13
@@ -219,8 +195,6 @@ cases:
   - [.nan, .nan]
   - [.nan, .nan]
   - [.nan, .nan]
-  baseline_perf_us: 80.82
-  t_hw_us: 34.10
   note: "M-bfloat16-scalar=nan-nan特殊值-10M-质数非对齐-5D | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 14
@@ -234,8 +208,6 @@ cases:
   - [0, 0]
   - [0, 0]
   - [0.001, 0.001]
-  baseline_perf_us: 43.22
-  t_hw_us: 19.01
   note: "M-float32-零值-3M-质数非对齐-5D | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 15
@@ -252,8 +224,6 @@ cases:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
   - [0.25, 0.5]
-  baseline_perf_us: 35.96
-  t_hw_us: 13.11
   note: "M-float32-TensorList_len=2-2M-非对齐-小比值范围 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 16
@@ -276,8 +246,6 @@ cases:
   - [-1.0, 3.0]
   - [-1.0, 3.0]
   - [0.1, 3.0]
-  baseline_perf_us: 71.44
-  t_hw_us: 26.12
   note: "M-bfloat16-TensorList_len=4-8M-非对齐-非对称小值域 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 17
@@ -291,8 +259,6 @@ cases:
   - [-1000.0, 1000.0]
   - [-1000.0, 1000.0]
   - [0.1, 1000.0]
-  baseline_perf_us: 28.20
-  t_hw_us: 6.54
   note: "M-float16-scalar=0.0-2M-非对齐-对称大值域 | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 18
@@ -309,8 +275,6 @@ cases:
   - [-0.2, 0.2]
   - [-0.2, 0.2]
   - [0.1, 0.2]
-  baseline_perf_us: 59.94
-  t_hw_us: 26.18
   note: "M-float32-TensorList_len=2-scalar=2.0-8M-非对齐-对称微小值域-3D | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 19
@@ -324,8 +288,6 @@ cases:
   - [-3.0, 6.0]
   - [-3.0, 6.0]
   - [0.1, 6.0]
-  baseline_perf_us: 27.96
-  t_hw_us: 6.53
   note: "M-bfloat16-scalar=-0.5-2M-非对齐-非对称中值域-3D | baseline_kernels: ForeachAddcdivScalar×1"
 - operator: ForeachAddcdivScalar
   case_id: 20
@@ -339,6 +301,4 @@ cases:
   - [-20.0, 40.0]
   - [-20.0, 40.0]
   - [20.0, 40.0]
-  baseline_perf_us: 105.68
-  t_hw_us: 65.93
   note: "L-float32-scalar=1.5-10M-非对齐-小比值范围-5D | baseline_kernels: ForeachAddcdivScalar×1"

@@ -2,6 +2,14 @@
 
 基于 `<<<>>>` 语法的 AscendC 自定义算子示例，支持算子自注册机制。
 
+## Supported SOC Versions
+
+| SOC | `NPU_ARCH` Value | Bisheng `--npu-arch` | Ascend Chip |
+|------|---------------|----------------------|-------------|
+| Ascend 910B | `ascend910b` | `dav-2201` | 910B1/B2/B3/B4 |
+| Ascend 910_93 | `ascend910_93` | `dav-2203` | 910_93 series |
+| Ascend 950 | `ascend950` | `dav-3510` | 950 series |
+
 ## 目录结构
 
 ```
@@ -34,9 +42,14 @@ direct_launch_example/
 ## 构建方法
 
 ```bash
-bash build.sh           # 仅构建wheel包
-bash build.sh --install # 构建+安装
+bash build.sh                              # Auto-detect SOC, build wheel
+bash build.sh --soc=ascend910b             # Build for 910B explicitly
+bash build.sh --soc=ascend910_93           # Build for 910_93
+bash build.sh --soc=ascend950              # Build for 950
+bash build.sh --soc=ascend910b --install   # Build + install for 910B
 ```
+
+If SOC cannot be auto-detected, the script will exit with an error. Use `--soc=` to specify manually.
 
 ---
 
@@ -253,7 +266,7 @@ TORCH_LIBRARY_IMPL(cann_bench, PrivateUse1, m)
 
 # Mul算子自注册
 
-# Kernel源文件(bisheng编译: --npu-arch=dav-2201 -xasc)
+# Kernel源文件(bisheng编译: --npu-arch and -xasc are set centrally from NPU_ARCH)
 set(MUL_KERNEL_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/mul_kernel.cpp
 )
@@ -269,7 +282,6 @@ register_direct_launch_op(
     op_kernel               # Kernel include目录(相对路径)
     "${MUL_PLUGIN_SRCS}"    # Plugin源文件列表
     op_kernel               # Plugin include目录(相对路径)
-    "--npu-arch=dav-2201"   # bisheng编译参数
 )
 ```
 
@@ -288,7 +300,7 @@ bash build.sh --install
 ### 注册宏定义 (cmake/func.cmake)
 
 ```cmake
-macro(register_direct_launch_op KERNEL_SRCS KERNEL_INCLUDE_DIR PLUGIN_SRCS PLUGIN_INCLUDE_DIR KERNEL_ARGS)
+macro(register_direct_launch_op KERNEL_SRCS KERNEL_INCLUDE_DIR PLUGIN_SRCS PLUGIN_INCLUDE_DIR)
     # 将kernel源文件添加到 ALL_KERNEL_SRCS
     # 将plugin源文件添加到 ALL_PLUGIN_SRCS
     # 将include目录添加到全局列表
@@ -311,7 +323,7 @@ endforeach()
 顶层 `CMakeLists.txt` 仅使用全局变量：
 ```cmake
 # Kernel编译(bisheng)
-set_source_files_properties(${ALL_KERNEL_SRCS} PROPERTIES COMPILE_FLAGS "--npu-arch=dav-2201 -xasc")
+set_source_files_properties(${ALL_KERNEL_SRCS} PROPERTIES COMPILE_FLAGS "--npu-arch=${BISHENG_NPU_ARCH} -xasc")
 add_library(all_kernels_obj OBJECT ${ALL_KERNEL_SRCS})
 
 # Plugin编译(g++)

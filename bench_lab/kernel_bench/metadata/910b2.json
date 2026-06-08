@@ -1,0 +1,8 @@
+{
+  "_metadata": {
+    "description": "Kernel Bench baseline 性能数据",
+    "hardware": "910b2",
+    "generated_at": "2026-06-06T15:12:40.098921",
+    "source": "从 bench_lab/kernel_bench/cases.yaml 迁移"
+  }
+}

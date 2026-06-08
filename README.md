@@ -68,7 +68,7 @@ cann-bench/
 ├── examples/               # 算子工程样例 & 评测任务样例
 │   ├── aclnn_launch_example/    # ACLNN 自定义算子样例
 │   ├── direct_launch_example/   # Direct launch 算子样例
-│   ├── eval_task/               # 评测任务样例（add/sqrt fixture，验证评测流水线）
+│   ├── tasks/                    # 评测任务样例（add/sqrt fixture，验证评测流水线）
 │   └── stanfordbench_example/   # Stanford benchmark 样例
 ├── docs/                   # 规范 / 设计 / 指南文档
 ├── scripts/                # 评测/测试入口脚本
@@ -158,7 +158,7 @@ pip install -r requirements.txt
 
 **评测任务样例**（教你"怎么评算子"）：
 
-3. **评测任务 fixture**：[examples/eval_task/](examples/eval_task/) — 提供 Add/Sqrt 两个轻量算子的评测定义（proto.yaml + golden.py + cases.yaml），用于验证评测流水线是否正常工作
+3. **评测任务 fixture**：[examples/tasks/](examples/tasks/) — 提供 Add/Sqrt 两个轻量算子的评测定义（proto.yaml + golden.py + cases.yaml + metadata/），用于验证评测流水线是否正常工作
 
 使用自定义算子：
 

@@ -373,7 +373,7 @@ def _render_operator_tables(ops: List[OperatorReport]) -> str:
 # Certification Seal
 # ---------------------------------------------------------------------------
 
-SEAL_HTML = '''  <!-- ============================================================ -->
+SEAL_HTML_TEMPLATE = '''  <!-- ============================================================ -->
   <!-- CERTIFICATION SEAL                                             -->
   <!-- ============================================================ -->
   <div class="seal-section">
@@ -387,7 +387,7 @@ SEAL_HTML = '''  <!-- ==========================================================
           <div class="seal-star">&#9733;</div>
           <div class="seal-date">2026 &middot; 06 &middot; 01</div>
         </div>
-        <span class="seal-arc-bottom">V0.1.0</span>
+        <span class="seal-arc-bottom">V{framework_version}</span>
       </div>
     </div>
 
@@ -397,7 +397,7 @@ SEAL_HTML = '''  <!-- ==========================================================
         Ascend C 算子代码。
       </p>
       <p>
-        评测数据来源于 CANN-Bench tasks/ 标准化题库，评分严格按照 CANN-Bench V0.1.0 评分规范执行。
+        评测数据来源于 CANN-Bench tasks/ 标准化题库（tasks-v{tasks_version}），评分严格按照 CANN-Bench V{framework_version} 评分规范执行。
       </p>
       <p class="cert-sign">
         CANN-Bench Evaluation Framework &mdash; AI for CANN, Benchmark for AI
@@ -514,6 +514,10 @@ def render_html_report(
     html += '\n' + _render_operator_tables(report.operators)
 
     # 5. Certification Seal + closing tags
-    html += '\n' + SEAL_HTML
+    from .._version import FRAMEWORK_VERSION, TASKS_VERSION
+    html += '\n' + SEAL_HTML_TEMPLATE.format(
+        framework_version=FRAMEWORK_VERSION,
+        tasks_version=TASKS_VERSION,
+    )
 
     return html

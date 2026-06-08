@@ -40,8 +40,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 24.03
   note: "float16-BSND-GQA-B2S256Skv4096N32Nkv8Dk128-top512-causal"
 - operator: SparseFlashAttention
   case_id: 2
@@ -74,8 +72,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 29.49
   note: "float16-BSND-GQA-Dk192Dv128-top512"
 - operator: SparseFlashAttention
   case_id: 3
@@ -108,8 +104,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 123.03
   note: "bfloat16-BNSD-GQA-top1024-causal"
 - operator: SparseFlashAttention
   case_id: 4
@@ -142,8 +136,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 37.14
   note: "float16-BNSD-GQA-Dk192-top512"
 - operator: SparseFlashAttention
   case_id: 5
@@ -176,8 +168,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 15.38
   note: "float16-BSND-GQA-N64Nkv8-top512-causal"
 - operator: SparseFlashAttention
   case_id: 6
@@ -210,8 +200,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 17.68
   note: "float16-BSND-GQA-B16S1-decode-top512"
 - operator: SparseFlashAttention
   case_id: 7
@@ -244,8 +232,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 88.13
   note: "bfloat16-BNSD-GQA-B32S1-decode-Dk192-top1024"
 - operator: SparseFlashAttention
   case_id: 8
@@ -278,8 +264,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 35.50
   note: "float16-BSND-GQA-B8S4-MTP-top512-causal"
 - operator: SparseFlashAttention
   case_id: 9
@@ -312,8 +296,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 115.52
-  t_hw_us: 48.53
   note: "float16-BSND-MLA-Dk512Dv512-top512-causal | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 10
@@ -346,8 +328,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 158.52
-  t_hw_us: 51.56
   note: "float16-BSND-MLA-Dk576Dv512-top512-causal | baseline_kernels: Slice×4 + SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 11
@@ -380,8 +360,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 449.41
-  t_hw_us: 194.12
   note: "bfloat16-BNSD-MLA-Dk512-top512-causal | baseline_kernels: Transpose×2 + SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 12
@@ -414,8 +392,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 255.07
-  t_hw_us: 103.13
   note: "float16-BNSD-MLA-Dk576-top512 | baseline_kernels: Transpose×2 + Slice×4 + SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 13
@@ -448,8 +424,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 104.12
-  t_hw_us: 48.53
   note: "float16-BSND-MLA-top512-long-causal | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 14
@@ -482,8 +456,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 48.18
-  t_hw_us: 9.85
   note: "float16-BSND-MLA-B16S1-decode-top512 | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 15
@@ -516,8 +488,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 38.43
   note: "bfloat16-BNSD-MLA-B32S1-decode-Dk576-top1024"
 - operator: SparseFlashAttention
   case_id: 16
@@ -550,8 +520,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 59.90
-  t_hw_us: 19.69
   note: "float16-BSND-MLA-B8S4-MTP-top512 | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 17
@@ -584,8 +552,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: null
-  t_hw_us: 39.66
   note: "float16-BNSD-MLA-B16S4-MTP-Dk576-top512-causal"
 - operator: SparseFlashAttention
   case_id: 18
@@ -618,8 +584,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us: 59.18
-  t_hw_us: 19.69
   note: "float16-BSND-MLA-B32S1-decode-large-batch | baseline_kernels: SparseFlashAttention×1"
 - operator: SparseFlashAttention
   case_id: 19
@@ -652,8 +616,6 @@ cases:
   value_range:
   - -1
   - 1
-  baseline_perf_us:
-  t_hw_us: 17.68
   note: "float16-BSND-GQA-B8S2-MTP-large-batch-causal"
 - operator: SparseFlashAttention
   case_id: 20
@@ -686,6 +648,4 @@ cases:
   value_range:
   - 0
   - 0
-  baseline_perf_us:
-  t_hw_us: 24.03
   note: "float16-BSND-GQA-zero-input"

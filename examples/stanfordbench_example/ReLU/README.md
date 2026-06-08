@@ -16,10 +16,10 @@ examples/stanfordbench/
 
 ```bash
 # 单卡测试
-./scripts/run_evaluation.sh --bench-name stanford --task-dir thirdparty/KernelBench/KernelBench --operator ReLU --device-id 0 --source-dir examples/stanfordbench_example/ReLU
+./scripts/run_evaluation.sh --bench-name stanford --task-dir bench_lab/stanford_bench/KernelBench/KernelBench --operator ReLU --device-id 0 --source-dir examples/stanfordbench_example/ReLU
 
 # 多卡并行测试
-./scripts/run_evaluation.sh --bench-name stanford --task-dir thirdparty/KernelBench/KernelBench --operator ReLU --source-dir examples/stanfordbench_example/ReLU
+./scripts/run_evaluation.sh --bench-name stanford --task-dir bench_lab/stanford_bench/KernelBench/KernelBench --operator ReLU --source-dir examples/stanfordbench_example/ReLU
 ```
 
 ## AI 算子文件要求
@@ -34,7 +34,7 @@ AI 算子文件 (`ai_op.py`) 需要满足以下要求：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  1. 加载 StanfordBench Golden (thirdparty/KernelBench)      │
+│  1. 加载 StanfordBench Golden (bench_lab/stanford_bench/KernelBench)      │
 │     - get_inputs(): 生成测试输入                             │
 │     - Model.forward(): PyTorch 参考实现                      │
 └─────────────────────────────────────────────────────────────┘

@@ -47,6 +47,9 @@ fusion_result.json
 skill/
 case_generate/
 .claude/
+.understand-anything/
+.understand-thing/
+nouse/
 
 # Test reports (generated)
 test/reports/
@@ -56,6 +59,9 @@ cann_bench_project/
 .arts
 # OpenCode 配置
 .opencode/
+
+# 编译日志（runtime 产出）
+_compile_logs/
 
 # msprof profile data — large, runtime-generated under inner/baseline_perf_prof/results/
 inner/baseline_perf_prof/results/msprof_level*/

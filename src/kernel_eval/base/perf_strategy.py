@@ -17,9 +17,11 @@
 职责：
 1. 定义 PerfMetricStrategy ABC — 接收 profiler 产出文件路径，自主解析并填充 PerfResult
 2. ProfFileLocations — 文件定位结果数据类
-3. KernelDetailsStrategy — 默认策略（trace_view kernel 级 + CSV warmup 过滤）
-4. TraceViewStrategy — PYPTO 口径策略（tilefwk/PYPTO 事件，不 fallback，
-    仅适用于使用 tilefwk/PYPTO 实现的算子）
+3. KernelDetailsStrategy — 默认策略（kernel_details.csv 为唯一 elapsed_us 数据源，
+    trace_view 仅用于补充 tilefwk/PYPTO 指标和 sanity check）
+4. TraceViewStrategy — PYPTO 口径策略（**待收编**；
+    KernelDetailsStrategy 的 metadata 已包含 aicore_e2e 等指标，
+    待确认下游无直接依赖后删除此策略）
 
 设计原则：
 - perf_eval 只负责 profiler 运行和文件定位（_locate_prof_files）
@@ -479,20 +481,21 @@ def parse_tilefwk_metrics(trace_view_path: str,
 class KernelDetailsStrategy(PerfMetricStrategy):
     """默认策略：Σ kernel Duration 中位数 作为 elapsed_us。
 
-    数据源尝试顺序（找到即停，不 fallback）：
-    1. kernel_details.csv kernel 级事件 + Input Shapes warmup 过滤（权威源）
-    2. trace_view.json kernel 级事件（CSV 不可用时的兜底）
+    数据源：kernel_details.csv（唯一权威源）。
+    CSV 不可用 → 明确报错，不 fallback 到 trace_view。
 
-    两者都不可用 → 明确报错。
-
-    为什么 CSV 优先：kernel_details.csv 列出了**每一个** kernel（既包括
+    为什么只用 CSV：kernel_details.csv 列出了**每一个** kernel（既包括
     aclnn 辅助 kernel，也包括 direct-launch / 自定义 AscendC kernel，如
     ``*_custom``），并带有 Type / Duration(us) / Step Id / Input Shapes。
     而 ``parse_trace_view_kernels`` 只识别 ``aclnn*AiCore_`` 命名，会**静默
     漏掉**自定义 kernel——当一个 case 同时含小的 ACLNN 辅助 kernel 和大的
     自定义 kernel 时，trace_view 口径只统计到辅助 kernel，导致 elapsed_us
-    偏小、speedup 虚高。因此 elapsed 口径以 CSV 为准，trace_view 仅用于
-    补充 tilefwk/PYPTO 指标，或在 CSV 缺失时兜底。
+    偏小、speedup 虚高。
+
+    trace_view.json 的用途（不参与 elapsed_us 计算）：
+    - 补充 tilefwk/PYPTO 指标（aicore_e2e / aicpukernel_gap / aicore_e2e_jitter）
+      写入 op_times["trace_view"] 和 metadata，供下游查询
+    - sanity check：对比 trace_view kernel total vs CSV total，诊断告警
     """
 
     def parse(self, prof_files: ProfFileLocations, result: Any) -> Any:
@@ -501,7 +504,7 @@ class KernelDetailsStrategy(PerfMetricStrategy):
 
         warmup_names = extract_warmup_names_from_csv(prof_files.csv_path)
 
-        # 优先使用 kernel_details.csv —— 完整 kernel 列表（含自定义 kernel）
+        # kernel_details.csv —— 唯一 elapsed_us 数据源
         if prof_files.csv_path:
             kernel_data = parse_csv_kernels(prof_files.csv_path, warmup_names)
             if kernel_data.get("total_kernel_us") and kernel_data["total_kernel_us"] > 0:
@@ -510,13 +513,17 @@ class KernelDetailsStrategy(PerfMetricStrategy):
                 result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
                 result.metadata["data_source"] = "kernel_details_csv"
 
-                # trace_view 提供 tilefwk/PYPTO 等独有补充指标（存在时附加）
+                # trace_view 补充 tilefwk/PYPTO 指标（不参与 elapsed_us 计算）
                 if prof_files.trace_view_path:
                     tilefwk_metrics = parse_tilefwk_metrics(
                         prof_files.trace_view_path, warmup_names
                     )
                     if tilefwk_metrics:
                         result.op_times["trace_view"] = tilefwk_metrics
+                        # 将 aicore_e2e 等关键指标也写入 metadata，便于下游直接查询
+                        result.metadata["aicore_e2e"] = tilefwk_metrics.get("aicore_e2e")
+                        result.metadata["aicpukernel_gap"] = tilefwk_metrics.get("aicpukernel_gap")
+                        result.metadata["aicore_e2e_jitter"] = tilefwk_metrics.get("aicore_e2e_jitter")
 
                     # sanity check：若 trace_view kernel 口径明显小于 CSV，
                     # 说明它漏掉了 CSV 中的 kernel（典型为自定义 kernel）。
@@ -536,32 +543,13 @@ class KernelDetailsStrategy(PerfMetricStrategy):
                         )
                 return result
 
-        # CSV 不可用 → 兜底使用 trace_view kernel 事件
-        # 注意：parse_trace_view_kernels 仅识别 aclnn*AiCore_ 命名，自定义
-        # kernel 不会被统计；此分支仅在 CSV 缺失（通常不会发生，因为
-        # trace_view 路径是从 CSV 所在目录推导的）时兜底。
-        if prof_files.trace_view_path:
-            kernel_data = parse_trace_view_kernels(
-                prof_files.trace_view_path, warmup_names
-            )
-            if kernel_data.get("total_kernel_us") and kernel_data["total_kernel_us"] > 0:
-                result.elapsed_us = kernel_data["total_kernel_us"]
-                result.op_times = {"device_kernels": kernel_data["device_kernels"]}
-                result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
-                result.metadata["data_source"] = "trace_view"
-
-                tilefwk_metrics = parse_tilefwk_metrics(
-                    prof_files.trace_view_path, warmup_names
-                )
-                if tilefwk_metrics:
-                    result.op_times["trace_view"] = tilefwk_metrics
-                return result
-
-        # 两者都不可用 → 明确报错
+        # CSV 不可用 → 明确报错（不 fallback 到 trace_view，
+        # 因为 parse_trace_view_kernels 的 aclnn*AiCore_ 过滤器会漏掉自定义 kernel，
+        # 且有 trace_view 时 CSV 必然存在——两者是同批次 profiler 产出）
         result.elapsed_us = 0.0
         result.error_msg = (
-            f"KernelDetailsStrategy: no perf data available — "
-            f"csv_path={prof_files.csv_path}, trace_view_path={prof_files.trace_view_path}"
+            f"KernelDetailsStrategy: kernel_details.csv not found or empty — "
+            f"csv_path={prof_files.csv_path}"
         )
         return result
 
@@ -576,6 +564,11 @@ class KernelDetailsStrategy(PerfMetricStrategy):
 class TraceViewStrategy(PerfMetricStrategy):
     """PYPTO 口径策略：trace_view.aicore_e2e 作为 elapsed_us。
 
+    **待收编** — KernelDetailsStrategy 的 metadata 已包含
+    aicore_e2e / aicpukernel_gap / aicore_e2e_jitter，完全覆盖了此策略
+    的输出。待确认下游无直接依赖后删除此策略，届时请使用
+    KernelDetailsStrategy（默认策略）替代。
+
     数据源要求：trace_view.json 中的 tilefwk/PYPTO 事件。
     无 fallback — tilefwk/PYPTO 缺失时明确报错，不静默切换口径。
 
@@ -587,6 +580,14 @@ class TraceViewStrategy(PerfMetricStrategy):
 
     def parse(self, prof_files: ProfFileLocations, result: Any) -> Any:
         """解析 profiler 产出文件，填充 PerfResult。"""
+        import warnings
+        warnings.warn(
+            "TraceViewStrategy 待收编。"
+            "KernelDetailsStrategy 的 metadata 已包含 aicore_e2e 等指标，"
+            "待确认下游无直接依赖后将删除此策略。",
+            PendingDeprecationWarning,
+            stacklevel=2,
+        )
         from .result import PerfResult
 
         if not prof_files.trace_view_path:

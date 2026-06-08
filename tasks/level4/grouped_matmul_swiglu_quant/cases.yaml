@@ -34,8 +34,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 772.76
-  t_hw_us: 122.88
   note: "L-DSv3-EP16-per-card-decode-M=128-E=8-K=7168-N=4096-balanced(~16/expert) | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 2
@@ -72,8 +70,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 773.95
-  t_hw_us: 123.36
   note: "L-DSv3-EP16-per-card-decode-M=256-E=8-K=7168-N=4096-balanced(~32/expert) | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 3
@@ -110,8 +106,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 824.66
-  t_hw_us: 126.23
   note: "L-DSv3-EP16-per-card-prefill-M=1024-E=8-K=7168-N=4096-balanced(~128/expert) | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 4
@@ -148,8 +142,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 904.88
-  t_hw_us: 169.86
   note: "L-DSv3-EP16-per-card-prefill-M=2048-E=8-K=7168-N=4096-balanced(~256/expert) | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 5
@@ -186,8 +178,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 1112.92
-  t_hw_us: 339.71
   note: "L-DSv3-EP16-per-card-big-batch-M=4096-E=8-K=7168-N=4096 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 6
@@ -224,8 +214,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 803.92
-  t_hw_us: 124.31
   note: "L-DSv3-EP16-per-card-imbalanced-M=512-E=8-one-hot-expert-token-skew | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 7
@@ -262,8 +250,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 706.21
-  t_hw_us: 122.88
   note: "L-DSv3-EP16-per-card-empty-expert-M=128-E=8-含2个空group(idx2和idx5) | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 8
@@ -308,8 +294,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 1725.63
-  t_hw_us: 246.72
   note: "L-DSv3-EP8-per-card-128专家8卡-M=512-E=16-K=7168-N=4096-balanced-32-per-expert | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 9
@@ -346,8 +330,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 2021.14
-  t_hw_us: 175.0
   note: "L-Mixtral-like-scaled-M=32-E=8-K=4096-N=10240-受硬件N<=10240约束的缩减版 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 10
@@ -384,8 +366,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 170.64
-  t_hw_us: 44.01
   note: "M-Qwen2-MoE-like-M=1024-E=8-K=3584-N=2816-moe_inter=1408 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 11
@@ -415,8 +395,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 78.46
-  t_hw_us: 12.13
   note: "M-single-expert退化-E=1-M=256-K=4096-N=4096-纯GMM | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 12
@@ -447,8 +425,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 26.34
-  t_hw_us: 1
   note: "S-small-aligned-M=64-E=2-K=256-N=512-小规模冒烟 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 13
@@ -481,8 +457,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 127.82
-  t_hw_us: 24.27
   note: "M-medium-aligned-M=1024-E=4-K=2048-N=4096-对齐中规模 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 14
@@ -527,8 +501,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 1069.76
-  t_hw_us: 144.32
   note: "L-large-aligned-M=2048-E=16-K=4096-N=4096-多专家大规模 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 15
@@ -561,8 +533,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 45.16
-  t_hw_us: 2.99
   note: "S-prime-M-M=1009-E=4-K=1024-N=1024-M质数非对齐 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 16
@@ -595,8 +565,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 40.62
-  t_hw_us: 2.51
   note: "S-non-pow2-K-M=512-E=4-K=1040(16x65)-N=1024-K非2幂但16对齐 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 17
@@ -629,8 +597,6 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 43.20
-  t_hw_us: 2.54
   note: "S-non-pow2-N-M=512-E=4-K=1024-N=1056(32x33)-SwiGLU拆分后=528 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 18
@@ -663,8 +629,6 @@ cases:
     - 0.001
   - - 0.0001
     - 0.001
-  baseline_perf_us: 38.04
-  t_hw_us: 2.47
   note: "S-micro-dequant-scale-M=512-E=4-两端scale=1e-4到1e-3-微小反量化 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 19
@@ -697,8 +661,6 @@ cases:
     - 0.1
   - - 0.01
     - 0.1
-  baseline_perf_us: 38.34
-  t_hw_us: 2.47
   note: "S-large-dequant-scale-M=512-E=4-两端scale=0.01到0.1-大反量化 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"
 - operator: GroupedMatmulSwigluQuant
   case_id: 20
@@ -735,6 +697,4 @@ cases:
     - 0.01
   - - 0.001
     - 0.01
-  baseline_perf_us: 439.31
-  t_hw_us: 72.16
   note: "L-narrow-activation-range-M=1024-E=8-x限定±32防止K=4096累加溢出 | baseline_kernels: TransData×1 + GroupedMatmulSwigluQuantV2×1"

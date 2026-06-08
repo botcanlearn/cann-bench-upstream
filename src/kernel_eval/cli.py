@@ -764,7 +764,6 @@ def cmd_eval_process(args):
 
     config.device_type = "npu"
     config.device_id = args.card_id
-    config.auto_fallback = False
     config.enable_profiler = args.enable_profiler
     config.warmup = args.warmup
     config.repeat = args.repeat

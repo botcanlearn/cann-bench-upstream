@@ -59,8 +59,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq1-Skv1024 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 2
@@ -112,8 +110,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq64-Skv64 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 3
@@ -165,8 +161,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq256-Skv512 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 4
@@ -218,8 +212,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq1024-Skv1024 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 5
@@ -271,8 +263,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B8-Sq1-Skv2048 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 6
@@ -324,8 +314,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq512-Skv1024 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 7
@@ -377,8 +365,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq97-Skv97 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 8
@@ -430,8 +416,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq200-Skv256 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 9
@@ -483,8 +467,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq4096-Skv4096 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 10
@@ -536,8 +518,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq2-Skv2 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 11
@@ -589,8 +569,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq128-Skv256 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 12
@@ -642,8 +620,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq1024-Skv2048 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 13
@@ -695,8 +671,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B4-Sq97-Skv200 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 14
@@ -748,8 +722,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq512-Skv512 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 15
@@ -801,8 +773,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq64-Skv128 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 16
@@ -854,8 +824,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq1-Skv128 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 17
@@ -907,8 +875,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq64-Skv64 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 18
@@ -960,8 +926,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq128-Skv256 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 19
@@ -1013,8 +977,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq256-Skv512 reference-aligned coverage
 - operator: FlashAttentionMla
   case_id: 20
@@ -1066,6 +1028,4 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq1-Skv128 reference-aligned coverage

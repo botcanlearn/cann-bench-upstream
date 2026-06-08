@@ -4,6 +4,8 @@
 
 # Direct launch算子注册宏
 # 算子目录通过调用register_direct_launch_op()将自己注册到全局列表
+# NOTE: Bisheng compile flags (--npu-arch, -xasc) are set centrally in the
+# top-level CMakeLists.txt via KERNEL_COMPILE_FLAGS, derived from NPU_ARCH.
 
 # 全局变量定义
 set(ALL_KERNEL_SRCS "" CACHE INTERNAL "All kernel source files")
@@ -17,8 +19,7 @@ set(ALL_PLUGIN_INCLUDE_DIRS "" CACHE INTERNAL "All plugin include directories")
 #   KERNEL_INCLUDE_DIR: kernel需要的include目录
 #   PLUGIN_SRCS: plugin源文件列表(g++编译)
 #   PLUGIN_INCLUDE_DIR: plugin需要的include目录
-#   KERNEL_ARGS: bisheng编译参数(如--npu-arch=dav-2201)
-macro(register_direct_launch_op KERNEL_SRCS KERNEL_INCLUDE_DIR PLUGIN_SRCS PLUGIN_INCLUDE_DIR KERNEL_ARGS)
+macro(register_direct_launch_op KERNEL_SRCS KERNEL_INCLUDE_DIR PLUGIN_SRCS PLUGIN_INCLUDE_DIR)
     get_filename_component(OP_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
     message(STATUS "Registering direct launch op: ${OP_NAME}")
 
@@ -41,11 +42,6 @@ macro(register_direct_launch_op KERNEL_SRCS KERNEL_INCLUDE_DIR PLUGIN_SRCS PLUGI
     set(_TEMP_PLUGIN_INC ${ALL_PLUGIN_INCLUDE_DIRS})
     list(APPEND _TEMP_PLUGIN_INC ${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_INCLUDE_DIR})
     set(ALL_PLUGIN_INCLUDE_DIRS ${_TEMP_PLUGIN_INC} CACHE INTERNAL "All plugin include directories")
-
-    # 存储编译参数
-    set(_KERNEL_ARGS_LIST ${ALL_KERNEL_ARGS_LIST})
-    list(APPEND _KERNEL_ARGS_LIST "${OP_NAME}|${KERNEL_ARGS}")
-    set(ALL_KERNEL_ARGS_LIST ${_KERNEL_ARGS_LIST} CACHE INTERNAL "All kernel args")
 
     message(STATUS "Registered ${OP_NAME}: kernel=${KERNEL_SRCS}, plugin=${PLUGIN_SRCS}")
 endmacro()

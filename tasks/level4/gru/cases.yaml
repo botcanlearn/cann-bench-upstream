@@ -12,14 +12,14 @@ cases:
   - &id001
     - - 96
   - *id001
-  - null  # h0 省略，用 null 占位
+  -       # h0 省略，用 null 占位
   dtype:
   - float32
   - - float32
   - - float32
   - - float32
   - - float32
-  - null  # dtype 也用 null 对应
+  -       # dtype 也用 null 对应
   attrs:
     inputSize: 64
     hiddenSize: 32
@@ -39,9 +39,7 @@ cases:
       - -0.01
       - 0.01
   - - *id003
-  - null  # value_range 也用 null 对应
-  baseline_perf_us: null
-  t_hw_us: 1
+  -       # value_range 也用 null 对应
   note: S-float32-case1
 - operator: GRU
   case_id: 2
@@ -81,8 +79,6 @@ cases:
       - -0.02
       - 0.02
   - - *id006
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case2
 - operator: GRU
   case_id: 3
@@ -122,8 +118,6 @@ cases:
       - -0.03
       - 0.03
   - - *id009
-  baseline_perf_us: null
-  t_hw_us: 1.332936
   note: S-bfloat16-case3
 - operator: GRU
   case_id: 4
@@ -176,8 +170,6 @@ cases:
     - *id012
   - - *id012
     - *id012
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float32-case4
 - operator: GRU
   case_id: 5
@@ -230,8 +222,6 @@ cases:
     - *id015
   - - *id015
     - *id015
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case5
 - operator: GRU
   case_id: 6
@@ -284,8 +274,6 @@ cases:
     - *id018
   - - *id018
     - *id018
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case6
 - operator: GRU
   case_id: 7
@@ -351,8 +339,6 @@ cases:
   - - *id021
     - *id021
     - *id021
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case7
 - operator: GRU
   case_id: 8
@@ -431,8 +417,6 @@ cases:
     - *id024
     - *id024
     - *id024
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case8
 - operator: GRU
   case_id: 9
@@ -511,8 +495,6 @@ cases:
     - *id027
     - *id027
     - *id027
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-bfloat16-case9
 - operator: GRU
   case_id: 10
@@ -552,8 +534,6 @@ cases:
       - -0.05
       - 0.05
   - - *id030
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case10
 - operator: GRU
   case_id: 11
@@ -606,8 +586,6 @@ cases:
     - *id033
   - - *id033
     - *id033
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case11
 - operator: GRU
   case_id: 12
@@ -619,9 +597,9 @@ cases:
       - 64
   - - - 96
       - 32
-  - null  # bias_ih 省略（bias=false）
-  - null  # bias_hh 省略（bias=false）
-  - null  # h0 省略
+  -       # bias_ih 省略（bias=false）
+  -       # bias_hh 省略（bias=false）
+  -       # h0 省略
   dtype:
   - float16
   - - float16
@@ -647,8 +625,6 @@ cases:
   - null
   - null
   - null
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case12
 - operator: GRU
   case_id: 13
@@ -687,8 +663,6 @@ cases:
     - *id035
   - - *id035
     - *id035
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-bfloat16-case13
 - operator: GRU
   case_id: 14
@@ -728,8 +702,6 @@ cases:
       - -0.05
       - 0.05
   - - *id038
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case14
 - operator: GRU
   case_id: 15
@@ -769,8 +741,6 @@ cases:
       - -0.05
       - 0.05
   - - *id041
-  baseline_perf_us: null
-  t_hw_us: 1.999403
   note: S-float16-case15
 - operator: GRU
   case_id: 16
@@ -810,8 +780,6 @@ cases:
       - -0.05
       - 0.05
   - - *id044
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case16
 - operator: GRU
   case_id: 17
@@ -851,8 +819,6 @@ cases:
       - -0.05
       - 0.05
   - - *id047
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-bfloat16-case17
 - operator: GRU
   case_id: 18
@@ -898,8 +864,6 @@ cases:
   - - *id050
   - - -0.1
     - 0.1
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case18
 - operator: GRU
   case_id: 19
@@ -984,8 +948,6 @@ cases:
     - *id053
   - - -0.1
     - 0.1
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case19
 - operator: GRU
   case_id: 20
@@ -1025,6 +987,4 @@ cases:
       - -0.05
       - 0.05
   - - *id056
-  baseline_perf_us: null
-  t_hw_us: 1
   note: S-float16-case20

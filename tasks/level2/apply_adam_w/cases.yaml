@@ -17,15 +17,12 @@ cases:
   - [1024, 1024]
   - [1024, 1024]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-1, 1]
   - [-1, 1]
   - [-0.1, 0.1]
   - [0, 0.1]
-  baseline_perf_us: 38.14
-  t_hw_us: 8.74
   note: "M-float32-1M-对齐-对称小值域-lr=0.001 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 2
@@ -35,15 +32,12 @@ cases:
   - [2048, 2048]
   - [2048, 2048]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-2, 2]
   - [-2, 2]
   - [-0.2, 0.2]
   - [0, 0.2]
-  baseline_perf_us: 51.50
-  t_hw_us: 17.48
   note: "M-float16-4M-对齐-对称小值域-lr=0.01 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 3
@@ -53,15 +47,12 @@ cases:
   - [4096, 4096]
   - [4096, 4096]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 
-      1.0e-08, maximize: false}
+  attrs: {lr: 0.0001, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-3, 3]
   - [-3, 3]
   - [-0.3, 0.3]
   - [0, 0.3]
-  baseline_perf_us: 244.74
-  t_hw_us: 69.91
   note: "L-bfloat16-16M-对齐-对称小值域-lr=0.0001 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 4
@@ -71,15 +62,12 @@ cases:
   - [4096, 4096]
   - [4096, 4096]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08,
-      maximize: false}
+  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-5, 5]
   - [-5, 5]
   - [-0.5, 0.5]
   - [0, 0.5]
-  baseline_perf_us: 320.99
-  t_hw_us: 139.81
   note: "L-float32-67M-对齐-对称中值域-lr=0.1 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 5
@@ -89,15 +77,12 @@ cases:
   - [4096, 8192]
   - [4096, 8192]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1.0e-08,
-      maximize: false}
+  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-5, 5]
   - [-5, 5]
   - [-0.5, 0.5]
   - [0, 0.5]
-  baseline_perf_us: 306.85
-  t_hw_us: 139.81
   note: "L-float16-268M-对齐-对称大值域-lr=1.0-wd=1.0 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 6
@@ -107,15 +92,12 @@ cases:
   - [1023, 1023]
   - [1023, 1023]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 
-      1.0e-08, maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-0.1, 0.1]
   - [-0.1, 0.1]
   - [-0.01, 0.01]
   - [0, 0.01]
-  baseline_perf_us: 34.42
-  t_hw_us: 4.36
   note: "S-bfloat16-1M-非对齐-对称微小值域 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 7
@@ -125,15 +107,12 @@ cases:
   - [1009, 1021]
   - [1009, 1021]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.1, beta1: 0.5, beta2: 0.9, weight_decay: 0.5, epsilon: 1.0e-08,
-      maximize: false}
+  attrs: {lr: 0.1, beta1: 0.5, beta2: 0.9, weight_decay: 0.5, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-1, 2]
   - [-1, 2]
   - [-0.1, 0.1]
   - [0, 0.1]
-  baseline_perf_us: 38.56
-  t_hw_us: 8.58
   note: "M-float32-1M-质数非对齐-低动量-beta1=0.5 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 8
@@ -143,15 +122,12 @@ cases:
   - [1537, 769]
   - [1537, 769]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.0001, beta1: 0.99, beta2: 0.99, weight_decay: 0.0, epsilon: 
-      1.0e-06, maximize: false}
+  attrs: {lr: 0.0001, beta1: 0.99, beta2: 0.99, weight_decay: 0.0, epsilon: 1.0e-06, maximize: false}
   value_range:
   - [-5, 10]
   - [-5, 10]
   - [-0.5, 0.5]
   - [0, 0.5]
-  baseline_perf_us: 29.74
-  t_hw_us: 4.92
   note: "S-float16-1M-非对齐-高动量-beta1=0.99 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 9
@@ -161,15 +137,12 @@ cases:
   - [363, 367, 373]
   - [363, 367, 373]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.01, beta1: 0.0, beta2: 0.5, weight_decay: 0.5, epsilon: 1.0e-08, 
-      maximize: false}
+  attrs: {lr: 0.01, beta1: 0.0, beta2: 0.5, weight_decay: 0.5, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-50, 100]
   - [-50, 100]
   - [-5, 5]
   - [0, 5]
-  baseline_perf_us: 764.32
-  t_hw_us: 207.05
   note: "L-bfloat16-50M-质数非对齐-无动量-beta1=0.0-3D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 10
@@ -179,15 +152,12 @@ cases:
   - [2049, 513]
   - [2049, 513]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 
-      1.0e-08, maximize: true}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08, maximize: true}
   value_range:
   - [-65504, 65504]
   - [-65504, 65504]
   - [-6550, 6550]
   - [0, 6550]
-  baseline_perf_us: 36.38
-  t_hw_us: 8.76
   note: "M-float32-1M-非对齐-maximize=true | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 11
@@ -197,15 +167,12 @@ cases:
   - [3, 7, 13, 4001]
   - [3, 7, 13, 4001]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-88, 88]
   - [-88, 88]
   - [-8.8, 8.8]
   - [0, 8.8]
-  baseline_perf_us: 28.70
-  t_hw_us: 4.55
   note: "S-float16-1M-质数非对齐-float32边界值-4D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 12
@@ -215,15 +182,12 @@ cases:
   - [1000003]
   - [1000003]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-.inf, .inf]
   - [-.inf, .inf]
   - [-1, 1]
   - [0, 1]
-  baseline_perf_us: 34.10
-  t_hw_us: 4.17
   note: "S-bfloat16-1M-质数非对齐-inf特殊值-1D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 13
@@ -233,15 +197,12 @@ cases:
   - [11, 13, 17, 67, 67]
   - [11, 13, 17, 67, 67]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 0.0, 
-      maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 0.0, maximize: false}
   value_range:
   - [.nan, .nan]
   - [.nan, .nan]
   - [.nan, .nan]
   - [.nan, .nan]
-  baseline_perf_us: 167.04
-  t_hw_us: 90.94
   note: "L-float32-10M-质数非对齐-epsilon=0.0-nan特殊值-5D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 14
@@ -251,15 +212,12 @@ cases:
   - [3, 7, 11, 13, 1013]
   - [3, 7, 11, 13, 1013]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [0, 0]
   - [0, 0]
   - [0, 0]
   - [0, 0]
-  baseline_perf_us: 45.12
-  t_hw_us: 12.68
   note: "M-float16-3M-质数非对齐-零值-5D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 15
@@ -269,15 +227,12 @@ cases:
   - [512, 2049]
   - [512, 2049]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-04,
-    maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-04, maximize: false}
   value_range:
   - [-0.5, 0.5]
   - [-0.5, 0.5]
   - [-0.05, 0.05]
   - [0, 0.05]
-  baseline_perf_us: 38.54
-  t_hw_us: 8.74
   note: "M-float32-1M-非对齐-大epsilon=1e-04 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 16
@@ -287,15 +242,12 @@ cases:
   - [255, 8193]
   - [255, 8193]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.01, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-1, 3]
   - [-1, 3]
   - [-0.1, 0.1]
   - [0, 0.1]
-  baseline_perf_us: 48.32
-  t_hw_us: 8.71
   note: "M-bfloat16-2M-非对齐-非对称小值域 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 17
@@ -305,15 +257,12 @@ cases:
   - [4097, 511]
   - [4097, 511]
   dtype: [float16, float16, float16, float16]
-  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1.0e-08, 
-      maximize: false}
+  attrs: {lr: 0.1, beta1: 0.9, beta2: 0.999, weight_decay: 0.1, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-1000, 1000]
   - [-1000, 1000]
   - [-100, 100]
   - [0, 100]
-  baseline_perf_us: 38.88
-  t_hw_us: 8.72
   note: "M-float16-2M-非对齐-对称大值域 | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 18
@@ -323,15 +272,12 @@ cases:
   - [2, 511, 2049]
   - [2, 511, 2049]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08,
-    maximize: false}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.0, epsilon: 1.0e-08, maximize: false}
   value_range:
   - [-0.2, 0.2]
   - [-0.2, 0.2]
   - [-0.02, 0.02]
   - [0, 0.02]
-  baseline_perf_us: 51.46
-  t_hw_us: 17.45
   note: "M-float32-2M-非对齐-对称微小值域-3D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 19
@@ -341,15 +287,12 @@ cases:
   - [4, 255, 2049]
   - [4, 255, 2049]
   dtype: [bfloat16, bfloat16, bfloat16, bfloat16]
-  attrs: {lr: 0.0001, beta1: 0.99, beta2: 0.99, weight_decay: 0.5, epsilon: 
-      1.0e-06, maximize: false}
+  attrs: {lr: 0.0001, beta1: 0.99, beta2: 0.99, weight_decay: 0.5, epsilon: 1.0e-06, maximize: false}
   value_range:
   - [-3, 6]
   - [-3, 6]
   - [-0.3, 0.3]
   - [0, 0.3]
-  baseline_perf_us: 48.30
-  t_hw_us: 8.71
   note: "M-bfloat16-2M-非对齐-非对称中值域-3D | baseline_kernels: ApplyAdamW×1"
 - operator: ApplyAdamW
   case_id: 20
@@ -359,13 +302,10 @@ cases:
   - [2, 3, 17, 1024, 101]
   - [2, 3, 17, 1024, 101]
   dtype: [float32, float32, float32, float32]
-  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 
-      1.0e-08, maximize: true}
+  attrs: {lr: 0.001, beta1: 0.9, beta2: 0.999, weight_decay: 0.01, epsilon: 1.0e-08, maximize: true}
   value_range:
   - [-20, 40]
   - [-20, 40]
   - [-2, 2]
   - [0, 2]
-  baseline_perf_us: 158.10
-  t_hw_us: 87.91
   note: "L-float32-10M-非对齐-非对称大值域-5D-maximize=true | baseline_kernels: ApplyAdamW×1"

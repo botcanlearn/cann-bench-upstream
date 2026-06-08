@@ -54,7 +54,6 @@ class Config:
     # 设备配置
     device_type: str = "npu"       # cpu / npu
     device_id: int = 0
-    auto_fallback: bool = True
 
     # 性能配置
     # NPU 模式下默认启用 profiler 以获取 kernel-only 时间

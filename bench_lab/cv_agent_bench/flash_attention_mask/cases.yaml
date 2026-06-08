@@ -49,8 +49,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq128-Skv128 reference-aligned coverage; mask_type=causal
 - operator: FlashAttentionMask
   case_id: 2
@@ -92,8 +90,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq1-Skv128 reference-aligned coverage; mask_type=full
 - operator: FlashAttentionMask
   case_id: 3
@@ -135,8 +131,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq32-Skv128 reference-aligned coverage; mask_type=causal
 - operator: FlashAttentionMask
   case_id: 4
@@ -178,8 +172,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq128-Skv128 reference-aligned coverage; mask_type=band
 - operator: FlashAttentionMask
   case_id: 5
@@ -221,8 +213,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq64-Skv256 reference-aligned coverage; mask_type=block
 - operator: FlashAttentionMask
   case_id: 6
@@ -264,8 +254,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq256-Skv256 reference-aligned coverage; mask_type=causal
 - operator: FlashAttentionMask
   case_id: 7
@@ -307,8 +295,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq128-Skv512 reference-aligned coverage; mask_type=band
 - operator: FlashAttentionMask
   case_id: 8
@@ -350,8 +336,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq32-Skv32 reference-aligned coverage; mask_type=full
 - operator: FlashAttentionMask
   case_id: 9
@@ -393,8 +377,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq1-Skv256 reference-aligned coverage; mask_type=causal
 - operator: FlashAttentionMask
   case_id: 10
@@ -436,8 +418,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq512-Skv512 reference-aligned coverage; mask_type=block
 - operator: FlashAttentionMask
   case_id: 11
@@ -479,8 +459,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq64-Skv128 reference-aligned coverage; mask_type=band
 - operator: FlashAttentionMask
   case_id: 12
@@ -522,8 +500,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq128-Skv64 reference-aligned coverage; mask_type=full
 - operator: FlashAttentionMask
   case_id: 13
@@ -565,8 +541,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq16-Skv512 reference-aligned coverage; mask_type=causal
 - operator: FlashAttentionMask
   case_id: 14
@@ -608,8 +582,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq256-Skv128 reference-aligned coverage; mask_type=block
 - operator: FlashAttentionMask
   case_id: 15
@@ -651,8 +623,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq384-Skv384 reference-aligned coverage; mask_type=band
 - operator: FlashAttentionMask
   case_id: 16
@@ -694,8 +664,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq1024-Skv1024 reference-aligned coverage; mask_type=causal
 - operator: FlashAttentionMask
   case_id: 17
@@ -737,8 +705,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq96-Skv160 reference-aligned coverage; mask_type=full
 - operator: FlashAttentionMask
   case_id: 18
@@ -780,8 +746,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq192-Skv256 reference-aligned coverage; mask_type=band
 - operator: FlashAttentionMask
   case_id: 19
@@ -823,8 +787,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq256-Skv384 reference-aligned coverage; mask_type=block
 - operator: FlashAttentionMask
   case_id: 20
@@ -866,6 +828,4 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq64-Skv64 reference-aligned coverage; mask_type=causal

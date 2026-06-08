@@ -25,8 +25,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 18.8
-  t_hw_us: 2.19
   note: M=1-K=2048-N=2048-fp16-2k*2k-attnO-基线
 - operator: WeightQuantBatchMatmul
   case_id: 2
@@ -44,8 +42,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 22.821
-  t_hw_us: 4.38
   note: M=4-K=2048-N=4096-bf16-小模型-FFN-up
 - operator: WeightQuantBatchMatmul
   case_id: 3
@@ -59,8 +55,6 @@ cases:
   - [-1, 1]
   - [-128, 127]
   - [0.001, 0.1]
-  baseline_perf_us: 29.321
-  t_hw_us: 4.4
   note: M=8-K=4096-N=2048-fp16-小模型-FFN-down-无offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 4
@@ -76,8 +70,6 @@ cases:
   - [-128, 127]
   - [0.001, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 22.88
-  t_hw_us: 1.5
   note: M=1-K=2048-N=1408-fp16-Qwen1.5-MoE-A2.7B-routed-expert-有offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 5
@@ -95,8 +87,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 37.581
-  t_hw_us: 4.11
   note: M=2-K=5120-N=1536-bf16-DeepSeek-V2-routed-expert
 - operator: WeightQuantBatchMatmul
   case_id: 6
@@ -114,8 +104,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 42.141
-  t_hw_us: 7.68
   note: M=4-K=7168-N=2048-fp16-DeepSeek-V3-routed-expert
 - operator: WeightQuantBatchMatmul
   case_id: 7
@@ -133,8 +121,6 @@ cases:
   - [0.001, 0.1]
   - 
   - [-0.1, 0.1]
-  baseline_perf_us: 44.56
-  t_hw_us: 13.69
   note: M=8-K=4096-N=6400-bf16-Phi-3.5-MoE-expert-无offset有bias
 - operator: WeightQuantBatchMatmul
   case_id: 8
@@ -152,8 +138,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 33.181
-  t_hw_us: 8.74
   note: M=1-K=4096-N=4096-fp16-LLaMA-7B-attnO-single-decode
 - operator: WeightQuantBatchMatmul
   case_id: 9
@@ -171,8 +155,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 56.441
-  t_hw_us: 26.22
   note: M=2-K=4096-N=12288-bf16-LLaMA-7B-QKV-MHA
 - operator: WeightQuantBatchMatmul
   case_id: 10
@@ -188,8 +170,6 @@ cases:
   - [-128, 127]
   - [0.001, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 45.661
-  t_hw_us: 13.12
   note: M=4-K=4096-N=6144-fp16-LLaMA3-8B-GQA-QKV-有offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 11
@@ -207,8 +187,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 38.44
-  t_hw_us: 8.63
   note: M=8-K=3584-N=4608-bf16-Qwen2-7B-GQA-QKV
 - operator: WeightQuantBatchMatmul
   case_id: 12
@@ -224,8 +202,6 @@ cases:
   - [-128, 127]
   - [0.001, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 59.682
-  t_hw_us: 23.55
   note: M=16-K=4096-N=11008-fp16-LLaMA-7B-FFN-gate-up-有offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 13
@@ -243,8 +219,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 86.802
-  t_hw_us: 23.85
   note: M=32-K=11008-N=4096-bf16-LLaMA-7B-FFN-down
 - operator: WeightQuantBatchMatmul
   case_id: 14
@@ -258,8 +232,6 @@ cases:
   - [-1, 1]
   - [-128, 127]
   - [0.001, 0.1]
-  baseline_perf_us: 106.282
-  t_hw_us: 30.86
   note: M=64-K=4096-N=14336-fp16-Qwen2-7B-FFN-gate-无offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 15
@@ -277,8 +249,6 @@ cases:
   - [0.001, 0.1]
   - 
   - [-0.1, 0.1]
-  baseline_perf_us: 134.183
-  t_hw_us: 38.39
   note: M=96-K=5120-N=13824-bf16-LLaMA-13B-FFN-gate-up-无offset有bias
 - operator: WeightQuantBatchMatmul
   case_id: 16
@@ -296,8 +266,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 75.662
-  t_hw_us: 18.96
   note: M=128-K=5120-N=5120-fp16-LLaMA-13B-attnO-decode-边界
 - operator: WeightQuantBatchMatmul
   case_id: 17
@@ -313,8 +281,6 @@ cases:
   - [-128, 127]
   - [0.001, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 128.483
-  t_hw_us: 31.54
   note: M=64-K=14336-N=4096-bf16-Qwen2-7B-FFN-down-有offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 18
@@ -332,8 +298,6 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 73.041
-  t_hw_us: 34.96
   note: M=1-K=8192-N=8192-bf16-LLaMA-70B-attnO-single-decode
 - operator: WeightQuantBatchMatmul
   case_id: 19
@@ -349,8 +313,6 @@ cases:
   - [-128, 127]
   - [0.001, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 90.642
-  t_hw_us: 43.76
   note: M=8-K=8192-N=10240-fp16-LLaMA-70B-GQA-QKV-有offset无bias
 - operator: WeightQuantBatchMatmul
   case_id: 20
@@ -368,6 +330,4 @@ cases:
   - [0.001, 0.1]
   - [-0.1, 0.1]
   - [-0.1, 0.1]
-  baseline_perf_us: 281.605
-  t_hw_us: 123.29
   note: M=32-K=28672-N=8192-bf16-LLaMA-70B-FFN-down-最大K

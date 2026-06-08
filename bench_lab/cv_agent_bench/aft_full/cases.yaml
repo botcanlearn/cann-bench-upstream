@@ -36,8 +36,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B32-S49 reference-aligned coverage
 - operator: AftFull
   case_id: 2
@@ -66,8 +64,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S16 reference-aligned coverage
 - operator: AftFull
   case_id: 3
@@ -96,8 +92,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S32 reference-aligned coverage
 - operator: AftFull
   case_id: 4
@@ -126,8 +120,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S64 reference-aligned coverage
 - operator: AftFull
   case_id: 5
@@ -156,8 +148,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B8-S49 reference-aligned coverage
 - operator: AftFull
   case_id: 6
@@ -186,8 +176,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B16-S128 reference-aligned coverage
 - operator: AftFull
   case_id: 7
@@ -216,8 +204,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B2-S49 reference-aligned coverage
 - operator: AftFull
   case_id: 8
@@ -246,8 +232,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S256 reference-aligned coverage
 - operator: AftFull
   case_id: 9
@@ -276,8 +260,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S49 reference-aligned coverage
 - operator: AftFull
   case_id: 10
@@ -306,8 +288,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B32-S64 reference-aligned coverage
 - operator: AftFull
   case_id: 11
@@ -336,8 +316,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S16 reference-aligned coverage
 - operator: AftFull
   case_id: 12
@@ -366,8 +344,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S16 reference-aligned coverage
 - operator: AftFull
   case_id: 13
@@ -396,8 +372,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S32 reference-aligned coverage
 - operator: AftFull
   case_id: 14
@@ -426,8 +400,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S32 reference-aligned coverage
 - operator: AftFull
   case_id: 15
@@ -456,8 +428,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S32 reference-aligned coverage
 - operator: AftFull
   case_id: 16
@@ -486,8 +456,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S49 reference-aligned coverage
 - operator: AftFull
   case_id: 17
@@ -516,8 +484,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S49 reference-aligned coverage
 - operator: AftFull
   case_id: 18
@@ -546,8 +512,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S64 reference-aligned coverage
 - operator: AftFull
   case_id: 19
@@ -576,8 +540,6 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S64 reference-aligned coverage
 - operator: AftFull
   case_id: 20
@@ -606,6 +568,4 @@ cases:
     - 1
   - - -1
     - 1
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S64 reference-aligned coverage

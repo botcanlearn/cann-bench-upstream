@@ -1,0 +1,8 @@
+{
+  "_metadata": {
+    "description": "CV Agent Bench baseline 性能数据",
+    "hardware": "910b2",
+    "generated_at": "2026-06-06T15:12:39.138920",
+    "source": "从 bench_lab/cv_agent_bench/cases.yaml 迁移"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "_metadata": {
+    "description": "评测任务样例 fixture baseline 数据",
+    "hardware": "910b2",
+    "source": "fixture，所有值均为 0.0 placeholder。本目录用于验证评测流水线机制，不做真实性能评测。",
+    "note": "如需真实 baseline 数据，请在 NPU 上运行基准采集后替换对应用例的值"
+  },
+  "level1": {
+    "sqrt": {
+      "1": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "2": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "3": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "4": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      }
+    }
+  },
+  "level2": {
+    "add": {
+      "1": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "2": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "3": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "4": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      },
+      "5": {
+        "baseline_perf_us": 0.0,
+        "t_hw_us": 0.0
+      }
+    }
+  }
+}

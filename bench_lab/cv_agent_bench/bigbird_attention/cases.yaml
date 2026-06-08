@@ -46,8 +46,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B32-S512 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 2
@@ -86,8 +84,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S128 reference-aligned coverage; window_size=16, num_random_blocks=2
 - operator: BigbirdAttention
   case_id: 3
@@ -126,8 +122,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S256 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 4
@@ -166,8 +160,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S512 reference-aligned coverage; window_size=64, num_random_blocks=4
 - operator: BigbirdAttention
   case_id: 5
@@ -206,8 +198,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B8-S128 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 6
@@ -246,8 +236,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B2-S512 reference-aligned coverage; window_size=64, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 7
@@ -286,8 +274,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S256 reference-aligned coverage; window_size=16, num_random_blocks=2
 - operator: BigbirdAttention
   case_id: 8
@@ -326,8 +312,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B16-S128 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 9
@@ -366,8 +350,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S512 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 10
@@ -406,8 +388,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B2-S1024 reference-aligned coverage; window_size=64, num_random_blocks=4
 - operator: BigbirdAttention
   case_id: 11
@@ -446,8 +426,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B4-S256 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 12
@@ -487,8 +465,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S128 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 13
@@ -528,8 +504,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S256 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 14
@@ -569,8 +543,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S512 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 15
@@ -610,8 +582,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S1024 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 16
@@ -651,8 +621,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S128 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 17
@@ -692,8 +660,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S256 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 18
@@ -733,8 +699,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S512 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 19
@@ -774,8 +738,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S1024 reference-aligned coverage; window_size=32, num_random_blocks=3
 - operator: BigbirdAttention
   case_id: 20
@@ -815,6 +777,4 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float32 B1-S128 reference-aligned coverage; window_size=32, num_random_blocks=3

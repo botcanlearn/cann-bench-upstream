@@ -36,6 +36,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from ..config import Config
+from .._version import FRAMEWORK_VERSION, TASKS_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +199,8 @@ def collect_setup_info(config: Optional[Config] = None) -> Dict:
 
     return {
         "metadata": {
-            "framework": "CANN-Bench V0.1.0",
+            "framework": f"CANN-Bench V{FRAMEWORK_VERSION}",
+            "tasks_version": TASKS_VERSION,
             "date": now,
             "agent_skill": getattr(config, 'agent_skill', '') or '',
             "base_model": getattr(config, 'base_model', '') or '',

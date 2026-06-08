@@ -51,7 +51,7 @@ class StanfordTaskLoader(TaskLoader):
         if bench_root:
             self.bench_root = Path(bench_root)
         else:
-            self.bench_root = get_project_root() / "thirdparty" / "KernelBench" / "KernelBench"
+            self.bench_root = get_project_root() / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench"
         self._cache: Dict[str, TaskSpec] = {}
 
     def list_tasks(self) -> List[TaskSpec]:
@@ -188,7 +188,8 @@ class StanfordCaseLoader(CaseLoader):
     input_shapes=[], dtypes=[], attrs={} 全空。
     输入数据由 get_inputs() 动态生成。
 
-    Baseline 性能数据从 data/stanford_baseline.json 加载。
+    Baseline 性能数据通过 BaselineStore 从 bench_lab/stanford_bench/metadata/910b2.json 加载。
+    BaselineStore 从 bench_root 向上查找 metadata/ 目录。
     """
 
     def __init__(self, bench_root: str = None, tasks_root: str = None):
@@ -197,21 +198,18 @@ class StanfordCaseLoader(CaseLoader):
         if bench_root:
             self.bench_root = Path(bench_root)
         else:
-            self.bench_root = get_project_root() / "thirdparty" / "KernelBench" / "KernelBench"
+            self.bench_root = get_project_root() / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench"
 
-        # 加载 baseline 性能数据
-        self._baseline_data = self._load_baseline()
-
-    def _load_baseline(self) -> Dict[str, Dict[str, Optional[float]]]:
-        """加载 baseline.json: {level: {name: perf_us}}"""
-        baseline_path = get_project_root() / "data" / "stanford_baseline.json"
-        if baseline_path.exists():
-            try:
-                with open(baseline_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return {}
+        # 使用 BaselineStore 加载 baseline 性能数据
+        # StanfordBench 的 bench_root 深于 stanford_bench 目录，
+        # BaselineStore 向上查找会找到 bench_lab/stanford_bench/metadata/910b2.json
+        from ..utils.baseline_store import BaselineStore, DEFAULT_HARDWARE
+        self._baseline_store = BaselineStore(
+            bench_root=self.bench_root,
+            project_root=get_project_root(),
+            hardware=DEFAULT_HARDWARE
+        )
+        self._baseline_store.load()
 
     def _get_baseline_perf(self, task_id: str, py_stem: str) -> float:
         """获取 baseline 性能值
@@ -225,11 +223,7 @@ class StanfordCaseLoader(CaseLoader):
         """
         if '/' in task_id:
             level = task_id.split('/')[0]
-            level_data = self._baseline_data.get(level, {})
-            # 先尝试原始文件名
-            perf = level_data.get(py_stem)
-            if perf is not None:
-                return float(perf)
+            return self._baseline_store.get_stanford_perf(level, py_stem)
         return 0.0
 
     def scan_all(self) -> List[CaseSpec]:
@@ -296,7 +290,7 @@ class StanfordGoldenLoader(GoldenLoaderBase):
         if bench_root:
             self.bench_root = Path(bench_root)
         else:
-            self.bench_root = get_project_root() / "thirdparty" / "KernelBench" / "KernelBench"
+            self.bench_root = get_project_root() / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench"
         self._random_seed = random_seed
         self._module_cache: Dict[str, Any] = {}
 

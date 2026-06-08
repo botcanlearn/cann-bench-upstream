@@ -34,7 +34,7 @@ print(torch.npu.get_device_name(0))
         Ascend910B1|Ascend910B2|Ascend910B3|Ascend910B4) echo "ascend910b" ;;
         Ascend910_93*)  echo "ascend910_93" ;;
         Ascend950*)     echo "ascend950" ;;
-        *)              echo "ascend910b" ;;
+        *)              echo "" ;;
     esac
 }
 
@@ -58,6 +58,11 @@ done
 
 if [ -z "${SOC_VERSION}" ]; then
     SOC_VERSION=$(detect_soc_version)
+    if [ -z "${SOC_VERSION}" ]; then
+        echo "[ERROR] Cannot detect SoC version. Use --soc=<soc_version> to specify."
+        echo "Supported values: ascend910b, ascend910_93, ascend950"
+        exit 1
+    fi
     echo "[INFO] Auto-detected SoC: ${SOC_VERSION}"
 fi
 export NPU_ARCH="${SOC_VERSION}"

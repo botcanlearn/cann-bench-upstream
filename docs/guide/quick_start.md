@@ -30,16 +30,16 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 项目提供了 Add/Sqrt 两个轻量评测任务 fixture，可用于快速验证评测流水线是否正常工作：
 
 ```bash
-# 评测 add 算子（CPU 模式 + 仅精度验证）
-./scripts/run_evaluation.sh --source-dir /path/to/ai_ops \
-    --task-dir examples/eval_task/add --device cpu --no-perf
+# 评测 add 算子
+./scripts/run_evaluation.sh --source-dir examples/aclnn_launch_example \
+    --task-dir examples/tasks/level2/add --no-perf
 
 # 评测目录下所有 fixture 算子（add + sqrt）
-./scripts/run_evaluation.sh --source-dir /path/to/ai_ops \
-    --task-dir examples/eval_task --device cpu --no-perf
+./scripts/run_evaluation.sh --source-dir examples/aclnn_launch_example \
+    --task-dir examples/tasks --no-perf
 ```
 
-详见 [examples/eval_task/README.md](../../examples/eval_task/README.md)。
+详见 [examples/tasks/README.md](../../examples/tasks/README.md)。
 
 ### 从源码目录评测（推荐）
 
@@ -64,8 +64,8 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 # 评测单个用例
 ./scripts/run_evaluation.sh --operator Exp --case-id 1
 
-# CPU 模式评测
-./scripts/run_evaluation.sh --device cpu --operator Exp
+# 仅精度验证（不采集性能）
+./scripts/run_evaluation.sh --operator Exp --no-perf
 
 # 设置 warmup/repeat 参数
 ./scripts/run_evaluation.sh --operator Exp --warmup 5 --repeat 10

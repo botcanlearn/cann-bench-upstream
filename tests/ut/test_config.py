@@ -113,11 +113,7 @@ class TestConfig:
         config = Config()
         assert config.profiler_level == "Level1"
 
-    def test_auto_fallback_default(self):
-        """默认自动回退"""
-        config = Config()
-        assert config.auto_fallback is True
-
+    
 
 class TestGetSetConfig:
     """get_config / set_config 函数测试"""
@@ -173,7 +169,6 @@ class TestConfigDeviceSettings:
         """NPU 设备"""
         config = Config(device_type="npu", device_id=0)
         assert config.device_type == "npu"
-        assert config.auto_fallback is True
 
     def test_cpu_device(self):
         """CPU 设备"""

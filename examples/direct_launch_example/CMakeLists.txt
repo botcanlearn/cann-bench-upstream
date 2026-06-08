@@ -19,6 +19,21 @@ include(cmake/func.cmake)
 
 # NPU architecture
 set(NPU_ARCH "ascend910b" CACHE STRING "NPU architecture")
+set_property(CACHE NPU_ARCH PROPERTY STRINGS "ascend910b" "ascend910_93" "ascend950")
+
+# Map NPU_ARCH to Bisheng --npu-arch flag
+unset(BISHENG_NPU_ARCH)
+if(NPU_ARCH STREQUAL "ascend910b")
+    set(BISHENG_NPU_ARCH "dav-2201")
+elseif(NPU_ARCH STREQUAL "ascend910_93")
+    set(BISHENG_NPU_ARCH "dav-2203")
+elseif(NPU_ARCH STREQUAL "ascend950")
+    set(BISHENG_NPU_ARCH "dav-3510")
+else()
+    message(FATAL_ERROR "Unsupported NPU_ARCH: ${NPU_ARCH}. Supported values: ascend910b, ascend910_93, ascend950")
+endif()
+message(STATUS "NPU_ARCH: ${NPU_ARCH} -> Bisheng --npu-arch=${BISHENG_NPU_ARCH}")
+
 set(EXTENSION_MODULE_NAME "cann_bench" CACHE STRING "Extension module name")
 
 # 输出目录
@@ -63,7 +78,6 @@ set(ALL_KERNEL_SRCS "" CACHE INTERNAL "All kernel source files")
 set(ALL_KERNEL_INCLUDE_DIRS "" CACHE INTERNAL "All kernel include directories")
 set(ALL_PLUGIN_SRCS "" CACHE INTERNAL "All plugin source files")
 set(ALL_PLUGIN_INCLUDE_DIRS "" CACHE INTERNAL "All plugin include directories")
-set(ALL_KERNEL_ARGS_LIST "" CACHE INTERNAL "All kernel args")
 
 # 添加算子目录(自注册)
 add_subdirectory(csrc)
@@ -84,7 +98,7 @@ set(CMAKE_CXX_COMPILER ${BISHENG})
 set(CMAKE_LINKER ${BISHENG})
 unset(CMAKE_CXX_FLAGS)
 
-set(KERNEL_COMPILE_FLAGS "--npu-arch=dav-2201 -xasc")
+set(KERNEL_COMPILE_FLAGS "--npu-arch=${BISHENG_NPU_ARCH} -xasc")
 set_source_files_properties(${ALL_KERNEL_SRCS} PROPERTIES LANGUAGE CXX COMPILE_FLAGS "${KERNEL_COMPILE_FLAGS}")
 
 set(KERNEL_TARGET all_kernels_obj)

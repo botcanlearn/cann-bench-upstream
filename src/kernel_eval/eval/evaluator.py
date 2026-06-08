@@ -70,7 +70,6 @@ class Evaluator:
         device_config = DeviceConfig(
             type=self.config.device_type,
             device_id=self.config.device_id,
-            auto_fallback=self.config.auto_fallback,
         )
         self.device_manager = DeviceManager(device_config)
 

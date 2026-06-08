@@ -241,6 +241,10 @@ class CannCaseLoader(OperatorDirMixin, CaseLoader):
 
     继承 CaseLoader 基类，实现 CANN 评测体系的用例加载逻辑。
     返回 CannCaseSpec（CANN 特化用例规格）。
+
+    baseline 性能数据从评测集根目录下的 metadata/<hardware>.json 加载（BaselineStore），
+    不再内嵌在 cases.yaml 中。BaselineStore 从 bench_root 向上查找 metadata/ 目录，
+    确保子目录场景也能正确定位。若 JSON 文件不存在，fallback 到 raw YAML 数据。
     """
 
     def __init__(self, bench_root: str = None, tasks_root: str = None):
@@ -252,6 +256,16 @@ class CannCaseLoader(OperatorDirMixin, CaseLoader):
         self.bench_root = Path(bench_root)
         if not self.bench_root.exists():
             raise ValueError(f"bench目录不存在: {bench_root}")
+
+        # 初始化 BaselineStore（从 bench_root 向上查找 metadata/<hardware>.json）
+        from ..config import get_project_root as _get_root
+        from ..utils.baseline_store import BaselineStore, DEFAULT_HARDWARE
+        self._baseline_store = BaselineStore(
+            bench_root=self.bench_root,
+            project_root=_get_root(),
+            hardware=DEFAULT_HARDWARE
+        )
+        self._baseline_store.load()
 
     def _is_bench_root(self) -> bool:
         """检查当前目录是否为 bench 根目录"""
@@ -366,7 +380,11 @@ class CannCaseLoader(OperatorDirMixin, CaseLoader):
         return warnings
 
     def _parse_case(self, raw: Dict, rel_path: str, yaml_path: str, op_dir_name: str = "") -> CannCaseSpec:
-        """解析单个用例"""
+        """解析单个用例
+
+        baseline 性能数据优先从 BaselineStore 查询（集中式 JSON 文件）；
+        若 JSON 文件不存在或查询不到，fallback 到 raw YAML 数据（向后兼容）。
+        """
         input_shapes = raw.get('input_shape', [])
         if isinstance(input_shapes, list) and input_shapes and not isinstance(input_shapes[0], list):
             input_shapes = [input_shapes]
@@ -381,6 +399,37 @@ class CannCaseLoader(OperatorDirMixin, CaseLoader):
         display_path = op_dir_name if op_dir_name and rel_path == "." else rel_path
         case_id_str = f"{display_path}_{case_id_int}"
 
+        # 计算 baseline 查询路径：
+        # 当 rel_path="."（单算子目录模式）时，需要相对于 metadata/ 所在目录
+        # 计算真正的路径，如 "level1/exp"
+        baseline_rel_path = rel_path
+        if rel_path == "." and self._baseline_store._baseline_dir is not None:
+            # metadata/ 的父目录就是评测集根目录（如 tasks/）
+            baseline_root = self._baseline_store._baseline_dir.parent
+            try:
+                baseline_rel_path = str(self.bench_root.relative_to(baseline_root))
+            except ValueError:
+                baseline_rel_path = op_dir_name
+
+        # 从 BaselineStore 查询 baseline 数据；fallback 到 raw YAML
+        if self._baseline_store._loaded and self._baseline_store.has_baseline(baseline_rel_path, case_id_int):
+            baseline_perf_us = self._baseline_store.get_perf(baseline_rel_path, case_id_int)
+            t_hw_us = self._baseline_store.get_t_hw(baseline_rel_path, case_id_int)
+        elif self._baseline_store._loaded:
+            # Store 已加载但无该用例数据 → 可能该用例本身就无 baseline
+            # 仍优先使用 Store（返回 0.0），但保留 fallback 以防 Store 不完整
+            store_perf = self._baseline_store.get_perf(baseline_rel_path, case_id_int)
+            store_thw = self._baseline_store.get_t_hw(baseline_rel_path, case_id_int)
+            # 若 Store 返回 0.0 但 raw 中有值 → 使用 raw（过渡期兼容）
+            raw_perf = _coerce_baseline_us(raw.get('baseline_perf_us'))
+            raw_thw = _coerce_baseline_us(raw.get('t_hw_us'))
+            baseline_perf_us = store_perf if store_perf > 0 else raw_perf
+            t_hw_us = store_thw if store_thw > 0 else raw_thw
+        else:
+            # Store 未加载 → 纯 YAML fallback
+            baseline_perf_us = _coerce_baseline_us(raw.get('baseline_perf_us'))
+            t_hw_us = _coerce_baseline_us(raw.get('t_hw_us'))
+
         return CannCaseSpec(
             case_id=case_id_str,
             rel_path=rel_path,
@@ -392,8 +441,8 @@ class CannCaseLoader(OperatorDirMixin, CaseLoader):
             value_ranges=raw.get('value_range', []) or [],
             note=raw.get('note', '') or '',
             yaml_path=yaml_path,
-            baseline_perf_us=_coerce_baseline_us(raw.get('baseline_perf_us')),
-            t_hw_us=_coerce_baseline_us(raw.get('t_hw_us')),
+            baseline_perf_us=baseline_perf_us,
+            t_hw_us=t_hw_us,
             metadata={'op_dir_name': op_dir_name},
         )
 

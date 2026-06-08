@@ -52,10 +52,83 @@ from dataclasses import dataclass
 DEFAULT_HARDWARE: str = os.environ.get("CANN_BENCH_HARDWARE", "910b2")
 
 
-# 已 warn 过的 hardware 集合，避免 per-case 重复 spam
-_WARNED_HARDWARES: Set[str] = set()
+# ---------------------------------------------------------------------------
+# 平台别名映射
+# ---------------------------------------------------------------------------
+# torch.npu.get_device_name() 返回的是产品型号名（如 "Ascend910_9362"），
+# 而 baseline 文件使用的是简短的逻辑名（如 "910b2"）。
+# 此映射将产品名 → 逻辑名，确保自动检测的硬件名能找到对应的 baseline 数据。
+#
+# 映射关系：
+#   Ascend 910B 系列 (A2 / Atlas A2 / 910B2 / 910_9362 等) → "910b2"
+#   Ascend 910B1 系列 → "910b1"
+#   Ascend 310P 系列 → "310p"
+#   未来新增平台只需在此处加一行映射 + 在 metadata/ 下加对应 JSON 文件。
+#
+# 产品型号对照（华为官方命名）：
+#   Ascend910_9362  = Ascend 910B2 (Atlas A2 训练卡)
+#   Ascend910_9362B = Ascend 910B2 变体
+#   Ascend910_9361  = Ascend 910B1 (Atlas A2 推理卡)
+#   Ascend310P_???  = Ascend 310P (Atlas 推理卡)
+# ---------------------------------------------------------------------------
+PLATFORM_ALIAS: Dict[str, str] = {
+    # 910B2 (Atlas A2 训练卡)
+    "Ascend910_9362": "910b2",
+    "Ascend910_9362B": "910b2",
+    "Ascend910B2": "910b2",
+    "910b2": "910b2",
+    "Atlas-A2": "910b2",
+    # 910B1 (Atlas A2 推理卡)
+    "Ascend910_9361": "910b1",
+    "Ascend910B1": "910b1",
+    "910b1": "910b1",
+    # 310P (Atlas 推理卡) — key 是前缀，子型号由 resolve_hardware 前缀匹配
+    "Ascend310P": "310p",
+    "310p": "310p",
+}
+
+
+def resolve_hardware(hardware: str) -> str:
+    """将硬件名称（含产品型号别名）解析为 baseline 逻辑名。
+
+    查找顺序：
+    1. PLATFORM_ALIAS 中有精确映射 → 返回逻辑名（如 "910b2"）
+    2. PLATFORM_ALIAS 中有前缀匹配 → 返回对应的逻辑名
+       （如 "Ascend310P3" 前缀匹配 key "Ascend310P" → "310p"）
+    3. 无匹配 → 返回原值（用户可能用了自定义名称）
+
+    Args:
+        hardware: 环境变量、torch.npu.get_device_name() 或用户指定的硬件名
+
+    Returns:
+        对应 metadata/ 下的文件名前缀（如 "910b2"）
+    """
+    # 1. 精确匹配
+    if hardware in PLATFORM_ALIAS:
+        return PLATFORM_ALIAS[hardware]
+
+    # 2. 前缀匹配（最长前缀优先，避免 "Ascend910" 误匹配 "Ascend910B2"）
+    best_prefix = ""
+    best_value = None
+    for alias_key, alias_value in PLATFORM_ALIAS.items():
+        if hardware.startswith(alias_key) and len(alias_key) > len(best_prefix):
+            best_prefix = alias_key
+            best_value = alias_value
+
+    if best_value is not None:
+        _logger.debug("resolve_hardware: %r 前缀匹配 → %r (prefix=%r)",
+                      hardware, best_value, best_prefix)
+        return best_value
+
+    # 3. 无匹配 → 返回原值
+    return hardware
+
 
 _logger = logging.getLogger(__name__)
+
+
+# 已 warn 过的 hardware 集合，避免 per-case 重复 spam
+_WARNED_HARDWARES: Set[str] = set()
 
 
 @dataclass
@@ -77,19 +150,20 @@ def has_baseline_for(case_raw: Dict[str, Any], hardware: str = DEFAULT_HARDWARE)
 
     Args:
         case_raw: 用例原始数据
-        hardware: 目标硬件名称
+        hardware: 目标硬件名称（支持产品型号别名，如 "Ascend910_9362"）
 
     Returns:
         True 表示该硬件有 baseline，False 表示需要走 fallback。
     """
+    hw = resolve_hardware(hardware)
     bp = case_raw.get("baseline_perf_us")
     if bp is None or bp == "None":
         return False
     if isinstance(bp, dict):
-        v = bp.get(hardware)
+        v = bp.get(hw)
         return v is not None and v != "None"
     # scalar 仅匹配默认硬件
-    return hardware == DEFAULT_HARDWARE
+    return hw == DEFAULT_HARDWARE
 
 
 def resolve_baseline_us(
@@ -101,7 +175,7 @@ def resolve_baseline_us(
 
     Args:
         case_raw: 用例原始数据（从cases.yaml解析）
-        hardware: 目标硬件名称
+        hardware: 目标硬件名称（支持产品型号别名，如 "Ascend910_9362"）
 
     Returns:
         baseline时间（微秒），无baseline返回0.0（向后兼容；区分"缺失"和"=0"
@@ -110,6 +184,7 @@ def resolve_baseline_us(
     F170: 非默认硬件 + scalar baseline 组合会返回 0.0，且 once-per-hardware
     log WARNING，提示评测在该硬件下走的是 fallback 路径。
     """
+    hw = resolve_hardware(hardware)
     bp = case_raw.get("baseline_perf_us", 0)
 
     if bp is None or bp == "None":
@@ -117,7 +192,7 @@ def resolve_baseline_us(
 
     # Dict形式：多硬件baseline
     if isinstance(bp, dict):
-        v = bp.get(hardware)
+        v = bp.get(hw)
         if v is None or v == "None":
             return 0.0
         try:
@@ -126,17 +201,17 @@ def resolve_baseline_us(
             return 0.0
 
     # Scalar形式：仅对默认硬件有效
-    if hardware != DEFAULT_HARDWARE:
+    if hw != DEFAULT_HARDWARE:
         # F170: 不再 silent return 0.0；log 一次让调用方/运维察觉。
         # 同一 hardware 只 warn 一次，避免 per-case spam。
-        if hardware not in _WARNED_HARDWARES:
-            _WARNED_HARDWARES.add(hardware)
+        if hw not in _WARNED_HARDWARES:
+            _WARNED_HARDWARES.add(hw)
             _logger.warning(
                 "baseline_resolver: hardware=%r != DEFAULT_HARDWARE=%r, "
                 "scalar baseline 仅对默认硬件有效，将返回 0.0。请将 cases.yaml 的 "
                 "baseline_perf_us 改为 dict 形式（如 {%s: <us>, %s: <us>}），"
                 "或设置环境变量 CANN_BENCH_HARDWARE=%s。",
-                hardware, DEFAULT_HARDWARE, DEFAULT_HARDWARE, hardware, hardware,
+                hw, DEFAULT_HARDWARE, DEFAULT_HARDWARE, hw, hw,
             )
         return 0.0
 
@@ -157,7 +232,7 @@ def resolve_baseline_info(
 
     Args:
         case_raw: 用例原始数据
-        hardware: 目标硬件
+        hardware: 目标硬件（支持产品型号别名，如 "Ascend910_9362"）
         measured_us: 实测baseline（可选）
         prefer_measured: 是否优先使用实测值
 
@@ -226,7 +301,9 @@ class BaselineResolver:
     """Baseline解析器"""
 
     def __init__(self, hardware: str = DEFAULT_HARDWARE):
-        self.hardware = hardware
+        # 将硬件名称（含产品型号别名）解析为 baseline 逻辑名
+        self.hardware = resolve_hardware(hardware)
+        self._original_hardware = hardware  # 保留原始输入，用于 WARNING 显示
         self.measured_baselines: Dict[str, float] = {}  # (op_name, case_id) -> us
 
     def resolve(self, case_raw: Dict[str, Any], op_name: str, case_id: int) -> BaselineInfo:

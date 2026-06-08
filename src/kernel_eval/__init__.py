@@ -52,8 +52,9 @@ kernel_eval 评测工程包
     results = evaluator.evaluate_operator(operator="Exp", rel_path="level1/Exp")
 """
 
-__version__ = "0.1.0"
+from ._version import FRAMEWORK_VERSION as __version__
+from ._version import TASKS_VERSION
 
 from .config import Config, get_config
 
-__all__ = ["Config", "get_config", "__version__"]
+__all__ = ["Config", "get_config", "__version__", "TASKS_VERSION"]

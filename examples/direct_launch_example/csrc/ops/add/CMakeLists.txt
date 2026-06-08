@@ -20,5 +20,4 @@ register_direct_launch_op(
     op_kernel
     "${ADD_PLUGIN_SRCS}"
     op_kernel
-    "--npu-arch=dav-2201"
 )

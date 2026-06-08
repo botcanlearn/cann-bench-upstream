@@ -95,14 +95,14 @@ def test_pypto_cann_bench_exp_task_is_static_2d_float32_subset():
     assert [case["case_id"] for case in yaml_cases] == [2, 8, 15]
     assert {tuple(case["dtype"]) for case in yaml_cases} == {("float32",)}
     assert all(len(case["input_shape"]) == 1 and len(case["input_shape"][0]) == 2 for case in yaml_cases)
-    assert all(float(case["baseline_perf_us"]) > 0 and float(case["t_hw_us"]) > 0 for case in yaml_cases)
+    # baseline_perf_us/t_hw_us 已迁移到 data/ JSON，不再在 YAML/CSV 中
 
     with (task_dir / "cases.csv").open(encoding="utf-8", newline="") as handle:
         csv_cases = list(csv.DictReader(handle))
     assert [int(case["case_id"]) for case in csv_cases] == [2, 8, 15]
     assert {tuple(json.loads(case["dtype"])) for case in csv_cases} == {("float32",)}
     assert all(len(json.loads(case["input_shape"])[0]) == 2 for case in csv_cases)
-    assert all(float(case["baseline_perf_us"]) > 0 and float(case["t_hw_us"]) > 0 for case in csv_cases)
+    # baseline_perf_us/t_hw_us 已迁移到 data/ JSON，不再在 YAML/CSV 中
 
     proto = config_runner.read_yaml_mapping(task_dir / "proto.yaml")["operator"]
     assert proto["name"] == "Exp"
@@ -149,7 +149,7 @@ def test_pypto_cann_bench_sigmoid_task_is_static_2d_float32_subset():
     assert [case["case_id"] for case in yaml_cases] == [8, 15]
     assert {tuple(case["dtype"]) for case in yaml_cases} == {("float32",)}
     assert all(len(case["input_shape"]) == 1 and len(case["input_shape"][0]) == 2 for case in yaml_cases)
-    assert all(float(case["baseline_perf_us"]) > 0 and float(case["t_hw_us"]) > 0 for case in yaml_cases)
+    # baseline_perf_us/t_hw_us 已迁移到 data/ JSON，不再在 YAML/CSV 中
 
     with (task_dir / "cases.csv").open(encoding="utf-8", newline="") as handle:
         csv_cases = list(csv.DictReader(handle))
@@ -1020,7 +1020,7 @@ def test_pypto_adapter_materializes_stanford_ai_op_before_cannbench_shape_check(
 def test_config_runner_uses_isolated_converter_agent_for_raw_pypto_output(monkeypatch, tmp_path):
     monkeypatch.setenv("PTO_TILE_LIB_CODE_PATH", "/data/pto-isa")
     bench_root = tmp_path / "bench"
-    task_path = bench_root / "thirdparty" / "KernelBench" / "KernelBench" / "level1" / "19_ReLU.py"
+    task_path = bench_root / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench" / "level1" / "19_ReLU.py"
     task_path.parent.mkdir(parents=True)
     task_path.write_text(
         "import torch.nn as nn\n"
@@ -1103,7 +1103,7 @@ def test_config_runner_uses_isolated_converter_agent_for_raw_pypto_output(monkey
         "benchmark": {
             "root": str(bench_root),
             "name": "stanford",
-            "tasks": ["thirdparty/KernelBench/KernelBench/level1/19_ReLU.py"],
+            "tasks": ["bench_lab/stanford_bench/KernelBench/KernelBench/level1/19_ReLU.py"],
         },
     }
 

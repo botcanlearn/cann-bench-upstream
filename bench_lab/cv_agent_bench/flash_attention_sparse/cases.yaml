@@ -43,8 +43,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B4-Sq128 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 2
@@ -80,8 +78,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq1 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 3
@@ -117,8 +113,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq64 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 4
@@ -154,8 +148,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq512 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 5
@@ -191,8 +183,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq1024 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 6
@@ -228,8 +218,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq97 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 7
@@ -265,8 +253,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B4-Sq200 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 8
@@ -302,8 +288,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq64 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 9
@@ -339,8 +323,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq128 reference-aligned coverage; topk=128
 - operator: FlashAttentionSparse
   case_id: 10
@@ -376,8 +358,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B4-Sq1 reference-aligned coverage; topk=64
 - operator: FlashAttentionSparse
   case_id: 11
@@ -413,8 +393,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq64 reference-aligned coverage; topk=64
 - operator: FlashAttentionSparse
   case_id: 12
@@ -450,8 +428,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B2-Sq200 reference-aligned coverage; topk=64
 - operator: FlashAttentionSparse
   case_id: 13
@@ -487,8 +463,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq1 reference-aligned coverage; topk=64
 - operator: FlashAttentionSparse
   case_id: 14
@@ -524,8 +498,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq128 reference-aligned coverage; topk=64
 - operator: FlashAttentionSparse
   case_id: 15
@@ -561,8 +533,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq97 reference-aligned coverage; topk=256
 - operator: FlashAttentionSparse
   case_id: 16
@@ -598,8 +568,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B1-Sq512 reference-aligned coverage; topk=256
 - operator: FlashAttentionSparse
   case_id: 17
@@ -635,8 +603,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B2-Sq200 reference-aligned coverage; topk=256
 - operator: FlashAttentionSparse
   case_id: 18
@@ -672,8 +638,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: float16 B4-Sq1024 reference-aligned coverage; topk=256
 - operator: FlashAttentionSparse
   case_id: 19
@@ -709,8 +673,6 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq1 reference-aligned coverage; topk=8
 - operator: FlashAttentionSparse
   case_id: 20
@@ -746,6 +708,4 @@ cases:
   - - -1
     - 1
   - null
-  baseline_perf_us: null
-  t_hw_us: null
   note: bfloat16 B1-Sq64 reference-aligned coverage; topk=16

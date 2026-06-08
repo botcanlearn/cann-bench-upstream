@@ -21,6 +21,9 @@ cases.yaml / cases.csv 一致性检查
 3. case_id 集合完全相同
 4. 列名覆盖一致
 5. 按 case_id 对齐后逐字段值一致（含 nan/inf/None 归一化）
+
+注意：baseline_perf_us 和 t_hw_us 已迁移到 data/ 下的集中式 JSON 文件，
+不再包含在 cases.yaml/cases.csv 中，因此不在 YAML-CSV 一致性检查范围内。
 """
 
 import csv
@@ -256,10 +259,15 @@ def _deep_eq(a: object, b: object, *, float_tol: float = 1e-9) -> bool:
 
 
 def _yaml_keys(yaml_cases: list[dict]) -> set[str]:
-    """收集 YAML 所有 case 中出现过的 key 集合"""
+    """收集 YAML 所有 case 中出现过的 key 集合
+
+    排除 baseline_perf_us 和 t_hw_us，这两个字段已迁移到 data/ JSON 文件。
+    """
+    # baseline 字段已迁移到 data/ 下的 JSON 文件，不在 YAML-CSV 一致性检查范围
+    EXCLUDED_KEYS = {"baseline_perf_us", "t_hw_us"}
     keys: set[str] = set()
     for c in yaml_cases:
-        keys.update(c.keys())
+        keys.update(k for k in c.keys() if k not in EXCLUDED_KEYS)
     return keys
 
 
@@ -360,13 +368,16 @@ class TestCasesYamlCsvConsistency:
         assert not msg_parts, f"{rel}: {'; '.join(msg_parts)}"
 
     def test_column_coverage(self, op_dir: Path):
-        """YAML key 集合与 CSV 列名集合一致"""
+        """YAML key 集合与 CSV 列名集合一致（排除已迁移的 baseline 字段）"""
         yaml_cases = _load_yaml(op_dir)
         csv_rows = _load_csv(op_dir)
         rel = _rel_dir(op_dir)
 
         yaml_keys_set = _yaml_keys(yaml_cases)
+        # CSV 列名也排除 baseline_perf_us/t_hw_us
+        EXCLUDED_COLS = {"baseline_perf_us", "t_hw_us"}
         csv_cols = set(csv_rows[0].keys()) if csv_rows else set()
+        csv_cols -= EXCLUDED_COLS
 
         missing_in_csv = yaml_keys_set - csv_cols
         missing_in_yaml = csv_cols - yaml_keys_set
@@ -379,10 +390,13 @@ class TestCasesYamlCsvConsistency:
         assert not msg_parts, f"{rel}: {'; '.join(msg_parts)}"
 
     def test_field_values(self, op_dir: Path):
-        """按 case_id 对齐后逐字段值一致"""
+        """按 case_id 对齐后逐字段值一致（排除已迁移的 baseline 字段）"""
         yaml_cases = _load_yaml(op_dir)
         csv_rows = _load_csv(op_dir)
         rel = _rel_dir(op_dir)
+
+        # baseline 字段已迁移到 data/ JSON 文件，不再检查 YAML-CSV 一致性
+        EXCLUDED_FIELDS = {"baseline_perf_us", "t_hw_us"}
 
         yaml_by_id = _yaml_cases_by_id(yaml_cases)
         csv_by_id = _csv_cases_by_id(csv_rows)
@@ -396,6 +410,9 @@ class TestCasesYamlCsvConsistency:
             cc = csv_by_id[cid]
 
             for field in yc:
+                if field in EXCLUDED_FIELDS:
+                    # baseline 字段已迁移到 JSON，跳过
+                    continue
                 if field not in cc:
                     # 列覆盖已在 test_column_coverage 中检查
                     continue
@@ -418,11 +435,6 @@ class TestCasesYamlCsvConsistency:
                         csv_val = int(csv_raw)
                     except ValueError:
                         csv_val = csv_raw
-                elif field in ("baseline_perf_us", "t_hw_us"):
-                    # 性能数值字段：两侧归一化后再比较
-                    # None / "None" / 空字符串 → Python None；数值 → float
-                    yaml_norm = _coerce_perf_us(yaml_norm)
-                    csv_val = _coerce_perf_us(csv_raw)
                 else:
                     # 复杂字段：input_shape / dtype / attrs / value_range 等
                     csv_val = _parse_csv_field(csv_raw)
@@ -456,3 +468,103 @@ def _repr_val(v: object) -> str:
             return f"{{{', '.join(f'{k}: {_repr_val(val)}' for k, val in items)}, ...}}"
         return f"{{{', '.join(f'{k}: {_repr_val(val)}' for k, val in v.items())}}}"
     return repr(v)
+
+
+# === Baseline JSON 一致性测试 ===
+
+
+class TestBaselineJsonConsistency:
+    """验证评测集根目录下的 baseline.json 数据完整性
+
+    baseline_perf_us 和 t_hw_us 已从 cases.yaml/cases.csv 迁移到各评测集根目录下的
+    baseline.json 文件。此测试确保迁移后 YAML 中不再包含这两个字段。
+    """
+
+    def test_yaml_no_baseline_fields(self):
+        """cases.yaml 中不应包含 baseline_perf_us 或 t_hw_us"""
+        root = get_project_root()
+        remaining = 0
+        for bench_dir in [root / "tasks", root / "bench_lab"]:
+            if not bench_dir.is_dir():
+                continue
+            for yaml_path in bench_dir.rglob("cases.yaml"):
+                with yaml_path.open("r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                if not data or "cases" not in data:
+                    continue
+                for case in data["cases"]:
+                    if "baseline_perf_us" in case:
+                        remaining += 1
+                    if "t_hw_us" in case:
+                        remaining += 1
+
+        assert remaining == 0, (
+            f"发现 {remaining} 处 baseline/t_hw 字段残留在 cases.yaml 中，"
+            f"这些字段应已迁移到评测集根目录下的 baseline.json 文件"
+        )
+
+    def test_csv_no_baseline_columns(self):
+        """cases.csv 中不应包含 baseline_perf_us 或 t_hw_us 列"""
+        root = get_project_root()
+        remaining = 0
+        for bench_dir in [root / "tasks", root / "bench_lab"]:
+            if not bench_dir.is_dir():
+                continue
+            for csv_path in bench_dir.rglob("cases.csv"):
+                with csv_path.open("r", encoding="utf-8", newline="") as f:
+                    reader = csv.DictReader(f)
+                    if reader.fieldnames and "baseline_perf_us" in reader.fieldnames:
+                        remaining += 1
+                    if reader.fieldnames and "t_hw_us" in reader.fieldnames:
+                        remaining += 1
+
+        assert remaining == 0, (
+            f"发现 {remaining} 个 cases.csv 仍包含 baseline/t_hw 列，"
+            f"这些列应已移除"
+        )
+
+    def test_tasks_baseline_json_exists(self):
+        """tasks/metadata/910b2.json 应存在"""
+        root = get_project_root()
+        json_path = root / "tasks" / "metadata" / "910b2.json"
+        assert json_path.is_file(), f"baseline JSON 不存在: {json_path}"
+
+    def test_baseline_store_loads_correctly(self):
+        """BaselineStore 能从 bench_root 向上查找 metadata/ 并正确加载 baseline 数据"""
+        from kernel_eval.utils.baseline_store import BaselineStore
+        from pathlib import Path
+        root = get_project_root()
+
+        # 测试 1: bench_root = tasks/ → 直接找到 tasks/metadata/910b2.json
+        store = BaselineStore(bench_root=Path(root / "tasks"), project_root=Path(root))
+        store.load()
+
+        perf = store.get_perf("level1/exp", 1)
+        assert perf > 0, f"level1/exp/1 baseline_perf_us 应 > 0, 实际 {perf}"
+
+        t_hw = store.get_t_hw("level1/exp", 1)
+        assert t_hw > 0, f"level1/exp/1 t_hw_us 应 > 0, 实际 {t_hw}"
+
+        assert store.has_baseline("level1/exp", 1), "level1/exp/1 应有 baseline"
+
+        # 测试 2: bench_root = tasks/level1/exp（子目录）→ 向上查找找到 tasks/metadata/910b2.json
+        sub_store = BaselineStore(bench_root=Path(root / "tasks" / "level1" / "exp"), project_root=Path(root))
+        sub_store.load()
+
+        sub_perf = sub_store.get_perf("level1/exp", 1)
+        assert sub_perf == perf, f"子目录查找应返回相同的 baseline: {sub_perf} != {perf}"
+
+        # 测试 3: cv_agent_bench 的 baseline 数据全为空
+        cv_store = BaselineStore(bench_root=Path(root / "bench_lab" / "cv_agent_bench"), project_root=Path(root))
+        cv_store.load()
+        assert not cv_store.has_baseline("flash_attention", 1), \
+            "flash_attention/1 在 cv_agent_bench 不应有 baseline 数据"
+
+        # 测试 4: StanfordBench bench_root 在深子目录 → 向上查找找到 stanford_bench/metadata/910b2.json
+        stanford_root = root / "bench_lab" / "stanford_bench" / "KernelBench" / "KernelBench"
+        if stanford_root.is_dir():
+            stan_store = BaselineStore(bench_root=stanford_root, project_root=Path(root))
+            stan_store.load()
+            # StanfordBench 使用 py_stem 查找而非 (rel_path, case_id)
+            stan_perf = stan_store.get_stanford_perf("level1", "1_Square_matrix_multiplication_")
+            assert stan_perf > 0, f"Stanford level1/1_Square_matrix_multiplication_ baseline 应 > 0, 实际 {stan_perf}"

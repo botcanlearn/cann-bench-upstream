@@ -34,6 +34,7 @@ from .baseline_resolver import (
     BaselineResolver, BaselineInfo,
     resolve_baseline_us, resolve_baseline_info,
     calculate_speedup, geometric_mean_speedup,
+    resolve_hardware, PLATFORM_ALIAS,
 )
 from .naming import camel_to_snake, snake_case_candidates
 from .tensor_utils import (
@@ -54,6 +55,7 @@ __all__ = [
     "BaselineResolver", "BaselineInfo",
     "resolve_baseline_us", "resolve_baseline_info",
     "calculate_speedup", "geometric_mean_speedup",
+    "resolve_hardware", "PLATFORM_ALIAS",
     "camel_to_snake", "snake_case_candidates",
     "tensor_to_fp64_cpu", "tensors_to_cpu",
     "tensors_to_fp64_cpu", "tensors_to_device",

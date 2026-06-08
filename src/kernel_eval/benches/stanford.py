@@ -103,7 +103,7 @@ def _register_stanford_components():
             case_spec_cls='stanford',
             golden_precision='native_npu',
             precision_thresholds={'atol': 0.01, 'rtol': 0.01},
-            default_tasks_root='thirdparty/KernelBench/KernelBench',
+            default_tasks_root='bench_lab/stanford_bench/KernelBench/KernelBench',
             description='StanfordBench 评测集 - Scaling Intelligence',
             metadata={
                 'solution_file': 'ai_op.py',
