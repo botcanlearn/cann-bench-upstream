@@ -87,7 +87,7 @@ def _register_cann_components():
     from ..registry.bench_registry import BenchRegistry, BenchConfig
     from ..registry.case_spec_registry import CaseSpecRegistry
     from ..registry.perf_strategy_registry import PerfMetricStrategyRegistry
-    from ..base.perf_strategy import KernelDetailsStrategy, TraceViewStrategy
+    from ..base.perf_strategy import KernelDetailsStrategy, TraceViewStrategy, MsProfSummaryStrategy
     from ..utils.thresholds import PRECISION_THRESHOLDS
 
     # 注册 Loader
@@ -123,6 +123,8 @@ def _register_cann_components():
         PerfMetricStrategyRegistry.register('kernel_details', KernelDetailsStrategy())
     if 'trace_view' not in PerfMetricStrategyRegistry._items:
         PerfMetricStrategyRegistry.register('trace_view', TraceViewStrategy())
+    if 'msprof_summary' not in PerfMetricStrategyRegistry._items:
+        PerfMetricStrategyRegistry.register('msprof_summary', MsProfSummaryStrategy())
 
     # 注册 BenchConfig
     if 'cann' not in BenchRegistry._items:

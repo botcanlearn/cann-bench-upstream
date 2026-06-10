@@ -47,6 +47,7 @@ fusion_result.json
 skill/
 case_generate/
 .claude/
+CLAUDE.md
 .understand-anything/
 .understand-thing/
 nouse/
@@ -83,3 +84,5 @@ inner/tests/baseline/results/*.json
 # st/ golden-candidate ST output (junit + kernel_eval reports), ST-owned; never the shared build/
 /tests/st/_artifacts/
 /tests/st/_artifacts.*/
+# baseline 采集产出（collect_baseline.py 输出，不入主仓）
+scripts/baseline/output/

@@ -56,6 +56,7 @@ class ProfFileLocations:
     csv_path: Optional[str] = None            # kernel_details.csv 完整路径
     trace_view_path: Optional[str] = None     # trace_view.json 完整路径
     prof_dir: str = ""                         # profiler 输出根目录
+    msprof_summary_paths: List[str] = field(default_factory=list)  # msprof 导出的 op_summary_*.csv
 
 
 # ---------------------------------------------------------------------------
@@ -628,3 +629,167 @@ class TraceViewStrategy(PerfMetricStrategy):
 
     def get_strategy_name(self) -> str:
         return "trace_view"
+
+
+# ---------------------------------------------------------------------------
+# MsProfSummaryStrategy — 基准采集专用策略
+# ---------------------------------------------------------------------------
+
+# msprof op_summary 可识别的 kernel 类型（与 TTK rts_sequence.py 一致）
+KERNEL_TYPES = ("AI_CORE", "AIV_SQE", "AI_VECTOR_CORE",
+                "MIX_AIC", "MIX_AIV",
+                "KERNEL_AIVEC", "KERNEL_AICORE")
+
+
+def parse_msprof_op_summary(csv_paths: List[str]) -> Dict[str, Any]:
+    """从 msprof op_summary_*.csv 解析 kernel 级数据。
+
+    实测验证：op_summary 包含 Input Shapes 列，可用 _is_warmup_kernel() 精确过滤。
+    列名：Op Name, OP Type, Task Type, Task Duration(us), Input Shapes 等
+
+    Returns:
+        {"device_kernels": {name: median_us}, "total_kernel_us": float}
+    """
+    all_kernel_times: Dict[str, List[float]] = {}
+
+    for csv_path in csv_paths:
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    task_type = row.get('Task Type', '').strip()
+                    op_type = row.get('OP Type', '').strip()
+                    op_name = row.get('Op Name', op_type)
+                    duration_str = row.get('Task Duration(us)', '0')
+                    input_shapes = row.get('Input Shapes', '')
+                    try:
+                        duration = float(duration_str)
+                    except (ValueError, TypeError):
+                        continue
+                    if duration <= 0:
+                        continue
+                    # 过滤非 AI_CORE 类型
+                    if task_type not in KERNEL_TYPES:
+                        continue
+                    # Warmup 过滤（精确 — 用 Input Shapes，与 kernel_details.csv 一致）
+                    if _is_warmup_kernel(op_type, input_shapes):
+                        continue
+                    if op_name not in all_kernel_times:
+                        all_kernel_times[op_name] = []
+                    all_kernel_times[op_name].append(duration)
+        except Exception as e:
+            _logger.warning("parse_msprof_op_summary failed for %s: %s", csv_path, e)
+
+    if not all_kernel_times:
+        return {}
+
+    device_kernels: Dict[str, float] = {}
+    total_kernel_us = 0.0
+    for name, times in all_kernel_times.items():
+        median_time = _median(times)
+        device_kernels[name] = round(median_time, 2)
+        total_kernel_us += median_time
+
+    return {
+        "device_kernels": device_kernels,
+        "total_kernel_us": round(total_kernel_us, 2),
+    }
+
+
+class MsProfSummaryStrategy(PerfMetricStrategy):
+    """基准采集专用策略：优先 kernel_details.csv，fallback msprof op_summary。
+
+    适用场景：baseline 性能数据采集 — 需要最完整的 kernel 覆盖，
+    包括自定义 AscendC kernel、direct-launch kernel 等。
+
+    数据源优先级：
+    1. kernel_details.csv（更精确：有 Step Id、Input Shapes 精确过滤）
+    2. msprof op_summary（更完整：包含所有 kernel，不受 Level1 过滤限制）
+    3. 全部不可用 → 明确报错
+
+    与 KernelDetailsStrategy 的区别：
+    - KernelDetailsStrategy 只用 kernel_details.csv（缺失时报错，不 fallback）
+    - MsProfSummaryStrategy 先尝试 CSV，不可用时 fallback 到 msprof
+    - 正式评测用 KernelDetailsStrategy，基准采集用 MsProfSummaryStrategy
+    """
+
+    def parse(self, prof_files: ProfFileLocations, result: Any) -> Any:
+        from .result import PerfResult
+
+        # === 第一优先级：kernel_details.csv ===
+        if prof_files.csv_path:
+            warmup_names = extract_warmup_names_from_csv(prof_files.csv_path)
+            kernel_data = parse_csv_kernels(prof_files.csv_path, warmup_names)
+            if kernel_data.get("total_kernel_us") and kernel_data["total_kernel_us"] > 0:
+                result.elapsed_us = kernel_data["total_kernel_us"]
+                result.op_times = {"device_kernels": kernel_data["device_kernels"]}
+                result.metadata["elapsed_us_source"] = "kernel_details.total_kernel_us"
+                result.metadata["data_source"] = "kernel_details_csv"
+
+                # trace_view 补充
+                self._add_trace_view_supplement(prof_files, result, warmup_names)
+
+                # sanity check
+                if prof_files.trace_view_path:
+                    tv = parse_trace_view_kernels(prof_files.trace_view_path, warmup_names)
+                    tv_total = tv.get("total_kernel_us") or 0.0
+                    csv_total = kernel_data["total_kernel_us"]
+                    if tv_total and tv_total < csv_total * 0.9:
+                        missing = sorted(
+                            set(kernel_data["device_kernels"]) - set(tv.get("device_kernels", {}))
+                        )
+                        _logger.warning(
+                            "trace_view kernel total (%.2fus) < CSV total (%.2fus); "
+                            "trace_view dropped %d kernel(s) %s (likely custom / "
+                            "direct-launch). Using CSV total.",
+                            tv_total, csv_total, len(missing), missing[:5],
+                        )
+
+                return result
+
+        # === 第二优先级：msprof op_summary ===
+        if prof_files.msprof_summary_paths:
+            warmup_names = extract_warmup_names_from_csv(prof_files.csv_path)
+            msprof_data = parse_msprof_op_summary(prof_files.msprof_summary_paths)
+            if msprof_data.get("total_kernel_us") and msprof_data["total_kernel_us"] > 0:
+                result.elapsed_us = msprof_data["total_kernel_us"]
+                result.op_times = {"device_kernels": msprof_data["device_kernels"]}
+                result.metadata["elapsed_us_source"] = "msprof_op_summary.total_kernel_us"
+                result.metadata["data_source"] = "msprof_op_summary"
+                _logger.info(
+                    "MsProfSummaryStrategy: elapsed_us=%.2f from msprof op_summary, "
+                    "kernels=%s",
+                    msprof_data["total_kernel_us"],
+                    list(msprof_data["device_kernels"].keys())[:5],
+                )
+
+                # trace_view 补充
+                self._add_trace_view_supplement(prof_files, result, warmup_names)
+                return result
+
+        # === 全部不可用 → 明确报错 ===
+        result.elapsed_us = 0.0
+        result.error_msg = (
+            f"MsProfSummaryStrategy: kernel_details.csv and msprof op_summary "
+            f"both unavailable — "
+            f"csv_path={prof_files.csv_path}, "
+            f"msprof_paths={prof_files.msprof_summary_paths}"
+        )
+        return result
+
+    def _add_trace_view_supplement(self, prof_files: ProfFileLocations,
+                                    result: Any, warmup_names: Set[str]):
+        """补充 trace_view tilefwk/PYPTO 指标（不参与 elapsed_us 计算）"""
+        if not prof_files.trace_view_path:
+            return
+        tilefwk_metrics = parse_tilefwk_metrics(
+            prof_files.trace_view_path, warmup_names
+        )
+        if tilefwk_metrics:
+            result.op_times["trace_view"] = tilefwk_metrics
+            result.metadata["aicore_e2e"] = tilefwk_metrics.get("aicore_e2e")
+            result.metadata["aicpukernel_gap"] = tilefwk_metrics.get("aicpukernel_gap")
+            result.metadata["aicore_e2e_jitter"] = tilefwk_metrics.get("aicore_e2e_jitter")
+
+    def get_strategy_name(self) -> str:
+        return "msprof_summary"

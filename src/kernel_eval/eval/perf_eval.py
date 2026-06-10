@@ -27,6 +27,7 @@
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 import traceback
@@ -176,6 +177,16 @@ class PerfEvaluator:
         strategy_name = self.config.perf_metric_strategy_override or "kernel_details"
         from ..registry.perf_strategy_registry import get_perf_metric_strategy
         self.perf_metric_strategy = get_perf_metric_strategy(strategy_name)
+
+        # ACL 逐算子模式：单算子 benchmark 场景下 ACL 是正确模式
+        if getattr(self.config, 'enable_acl_launch_mode', True):
+            os.environ.setdefault("ASCEND_LAUNCH_MODE", "ACL")
+
+        # msprof export 开关：仅在 MsProfSummaryStrategy 下启用
+        self._need_msprof_export = (
+            self.perf_metric_strategy.get_strategy_name() == "msprof_summary"
+            and getattr(self.config, 'enable_msprof_export', True)
+        )
 
         # 性能数据归档目录
         self.prof_data_dir = os.path.join(self.config.reports_dir, "prof_data")
@@ -516,6 +527,10 @@ class PerfEvaluator:
 
             self._profile(_fn, prof_dir, warmup, repeat)
 
+            # msprof export（仅 MsProfSummaryStrategy 需要）
+            if self._need_msprof_export:
+                self._export_msprof_summary(prof_dir)
+
             # Clean up InputPool now (trace already written to disk).
             if inputs and use_input_pool:
                 pool.clear()
@@ -657,12 +672,106 @@ class PerfEvaluator:
             if os.path.isfile(tv_candidate):
                 trace_view_path = tv_candidate
 
+        # 搜索 msprof 导出的 op_summary CSV
+        msprof_summary_paths = []
+        for root, dirs, files in os.walk(prof_dir):
+            for f in files:
+                if f.startswith("op_summary_") and f.endswith(".csv"):
+                    msprof_summary_paths.append(os.path.join(root, f))
+
         return ProfFileLocations(
             ascend_output_dir=ascend_output_dir,
             csv_path=csv_file,
             trace_view_path=trace_view_path,
             prof_dir=prof_dir,
+            msprof_summary_paths=sorted(msprof_summary_paths),
         )
+
+    # --- msprof export 方法（MsProfSummaryStrategy 专用）---
+
+    def _export_msprof_summary(self, prof_dir: str) -> List[str]:
+        """torch_npu.profiler session 完成后，调用 msprof.py export summary。
+
+        与 TTK MsProfiler._analysis_profile_data 一致：
+        python3 msprof.py export summary -dir <prof_dir> --format csv
+
+        msprof export 读取 PROF 原始数据，导出 op_summary_*.csv（包含所有 kernel，
+        不受 Level1 过滤限制）。产出放在 PROF_*/mindstudio_profiler_output/ 目录下。
+        """
+        msprof_path = self._resolve_msprof_path()
+        if not msprof_path:
+            _logger.debug("msprof.py not found, skip msprof export")
+            return []
+
+        # msprof.py export 需要指向 PROF_* 子目录
+        prof_subdirs = []
+        try:
+            for entry in os.listdir(prof_dir):
+                if entry.startswith("PROF_") and os.path.isdir(
+                    os.path.join(prof_dir, entry)):
+                    prof_subdirs.append(os.path.join(prof_dir, entry))
+        except OSError:
+            if os.path.basename(prof_dir).startswith("PROF_"):
+                prof_subdirs = [prof_dir]
+
+        if not prof_subdirs:
+            _logger.debug("No PROF_* subdirectory found in %s, skip msprof export",
+                          prof_dir)
+            return []
+
+        all_summary_paths = []
+        for prof_subdir in prof_subdirs:
+            try:
+                proc = subprocess.run(
+                    ["python3", msprof_path, "export", "summary",
+                     "-dir", prof_subdir, "--format", "csv"],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if proc.returncode != 0:
+                    _logger.warning(
+                        "msprof.py export summary failed for %s: rc=%d, stderr=%s",
+                        prof_subdir, proc.returncode, proc.stderr[:200],
+                    )
+                    continue
+            except Exception as e:
+                _logger.warning("msprof.py export summary exception for %s: %s",
+                                prof_subdir, e)
+                continue
+
+            for root, dirs, files in os.walk(prof_subdir):
+                for f in files:
+                    if f.startswith("op_summary_") and f.endswith(".csv"):
+                        all_summary_paths.append(os.path.join(root, f))
+
+        if all_summary_paths:
+            _logger.info("msprof export found %d op_summary CSV(s)",
+                         len(all_summary_paths))
+        else:
+            _logger.debug("msprof export produced no op_summary CSVs")
+
+        return sorted(all_summary_paths)
+
+    def _resolve_msprof_path(self) -> Optional[str]:
+        """定位 CANN msprof.py（与 TTK 一致的搜索路径）。
+
+        搜索顺序：ASCEND_OPP_PATH → ASCEND_HOME_PATH → ASCEND_TOOLKIT_HOME
+        """
+        candidates = []
+        opp_path = os.getenv("ASCEND_OPP_PATH", "")
+        if opp_path:
+            candidates.append(os.path.normpath(os.path.join(
+                opp_path, "..", "tools", "profiler",
+                "profiler_tool", "analysis", "msprof", "msprof.py")))
+        for env_var in ("ASCEND_HOME_PATH", "ASCEND_TOOLKIT_HOME"):
+            home = os.getenv(env_var, "")
+            if home:
+                candidates.append(os.path.normpath(os.path.join(
+                    home, "tools", "profiler",
+                    "profiler_tool", "analysis", "msprof", "msprof.py")))
+        for path in candidates:
+            if os.path.isfile(path):
+                return path
+        return None
 
     # --- 以下方法已迁移到 PerfMetricStrategy，保留仅用于兼容性 ---
 

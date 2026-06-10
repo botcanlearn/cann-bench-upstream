@@ -105,7 +105,18 @@ class Config:
 # 性能指标策略覆盖
     # None（默认）: 使用 BenchConfig 中注册的策略（通常为 kernel_details）
     # "trace_view": PYPTO 口径 — tilefwk/PYPTO aicore_e2e（由 CLI --perf-metric-strategy 设置）
+    # "msprof_summary": 基准采集专用 — 优先 kernel_details.csv，fallback msprof op_summary
     perf_metric_strategy_override: Optional[str] = None
+
+    # ACL 逐算子模式（默认 True）
+    # 单算子 benchmark 场景下 ACL 是正确模式：
+    # - Ge 图优化不适用（只有一个算子，无融合对象）
+    # - ACL 确保 profiler 产出完整 kernel_details.csv
+    enable_acl_launch_mode: bool = True
+
+    # msprof export 开关（默认 True）
+    # 仅在 MsProfSummaryStrategy 下生效
+    enable_msprof_export: bool = True
     def __post_init__(self):
         """初始化后自动设置默认路径"""
         if not self.tasks_root:
