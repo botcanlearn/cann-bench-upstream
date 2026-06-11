@@ -133,6 +133,9 @@ class SubprocessRunner:
         eval_seed = getattr(cfg, "eval_seed", None)
         if eval_seed is not None:
             flags += ["--eval-seed", str(eval_seed)]
+        torch_op_guard_mode = getattr(cfg, "torch_op_guard_mode", None)
+        if torch_op_guard_mode:
+            flags += ["--torch-op-guard-mode", str(torch_op_guard_mode)]
         return flags
 
     def run_operator_subprocess(

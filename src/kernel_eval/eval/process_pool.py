@@ -56,6 +56,11 @@ class ProcessConfig:
     enable_profiler: bool = True     # 是否启用 profiler
 
 
+def _torch_op_guard_args(config: Config) -> List[str]:
+    mode = getattr(config, "torch_op_guard_mode", None)
+    return ["--torch-op-guard-mode", str(mode)] if mode else []
+
+
 @dataclass
 class OperatorTask:
     """单个算子评测任务"""
@@ -244,6 +249,7 @@ class OperatorScheduler:
             "--reports-dir", self.base_config.reports_dir,
             "--rel-paths", rel_path,  # 单个算子
         ]
+        cmd.extend(_torch_op_guard_args(self.base_config))
 
         if self.process_config.enable_profiler:
             cmd.append("--enable-profiler")
@@ -491,6 +497,7 @@ class ProcessWorker:
             "--bench-name", self.base_config.bench_name,
             "--reports-dir", self.base_config.reports_dir,
         ]
+        cmd.extend(_torch_op_guard_args(self.base_config))
 
         # 添加 profiler 配置
         if self.process_config.enable_profiler:

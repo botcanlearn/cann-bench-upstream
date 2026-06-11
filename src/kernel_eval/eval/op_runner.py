@@ -168,9 +168,9 @@ class OpRunner:
                   enable_perf: bool = True) -> OpRunResult:
         """执行AI算子（受 TorchOpGuard 监视，检测对禁用 builtin 数学 API 的调用）"""
         # 防作弊监听：detect AI op calling torch.matmul / conv / softmax 等
-        guard_mode = "warn"
+        guard_mode = "block"
         if self.perf_evaluator is not None:
-            guard_mode = getattr(self.perf_evaluator.config, 'torch_op_guard_mode', 'warn')
+            guard_mode = getattr(self.perf_evaluator.config, 'torch_op_guard_mode', 'block')
 
         from ..security.torch_op_guard import TorchOpGuard
         with TorchOpGuard(mode=guard_mode):

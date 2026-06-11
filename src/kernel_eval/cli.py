@@ -118,6 +118,11 @@ def create_parser() -> argparse.ArgumentParser:
                              help='Override perf metric strategy (kernel_details | trace_view). '
                                   'When set, overrides the strategy from BenchConfig. '
                                   'trace_view uses tilefwk/PYPTO aicore_e2e (PYPTO 口径).')
+    eval_parser.add_argument('--torch-op-guard-mode', type=str, default=None,
+                             choices=['off', 'warn', 'block'],
+                             help='AI 算子调用禁用 PyTorch 内置计算 API 时的处理方式。'
+                                  '默认使用 Config.torch_op_guard_mode（block）。'
+                                  '生产评测应使用 block；调试可临时使用 warn/off。')
 
     eval_parser.add_argument('--eval-seed', type=int, default=0,
                              help='输入生成确定性种子（默认: 0 = 基于case_id自动确定）。'
@@ -189,6 +194,9 @@ def create_parser() -> argparse.ArgumentParser:
                                       help='采集次数')
     eval_process_parser.add_argument('--enable-profiler', action='store_true',
                                       help='启用 profiler 性能采集')
+    eval_process_parser.add_argument('--torch-op-guard-mode', type=str, default=None,
+                                      choices=['off', 'warn', 'block'],
+                                      help='AI 算子调用禁用 PyTorch 内置计算 API 时的处理方式。')
 
     return parser
 
@@ -245,6 +253,9 @@ def _create_config_from_args(args, bench_root: str) -> Config:
         config.enable_profiler = False
     if hasattr(args, 'profiler_level'):
         config.profiler_level = args.profiler_level
+    torch_op_guard_mode = getattr(args, 'torch_op_guard_mode', None)
+    if torch_op_guard_mode:
+        config.torch_op_guard_mode = torch_op_guard_mode
 
     # 评测种子：-1 表示纯随机（转换为 None），其他值为确定性种子
     eval_seed_raw = getattr(args, 'eval_seed', 0)
@@ -768,6 +779,8 @@ def cmd_eval_process(args):
     config.enable_profiler = args.enable_profiler
     config.warmup = args.warmup
     config.repeat = args.repeat
+    if getattr(args, 'torch_op_guard_mode', None):
+        config.torch_op_guard_mode = args.torch_op_guard_mode
     set_config(config)
 
     # 打印进程信息

@@ -77,8 +77,8 @@ class Config:
 
     # 防作弊：监听 AI 算子在执行时是否直接调用了 torch.matmul / conv / softmax
     # 等内置数学 API（=把计算甩给 PyTorch，跳过自己写的 AscendC kernel）。
-    # off=不监听；warn=记日志不阻断（默认，便于排查）；block=直接抛错。
-    torch_op_guard_mode: str = "warn"
+    # off=不监听；warn=记日志不阻断（便于排查）；block=直接抛错（默认）。
+    torch_op_guard_mode: str = "block"
 
     # 精度配置（采用生态算子开源精度标准）
     # 通过条件: MERE < threshold, MARE < 10 * threshold

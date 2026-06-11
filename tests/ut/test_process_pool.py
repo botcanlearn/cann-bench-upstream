@@ -72,6 +72,11 @@ class TestProcessConfig(unittest.TestCase):
         self.assertEqual(config.timeout_per_operator, 300)
         self.assertTrue(config.enable_profiler)
 
+    def test_default_torch_op_guard_is_block(self):
+        """生产默认配置应阻断 AI 算子调用禁用 PyTorch 内置计算 API。"""
+        config = Config()
+        self.assertEqual(config.torch_op_guard_mode, "block")
+
     def test_custom_config(self):
         """测试自定义配置"""
         config = ProcessConfig(
@@ -152,6 +157,9 @@ class TestProcessWorker(unittest.TestCase):
         self.assertIn("eval-process", cmd)
         self.assertIn("--process-id", cmd)
         self.assertIn("0", cmd)
+        self.assertIn("--torch-op-guard-mode", cmd)
+        idx = cmd.index("--torch-op-guard-mode")
+        self.assertEqual(cmd[idx + 1], "block")
 
     def test_cleanup(self):
         """测试临时文件清理"""
@@ -412,6 +420,22 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(args.card_id, 0)
         self.assertEqual(args.output, '/tmp/test.json')
         self.assertEqual(args.rel_paths, 'level1/sigmoid,level1/exp')
+
+    def test_cli_eval_process_accepts_torch_op_guard_mode(self):
+        """eval-process 子进程应能接收父进程透传的 TorchOpGuard 策略。"""
+        from src.kernel_eval.cli import create_parser
+
+        parser = create_parser()
+        args = parser.parse_args([
+            'eval-process',
+            '--process-id', '0',
+            '--card-id', '0',
+            '--output', '/tmp/test.json',
+            '--rel-paths', 'level1/sigmoid',
+            '--torch-op-guard-mode', 'block',
+        ])
+
+        self.assertEqual(args.torch_op_guard_mode, 'block')
 
     def test_coordinator_stats(self):
         """测试协调器统计信息"""

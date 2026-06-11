@@ -64,6 +64,13 @@ def test_warmup_repeat_profiler_level_device_forwarded():
     assert _pairs(cmd, "--device-id") == ["3"]
 
 
+def test_torch_op_guard_mode_forwarded():
+    cfg = Config()
+    cfg.torch_op_guard_mode = "block"
+    cmd = _runner(cfg)._build_child_cmd("Cummin", "/tmp/frag.json", source_dir="cand")
+    assert _pairs(cmd, "--torch-op-guard-mode") == ["block"]
+
+
 def test_base_invariants_preserved():
     cfg = Config()
     cmd = _runner(cfg)._build_child_cmd("Cummin", "/tmp/frag.json", source_dir="cand")
@@ -117,4 +124,5 @@ def test_no_config_is_safe():
     cmd = runner._build_child_cmd("Cummin", "/tmp/frag.json", source_dir="cand")
     assert "--no-perf" not in cmd
     assert "--warmup" not in cmd
+    assert "--torch-op-guard-mode" not in cmd
     assert "--task-dir" not in cmd
