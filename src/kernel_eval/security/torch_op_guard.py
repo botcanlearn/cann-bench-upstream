@@ -122,23 +122,47 @@ _LEAF_TO_CANONICAL: dict = {
 }
 
 
+def _should_normalize_leaf(mod: str, qualname: str) -> bool:
+    """Return whether a leaf op name belongs to PyTorch builtin dispatch.
+
+    Custom operators registered under ``torch.ops.<namespace>`` may deliberately
+    reuse public operator names such as ``gelu`` or ``softmax``. Normalizing only
+    by the leaf name would classify ``torch.ops.cann_bench.gelu`` as
+    ``torch.nn.functional.gelu`` before PyTorch dispatch reaches the submitted
+    PrivateUse1 implementation. Only normalize known PyTorch builtin entry
+    points and Tensor methods.
+    """
+    if "TensorBase" in qualname or "Tensor." in qualname:
+        return True
+    if mod.startswith("torch._C._TensorBase"):
+        return True
+
+    builtin_prefixes = (
+        "torch._C",
+        "torch._ops.aten",
+        "torch.nn.functional",
+    )
+    return mod == "torch" or any(mod.startswith(prefix) for prefix in builtin_prefixes)
+
+
 def _qualified_name(func) -> str:
     """计算操作的 canonical name，规约所有调度路径（aten / @ / method / F.*）到
     BUILTIN_COMPUTE_OPS 中的同一条目，防止单条规则被多路径绕过。
 
     优先级：
-      1. ``__name__`` 的"叶子部分"（去掉 ``.default`` 等 overload 后缀）在
-         ``_LEAF_TO_CANONICAL`` 中 → 直接返回 canonical name。
+      1. 内置 PyTorch API / aten / Tensor method 且 ``__name__`` 的"叶子部分"
+         （去掉 ``.default`` 等 overload 后缀）在 ``_LEAF_TO_CANONICAL`` 中
+         → 返回 canonical name。
       2. 否则按旧规则（Tensor method 走 ``torch.Tensor.<name>``，其余 ``mod.name``）。
     """
     name = getattr(func, "__name__", "") or repr(func)
-    # Strip overload suffix: "mm.default" → "mm"
-    leaf = name.split(".", 1)[0]
-    if leaf in _LEAF_TO_CANONICAL:
-        return _LEAF_TO_CANONICAL[leaf]
-    # Old behavior (fallback for ops not in canonical map)
     mod = getattr(func, "__module__", "") or ""
     qualname = getattr(func, "__qualname__", "") or ""
+    # Strip overload suffix: "mm.default" → "mm"
+    leaf = name.split(".", 1)[0]
+    if leaf in _LEAF_TO_CANONICAL and _should_normalize_leaf(mod, qualname):
+        return _LEAF_TO_CANONICAL[leaf]
+    # Old behavior (fallback for ops not in canonical map)
     if "TensorBase" in qualname or "Tensor." in qualname:
         return f"torch.Tensor.{name}"
     if mod.startswith("torch._C._TensorBase"):

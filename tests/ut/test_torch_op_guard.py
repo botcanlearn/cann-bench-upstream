@@ -27,6 +27,7 @@ import torch
 from kernel_eval.security.torch_op_guard import (
     BUILTIN_COMPUTE_OPS,
     TorchOpGuard,
+    _qualified_name,
 )
 
 
@@ -93,6 +94,39 @@ class TestNonForbiddenNotCaught:
         with g:
             _ = a.view(4, 4)
         assert g.forbidden_calls == []
+
+
+# ============================================================================
+# false positive 回归测试：自定义 torch.ops namespace 不应按叶子名误判
+# ============================================================================
+class TestCustomTorchOpsNotCaught:
+    """提交包注册的 torch.ops.<namespace> 算子可与 PyTorch 内置算子同名。"""
+
+    def test_custom_gelu_namespace_not_canonicalized(self):
+        custom_gelu = type("FakeFunc", (), {})()
+        custom_gelu.__name__ = "gelu"
+        custom_gelu.__module__ = "torch._ops.cann_bench"
+        custom_gelu.__qualname__ = "cann_bench.gelu"
+
+        assert _qualified_name(custom_gelu) == "torch._ops.cann_bench.gelu"
+        assert _qualified_name(custom_gelu) not in BUILTIN_COMPUTE_OPS
+
+    def test_custom_matmul_namespace_not_canonicalized(self):
+        custom_matmul = type("FakeFunc", (), {})()
+        custom_matmul.__name__ = "matmul"
+        custom_matmul.__module__ = "torch._ops.my_submission"
+        custom_matmul.__qualname__ = "my_submission.matmul"
+
+        assert _qualified_name(custom_matmul) == "torch._ops.my_submission.matmul"
+        assert _qualified_name(custom_matmul) not in BUILTIN_COMPUTE_OPS
+
+    def test_aten_gelu_still_canonicalized(self):
+        aten_gelu = type("FakeFunc", (), {})()
+        aten_gelu.__name__ = "gelu.default"
+        aten_gelu.__module__ = "torch._ops.aten"
+        aten_gelu.__qualname__ = "aten.gelu.default"
+
+        assert _qualified_name(aten_gelu) == "torch.nn.functional.gelu"
 
 
 # ============================================================================
