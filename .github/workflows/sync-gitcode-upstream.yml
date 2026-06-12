@@ -20,7 +20,7 @@ jobs:
       CONTROL_BRANCH: github-sync
     steps:
       - name: Checkout sync control branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Mirror all GitCode branches and tags
         env:
