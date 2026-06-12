@@ -1,0 +1,72 @@
+name: Sync GitCode Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-gitcode-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REPO: https://gitcode.com/cann/cann-bench.git
+      CONTROL_BRANCH: github-sync
+    steps:
+      - name: Checkout sync control branch
+        uses: actions/checkout@v4
+
+      - name: Mirror all GitCode branches and tags
+        env:
+          TARGET_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dst="https://x-access-token:${GITHUB_TOKEN}@github.com/${TARGET_REPO}.git"
+          tmp="$(mktemp -d)"
+
+          ok=0
+          for n in 1 2 3 4 5; do
+            rm -rf "$tmp/src.git"
+            if git -c http.version=HTTP/1.1 clone --mirror "$SOURCE_REPO" "$tmp/src.git"; then
+              ok=1
+              break
+            fi
+            sleep $((n * 10))
+          done
+          test "$ok" = 1
+
+          cd "$tmp/src.git"
+          git remote add github "$dst"
+
+          git -c http.version=HTTP/1.1 push github '+refs/heads/*:refs/heads/*'
+
+          git for-each-ref --format='+%(refname):%(refname)' refs/tags > "$tmp/tag-refspecs"
+          if [ -s "$tmp/tag-refspecs" ]; then
+            xargs git -c http.version=HTTP/1.1 push github < "$tmp/tag-refspecs"
+          fi
+
+          git for-each-ref --format='%(refname:strip=2)' refs/heads > "$tmp/source-heads"
+          git ls-remote --heads github | awk '{print $2}' | sed 's#refs/heads/##' > "$tmp/target-heads"
+          while IFS= read -r branch; do
+            [ -z "$branch" ] && continue
+            [ "$branch" = "$CONTROL_BRANCH" ] && continue
+            if ! grep -Fxq -- "$branch" "$tmp/source-heads"; then
+              git -c http.version=HTTP/1.1 push github ":refs/heads/$branch"
+            fi
+          done < "$tmp/target-heads"
+
+          git for-each-ref --format='%(refname:strip=2)' refs/tags > "$tmp/source-tags"
+          git ls-remote --tags github | awk '$2 !~ /\^\{\}$/ {print $2}' | sed 's#refs/tags/##' > "$tmp/target-tags"
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            if ! grep -Fxq -- "$tag" "$tmp/source-tags"; then
+              git -c http.version=HTTP/1.1 push github ":refs/tags/$tag"
+            fi
+          done < "$tmp/target-tags"
