@@ -146,4 +146,8 @@ def strided_slice(
     # 执行切片
     y = x[tuple(indices)]
 
-    return y
+    # 物化输出:真实 StridedSlice 算子会写出独立 buffer;若直接返回 x[...] 的 view,
+    # golden-as-candidate 在 NPU 上不跑 compute kernel(view 无拷贝)→ profiler 测不到 perf。
+    # clone() 强制拷贝,非连续切片即跑出真实 SliceAiCore kernel。精度不变(值相同),且更贴近
+    # 真实算子语义(输出与输入不共享内存)。
+    return y.clone()

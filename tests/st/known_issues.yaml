@@ -3,4 +3,12 @@
 #   case   ∈ <int> (一个用例) | "all" (op 级,整算子)
 #   target ∈ {golden, baseline} | 省略 (对所有都生效). 本 ST 只跑 golden 候选, baseline 预留。
 #
-# TODO: 待 NPU 实机上首跑 golden ST 后,据实际 accuracy-fail / 无可测 kernel 的算子回填。
+# 据 NPU 实机首跑 golden ST 回填(后续按实际 accuracy-fail / 无可测 kernel 的算子补充)。
+
+# StridedSlice:golden 已 clone 物化(见 tasks/level3/strided_slice/golden.py),非连续切片能跑出
+# 真实 SliceAiCore kernel(17/20 可计量)。但 case 14/18/19 是 shrink+小输出,物化走 DMA memcpy
+# (非 AiCore)→ AiCore-only 的 KernelDetailsStrategy 采不到,perf 结构性为 0(非 flaky)。仅对
+# 这 3 个 case 放宽 perf,其余 17 个仍正常计量。
+- {op: StridedSlice, case: 14, action: xfail-perf, target: golden, reason: "shrink+小输出,物化走 DMA(非 AiCore),profiler 采不到"}
+- {op: StridedSlice, case: 18, action: xfail-perf, target: golden, reason: "shrink+小输出,物化走 DMA(非 AiCore),profiler 采不到"}
+- {op: StridedSlice, case: 19, action: xfail-perf, target: golden, reason: "shrink+小输出,物化走 DMA(非 AiCore),profiler 采不到"}
