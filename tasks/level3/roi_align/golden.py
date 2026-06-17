@@ -14,16 +14,17 @@
 import torch
 
 """
-ROIAlign 算子 Torch Golden 参考实现
+ROIAlign operator Torch golden reference.
 
-池化层，用于非均匀输入尺寸的特征图
-公式: y = roi_align(x, boxes, output_size)
+Region-of-interest pooling for feature maps of non-uniform input size.
+Formula: y = roi_align(x, boxes, output_size)
 
-输入签名与 torch_npu.npu_roi_align 一致：boxes 为 (N, 5) 张量，
-第 0 列为 batch index（与特征 dtype 相同），第 1-4 列为 (x0, y0, x1, y1) 像素坐标。
+The signature matches torch_npu.npu_roi_align: boxes is an (N, 5) tensor whose
+column 0 is the batch index (same dtype as the features) and columns 1-4 are the
+(x0, y0, x1, y1) pixel coordinates.
 
-优先使用 torchvision.ops.roi_align 官方实现，
-torchvision 不可用时使用纯 Python fallback（对标 torchvision 源码逻辑）。
+Prefers torchvision.ops.roi_align; when torchvision is unavailable it falls back
+to a pure-Python implementation mirroring the torchvision reference.
 """
 
 try:
@@ -36,7 +37,7 @@ except Exception:
 def _bilinear_interpolate(
     input, roi_batch_ind, y, x, ymask, xmask,
 ):
-    """Bilinear interpolation，对标 torchvision _bilinear_interpolate。"""
+    """Bilinear interpolation, mirroring torchvision's _bilinear_interpolate."""
     _, channels, height, width = input.size()
     y = y.clamp(min=0)
     x = x.clamp(min=0)
@@ -84,7 +85,7 @@ def _roi_align_fallback(
     x, boxes, outputHeight, outputWidth,
     spatial_scale, sampling_ratio, aligned,
 ):
-    """纯 Python fallback，对标 torchvision.ops.roi_align 的纯 Python 参考实现。"""
+    """Pure-Python fallback mirroring torchvision.ops.roi_align's reference path."""
     orig_dtype = x.dtype
     x_fp32 = x.float()
     boxes_fp32 = boxes.float()
@@ -132,17 +133,33 @@ def _roi_align_fallback(
         + (ix[None, None, :] + 0.5).to(x_fp32.dtype) * from_K(bin_size_w / roi_bin_grid_w)
     )
 
-    val = _bilinear_interpolate(x_fp32, roi_batch_ind, y, x_pos, ymask, xmask)
-
-    if not exact_sampling:
-        val = torch.where(ymask[:, None, None, None, :, None], val, 0)
-        val = torch.where(xmask[:, None, None, None, None, :], val, 0)
-
-    output = val.sum((-1, -2))
-    if isinstance(count, torch.Tensor):
-        output = output / count[:, None, None, None]
-    else:
-        output = output / count
+    # _bilinear_interpolate materializes [n, C, oh, gh, ow, gw]; for auto-sampling
+    # (gh,gw span the full feature map) this reaches ~18 GiB on case 16 and OOMs the
+    # NPU. Per-ROI reductions are independent, so chunking the ROI axis is bit-exact
+    # and caps the peak val tensor to ~1 GiB (fp32).
+    n_rois = y.shape[0]
+    elems_per_roi = max(
+        1, x_fp32.shape[1] * y.shape[1] * y.shape[2] * x_pos.shape[1] * x_pos.shape[2]
+    )
+    chunk = max(1, (256 * 1024 * 1024) // elems_per_roi)
+    parts = []
+    for st in range(0, n_rois, chunk):
+        en = st + chunk
+        val = _bilinear_interpolate(
+            x_fp32, roi_batch_ind[st:en], y[st:en], x_pos[st:en],
+            None if ymask is None else ymask[st:en],
+            None if xmask is None else xmask[st:en],
+        )
+        if not exact_sampling:
+            val = torch.where(ymask[st:en][:, None, None, None, :, None], val, 0)
+            val = torch.where(xmask[st:en][:, None, None, None, None, :], val, 0)
+        out_chunk = val.sum((-1, -2))
+        if isinstance(count, torch.Tensor):
+            out_chunk = out_chunk / count[st:en][:, None, None, None]
+        else:
+            out_chunk = out_chunk / count
+        parts.append(out_chunk)
+    output = torch.cat(parts, dim=0)
 
     return output.to(orig_dtype)
 
@@ -151,23 +168,22 @@ def roi_align(
     x: torch.Tensor, boxes: torch.Tensor, outputHeight: int, outputWidth: int,
     spatial_scale: float, sampling_ratio: int = -1, aligned: bool = False,
 ) -> torch.Tensor:
-    """
-    池化层，用于非均匀输入尺寸的特征图
+    """Region-of-interest pooling for feature maps of non-uniform input size.
 
-    公式: y = roi_align(x, boxes, output_size)
+    Formula: y = roi_align(x, boxes, output_size)
 
     Args:
-        x: 输入特征图 [B, C, H, W]
-        boxes: ROI 框 [N, 5]，每行 (batch_idx, x0, y0, x1, y1)；col 0 为整数值的
-            batch 索引（与 features dtype 相同）
-        outputHeight: 输出高度
-        outputWidth: 输出宽度
-        spatial_scale: 空间缩放因子（将 boxes 坐标乘到特征图分辨率）
-        sampling_ratio: 采样比率 (-1 或 0 表示自动计算 ceil(roi_h/oh))
-        aligned: 是否对齐 (aligned=True 时 ROI 坐标偏移 -0.5 像素)
+        x: input feature map [B, C, H, W]
+        boxes: ROI boxes [N, 5], each row (batch_idx, x0, y0, x1, y1); col 0 is the
+            integer batch index (same dtype as the features)
+        outputHeight: output height
+        outputWidth: output width
+        spatial_scale: spatial scale factor (maps box coords to feature resolution)
+        sampling_ratio: sampling ratio (-1 or 0 -> auto ceil(roi_h/oh))
+        aligned: whether to align (aligned=True shifts ROI coords by -0.5 pixel)
 
     Returns:
-        输出张量 [N, C, outputHeight, outputWidth]
+        output tensor [N, C, outputHeight, outputWidth]
     """
     if HAS_TORCHVISION:
         return _tv_roi_align(
@@ -180,3 +196,53 @@ def roi_align(
         x, boxes, outputHeight, outputWidth,
         spatial_scale, sampling_ratio, aligned,
     )
+
+
+def get_input(
+    x: torch.Tensor,
+    boxes: torch.Tensor,
+    outputHeight: int,
+    outputWidth: int,
+    spatial_scale: float,
+    sampling_ratio: int = -1,
+    aligned: bool = False,
+    **kwargs,
+):
+    """Input preprocessing: rebuild legal ROI boxes (feature map x kept as-is).
+
+    A cases.yaml value_range is a single [min, max] interval and cannot express the
+    structured boxes (N,5) contract (col0 an integer batch index, col1-4 satisfying
+    x1>x0/y1>y0 and landing inside the feature map after scaling). Spread over [-1,1]
+    by the generic generator, col0 becomes non-integer/negative and boxes degenerate.
+    The golden tolerates this (.long() truncation + clamp) but torch_npu.npu_roi_align
+    does not, so its accuracy explodes. get_input regenerates legal boxes here.
+
+    kernel_eval calls this with input names + attrs as keywords and uses the return
+    value (a list in golden-signature Tensor order) to replace the inputs of BOTH the
+    golden and the candidate, so the comparison stays fair.
+
+    Args:
+        x: feature map [B, C, H, W] (returned as-is, including inf/nan stress cases)
+        boxes: original boxes [N, 5] (only N/dtype/device used; contents rebuilt)
+        spatial_scale: coord->feature-map scale, used to bound the coordinate range
+
+    Returns:
+        [x, new_boxes], ordered to match the golden signature's (x, boxes, ...) tensors.
+    """
+    B, _, H, W = x.shape
+    N = boxes.shape[0]
+    g = torch.Generator().manual_seed(0)  # deterministic for reproducibility
+
+    # col0: integer batch index in [0, B); fp16 represents it exactly for B <= 4
+    batch_idx = torch.randint(0, B, (N,), generator=g).float()
+
+    # col1-4: pixel coords kept non-degenerate and inside the map after *spatial_scale
+    max_x = (W - 1) / spatial_scale
+    max_y = (H - 1) / spatial_scale
+    x0 = torch.rand(N, generator=g) * 0.5 * max_x
+    y0 = torch.rand(N, generator=g) * 0.5 * max_y
+    x1 = x0 + (0.1 + 0.4 * torch.rand(N, generator=g)) * max_x  # width in (0.1,0.5)*max -> x1>x0, x1<=max
+    y1 = y0 + (0.1 + 0.4 * torch.rand(N, generator=g)) * max_y
+
+    new_boxes = torch.stack([batch_idx, x0, y0, x1, y1], dim=1).to(boxes.device, boxes.dtype)
+    return [x, new_boxes]
