@@ -467,6 +467,27 @@ class GoldenLoader(GoldenLoaderBase):
                     f"模块 tasks.{rel_path.replace('/', '.')} 中找不到函数: {func_name}")
         return getattr(module, func_name)
 
+    def get_mc2_distributed_golden(self, rel_path: str, required: bool = False) -> Optional[Callable]:
+        """获取 MC2 多卡分布式 golden 钩子（golden.py 中的 mc2_distributed_golden）。
+
+        MC2 类算子的 golden 逻辑依赖多 rank HCCL 通信，无法走单进程 golden 路径，
+        改由各 task 的 golden.py 提供名为 ``mc2_distributed_golden`` 的可选钩子。
+
+        Args:
+            rel_path: 算子相对路径
+            required: 为 True 时若钩子缺失则抛 AttributeError；否则返回 None
+
+        Returns:
+            钩子函数；缺失且 required=False 时返回 None
+        """
+        module = self._load_module(rel_path)
+        hook = getattr(module, "mc2_distributed_golden", None)
+        if hook is None and required:
+            raise AttributeError(
+                f"模块 tasks.{rel_path.replace('/', '.')} 中找不到分布式 golden 钩子: "
+                f"mc2_distributed_golden")
+        return hook
+
     def _get_operator_name(self, rel_path: str) -> str:
         """从 proto.yaml 获取算子名称"""
         proto_path = self.bench_root / rel_path / "proto.yaml"

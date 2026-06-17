@@ -753,6 +753,19 @@ def compare_tensors(
         single_output_results: List[SingleOutputResult] = []
 
         for i, (out_tensor, gold_tensor) in enumerate(zip(outputs, goldens)):
+            # 处理可选输出：双方均为 None 则跳过，否则报错
+            if out_tensor is None or gold_tensor is None:
+                both_none = out_tensor is None and gold_tensor is None
+                single_output_results.append(SingleOutputResult(
+                    index=i,
+                    name="",
+                    dtype="none",
+                    passed=both_none,
+                    error_msg="" if both_none else f"output[{i}] is None (candidate={'None' if out_tensor is None else 'Tensor'}, golden={'None' if gold_tensor is None else 'Tensor'})",
+                    metadata={'dtype_category': 'none'},
+                ))
+                continue
+
             # 跳过不需要对比的输出
             if ignore_output_indices and i in ignore_output_indices:
                 # 创建跳过标记的 SingleOutputResult

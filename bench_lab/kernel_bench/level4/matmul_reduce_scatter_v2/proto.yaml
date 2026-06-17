@@ -1,0 +1,73 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: MatmulReduceScatterV2
+  category: FusedComposite
+  difficulty: L4
+  formula: |
+    mm = QuantMatmul(x1, x2, x1_scale, x2_scale, bias)
+    y = ReduceScatter(mm, op=sum) along dim 0
+  description: MC2 quantized matmul and reduce-scatter fused operator. INT8 cases require one HCCL process per rank and target Atlas A3.
+  shape_support: 'x1: [M, K], x2: [K, N], x1_scale: [M], x2_scale: [N]; y: [M / world_size, N]'
+  precision_thresholds:
+    float16: 0.01
+    bfloat16: 0.01
+  attrs:
+  - name: mc2_distributed
+    type: bool
+    default: true
+    description: Route this task through the cann-bench MC2 distributed runner.
+  - name: world_size
+    type: int
+    description: Number of HCCL ranks.
+  - name: reduce_op
+    type: str
+    default: sum
+    description: Reduce operation. Current cases use sum.
+  - name: out_dtype
+    type: str
+    default: float16
+    description: Output dtype for quantized matmul.
+  - name: x1_dtype
+    type: str
+    default: int8
+    description: Logical quantized dtype for x1.
+  - name: x2_dtype
+    type: str
+    default: int8
+    description: Logical quantized dtype for x2.
+  - name: block_size
+    type: int
+    default: 128
+    description: Quant-mm block size passed through to torch_npu.
+  inputs:
+  - name: x1
+    description: Quantized matmul input tensor.
+    dtype: [int8]
+    shape: '[M, K]'
+  - name: x2
+    description: Quantized matmul weight tensor.
+    dtype: [int8]
+    shape: '[K, N]'
+  - name: x1_scale
+    description: Per-token scale for x1.
+    dtype: [float32]
+    shape: '[M]'
+  - name: x2_scale
+    description: Per-channel scale for x2.
+    dtype: [float32]
+    shape: '[N]'
+  outputs:
+  - name: y
+    description: Reduce-scattered quantized matmul result.
+    dtype: [float16, bfloat16]
+    shape: '[M / world_size, N]'
+  schema: matmul_reduce_scatter_v2(Tensor x1, Tensor x2, str hcomm_info, int world_size, str reduce_op="sum", Tensor? bias=None, Tensor? x1_scale=None, Tensor? x2_scale=None, bool is_trans_b=False, str out_dtype="float16", str x1_dtype="int8", str x2_dtype="int8", str x1_scale_dtype="float32", str x2_scale_dtype="float32", int block_size=128, int[] group_sizes=[]) -> Tensor y

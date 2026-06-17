@@ -1,0 +1,801 @@
+cases:
+- operator: GroupedMatMulAlltoAllv
+  case_id: 1
+  input_shape:
+  - [256, 65535]
+  - [4, 65535, 4096]
+  - [32]
+  - [32]
+  - [32, 65535]
+  - [65535, 3072]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 51
+    graph_type: 0
+    case_name: case130_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -1000
+    - 1000
+  - - -20.0
+    - 20.0
+  note: case130_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 2
+  input_shape:
+  - [8800, 8192]
+  - [4, 8192, 4096]
+  - [32]
+  - [32]
+  - [1100, 8192]
+  - [8192, 8192]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 86
+    graph_type: 0
+    case_name: case212_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -1000
+    - 1000
+  - - -5.0
+    - 5.0
+  note: case212_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 3
+  input_shape:
+  - [8192, 2688]
+  - [4, 2688, 1024]
+  - [32]
+  - [32]
+  - [1024, 2688]
+  - [2688, 3072]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 2
+    graph_type: 0
+    case_name: case574_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -20.0
+    - 20.0
+  - - -1000
+    - 1000
+  note: case574_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 4
+  input_shape:
+  - [59200, 4096]
+  - [4, 1024, 4096]
+  - [32]
+  - [32]
+  - [7400, 4096]
+  - [4096, 1024]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 32
+    graph_type: 0
+    case_name: case106_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  - - -0.01
+    - -0.001
+  - - -1000
+    - 1000
+  note: case106_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 5
+  input_shape:
+  - [8800, 4096]
+  - [4, 2688, 4096]
+  - [32]
+  - [32]
+  - [1100, 4096]
+  - [8192, 4096]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int64
+  - int64
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 33
+    graph_type: 0
+    case_name: case539_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -20.0
+    - 20.0
+  - - -20.0
+    - 20.0
+  - - -20.0
+    - 20.0
+  - - -1000
+    - 1000
+  - - -5.0
+    - 5.0
+  note: case539_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 6
+  input_shape:
+  - [256, 65535]
+  - [4, 2688, 65535]
+  - [32]
+  - [32]
+  - [128, 65535]
+  - [65535, 8192]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 61
+    graph_type: 0
+    case_name: case590_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -1000
+    - 1000
+  - - -0.01
+    - -0.001
+  note: case590_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 7
+  input_shape:
+  - [59200, 3072]
+  - [4, 3072, 4096]
+  - [32]
+  - [32]
+  - [7400, 3072]
+  - [3072, 4096]
+  dtype:
+  - float16
+  - float16
+  - int64
+  - int64
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 79
+    graph_type: 0
+    case_name: case77_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  note: case77_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 8
+  input_shape:
+  - [16384, 1024]
+  - [4, 1024, 2688]
+  - [32]
+  - [32]
+  - [2048, 1024]
+  - [1024, 8192]
+  dtype:
+  - float16
+  - float16
+  - int32
+  - int32
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 41
+    graph_type: 0
+    case_name: case182_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -20.0
+    - 20.0
+  - - -20.0
+    - 20.0
+  note: case182_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 9
+  input_shape:
+  - [8192, 8192]
+  - [4, 8192, 3072]
+  - [32]
+  - [32]
+  - [1024, 8192]
+  - [8192, 2688]
+  dtype:
+  - float16
+  - float16
+  - int32
+  - int32
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 4
+    graph_type: 0
+    case_name: case318_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  - - -5.0
+    - 5.0
+  note: case318_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 10
+  input_shape:
+  - [512, 65534]
+  - [4, 4096, 65534]
+  - [32]
+  - [32]
+  - [256, 65534]
+  - [65534, 1024]
+  dtype:
+  - float16
+  - float16
+  - int32
+  - int32
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 27
+    graph_type: 0
+    case_name: case556_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -20.0
+    - 20.0
+  note: case556_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 11
+  input_shape:
+  - [8800, 8192]
+  - [4, 1024, 8192]
+  - [32]
+  - [32]
+  - [1100, 8192]
+  - [2688, 8192]
+  dtype:
+  - float16
+  - float16
+  - int64
+  - int64
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 86
+    graph_type: 0
+    case_name: case1140_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -0.01
+    - -0.001
+  note: case1140_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 12
+  input_shape:
+  - [4096, 65534]
+  - [4, 4096, 65534]
+  - [32]
+  - [32]
+  - [2048, 65534]
+  - [65534, 8192]
+  dtype:
+  - float16
+  - float16
+  - int32
+  - int32
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 79
+    graph_type: 0
+    case_name: case1232_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  note: case1232_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 13
+  input_shape:
+  - [4000, 65534]
+  - [4, 65534, 2048]
+  - [32]
+  - [32]
+  - [2000, 65534]
+  - [8192, 65534]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int64
+  - int64
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 20
+    graph_type: 0
+    case_name: case906_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  note: case906_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 14
+  input_shape:
+  - [14800, 2688]
+  - [4, 2688, 1024]
+  - [32]
+  - [32]
+  - [7400, 2688]
+  - [2688, 2048]
+  dtype:
+  - float16
+  - float16
+  - int64
+  - int64
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 79
+    graph_type: 0
+    case_name: case926_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -20.0
+    - 20.0
+  - - -20.0
+    - 20.0
+  note: case926_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 15
+  input_shape:
+  - [16384, 7168]
+  - [4, 2688, 7168]
+  - [32]
+  - [32]
+  - [8192, 7168]
+  - [8192, 7168]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int64
+  - int64
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 88
+    graph_type: 0
+    case_name: case961_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -1000
+    - 1000
+  note: case961_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 16
+  input_shape:
+  - [2048, 7168]
+  - [4, 7168, 2048]
+  - [32]
+  - [32]
+  - [1024, 7168]
+  - [3072, 7168]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 96
+    graph_type: 0
+    case_name: case1028_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  - - -0.01
+    - -0.001
+  - - -20.0
+    - 20.0
+  note: case1028_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 17
+  input_shape:
+  - [8800, 2688]
+  - [4, 2688, 4096]
+  - [32]
+  - [32]
+  - [1100, 2688]
+  - [2688, 1024]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int32
+  - int32
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 83
+    graph_type: 0
+    case_name: case1089_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  - - -20.0
+    - 20.0
+  - - -1000
+    - 1000
+  note: case1089_exp_4_card_8_dtype_bf16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 18
+  input_shape:
+  - [4000, 3072]
+  - [4, 3072, 4096]
+  - [32]
+  - [32]
+  - [2000, 3072]
+  - [4096, 3072]
+  dtype:
+  - float16
+  - float16
+  - int64
+  - int64
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: false
+    trans_mm_weight: false
+    mm_out: false
+    seed: 65
+    graph_type: 0
+    case_name: case1192_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+  value_range:
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -5.0
+    - 5.0
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  note: case1192_exp_4_card_8_dtype_fp16_trans1_False_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 19
+  input_shape:
+  - [4000, 65534]
+  - [4, 2688, 65534]
+  - [32]
+  - [32]
+  - [2000, 65534]
+  - [65534, 3072]
+  dtype:
+  - bfloat16
+  - bfloat16
+  - int64
+  - int64
+  - bfloat16
+  - bfloat16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 1
+    graph_type: 0
+    case_name: case1231_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -5.0
+    - 5.0
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -0.01
+    - -0.001
+  - - -5.0
+    - 5.0
+  - - -1000
+    - 1000
+  note: case1231_exp_4_card_8_dtype_bf16_trans1_True_trans2_False_mm_out_flag_False
+- operator: GroupedMatMulAlltoAllv
+  case_id: 20
+  input_shape:
+  - [2200, 4096]
+  - [4, 2688, 4096]
+  - [32]
+  - [32]
+  - [1100, 4096]
+  - [3072, 4096]
+  dtype:
+  - float16
+  - float16
+  - int64
+  - int64
+  - float16
+  - float16
+  attrs:
+    mc2_distributed: true
+    world_size: 8
+    e: 4
+    trans_gmm_weight: true
+    trans_mm_weight: false
+    mm_out: false
+    seed: 15
+    graph_type: 0
+    case_name: case1280_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False
+  value_range:
+  - - -1.0
+    - 1.0
+  - - -1.0
+    - 1.0
+  - - -1000
+    - 1000
+  - - -1000
+    - 1000
+  - - -20.0
+    - 20.0
+  - - -0.01
+    - -0.001
+  note: case1280_exp_4_card_8_dtype_fp16_trans1_True_trans2_False_mm_out_flag_False

@@ -134,6 +134,14 @@ class Evaluator:
         """
         case_id_str = case.get_case_id_str()
 
+        # MC2 多卡通信类算子（如 MatmulReduceScatter / AllGatherMatmul 等）需要
+        # 多 rank HCCL 进程组，无法走单进程 golden 路径，转交专用分布式 runner。
+        if (case.attrs or {}).get("mc2_distributed", False):
+            from .mc2_distributed_runner import MC2DistributedEvaluator
+            merged_thresholds = self._get_merged_thresholds(case.rel_path)
+            return MC2DistributedEvaluator(self.config).evaluate_case(
+                case, custom_thresholds=merged_thresholds)
+
         try:
             # 1. 获取golden函数
             golden_func = self.golden_loader.get_golden_function(case.rel_path)

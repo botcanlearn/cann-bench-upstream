@@ -1,0 +1,151 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+cases:
+- operator: AllGatherMatmulV2
+  case_id: 1
+  input_shape: [[256, 4096], [4096, 1024], [256], [1024]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3001, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m256_k4096_n1024_float16"
+- operator: AllGatherMatmulV2
+  case_id: 2
+  input_shape: [[512, 4096], [4096, 2048], [512], [2048]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3002, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m512_k4096_n2048_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 3
+  input_shape: [[1024, 4096], [4096, 4096], [1024], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3003, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m1024_k4096_n4096_float16"
+- operator: AllGatherMatmulV2
+  case_id: 4
+  input_shape: [[2048, 4096], [4096, 4096], [2048], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3004, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m2048_k4096_n4096_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 5
+  input_shape: [[256, 5120], [5120, 1024], [256], [1024]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3005, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m256_k5120_n1024_float16"
+- operator: AllGatherMatmulV2
+  case_id: 6
+  input_shape: [[512, 5120], [5120, 2048], [512], [2048]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3006, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m512_k5120_n2048_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 7
+  input_shape: [[1024, 5120], [5120, 4096], [1024], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3007, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m1024_k5120_n4096_float16"
+- operator: AllGatherMatmulV2
+  case_id: 8
+  input_shape: [[2048, 5120], [5120, 4096], [2048], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3008, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m2048_k5120_n4096_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 9
+  input_shape: [[256, 7168], [7168, 1024], [256], [1024]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3009, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m256_k7168_n1024_float16"
+- operator: AllGatherMatmulV2
+  case_id: 10
+  input_shape: [[512, 7168], [7168, 2048], [512], [2048]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3010, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m512_k7168_n2048_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 11
+  input_shape: [[1024, 7168], [7168, 4096], [1024], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3011, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m1024_k7168_n4096_float16"
+- operator: AllGatherMatmulV2
+  case_id: 12
+  input_shape: [[2048, 7168], [7168, 4096], [2048], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3012, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m2048_k7168_n4096_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 13
+  input_shape: [[128, 8192], [8192, 1024], [128], [1024]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3013, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m128_k8192_n1024_float16"
+- operator: AllGatherMatmulV2
+  case_id: 14
+  input_shape: [[256, 8192], [8192, 2048], [256], [2048]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3014, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m256_k8192_n2048_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 15
+  input_shape: [[512, 8192], [8192, 4096], [512], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3015, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m512_k8192_n4096_float16"
+- operator: AllGatherMatmulV2
+  case_id: 16
+  input_shape: [[1024, 8192], [8192, 4096], [1024], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3016, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m1024_k8192_n4096_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 17
+  input_shape: [[64, 12288], [12288, 1024], [64], [1024]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3017, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m64_k12288_n1024_float16"
+- operator: AllGatherMatmulV2
+  case_id: 18
+  input_shape: [[128, 12288], [12288, 2048], [128], [2048]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3018, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m128_k12288_n2048_bfloat16"
+- operator: AllGatherMatmulV2
+  case_id: 19
+  input_shape: [[256, 12288], [12288, 4096], [256], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": true, "is_trans_b": false, "is_bias": false, "out_dtype": "float16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3019, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m256_k12288_n4096_float16"
+- operator: AllGatherMatmulV2
+  case_id: 20
+  input_shape: [[512, 12288], [12288, 4096], [512], [4096]]
+  dtype: ["int8", "int8", "float32", "float32"]
+  attrs: {"mc2_distributed": true, "world_size": 8, "gather_output": false, "is_trans_b": false, "is_bias": false, "out_dtype": "bfloat16", "x1_dtype": "int8", "x2_dtype": "int8", "x1_scale_dtype": "float32", "x2_scale_dtype": "float32", "block_size": 128, "group_sizes": [], "seed": 3020, "weight_same": 1, "platform": "Atlas A3"}
+  value_range: [[-8, 8], [-8, 8], [0.001, 0.02], [0.001, 0.02]]
+  note: "int8_agmm_v2_m512_k12288_n4096_bfloat16"

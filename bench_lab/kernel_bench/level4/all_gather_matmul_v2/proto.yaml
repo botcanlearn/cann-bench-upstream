@@ -1,0 +1,79 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: AllGatherMatmulV2
+  category: FusedComposite
+  difficulty: L4
+  formula: |
+    gather_x = AllGather(x1) along dim 0
+    gather_scale = AllGather(x1_scale) along dim 0
+    y = QuantMatmul(gather_x, x2, gather_scale, x2_scale, bias)
+    gather_out = gather_x when gather_output=True
+  description: MC2 all-gather and quantized matmul fused operator. INT8 cases require one HCCL process per rank and target Atlas A3.
+  shape_support: 'x1: [M_local, K], x2: [K, N], x1_scale: [M_local], x2_scale: [N]; y: [M_local * world_size, N]'
+  precision_thresholds:
+    float16: 0.005
+    bfloat16: 0.005
+  attrs:
+  - name: mc2_distributed
+    type: bool
+    default: true
+    description: Route this task through the cann-bench MC2 distributed runner.
+  - name: world_size
+    type: int
+    description: Number of HCCL ranks.
+  - name: gather_output
+    type: bool
+    default: true
+    description: Whether the fused operator returns gathered x1.
+  - name: out_dtype
+    type: str
+    default: float16
+    description: Output dtype for quantized matmul.
+  - name: x1_dtype
+    type: str
+    default: int8
+    description: Logical quantized dtype for x1.
+  - name: x2_dtype
+    type: str
+    default: int8
+    description: Logical quantized dtype for x2.
+  - name: block_size
+    type: int
+    default: 128
+    description: Quant-mm block size passed through to torch_npu.
+  inputs:
+  - name: x1
+    description: Local rank quantized input tensor.
+    dtype: [int8]
+    shape: '[M_local, K]'
+  - name: x2
+    description: Quantized matmul weight tensor.
+    dtype: [int8]
+    shape: '[K, N]'
+  - name: x1_scale
+    description: Per-token scale for x1.
+    dtype: [float32]
+    shape: '[M_local]'
+  - name: x2_scale
+    description: Per-channel scale for x2.
+    dtype: [float32]
+    shape: '[N]'
+  outputs:
+  - name: y
+    description: Quantized matmul result after all-gather.
+    dtype: [float16, bfloat16]
+    shape: '[M_local * world_size, N]'
+  - name: gather_out
+    description: Optional gathered x1 tensor.
+    dtype: [int8]
+    shape: '[M_local * world_size, K]'
+  schema: all_gather_matmul_v2(Tensor x1, Tensor x2, str hcomm_info, int world_size, Tensor? bias=None, Tensor? x1_scale=None, Tensor? x2_scale=None, bool gather_output=True, bool is_trans_b=False, str out_dtype="float16", str x1_dtype="int8", str x2_dtype="int8", str x1_scale_dtype="float32", str x2_scale_dtype="float32", int block_size=128, int[] group_sizes=[]) -> (Tensor y, Tensor gather_out)
