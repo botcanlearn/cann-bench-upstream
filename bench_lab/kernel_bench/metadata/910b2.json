@@ -3,7 +3,503 @@
     "description": "Kernel Bench baseline 性能数据",
     "hardware": "910b2",
     "generated_at": "2026-06-06T15:12:40.098921",
-    "source": "从 bench_lab/kernel_bench/level4/*/cases.yaml 迁移 baseline_perf_us / t_hw_us"
+    "source": "从 bench_lab/kernel_bench/*/*/cases.yaml 迁移 baseline_perf_us / t_hw_us"
+  },
+  "level1": {
+    "clipped_swiglu": {
+      "1": {
+        "baseline_perf_us": 118.98,
+        "t_hw_us": null
+      },
+      "2": {
+        "baseline_perf_us": 119.44,
+        "t_hw_us": null
+      },
+      "3": {
+        "baseline_perf_us": 116.78,
+        "t_hw_us": null
+      },
+      "4": {
+        "baseline_perf_us": 119.44,
+        "t_hw_us": null
+      },
+      "5": {
+        "baseline_perf_us": 118.94,
+        "t_hw_us": null
+      },
+      "6": {
+        "baseline_perf_us": 125.04,
+        "t_hw_us": null
+      },
+      "7": {
+        "baseline_perf_us": 122.9,
+        "t_hw_us": null
+      },
+      "8": {
+        "baseline_perf_us": 120.92,
+        "t_hw_us": null
+      },
+      "9": {
+        "baseline_perf_us": 119.38,
+        "t_hw_us": null
+      },
+      "10": {
+        "baseline_perf_us": 123.48,
+        "t_hw_us": null
+      },
+      "11": {
+        "baseline_perf_us": 117.06,
+        "t_hw_us": null
+      },
+      "12": {
+        "baseline_perf_us": 123.76,
+        "t_hw_us": null
+      },
+      "13": {
+        "baseline_perf_us": 119.7,
+        "t_hw_us": null
+      },
+      "14": {
+        "baseline_perf_us": 122.94,
+        "t_hw_us": null
+      },
+      "15": {
+        "baseline_perf_us": 123.42,
+        "t_hw_us": null
+      },
+      "16": {
+        "baseline_perf_us": 121.62,
+        "t_hw_us": null
+      },
+      "17": {
+        "baseline_perf_us": 172.98,
+        "t_hw_us": null
+      },
+      "18": {
+        "baseline_perf_us": 177.58,
+        "t_hw_us": null
+      },
+      "19": {
+        "baseline_perf_us": 205.08,
+        "t_hw_us": null
+      },
+      "20": {
+        "baseline_perf_us": 281.54,
+        "t_hw_us": null
+      }
+    }
+  },
+  "level2": {
+    "attention_update": {
+      "1": {
+        "baseline_perf_us": 121.8,
+        "t_hw_us": null
+      },
+      "2": {
+        "baseline_perf_us": 120.58,
+        "t_hw_us": null
+      },
+      "3": {
+        "baseline_perf_us": 123.4,
+        "t_hw_us": null
+      },
+      "4": {
+        "baseline_perf_us": 118.1,
+        "t_hw_us": null
+      },
+      "5": {
+        "baseline_perf_us": 123.76,
+        "t_hw_us": null
+      },
+      "6": {
+        "baseline_perf_us": 121.68,
+        "t_hw_us": null
+      },
+      "7": {
+        "baseline_perf_us": 119.2,
+        "t_hw_us": null
+      },
+      "8": {
+        "baseline_perf_us": 120.94,
+        "t_hw_us": null
+      },
+      "9": {
+        "baseline_perf_us": 124.6,
+        "t_hw_us": null
+      },
+      "10": {
+        "baseline_perf_us": 120.7,
+        "t_hw_us": null
+      },
+      "11": {
+        "baseline_perf_us": 121.86,
+        "t_hw_us": null
+      },
+      "12": {
+        "baseline_perf_us": 118.22,
+        "t_hw_us": null
+      },
+      "13": {
+        "baseline_perf_us": 125.52,
+        "t_hw_us": null
+      },
+      "14": {
+        "baseline_perf_us": 127.72,
+        "t_hw_us": null
+      },
+      "15": {
+        "baseline_perf_us": 123.14,
+        "t_hw_us": null
+      },
+      "16": {
+        "baseline_perf_us": 130.34,
+        "t_hw_us": null
+      },
+      "17": {
+        "baseline_perf_us": 133.72,
+        "t_hw_us": null
+      },
+      "18": {
+        "baseline_perf_us": 137.96,
+        "t_hw_us": null
+      },
+      "19": {
+        "baseline_perf_us": 154.82,
+        "t_hw_us": null
+      },
+      "20": {
+        "baseline_perf_us": 7018.62,
+        "t_hw_us": null
+      }
+    },
+    "ai_infra_manifold_constrained_hyper_connection_post": {
+      "1": {
+        "baseline_perf_us": 298.76,
+        "t_hw_us": null
+      },
+      "2": {
+        "baseline_perf_us": 437.89,
+        "t_hw_us": null
+      },
+      "3": {
+        "baseline_perf_us": 297.05,
+        "t_hw_us": null
+      },
+      "4": {
+        "baseline_perf_us": 439.57,
+        "t_hw_us": null
+      },
+      "5": {
+        "baseline_perf_us": 310.01,
+        "t_hw_us": null
+      },
+      "6": {
+        "baseline_perf_us": 313.95,
+        "t_hw_us": null
+      },
+      "7": {
+        "baseline_perf_us": 407.91,
+        "t_hw_us": null
+      },
+      "8": {
+        "baseline_perf_us": 412.75,
+        "t_hw_us": null
+      },
+      "9": {
+        "baseline_perf_us": 131.3,
+        "t_hw_us": null
+      },
+      "10": {
+        "baseline_perf_us": 130.42,
+        "t_hw_us": null
+      },
+      "11": {
+        "baseline_perf_us": 122.24,
+        "t_hw_us": null
+      },
+      "12": {
+        "baseline_perf_us": 127.76,
+        "t_hw_us": null
+      },
+      "13": {
+        "baseline_perf_us": 122.5,
+        "t_hw_us": null
+      },
+      "14": {
+        "baseline_perf_us": 127.68,
+        "t_hw_us": null
+      },
+      "15": {
+        "baseline_perf_us": 137.4,
+        "t_hw_us": null
+      },
+      "16": {
+        "baseline_perf_us": 121.82,
+        "t_hw_us": null
+      },
+      "17": {
+        "baseline_perf_us": 126.6,
+        "t_hw_us": null
+      },
+      "18": {
+        "baseline_perf_us": 127.56,
+        "t_hw_us": null
+      },
+      "19": {
+        "baseline_perf_us": 129.24,
+        "t_hw_us": null
+      },
+      "20": {
+        "baseline_perf_us": 127.32,
+        "t_hw_us": null
+      }
+    },
+    "scatter_pa_kv_cache": {
+      "1": {
+        "baseline_perf_us": 63.54,
+        "t_hw_us": null
+      },
+      "2": {
+        "baseline_perf_us": 67.82,
+        "t_hw_us": null
+      },
+      "3": {
+        "baseline_perf_us": 1348.66,
+        "t_hw_us": null
+      },
+      "4": {
+        "baseline_perf_us": 73.08,
+        "t_hw_us": null
+      },
+      "5": {
+        "baseline_perf_us": 49.52,
+        "t_hw_us": null
+      },
+      "6": {
+        "baseline_perf_us": 12.30,
+        "t_hw_us": null
+      },
+      "7": {
+        "baseline_perf_us": 28.48,
+        "t_hw_us": null
+      },
+      "8": {
+        "baseline_perf_us": 710.50,
+        "t_hw_us": null
+      },
+      "9": {
+        "baseline_perf_us": 10.14,
+        "t_hw_us": null
+      },
+      "10": {
+        "baseline_perf_us": 2.38,
+        "t_hw_us": null
+      },
+      "11": {
+        "baseline_perf_us": 2.78,
+        "t_hw_us": null
+      },
+      "12": {
+        "baseline_perf_us": 64.62,
+        "t_hw_us": null
+      },
+      "13": {
+        "baseline_perf_us": 2.28,
+        "t_hw_us": null
+      },
+      "14": {
+        "baseline_perf_us": 6.78,
+        "t_hw_us": null
+      },
+      "15": {
+        "baseline_perf_us": 34.36,
+        "t_hw_us": null
+      },
+      "16": {
+        "baseline_perf_us": 46.06,
+        "t_hw_us": null
+      },
+      "17": {
+        "baseline_perf_us": 2.62,
+        "t_hw_us": null
+      },
+      "18": {
+        "baseline_perf_us": 26.40,
+        "t_hw_us": null
+      },
+      "19": {
+        "baseline_perf_us": 314.44,
+        "t_hw_us": null
+      },
+      "20": {
+        "baseline_perf_us": 435.78,
+        "t_hw_us": null
+      }
+    },
+    "aggregate_hidden": {
+      "1": {
+        "baseline_perf_us": 101.16,
+        "t_hw_us": null
+      },
+      "2": {
+        "baseline_perf_us": 103.52,
+        "t_hw_us": null
+      },
+      "3": {
+        "baseline_perf_us": 105.32,
+        "t_hw_us": null
+      },
+      "4": {
+        "baseline_perf_us": 103.76,
+        "t_hw_us": null
+      },
+      "5": {
+        "baseline_perf_us": 262.32,
+        "t_hw_us": null
+      },
+      "6": {
+        "baseline_perf_us": 251.38,
+        "t_hw_us": null
+      },
+      "7": {
+        "baseline_perf_us": 102.30,
+        "t_hw_us": null
+      },
+      "8": {
+        "baseline_perf_us": 102.68,
+        "t_hw_us": null
+      },
+      "9": {
+        "baseline_perf_us": 105.00,
+        "t_hw_us": null
+      },
+      "10": {
+        "baseline_perf_us": 105.04,
+        "t_hw_us": null
+      },
+      "11": {
+        "baseline_perf_us": 260.94,
+        "t_hw_us": null
+      },
+      "12": {
+        "baseline_perf_us": 251.00,
+        "t_hw_us": null
+      },
+      "13": {
+        "baseline_perf_us": 1090.12,
+        "t_hw_us": null
+      },
+      "14": {
+        "baseline_perf_us": 103.50,
+        "t_hw_us": null
+      },
+      "15": {
+        "baseline_perf_us": 495.00,
+        "t_hw_us": null
+      },
+      "16": {
+        "baseline_perf_us": 520.86,
+        "t_hw_us": null
+      },
+      "17": {
+        "baseline_perf_us": 482.46,
+        "t_hw_us": null
+      },
+      "18": {
+        "baseline_perf_us": 103.92,
+        "t_hw_us": null
+      },
+      "19": {
+        "baseline_perf_us": 104.12,
+        "t_hw_us": null
+      },
+      "20": {
+        "baseline_perf_us": 182.34,
+        "t_hw_us": null
+      }
+    },
+    "multi_add_rms_norm_dynamic_quant": {
+      "1": {
+        "baseline_perf_us": 29.62,
+        "t_hw_us": null
+      },
+      "2": {
+        "baseline_perf_us": 19.98,
+        "t_hw_us": null
+      },
+      "3": {
+        "baseline_perf_us": 19.94,
+        "t_hw_us": null
+      },
+      "4": {
+        "baseline_perf_us": 22.50,
+        "t_hw_us": null
+      },
+      "5": {
+        "baseline_perf_us": 81.46,
+        "t_hw_us": null
+      },
+      "6": {
+        "baseline_perf_us": 38.04,
+        "t_hw_us": null
+      },
+      "7": {
+        "baseline_perf_us": 49.72,
+        "t_hw_us": null
+      },
+      "8": {
+        "baseline_perf_us": 110.02,
+        "t_hw_us": null
+      },
+      "9": {
+        "baseline_perf_us": 22.32,
+        "t_hw_us": null
+      },
+      "10": {
+        "baseline_perf_us": 259.38,
+        "t_hw_us": null
+      },
+      "11": {
+        "baseline_perf_us": 181.94,
+        "t_hw_us": null
+      },
+      "12": {
+        "baseline_perf_us": 136.92,
+        "t_hw_us": null
+      },
+      "13": {
+        "baseline_perf_us": 139.12,
+        "t_hw_us": null
+      },
+      "14": {
+        "baseline_perf_us": 117.02,
+        "t_hw_us": null
+      },
+      "15": {
+        "baseline_perf_us": 119.22,
+        "t_hw_us": null
+      },
+      "16": {
+        "baseline_perf_us": 65.34,
+        "t_hw_us": null
+      },
+      "17": {
+        "baseline_perf_us": 175.50,
+        "t_hw_us": null
+      },
+      "18": {
+        "baseline_perf_us": 163.24,
+        "t_hw_us": null
+      },
+      "19": {
+        "baseline_perf_us": 214.46,
+        "t_hw_us": null
+      },
+      "20": {
+        "baseline_perf_us": 184.62,
+        "t_hw_us": null
+      }
+    }
   },
   "level4": {
     "all_gather_matmul": {
