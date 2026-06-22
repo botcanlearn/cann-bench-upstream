@@ -192,6 +192,8 @@ def create_parser() -> argparse.ArgumentParser:
                               help='TaskUnit JSON 文件路径')
     child_parser.add_argument('--output', type=str, required=True,
                               help='结果 JSON 输出路径')
+    child_parser.add_argument('--reports-dir', type=str, default=None,
+                              help=argparse.SUPPRESS)
     child_parser.add_argument('--task-dir', type=str, default=None)
     child_parser.add_argument('--source-dir', type=str, default=None,
                               help=argparse.SUPPRESS)  # Stanford bench 透传
@@ -590,6 +592,8 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
     config.enable_profiler = not args.no_perf
     config.profiler_level = args.profiler_level
     config.bench_name = bench_name
+    if getattr(args, 'reports_dir', None):
+        config.reports_dir = args.reports_dir
 
     # source-dir 透传（Stanford bench 等需要在子进程中加载 ai_op.py）
     source_dir = getattr(args, 'source_dir', None)

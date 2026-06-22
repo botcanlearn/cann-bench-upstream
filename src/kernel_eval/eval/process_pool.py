@@ -268,6 +268,10 @@ class ProcessPoolCoordinator:
                "--repeat", str(self.base_config.repeat),
                ]
 
+        reports_dir = getattr(self.base_config, "reports_dir", "") or ""
+        if reports_dir:
+            cmd += ["--reports-dir", str(reports_dir)]
+
         # task-dir 透传
         tasks_root = getattr(self.base_config, "tasks_root", "")
         if tasks_root:

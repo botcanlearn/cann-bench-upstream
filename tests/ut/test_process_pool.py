@@ -261,6 +261,25 @@ class TestProcessPoolCoordinator(unittest.TestCase):
             if var in os.environ:
                 self.assertIn(var, env)
 
+    def test_build_child_cmd_propagates_reports_dir(self):
+        """eval-child 子进程继承父进程 reports_dir"""
+        self.base_config.device_type = "cpu"
+        self.base_config.reports_dir = "/tmp/cann-bench-reports"
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+        cmd = coordinator._build_child_cmd(task, "/tmp/cases.json", "/tmp/out.json")
+        self.assertIn("--reports-dir", cmd)
+        idx = cmd.index("--reports-dir")
+        self.assertEqual(cmd[idx + 1], "/tmp/cann-bench-reports")
+
 
 class TestSubprocessUtils(unittest.TestCase):
     """测试 subprocess_utils 工具函数"""
@@ -380,6 +399,7 @@ class TestCLI(unittest.TestCase):
             '--device-id', '0',
             '--cases-file', '/tmp/cases.json',
             '--output', '/tmp/output.json',
+            '--reports-dir', '/tmp/reports',
             '--bench-name', 'cann',
             '--warmup', '3',
             '--repeat', '5',
@@ -389,7 +409,22 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.device_id, 0)
         self.assertEqual(args.cases_file, '/tmp/cases.json')
         self.assertEqual(args.output, '/tmp/output.json')
+        self.assertEqual(args.reports_dir, '/tmp/reports')
         self.assertTrue(args.no_perf)
+
+    def test_cli_eval_child_config_uses_reports_dir(self):
+        """eval-child 配置使用命令行 reports_dir 而不是默认项目 reports"""
+        from src.kernel_eval.cli import create_parser, _create_config_from_args_for_child
+        parser = create_parser()
+        args = parser.parse_args([
+            'eval-child',
+            '--device-id', '0',
+            '--cases-file', '/tmp/cases.json',
+            '--output', '/tmp/output.json',
+            '--reports-dir', '/tmp/job-local-reports',
+        ])
+        config = _create_config_from_args_for_child(args, str(project_root / "tasks"))
+        self.assertEqual(config.reports_dir, '/tmp/job-local-reports')
 
     def test_cli_eval_child_torch_op_guard(self):
         """eval-child 接收 torch-op-guard-mode"""
