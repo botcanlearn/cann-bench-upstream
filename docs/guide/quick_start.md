@@ -151,6 +151,7 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 
 ## 下一步
 
+- [算子提交原则与禁止行为](submission_rules.md)：哪些实现方式会被视为无效或作弊
 - [贡献指南](contributing.md)：如何提交新算子评测任务
 - [评测基准规范](../spec/benchmark_spec.md)：算子定义和精度标准
 - [评测工程设计](../design/evaluator_design.md)：评测器架构设计

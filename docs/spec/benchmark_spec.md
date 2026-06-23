@@ -79,7 +79,7 @@
   - 引入用例难度因子，区分典型用例和边界/极端用例的评分权重
   - 性能评分从"相比基准加速比"演进到"相比理论性能占比"，更客观衡量优化空间
 - **精度标准升级**：对接CANN官方算子精度标准，建立细粒度的分精度评测体系
-- **防作弊体系**：完善aclnn路由检测、代码相似度分析等防作弊机制
+- **防作弊体系**：明确无效实现边界，维护公平、可复现的评测规则
 
 ## 2. 评测体系架构
 
@@ -567,7 +567,7 @@ $$
 |--------|------|
 | Kernel-only测量 | 仅统计 NPU 内核执行时间，剥离 Python 派发开销 |
 | NPU升频清cache | 每次测量前执行 MatMul + ReduceMax，保证 NPU 频率稳定并清空 L2 cache |
-| 输入池防缓存 | 预分配 clone 输入池轮换使用，防止按 data_ptr 缓存输出 |
+| 输入独立性 | 候选实现不得依赖固定输入地址、固定执行顺序或缓存输出 |
 | Warmup Kernel过滤 | 自动过滤升频用的 MatMul/ReduceMax kernel，只统计目标算子时间 |
 
 **采集参数标准**：
@@ -591,14 +591,21 @@ $$
 
 ### 4.6 防作弊规范
 
-| 防护项 | 规范要求 |
-|--------|----------|
-| 禁用内置算子 | 删除环境内内置算子的二进制实现，避免直接路由到内置算子 |
-| Timing API防护 | 快照关键 API 身份，安装 wheel 后验证是否被篡改 |
-| 返回值类型检查 | 严格检查 `type(output) is torch.Tensor`，拒绝 FakeTensor |
-| 二次验证 | 用新鲜输入重跑，防止缓存作弊 |
+CANN Bench 评测的是提交者实现 Ascend C / NPU kernel 的能力。候选算子的计算主体应由提交工程中的自定义 kernel 完成；包装层只能做参数整理、输出分配和自定义 kernel 调度。以下行为属于无效或作弊实现：
 
-> 详细实现请参阅 [evaluator_design.md](../design/evaluator_design.md)
+| 行为分类 | 说明 |
+|----------|------|
+| 调用 PyTorch / torch_npu 内置计算 API 代算 | 例如在候选算子中直接调用 `torch.matmul`、`torch.nn.functional.conv2d`、`softmax`、`gelu` 等完成全部或部分目标计算 |
+| 使用 PyTorch / torch_npu 处理输入输出 tensor | 例如先调用 `transpose`、`permute`、`contiguous`、`cast`、`slice`、`gather`、`scatter` 等现成 tensor API 完成输入预处理、输出后处理或中间数据变换，再交给提交 kernel |
+| 路由到 CANN 内置同名算子 | 例如包装层直接调用评测环境已有的 `aclnn<Op>` 或注册到现成同名 AiCore kernel |
+| CPU fallback 或未执行提交 NPU kernel | 结果从 CPU 侧计算或预处理得到，核心计算不是由提交的 NPU kernel 完成 |
+| 缓存输出或固定输出 | 按 `data_ptr()`、固定 shape、固定 dtype、固定 attrs、公开 case 或第一次执行结果返回缓存值 |
+| 篡改评测环境或计时接口 | monkey-patch、替换或删除计时、同步、性能采集、运行时等关键 API，使评测结果不再反映真实 kernel 执行 |
+| 返回 FakeTensor / 懒求值对象 | 返回 Tensor 子类、伪 Tensor 或延迟求值包装器绕过真实计算 |
+
+提交 kernel 内可以使用 Ascend C 原生 API 和 intrinsic，例如 `AscendC::Add`、`AscendC::Mul`、`AscendC::Exp`、`AscendC::Mmad` 等；这类调用会编译进提交者自己的 kernel，不属于转发现成内置算子。
+
+面向提交者的原则说明和反例代码片段见 [submission_rules.md](../guide/submission_rules.md)。
 
 ## 5. 应用层规范
 

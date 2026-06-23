@@ -6,7 +6,7 @@
 
 **更新说明参见 [changelog](changelog.md)**：
 - Profiling 升级为 Level1/Level2（删除 Level0）
-- 安全层 APIGuard 系统性集成
+- 提交规则与安全边界补充
 - Config 依赖注入（支持多实例并行评测）
 - 进程隔离简化（取消用例级，保留算子级）
 - YAML 格式校验（WARNING 输出）
@@ -41,6 +41,7 @@
 |------|------|
 | [contributing.md](guide/contributing.md) | 算子贡献指南：如何提交新算子评测任务 |
 | [quick_start.md](guide/quick_start.md) | 快速入门：评测流程和命令行使用（待补充） |
+| [submission_rules.md](guide/submission_rules.md) | 算子提交原则与禁止行为：说明哪些实现方式会被视为无效或作弊 |
 | [auto_pipeline_usage.md](guide/auto_pipeline_usage.md) | auto_pipeline 使用指南：CLI、配置、环境变量、输出目录 |
 | [auto_pipeline_agent_integration.md](guide/auto_pipeline_agent_integration.md) | auto_pipeline 新 agent 接入指南：通用 code agent + skills 与 LangGraph workflow 两类路径 |
 
@@ -52,11 +53,11 @@
 
 ## 快速导航
 
-**我是算子贡献者** → [contributing.md](guide/contributing.md) + [benchmark_spec.md](spec/benchmark_spec.md)
+**我是算子贡献者** → [contributing.md](guide/contributing.md) + [submission_rules.md](guide/submission_rules.md) + [benchmark_spec.md](spec/benchmark_spec.md)
 
 **我是评测器开发者** → [evaluator_design.md](design/evaluator_design.md) + [benchmark_orchestrator_architecture.md](design/benchmark_orchestrator_architecture.md) + [auto_pipeline_agent_integration.md](guide/auto_pipeline_agent_integration.md)
 
-**我是使用者** → [quick_start.md](guide/quick_start.md) + [auto_pipeline_usage.md](guide/auto_pipeline_usage.md)
+**我是使用者** → [quick_start.md](guide/quick_start.md) + [submission_rules.md](guide/submission_rules.md) + [auto_pipeline_usage.md](guide/auto_pipeline_usage.md)
 
 ## 评测体系概述
 
