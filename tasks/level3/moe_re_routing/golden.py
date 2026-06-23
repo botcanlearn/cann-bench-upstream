@@ -67,56 +67,35 @@ def moe_re_routing(
         total_tokens = expert_token_num_per_rank.sum()
     assert total_tokens == A, f"Sum of expert_token_num_per_rank ({total_tokens}) must equal A ({A})"
 
-    # 构建 src_offset 和 dst_offset 映射
-    # 计算 SrcOffset：按 rank 和 expert 的顺序累加
-    src_offsets = {}  # (rank, expert) -> src_offset
-    dst_offsets = {}  # (rank, expert) -> dst_offset
-
-    # 计算 SrcOffset：按 rank 和 expert 的顺序累加
-    src_acc = 0
-    for i in range(N):  # cur_rank
-        for j in range(E):  # cur_expert
-            src_offsets[(i, j)] = src_acc
-            if is_torch:
-                src_acc += expert_token_num_per_rank[i, j].item()
-            else:
-                src_acc += expert_token_num_per_rank[i, j]
-
-    # 计算 DstOffset：按 expert 和 rank 的顺序累加
-    dst_acc = 0
-    for j in range(E):  # cur_expert
-        for i in range(N):  # cur_rank
-            dst_offsets[(i, j)] = dst_acc
-            if is_torch:
-                dst_acc += expert_token_num_per_rank[i, j].item()
-            else:
-                dst_acc += expert_token_num_per_rank[i, j]
-
-    # 构建重排映射：src_pos -> dst_pos
-    src_to_dst = {}
-    for i in range(N):
-        for j in range(E):
-            if is_torch:
-                num_tokens = expert_token_num_per_rank[i, j].item()
-            else:
-                num_tokens = expert_token_num_per_rank[i, j]
-            src_start = src_offsets[(i, j)]
-            dst_start = dst_offsets[(i, j)]
-            for k in range(int(num_tokens)):
-                src_to_dst[src_start + k] = dst_start + k
-
-    # 构建反向映射用于 gather 索引
-    dst_to_src = {v: k for k, v in src_to_dst.items()}
-
-    # 生成 permute_token_idx (gather 索引)
+    # Vectorised offset + gather-index construction. The old form built src/dst
+    # offsets and src->dst maps with N*E + A nested Python loops, each step doing a
+    # `.item()` (device->host sync) — on NPU that serialised thousands of syncs and
+    # timed out. Here the index math runs on CPU over the tiny (N,E) counts; the
+    # heavy token gather below stays on the input device. Output is bit-identical.
+    #   src order = (rank, expert) row-major; dst order = (expert, rank).
     if is_torch:
-        permute_token_idx = torch.zeros(A, dtype=torch.int32, device=device)
-        for dst_pos in range(A):
-            permute_token_idx[dst_pos] = dst_to_src[dst_pos]
+        c = expert_token_num_per_rank.to(torch.int64).cpu()
+        cnt_src = c.reshape(-1)        # block sizes in src (rank, expert) order
+        cnt_dst = c.t().reshape(-1)    # block sizes in dst (expert, rank) order
+        _excl = lambda t: torch.cat([t.new_zeros(1), t.cumsum(0)[:-1]])
+        src_start = _excl(cnt_src)
+        dst_start = _excl(cnt_dst).reshape(E, N).t().reshape(-1)  # back to (rank, expert)
+        block = torch.repeat_interleave(torch.arange(N * E), cnt_src)  # block id per src pos
+        dst_pos = dst_start[block] + (torch.arange(A) - src_start[block])  # src -> dst
+        permute_token_idx = torch.empty(A, dtype=torch.int32)
+        permute_token_idx[dst_pos] = torch.arange(A, dtype=torch.int32)   # invert -> gather idx
+        permute_token_idx = permute_token_idx.to(device)
     else:
-        permute_token_idx = np.zeros(A, dtype=np.int32)
-        for dst_pos in range(A):
-            permute_token_idx[dst_pos] = dst_to_src[dst_pos]
+        c = expert_token_num_per_rank.astype(np.int64)
+        cnt_src = c.reshape(-1)
+        cnt_dst = c.T.reshape(-1)
+        _excl = lambda a: np.concatenate([[0], np.cumsum(a)[:-1]])
+        src_start = _excl(cnt_src)
+        dst_start = _excl(cnt_dst).reshape(E, N).T.reshape(-1)
+        block = np.repeat(np.arange(N * E), cnt_src)
+        dst_pos = dst_start[block] + (np.arange(A) - src_start[block])
+        permute_token_idx = np.empty(A, dtype=np.int32)
+        permute_token_idx[dst_pos] = np.arange(A, dtype=np.int32)
 
     # 重排 tokens
     if is_torch:

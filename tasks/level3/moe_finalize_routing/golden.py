@@ -112,61 +112,47 @@ def moe_finalize_routing(
         else:
             out = np.zeros([num_rows, H], dtype=dtype)
 
-    # 核心计算循环
-    for i in range(num_rows):
-        for k in range(K):
-            # 根据 drop_pad_mode 获取索引位置
-            if drop_pad_mode == 0 or drop_pad_mode == 1:
-                # 按列排列
-                index_pos = k * num_rows + i
-            else:
-                # 按行排列 (drop_pad_mode == 2 or 3)
-                index_pos = i * K + k
+    # Vectorised over rows; only the small K (~topk) loop remains. The old form
+    # looped num_rows*K times doing a per-step `.item()` (device->host sync) and
+    # timed out on NPU. Keeping the k-loop preserves the per-row accumulation order,
+    # so the fp32 result is bit-identical to the original; the heavy H-dim gather /
+    # scaled-add run vectorised on the input device.
+    rows = torch.arange(num_rows) if is_torch else np.arange(num_rows)
+    num_experts = bias.shape[0] if bias is not None else 0
+    for k in range(K):
+        # row index into expanded_src_to_dst_row for this k (per drop_pad_mode layout)
+        index_pos = (k * num_rows + rows) if drop_pad_mode in (0, 1) else (rows * K + k)
+        value = expanded_src_to_dst_row[index_pos]  # (num_rows,)
 
-            # 获取行索引值
+        # value == -1 (drop pad) contributes a zero row; otherwise gather it.
+        if is_torch:
+            valid = value != -1
+            dst_row = expanded_permuted_rows[value.clamp(min=0).long()].clone()
+            dst_row[~valid] = 0
+        else:
+            valid = value != -1
+            dst_row = expanded_permuted_rows[np.clip(value, 0, None).astype(np.int64)].copy()
+            dst_row[~valid] = 0
+        term = dst_row
+
+        # F510: bound-check expert_id before indexing bias. The upstream
+        # `moe_gating_top_k_softmax` golden uses num_expert (== E, out-of-range) as a
+        # sentinel for finished tokens; such rows contribute the unbiased value.
+        if bias is not None and expert_for_source_row is not None:
+            expert_id = expert_for_source_row[:, k]
+            valid_e = (expert_id >= 0) & (expert_id < num_experts)
             if is_torch:
-                value = expanded_src_to_dst_row[index_pos].item()
+                bias_row = bias[expert_id.clamp(0, num_experts - 1).long()].clone()
+                bias_row[~valid_e] = 0
             else:
-                value = expanded_src_to_dst_row[index_pos]
+                bias_row = bias[np.clip(expert_id, 0, num_experts - 1).astype(np.int64)].copy()
+                bias_row[~valid_e] = 0
+            term = dst_row + bias_row
 
-            # drop pad 模式：索引为 -1 时贡献为 0
-            if value == -1:
-                if is_torch:
-                    dst_row = torch.zeros(H, dtype=dtype, device=device)
-                else:
-                    dst_row = 0
-            else:
-                dst_row = expanded_permuted_rows[value, :]
-
-            # 获取缩放因子
-            scale_val = 1.0
-            if scales is not None:
-                if is_torch:
-                    scale_val = scales[i, k].item() if scales.dtype in [torch.float16, torch.bfloat16] else scales[i, k]
-                else:
-                    scale_val = scales[i, k]
-
-            # 获取专家 ID 和 bias
-            # F510: bound-check expert_id before indexing into bias. The
-            # upstream `moe_gating_top_k_softmax` golden uses `num_expert`
-            # (== E, out-of-range) as a sentinel for finished tokens
-            # (golden.py:77 `torch.where(finished_expanded, num_expert, indices)`).
-            # Without this guard `bias[E, :]` would index out of bounds.
-            # The semantically correct fallback for a finished / sentinel
-            # token is to contribute the unbiased value (skip bias addition).
-            if bias is not None and expert_for_source_row is not None:
-                if is_torch:
-                    expert_id = expert_for_source_row[i, k].item()
-                else:
-                    expert_id = expert_for_source_row[i, k]
-                num_experts = bias.shape[0]
-                if 0 <= expert_id < num_experts:
-                    out[i, :] += scale_val * (dst_row + bias[expert_id, :])
-                else:
-                    # finished / sentinel token — skip bias term
-                    out[i, :] += scale_val * dst_row
-            else:
-                out[i, :] += scale_val * dst_row
+        if scales is not None:
+            out = out + scales[:, k][:, None] * term
+        else:
+            out = out + 1.0 * term
 
     if is_torch and original_dtype is not None and _low_prec:
         out = out.to(original_dtype)
