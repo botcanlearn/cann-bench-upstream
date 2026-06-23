@@ -121,6 +121,96 @@ class FailureSynthesizer:
             filter_func=filter_func,
         )
 
+    def synthesize_all_compile_failures(
+        self,
+        operator_matcher,
+        package_info,
+        operator_filter: Optional[List[str]] = None,
+        case_filter: Optional[Dict] = None,
+        filter_func: Optional[callable] = None,
+    ) -> List[EvalOperatorResult]:
+        """编译整体失败时，把 package_info.compile_errors 合成为 0 分结果列表。
+
+        cli 与 evaluator 两条编译失败处理路径的**单一真源**，避免两处逻辑漂移。
+
+        - 能反查到 spec 的算子逐个合成（受 operator_filter 约束）；
+        - 反查不到的（`<build>` 兜底键 / 未注册 snake 名）打 WARN 跳过；
+        - 仅当**没有任何算子能反查到 spec** 时，合成一条提交级记录，避免空报告
+          静默失败。注意：只在"无法映射"时兜底，**不**在"算子被 operator_filter
+          过滤掉"时兜底——否则会把用户主动过滤误判为无法映射而虚报失败。
+        """
+        import sys
+
+        results: List[EvalOperatorResult] = []
+        mapped_any = False
+        for snake_op_name, err in (package_info.compile_errors or {}).items():
+            op_info = operator_matcher.find_operator_info_by_snake(snake_op_name)
+            if op_info is None:
+                print(
+                    f"[WARN] 编译失败算子 {snake_op_name!r} 未在 OperatorMatcher 中找到对应 spec，"
+                    f"跳过逐算子合成（可能是 <build> 兜底键或未注册的 snake 名）。",
+                    file=sys.stderr, flush=True,
+                )
+                continue
+            mapped_any = True
+            if operator_filter and op_info.name not in operator_filter:
+                continue
+            results.append(self.synthesize_compile_failure(
+                op_info, err, case_filter, filter_func,
+            ))
+
+        if not mapped_any and not results:
+            joined = "\n".join(
+                f"[{k}] {v}" for k, v in (package_info.compile_errors or {}).items()
+            ) or "build.sh 编译失败（无更多详情）"
+            print(
+                "[WARN] 编译失败但未能映射到任何已注册算子，"
+                "合成提交级编译失败记录以避免空报告。",
+                file=sys.stderr, flush=True,
+            )
+            results.append(self.synthesize_submission_compile_failure(joined))
+        return results
+
+    def synthesize_submission_compile_failure(
+        self,
+        error_text: str,
+        operator_name: str = "<submission>",
+    ) -> EvalOperatorResult:
+        """整体编译失败、但 compile_errors 无法映射到任何已注册算子时的兜底。
+
+        触发场景：build.sh 在编译算子内核前就失败（cmake/依赖/链接错误等），
+        或提交目录布局异常 → compile_errors 退化为 {"<build>": ...} 这类无法
+        反查 spec 的键。此时若按算子逐条合成会得到空结果，上层报告将不体现任何
+        编译失败（"静默失败"）。本方法合成一条**提交级** all-FAIL 记录，保证报告
+        至少出现一条编译失败、退出码非零。
+
+        rel_path 故意留空：report / html_generator 对空 rel_path 均有兜底，
+        不会把这条记录错误归入某个 level，也不会触发 rel_path 解析崩溃。
+        """
+        first_line = (error_text.strip().splitlines() or ["(no detail)"])[0]
+        reason_short = f"compile failed: {first_line[:180]}"
+        case_results = [EvalCaseResult(
+            case_id="",
+            rel_path="",
+            operator=operator_name,
+            case_num=0,
+            success=False,
+            error_msg=reason_short,
+            failure_type="cascade_device",
+        )]
+        return EvalOperatorResult(
+            rel_path="",
+            operator=operator_name,
+            total_cases=1,
+            passed_cases=0,
+            failed_cases=1,
+            skipped_cases=0,
+            results=case_results,
+            pass_rate=0.0,
+            avg_speedup=0.0,
+            compilation_error=error_text,
+        )
+
     def synthesize_security_failure(
         self,
         op_info: TaskSpec,

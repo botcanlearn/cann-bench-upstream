@@ -630,6 +630,17 @@ class Evaluator:
             source_dir, verbose=verbose, iterative_compile=iterative_compile,
         )
 
+        # 1.5 整体编译失败：不隔离/不补救，本次提交相关算子全部按编译失败计 0 分
+        # （与 cli 共用 synthesize_all_compile_failures，逻辑单一真源）。
+        if getattr(package_info, "build_failed", False):
+            print(f"[ERROR] 编译失败，本次提交相关算子按编译失败计 0 分（错误汇总见 _compile.log）")
+            results = self.failure_synthesizer.synthesize_all_compile_failures(
+                self.operator_matcher, package_info,
+                operator_filter=operator_filter, case_filter=case_filter,
+                filter_func=self._filter_cases,
+            )
+            return EvalSessionResult(operators=results, package_info=package_info)
+
         # 2. APIGuard 验证
         from ..security.api_guard import APIGuard
         guard = APIGuard()

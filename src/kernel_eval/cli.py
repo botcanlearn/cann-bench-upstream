@@ -115,10 +115,9 @@ def create_parser() -> argparse.ArgumentParser:
                              help='子进程隔离下 per-op 超时。超时先 SIGTERM，10s 宽限后 SIGKILL。'
                                   '默认 240 秒。')
     eval_parser.add_argument('--no-iterative-compile', action='store_true',
-                             help='关闭迭代隔离编译（默认开启）。开启时 build.sh 失败会自动'
-                                  '识别并隔离编译不过的算子到 _quarantine/，剩下的算子继续'
-                                  '编译和评测；此开关关闭该逻辑，任何一个算子编译失败整个'
-                                  '提交直接判定为失败，用于想要严格"全过或全挂"的场景。')
+                             help='已废弃（保留以兼容旧脚本，无实际作用）。编译统一为整体编译：'
+                                  'build.sh 编译失败即本次提交相关算子全部按编译失败计 0 分，'
+                                  '不再隔离/补救失败算子，也不修改用户源码（为支持并行化评测）。')
     eval_parser.add_argument('--no-perf', action='store_true',
                              help='关闭性能采集，仅做精度验证')
     eval_parser.add_argument('--profiler-level', type=str, default='Level1',
@@ -357,6 +356,21 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
         matched_operators, package_info = evaluator.package_manager.prepare_from_source(
             args.source_dir, iterative_compile=iterative_compile,
         )
+
+        # 1.5 整体编译失败：不隔离/不补救，本次提交相关算子全部按编译失败计 0 分
+        # （与 evaluator 共用 synthesize_all_compile_failures，逻辑单一真源）。
+        if getattr(package_info, "build_failed", False):
+            print(f"[ERROR] 编译失败，本次提交相关算子按编译失败计 0 分（错误汇总见 _compile.log）")
+            op_filter = [args.operator] if getattr(args, "operator", None) else None
+            compile_failed_results = evaluator.failure_synthesizer.synthesize_all_compile_failures(
+                evaluator.operator_matcher, package_info, operator_filter=op_filter,
+            )
+            for result in compile_failed_results:
+                report_generator.add_operator_result(result)
+            evaluator.shutdown()
+            # 控制流短路；本次评测的退出码由 cmd_eval 据报告统一推导（_compute_exit_code），
+            # 此处返回值不被使用。
+            return
 
         # 2. APIGuard 验证
         from .security.api_guard import APIGuard
@@ -613,6 +627,23 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
 
 
 
+def _compute_exit_code(report) -> int:
+    """根据评测报告计算进程退出码（0=成功，非零=不达标/出错）。
+
+    退出码语义 = "这次提交是否达标"，供 CI/CD 与 shell `&&` 判定：
+    - F042: 旧版以 `passed_cases>0` 为成功 → 52/53 失败仍退出 0 误导 CI；
+      改为只要有**真实失败用例**（failed_cases）即非零。
+    - 编译失败的用例按 cascade_device 统计、不计入 failed_cases，若只看
+      failed_cases 会得到退出码 0（"编译都没过"被误判为通过）。这里显式把
+      "带 compilation_error 的算子数"计入退出码，使编译失败 → 整批 0 分 →
+      退出码非零。不改报告统计口径（cascade_cases 等保持原样）。
+
+    返回值封顶 255（POSIX 退出码上限）。
+    """
+    compile_failed_ops = sum(1 for op in report.operators if op.compilation_error)
+    return min(report.failed_cases + compile_failed_ops, 255)
+
+
 def cmd_eval(args):
     """执行评测命令"""
     # OOM 保护策略：
@@ -641,21 +672,25 @@ def cmd_eval(args):
     case_filter = {'case_id': args.case_id} if args.case_id else None
 
     # 执行评测：CPU 调用仿真模块，NPU 统一走多卡并行
+    # 注：simulate / _cmd_eval_npu 的返回值不作为退出码——真正的退出码由下方
+    # _compute_exit_code(report) 依据报告统一推导（含编译失败维度），故此处不接收返回值。
     if args.device == 'cpu':
         from .simulation import simulate
-        ret = simulate(config, bench_name=bench_name,
-                       operator_filter=operator_filter, case_filter=case_filter,
-                       report_generator=report_generator)
+        simulate(config, bench_name=bench_name,
+                 operator_filter=operator_filter, case_filter=case_filter,
+                 report_generator=report_generator)
     else:
-        ret = _cmd_eval_npu(args, bench_root, filter_prefix, config, report_generator)
+        _cmd_eval_npu(args, bench_root, filter_prefix, config, report_generator)
 
     # 生成报告
     report = report_generator.generate()
     report_generator.save_all(report)
     report_generator.print_summary(report)
-    # F042: 旧版 `passed_cases > 0` → 退出码 0 误导 CI/CD（52/53 失败仍 success）。
-    # 改为 failed_cases==0 时 0，否则非零（capped 至 255 防 POSIX 溢出）。
-    return 0 if report.failed_cases == 0 else min(report.failed_cases, 255)
+    compile_failed_ops = sum(1 for op in report.operators if op.compilation_error)
+    if compile_failed_ops:
+        print(f"[ERROR] 检测到 {compile_failed_ops} 个算子编译失败，本次提交相关算子整批计 0 分，"
+              f"退出码非零。请在提交前本地确保编译通过。", file=sys.stderr, flush=True)
+    return _compute_exit_code(report)
 
 
 
