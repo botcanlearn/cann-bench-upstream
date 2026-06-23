@@ -41,7 +41,8 @@ def kernel_eval_env(candidate_dir) -> dict:
 
     候选用 PYTHONPATH 暴露而非 `pip install -e` —— NPU 服务器的 immutable 容器里 uv ephemeral
     环境无需 setuptools/wheel/pip。cli 以 --skip-install 进程内评测,`import cann_bench` 经此解析。
-    warn-mode guard 维持默认(golden 调 torch builtin 会触发 [WARN],非致命)。
+    guard 模式由 build_eval_cmd 显式传 `--torch-op-guard-mode warn`(见该函数注释);
+    Config 默认是 block,不显式降级会把 golden 合法的 torch builtin 当作弊误杀。
     """
     env = dict(os.environ)
     extra = os.pathsep.join([str(KERNEL_EVAL_SRC), str(candidate_dir)])
@@ -58,6 +59,11 @@ def build_eval_cmd(*, source_dir, task_dir, reports_dir, operator=None, case_id=
         "--bench-name", "cann", "--device", "npu",
         "--source-dir", str(source_dir), "--skip-install",
         "--task-dir", str(task_dir), "--reports-dir", str(reports_dir),
+        # golden 是参考实现,合法使用 torch 内置算子(matmul 系 golden 如 WeightQuantBatchMatmul
+        # 必然调 torch.matmul)。TorchOpGuard 的 Config 默认是 block,会把 golden 当"调内置算子作弊"
+        # 直接 raise [SECURITY] → 该算子全 case 失败。golden 候选应只告警不 gate,故显式降为 warn,
+        # 与上方 kernel_eval_env 注释及 e2e 冒烟(--torch-op-guard-mode warn)保持一致。
+        "--torch-op-guard-mode", "warn",
     ]
     if operator is not None:
         cmd += ["--operator", str(operator)]
