@@ -45,6 +45,9 @@
   "DequantSwigluQuant": [
     "ops_nn/dequant_swiglu_quant"
   ],
+  "Dilation2D": [
+    "ops_legacy/dilation"
+  ],
   "DynamicQuant": [
     "ops_nn/dynamic_quant",
     "ops_nn/dynamic_quant_v2"
@@ -137,6 +140,11 @@
   "MoeReRouting": [
     "ops_transformer/moe_re_routing"
   ],
+  "NMS": [
+    "ops_legacy/batch_multi_class_non_max_suppression",
+    "ops_legacy/nms_with_mask",
+    "ops_legacy/sorted_nms"
+  ],
   "QuantMatmul": [
     "ops_legacy/quant_batch_matmul",
     "ops_nn/quant_batch_matmul_v3",
@@ -170,8 +178,16 @@
     "ops_math/transpose_v2",
     "ops_transformer/sparse_flash_attention"
   ],
+  "StridedSlice": [
+    "ops_legacy/strided_slice",
+    "ops_legacy/strided_slice_v3"
+  ],
   "SwiGlu": [
     "ops_nn/swi_glu"
+  ],
+  "TopK": [
+    "ops_legacy/top_k_d",
+    "ops_legacy/top_k_v2"
   ],
   "Transpose": [
     "ops_legacy/transpose",
@@ -182,5 +198,9 @@
     "ops_legacy/unsorted_segment_sum",
     "ops_nn/inplace_index_add_with_sorted",
     "ops_nn/inplace_scatter_add"
+  ],
+  "WeightQuantBatchMatmul": [
+    "ops_legacy/weight_quant_batchmatmul",
+    "ops_nn/weight_quant_batch_matmul_v2"
   ]
 }

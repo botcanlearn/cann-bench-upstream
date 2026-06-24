@@ -53,3 +53,24 @@ bash scripts/anti_cheat/restore_builtin_kernels.sh
 - 安全保护：脚本**绝不会被任何评测流程自动调用**（`run_evaluation.sh`、`kernel_eval`
   均不引用本目录）；非交互环境下若未显式 `--yes` 会**直接中止**，避免误删。
 - 完全可逆且不删数据：禁用用 `mv` 把目录移到备份目录（不用 `rm`），`restore` 脚本用 `mv` 一键移回。
+
+## 残留风险：kernel-disable 无法覆盖的算子
+
+kernel-disable 只能移除**预编译的 AiCore kernel 二进制目录**。对于以下算子，
+即使在 `cases.csv` 补 `baseline_kernels` 标注也无处可指（OPP 中不存在可移除的 AiCore
+kernel），因此**本机制结构性地无法防护**，需依赖 host 侧 `TorchOpGuard`
+（`src/kernel_eval/security/torch_op_guard.py`）或其他手段。已知残留：
+
+| Task | 可达的内置路径 | 为何 kernel-disable 无效 |
+|------|----------------|--------------------------|
+| `tasks/level3/unique` | `at::unique` / `aclnnUnique` | Unique 走 **AICPU**，OPP 无 AiCore kernel 目录可移除 |
+| `tasks/level4/gru` | `torch_npu.npu_gru` / `at::gru` | NPU 上 GRU **分解为 matmul + 逐元素**，无单一 GRU kernel；matmul kernel 属 PROTECTED 不可禁 |
+| `tasks/level3/strided_slice` | 原生 `x[b:e:s]` 索引 + DMA | 原生切片**不经过任何算子 kernel**（纯 view + DMA 物化），禁 `strided_slice` 目录只挡显式 op 路径 |
+
+> 注意：`TorchOpGuard` 是 Python `TorchFunctionMode`，**无法拦截 C++ 自定义算子
+> （PrivateUse1 plugin）内部直接发起的 `at::xxx` 调用**——已实证的 TopK 作弊正是 C++
+> `at::topk`。要根治这一类，需在 C++/dispatch 层（如 `TorchDispatchMode` 或 aclnn 拦截）
+> 增加防护。上表算子在补全 host 侧 guard 前应视为**未完全防护**。
+
+> `tasks/level3/engram_gate_fusion` **不在**残留清单：它是全新融合算子（DeepSeek Engram
+> 7 步），OPP 无对应内置实现，无法通过单一内置算子绕过，故其缺少 `baseline_kernels` 标注是**正确**的。
