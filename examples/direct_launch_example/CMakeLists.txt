@@ -21,12 +21,13 @@ include(cmake/func.cmake)
 set(NPU_ARCH "ascend910b" CACHE STRING "NPU architecture")
 set_property(CACHE NPU_ARCH PROPERTY STRINGS "ascend910b" "ascend910_93" "ascend950")
 
-# Map NPU_ARCH to Bisheng --npu-arch flag
+# Map NPU_ARCH to Bisheng --npu-arch flag (CANN 9.0.0 实测验证)
+# ascend910b / ascend910_93 → dav-2201 (910B 和 910_93 共享 AICore 微架构 c220，
+#   bisheng 的 --npu-arch 使用内部标识 dav-2201，而非架构族名 dav-c220)
+# ascend950                  → dav-3510 (950PR AICore 微架构 c310，内部标识 dav-3510)
 unset(BISHENG_NPU_ARCH)
-if(NPU_ARCH STREQUAL "ascend910b")
+if(NPU_ARCH STREQUAL "ascend910b" OR NPU_ARCH STREQUAL "ascend910_93")
     set(BISHENG_NPU_ARCH "dav-2201")
-elseif(NPU_ARCH STREQUAL "ascend910_93")
-    set(BISHENG_NPU_ARCH "dav-2203")
 elseif(NPU_ARCH STREQUAL "ascend950")
     set(BISHENG_NPU_ARCH "dav-3510")
 else()

@@ -4,11 +4,11 @@
 
 ## Supported SOC Versions
 
-| SOC | `NPU_ARCH` Value | Bisheng `--npu-arch` | Ascend Chip |
-|------|---------------|----------------------|-------------|
-| Ascend 910B | `ascend910b` | `dav-2201` | 910B1/B2/B3/B4 |
-| Ascend 910_93 | `ascend910_93` | `dav-2203` | 910_93 series |
-| Ascend 950 | `ascend950` | `dav-3510` | 950 series |
+| SOC | `NPU_ARCH` Value | Bisheng `--npu-arch` | AICore 微架构 | Ascend Chip |
+|------|---------------|----------------------|---------------|-------------|
+| Ascend 910B | `ascend910b` | `dav-2201` | c220 (cube+vec) | 910B1/B2/B3/B4 |
+| Ascend 910_93 | `ascend910_93` | `dav-2201` | c220 (共享 910B 微架构) | 910_93 series |
+| Ascend 950 | `ascend950` | `dav-3510` | c310 (cube+vec) | 950 series |
 
 ## 目录结构
 

@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import sys
+import time
 import traceback
 from collections import Counter
 from datetime import datetime
@@ -331,7 +332,10 @@ class BaselineCollector:
             return {"op_path": op_path, "case_id": case_id,
                     "elapsed_us": None, "error_msg": f"profiler_FAIL: {e}"}
 
-        # 7. Check result
+        # 7. Check result — profiler 采集失败时直接记录错误，不做外部计时替代。
+        #    kernel 耗时必须来自 profiler 产出的 kernel_details.csv，
+        #    若 profiler 未产出 CSV，则正向定位问题（通常是同进程内连续
+        #    profiler session 状态污染，由 collect_op 的子进程隔离解决）。
         if perf_result.error_msg:
             logger.warning("perf_result has error for %s case %d: %s",
                            op_path, case_id, perf_result.error_msg)
@@ -339,9 +343,10 @@ class BaselineCollector:
                     "elapsed_us": None, "error_msg": perf_result.error_msg}
 
         if perf_result.elapsed_us <= 0:
-            logger.warning("elapsed_us=0 for %s case %d", op_path, case_id)
+            logger.warning("elapsed_us<=0 for %s case %d (kernel_details.csv 未产出)",
+                           op_path, case_id)
             return {"op_path": op_path, "case_id": case_id,
-                    "elapsed_us": None, "error_msg": "elapsed_us=0"}
+                    "elapsed_us": None, "error_msg": "no_kernel_details_csv"}
 
         # 8. 读取 t_hw_us from BaselineStore
         t_hw_us = self.baseline_store.get_t_hw(op_path, case_id)
@@ -372,6 +377,73 @@ class BaselineCollector:
             return len(device_kernels)
         return None
 
+    def _collect_one_case_in_subprocess(self, op_path: str, case_id: int,
+                                        case_raw: Dict) -> Optional[Dict]:
+        """在独立子进程中采集单个 case 的 profiler 数据。
+
+        torch_npu.profiler 在同一进程内连续调用多次时，C++ 层的 profiler
+        session 状态会互相污染，导致第 2+ 个 session 的 analyse() 不产出
+        kernel_details.csv。将每个 case 隔离到独立子进程中执行，可彻底
+        避免 session 间状态残留。
+
+        子进程入口为 _subprocess_collect_entry，通过 JSON 文件回传结果。
+        """
+        import json
+        import subprocess
+        import tempfile
+
+        result_file = tempfile.mktemp(suffix=".json", prefix="baseline_case_")
+        case_json = json.dumps(case_raw, ensure_ascii=False, default=str)
+
+        cmd = [
+            sys.executable, str(Path(__file__).resolve()),
+            "--subprocess-collect",
+            "--op", op_path,
+            "--case-id", str(case_id),
+            "--case-json", case_json,
+            "--device-id", str(self.config.device_id),
+            "--warmup", str(self.warmup),
+            "--repeat", str(self.repeat),
+            "--bench-root", str(self.bench_root),
+            "--result-file", result_file,
+        ]
+
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("subprocess timeout for %s case %d", op_path, case_id)
+            return {"op_path": op_path, "case_id": case_id,
+                    "elapsed_us": None, "error_msg": "subprocess_timeout"}
+
+        if proc.returncode != 0:
+            stderr_tail = (proc.stderr or "")[-500:]
+            logger.warning("subprocess failed (rc=%d) for %s case %d: %s",
+                           proc.returncode, op_path, case_id, stderr_tail)
+            return {"op_path": op_path, "case_id": case_id,
+                    "elapsed_us": None,
+                    "error_msg": f"subprocess_rc{proc.returncode}: {stderr_tail}"}
+
+        try:
+            with open(result_file) as f:
+                result = json.load(f)
+        except Exception as e:
+            logger.warning("read result failed for %s case %d: %s",
+                           op_path, case_id, e)
+            return {"op_path": op_path, "case_id": case_id,
+                    "elapsed_us": None, "error_msg": f"result_read_FAIL: {e}"}
+        finally:
+            try:
+                os.remove(result_file)
+            except OSError:
+                pass
+
+        if result and result.get("elapsed_us") is not None:
+            self._results.setdefault(op_path, {})[case_id] = result
+
+        return result
+
     # === 批量采集 ===
 
     def collect_op(self, op_path: str, cases_filter: Set[int] = None) -> List[Dict]:
@@ -401,12 +473,27 @@ class BaselineCollector:
 
         print(f"\n=== {op_path} ({len(cases)} cases, device {self.device_manager.get_device()}) ===")
 
+        # 每个 case 在独立子进程中采集 profiler 数据，避免同进程内连续
+        # torch_npu.profiler session 状态污染导致 kernel_details.csv 不产出。
+        MAX_RETRIES = 3
+
         results = []
         for i, case in enumerate(cases, 1):
             cid = int(case["case_id"])
             print(f"[{i}/{len(cases)}] {op_path}_{cid} ...", end=" ", flush=True)
 
-            result = self.collect_one_case(op_path, cid, case)
+            result = None
+            for attempt in range(1, MAX_RETRIES + 1):
+                result = self._collect_one_case_in_subprocess(op_path, cid, case)
+
+                if result and result.get("elapsed_us") is not None:
+                    break
+
+                if attempt < MAX_RETRIES:
+                    wait = attempt
+                    print(f"retry({attempt}/{MAX_RETRIES}, wait {wait}s) ", end="", flush=True)
+                    time.sleep(wait)
+
             results.append(result)
 
             if result and result.get("elapsed_us") is not None:
@@ -425,14 +512,6 @@ class BaselineCollector:
             else:
                 err = result.get("error_msg", "unknown") if result else "unknown"
                 print(f"❌ {err}")
-
-            # 清理内存
-            try:
-                import torch_npu
-                torch_npu.npu.empty_cache()
-            except Exception:
-                pass
-            gc.collect()
 
         return results
 
@@ -568,6 +647,64 @@ def _check_npu_available():
         return False
 
 
+def _run_subprocess_collect(args):
+    """子进程入口：构建 BaselineCollector，采集单个 case，结果写 JSON 文件。
+
+    主进程通过 _collect_one_case_in_subprocess 启动本函数所在的子进程，
+    实现 torch_npu.profiler session 的进程级隔离。
+    """
+    import json
+
+    if not _check_npu_available():
+        _write_subprocess_error(args.result_file, "NPU unavailable in subprocess")
+        sys.exit(1)
+
+    bench_root = Path(args.bench_root) if args.bench_root else PROJECT_ROOT / "tasks"
+
+    config = Config(
+        device_type="npu",
+        device_id=args.device_id,
+        enable_profiler=True,
+        profiler_level="Level1",
+        warmup=args.warmup,
+        repeat=args.repeat,
+        tasks_root=str(bench_root),
+        reports_dir=str(PROJECT_ROOT / "reports"),
+        torch_op_guard_mode="off",
+        enable_accuracy_retry=False,
+        eval_seed=0,
+        enable_acl_launch_mode=True,
+        enable_msprof_export=True,
+        perf_metric_strategy_override="msprof_summary",
+    )
+
+    collector = BaselineCollector(
+        config=config,
+        bench_root=bench_root,
+        warmup=args.warmup,
+        repeat=args.repeat,
+    )
+
+    case_raw = json.loads(args.case_json)
+    result = collector.collect_one_case(args.op_path, args.case_id, case_raw)
+
+    try:
+        with open(args.result_file, "w") as f:
+            json.dump(result, f, ensure_ascii=False, default=str)
+    except Exception as e:
+        logger.error("subprocess write result failed: %s", e)
+        sys.exit(2)
+
+
+def _write_subprocess_error(result_file: str, msg: str):
+    import json
+    try:
+        with open(result_file, "w") as f:
+            json.dump({"elapsed_us": None, "error_msg": msg}, f)
+    except Exception:
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -597,7 +734,21 @@ def main():
                         help="跳过已有 metadata 的 case")
     parser.add_argument("--force-recollect", action="store_true",
                         help="强制重新采集所有 case")
+    # --- 子进程采集入口参数（由 _collect_one_case_in_subprocess 构造调用）---
+    parser.add_argument("--subprocess-collect", action="store_true",
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--case-id", type=int, default=None,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--case-json", default=None,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--result-file", default=None,
+                        help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    # 子进程采集入口：独立进程内只跑单个 case 的 profiler，结果写 JSON 文件。
+    if args.subprocess_collect:
+        _run_subprocess_collect(args)
+        return
 
     if not args.op_path and not args.level and not args.all:
         parser.error("指定 op_path (如 level1/exp) 或 --level N 或 --all")

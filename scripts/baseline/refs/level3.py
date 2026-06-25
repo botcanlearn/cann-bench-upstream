@@ -358,12 +358,43 @@ def conv_3d_backprop_filter_ref(inputs, attrs):
     return grad_w
 
 
+def strided_slice_ref(inputs, attrs):
+    """TF-style strided_slice via golden.py implementation.
+
+    cases.yaml attrs: begin, end, strides (lists), plus optional masks
+    (begin_mask, end_mask, ellipsis_mask, shrink_axis_mask, new_axis_mask).
+    """
+    import importlib.util
+    from pathlib import Path
+    x = inputs[0]
+    _golden = None
+    if _golden is None:
+        spec = importlib.util.spec_from_file_location(
+            "_golden_ss",
+            Path(__file__).resolve().parents[3] / "tasks" / "level3" / "strided_slice" / "golden.py",
+        )
+        _mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_mod)
+        strided_slice_ref._golden_mod = _mod
+    return strided_slice_ref._golden_mod.strided_slice(
+        x,
+        begin=list(attrs.get("begin", [])),
+        end=list(attrs.get("end", [])),
+        strides=list(attrs.get("strides", [])),
+        begin_mask=int(attrs.get("begin_mask", 0)),
+        end_mask=int(attrs.get("end_mask", 0)),
+        ellipsis_mask=int(attrs.get("ellipsis_mask", 0)),
+        shrink_axis_mask=int(attrs.get("shrink_axis_mask", 0)),
+        new_axis_mask=int(attrs.get("new_axis_mask", 0)),
+    )
+
+
 # Operators registered. Omit (skip method 3) for ops with no torch / torch_npu /
 # torchvision equivalent or whose semantic divergence makes the comparison
 # meaningless (NZ output formats, custom CV-mix kernels):
 #
 # OMITTED: dilation_2d (no torch.nn equiv), engram (custom op), mhc_sinkhorn
-#   (custom op), strided_slice (semantic too tied to mask args).
+#   (custom op).
 REGISTRY = {
     "level3/adaptive_avg_pool_3d": adaptive_avg_pool_3d_ref,
     "level3/add_rms_norm_dynamic_quant": add_rms_norm_dynamic_quant_ref,
@@ -378,6 +409,7 @@ REGISTRY = {
     "level3/nms": nms_ref,
     "level3/quant_matmul": quant_matmul_ref,
     "level3/roi_align": roi_align_ref,
+    "level3/strided_slice": strided_slice_ref,
     "level3/top_k": top_k_ref,
     "level3/transpose": transpose_ref,
     "level3/unique": unique_ref,

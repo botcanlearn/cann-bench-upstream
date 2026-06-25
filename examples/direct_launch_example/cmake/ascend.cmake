@@ -40,6 +40,7 @@ endif()
 
 message(STATUS "Using Ascend toolkit path: ${ASCEND_DIR}")
 set(CMAKE_PREFIX_PATH ${ASCEND_DIR}/)
+list(APPEND CMAKE_PREFIX_PATH ${ASCEND_DIR}/lib64/cmake)
 set(BISHENG "${ASCEND_DIR}/${SYSTEM_PREFIX}/ccec_compiler/bin/bisheng" CACHE FILEPATH "Path to Bisheng compiler")
 message(STATUS "Bisheng compiler path: ${BISHENG}")
 

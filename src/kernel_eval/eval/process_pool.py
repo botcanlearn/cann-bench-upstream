@@ -104,6 +104,9 @@ def build_task_units(
     单算子场景：用例分到卡0-7 → 单算子多卡并行。
     单卡场景：只有一个 chunk → 退化串行。
     """
+    if card_count <= 0:
+        return []
+
     task_units: List[TaskUnit] = []
     card_ids = list(range(card_count))
 

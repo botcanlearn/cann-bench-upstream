@@ -34,6 +34,10 @@ endif()
 
 message(STATUS "Using Ascend toolkit path: ${ASCEND_DIR}")
 set(CMAKE_PREFIX_PATH ${ASCEND_DIR}/)
+# NOTE: asc-config.cmake lives directly under <root>/lib64/cmake/ without a
+# package-name subdirectory (e.g. ASC/).  A plain prefix like <root>/ won't
+# match find_package(ASC)'s search rules, so we append the cmake config dir.
+list(APPEND CMAKE_PREFIX_PATH ${ASCEND_DIR}/lib64/cmake)
 set(BISHENG "${ASCEND_DIR}/${SYSTEM_PREFIX}/ccec_compiler/bin/bisheng" CACHE FILEPATH "Path to Bisheng compiler")
 message(STATUS "Bisheng compiler path: ${BISHENG}")
 

@@ -4302,7 +4302,7 @@
       },
       "5": {
         "t_hw_us": 139.81,
-        "baseline_perf_us": 66.05
+        "baseline_perf_us": 1398.1
       },
       "6": {
         "t_hw_us": 209.72,

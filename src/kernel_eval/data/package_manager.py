@@ -463,9 +463,32 @@ class PackageManager:
                 timeout=60
             )
 
+            if result.stdout:
+                for line in result.stdout.strip().splitlines():
+                    print(f"[pip] {line}")
+            if result.stderr:
+                for line in result.stderr.strip().splitlines():
+                    print(f"[pip-warn] {line}")
+
             if result.returncode != 0:
-                print(f"[ERROR] whl包安装失败: {result.stderr}")
                 raise RuntimeError(f"pip install 失败: {result.stderr}")
+
+            # 验证安装位置（诊断步骤，失败不应影响已成功的安装）
+            try:
+                verify = subprocess.run(
+                    [sys.executable, "-c",
+                     "import importlib.util; spec = importlib.util.find_spec('cann_bench'); "
+                     "print(spec.origin if spec else 'NOT FOUND')"],
+                    capture_output=True, text=True, timeout=10
+                )
+                verify_out = verify.stdout.strip()
+                if verify_out == "NOT FOUND":
+                    print(f"[WARN] pip 返回成功但 cann_bench 模块不可被 find_spec 发现；"
+                          f"后续 scan_interfaces 可能失败")
+                elif verify_out:
+                    print(f"[INFO] cann_bench 安装位置: {verify_out}")
+            except subprocess.TimeoutExpired:
+                print(f"[WARN] cann_bench 安装位置验证超时，已跳过（不影响安装结果）")
 
             print(f"[INFO] whl包安装成功")
             return True
@@ -500,6 +523,7 @@ class PackageManager:
 
         # 1. 尝试从 cann_bench 模块扫描
         cann_bench_imported = False
+        cann_bench_import_error = None
         try:
             # 重新导入模块（确保使用最新安装的版本）
             if 'cann_bench' in sys.modules:
@@ -527,8 +551,11 @@ class PackageManager:
                         callable=attr,
                         signature=f"{name}{sig}"
                     ))
-        except ImportError:
-            pass
+        except ImportError as e:
+            cann_bench_import_error = e
+            import traceback
+            print(f"[WARN] cann_bench 导入失败: {e}")
+            traceback.print_exc()
 
         # 2. 尝试从 torch.ops.cann_bench 扫描（由 cann_bench 模块注册）
         try:
@@ -552,7 +579,10 @@ class PackageManager:
         # 3. 如果两者都没找到，抛出错误
         if not interfaces:
             if not cann_bench_imported:
-                raise ImportError("无法导入 cann_bench 模块，且 torch.ops.cann_bench 中无算子")
+                error_detail = f": {cann_bench_import_error}" if cann_bench_import_error else ""
+                raise ImportError(
+                    f"无法导入 cann_bench 模块{error_detail}，且 torch.ops.cann_bench 中无算子"
+                )
 
         return interfaces
 
