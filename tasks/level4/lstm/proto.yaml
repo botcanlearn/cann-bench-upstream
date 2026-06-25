@@ -109,6 +109,13 @@ operator:
     - float16
     - bfloat16
     optional: true
+  - name: weight_hr
+    description: "投影矩阵列表（可选，仅 projSize>0 / LSTMP 需要），每层/每方向一个 tensor，shape: (projSize, hiddenSize)，列表长度 = numLayers * num_directions"
+    dtype:
+    - float32
+    - float16
+    - bfloat16
+    optional: true
   - name: h0
     description: 初始隐藏状态 (可选，默认全 0)，shape 为 (num_layers * num_directions, B, hiddenSize 或 projSize)
     dtype:
@@ -142,4 +149,4 @@ operator:
     - float32
     - float16
     - bfloat16
-  schema: lstm(Tensor x, Tensor[] weight_ih, Tensor[] weight_hh, int inputSize, int hiddenSize, int numLayers, bool bias=True, bool batchFirst=False, float dropout=0.0, bool bidirectional=False, int projSize=0, Tensor[]? bias_ih=None, Tensor[]? bias_hh=None, Tensor? h0=None, Tensor? c0=None) -> (Tensor y, Tensor hn, Tensor cn)
+  schema: lstm(Tensor x, Tensor[] weight_ih, Tensor[] weight_hh, int inputSize, int hiddenSize, int numLayers, bool bias=True, bool batchFirst=False, float dropout=0.0, bool bidirectional=False, int projSize=0, Tensor[]? bias_ih=None, Tensor[]? bias_hh=None, Tensor[]? weight_hr=None, Tensor? h0=None, Tensor? c0=None) -> (Tensor y, Tensor hn, Tensor cn)

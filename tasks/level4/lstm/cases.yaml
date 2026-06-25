@@ -921,8 +921,11 @@ cases:
   - &id043
     - - 256
   - *id043
+  - - - 16
+      - 64
   dtype:
   - float32
+  - - float32
   - - float32
   - - float32
   - - float32
@@ -947,6 +950,8 @@ cases:
       - 0.01
   - - - -0.01
       - 0.01
+  - - - -0.1
+      - 0.1
   note: "S-float32-case19 | baseline_kernels: ZerosLike×3 + ConcatD×1 + Add×1 + Transpose×1 + DynamicRNN×1 + TransData×5"
 - operator: LSTM
   case_id: 20
@@ -966,8 +971,14 @@ cases:
     - - 256
     - - 256
   - *id044
+  - - - 16
+      - 64
+    - - 16
+      - 64
   dtype:
   - float32
+  - - float32
+    - float32
   - - float32
     - float32
   - - float32
@@ -1004,4 +1015,8 @@ cases:
       - -0.01
       - 0.01
     - *id048
+  - - - -0.1
+      - 0.1
+    - - -0.1
+      - 0.1
   note: "S-float32-case20 | baseline_kernels: ZerosLike×3 + ConcatD×1 + Add×1 + Transpose×1 + DynamicRNN×1 + TransData×5"

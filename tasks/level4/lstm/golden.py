@@ -12,7 +12,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 """
 LSTM 算子 Torch Golden 参考实现
@@ -22,7 +22,9 @@ LSTM 算子 Torch Golden 参考实现
   - weight_ih_l0, weight_hh_l0, bias_ih_l0, bias_hh_l0 (forward)
   - weight_ih_l0_reverse, weight_hh_l0_reverse, ... (reverse, if bidirectional)
   - weight_ih_l1, ... (layer 1, if numLayers > 1)
+  - weight_hr_l0, ... (projection matrix, if projSize > 0; LSTMP)
 """
+
 
 def lstm(
     x: torch.Tensor,
@@ -38,6 +40,7 @@ def lstm(
     projSize: int = 0,
     bias_ih: Optional[List[torch.Tensor]] = None,
     bias_hh: Optional[List[torch.Tensor]] = None,
+    weight_hr: Optional[List[torch.Tensor]] = None,
     h0: Optional[torch.Tensor] = None,
     c0: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -55,9 +58,11 @@ def lstm(
         batchFirst: 输入格式是否为 (batch, seq, feature)
         dropout: 层间 dropout
         bidirectional: 是否双向
-        projSize: 投影维度 (>0 时启用 LSTM with Projection)
+        projSize: 投影维度 (>0 时启用 LSTM with Projection / LSTMP)
         bias_ih: TensorList?, 每层每方向一个 [4*hiddenSize] tensor
         bias_hh: TensorList?, 每层每方向一个 [4*hiddenSize] tensor
+        weight_hr: TensorList?, 投影矩阵，每层每方向一个 [projSize, hiddenSize]
+            tensor；仅 projSize>0 时需要 (LSTMP)
         h0: 初始隐藏状态 [numLayers*num_directions, B, hiddenSize or projSize]
         c0: 初始细胞状态 [numLayers*num_directions, B, hiddenSize]
 
@@ -70,6 +75,9 @@ def lstm(
     gate_size = 4 * hiddenSize  # LSTM: i, f, g, o
     effective_hidden = projSize if projSize > 0 else hiddenSize
 
+    if projSize > 0 and weight_hr is None:
+        raise ValueError("projSize>0 (LSTMP) requires weight_hr (projection matrix list)")
+
     lstm_layer = torch.nn.LSTM(
         input_size=inputSize,
         hidden_size=hiddenSize,
@@ -78,21 +86,23 @@ def lstm(
         batch_first=batchFirst,
         dropout=dropout if numLayers > 1 else 0.0,
         bidirectional=bidirectional,
-        proj_size=projSize if projSize > 0 else 0
+        proj_size=projSize if projSize > 0 else 0,
     )
 
     input_dtype = x.dtype
     lstm_layer = lstm_layer.float().to(x.device)
+    # Inference golden: disable inter-layer dropout so the reference is deterministic
+    # (nn.Module defaults to train mode; for numLayers>1 + dropout>0 the forward would
+    # apply a random mask each call -> nondeterministic hn/cn that no kernel can match).
+    lstm_layer.eval()
 
     # 计算每层的输入维度
     layer_inputs = [inputSize]
     for layer in range(1, numLayers):
-        if projSize > 0:
-            layer_inputs.append(projSize * num_directions)
-        else:
-            layer_inputs.append(hiddenSize * num_directions)
+        layer_inputs.append(effective_hidden * num_directions)
 
-    # 设置权重参数（TensorList 格式）
+    # 设置权重参数（TensorList 格式）。projSize>0 时必须设上投影权重 weight_hr，
+    # 否则 nn.LSTM 用随机初始化的投影矩阵 -> 参考输出非确定。
     with torch.no_grad():
         for layer in range(numLayers):
             layer_input = layer_inputs[layer]
@@ -106,6 +116,10 @@ def lstm(
 
                 getattr(lstm_layer, f'weight_ih_{suffix}').copy_(wi.float())
                 getattr(lstm_layer, f'weight_hh_{suffix}').copy_(wh.float())
+
+                if projSize > 0:
+                    wr = weight_hr[idx][:projSize, :hiddenSize]
+                    getattr(lstm_layer, f'weight_hr_{suffix}').copy_(wr.float())
 
                 if bias and bias_ih is not None and bias_hh is not None:
                     bi = bias_ih[idx][:gate_size]

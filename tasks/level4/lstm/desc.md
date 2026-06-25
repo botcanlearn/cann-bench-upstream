@@ -42,13 +42,20 @@ c_t = f_t \odot c_{t-1} + i_t \odot g_t \quad \text{（细胞状态）}
 $$
 
 $$
-h_t = o_t \odot \tanh(c_t) \quad \text{（隐藏状态）}
+h_t' = o_t \odot \tanh(c_t) \quad \text{（隐藏状态）}
+$$
+
+当 `projSize > 0`（LSTM with Projection / LSTMP）时，隐藏状态再经投影矩阵 $W_{hr}$ 降维至 projSize 维；`projSize = 0` 时 $h_t = h_t'$：
+
+$$
+h_t = W_{hr}\, h_t' = W_{hr}\,(o_t \odot \tanh(c_t)) \quad \text{（投影隐藏状态，维度 projSize）}
 $$
 
 其中：
 - $i_t, f_t, o_t$ 分别为输入门、遗忘门、输出门
 - $g_t$ 为候选细胞状态
-- $c_t$ 为细胞状态，$h_t$ 为隐藏状态
+- $c_t$ 为细胞状态，$h_t$ 为隐藏状态（$h_t'$ 为投影前隐藏状态，仅 projSize>0 时区分）
+- $W_{hr}$ 为投影矩阵（shape $(\text{projSize}, \text{hiddenSize})$，仅 projSize>0 / LSTMP 时存在）
 - $\sigma$ 为 sigmoid 函数，$\odot$ 为逐元素乘法
 
 ## 3. 接口规范
@@ -56,7 +63,7 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, int inputSize, int hiddenSize, int numLayers, bool bias=True, bool batchFirst=False, float dropout=0.0, bool bidirectional=False, int projSize=0, TensorList? bias_ih=None, TensorList? bias_hh=None, Tensor? h0=None, Tensor? c0=None) -> (Tensor y, Tensor hn, Tensor cn)
+cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, int inputSize, int hiddenSize, int numLayers, bool bias=True, bool batchFirst=False, float dropout=0.0, bool bidirectional=False, int projSize=0, TensorList? bias_ih=None, TensorList? bias_hh=None, TensorList? weight_hr=None, Tensor? h0=None, Tensor? c0=None) -> (Tensor y, Tensor hn, Tensor cn)
 ```
 
 ### 输入参数说明
@@ -76,6 +83,7 @@ cann_bench.lstm(Tensor x, TensorList weight_ih, TensorList weight_hh, int inputS
 | projSize | int | 0 | 投影维度（>0 时启用 LSTM with Projection） |
 | bias_ih | TensorList | None | 输入到隐藏层偏置列表（可选），每个 tensor shape 为 (4*hiddenSize) |
 | bias_hh | TensorList | None | 隐藏层到隐藏层偏置列表（可选），每个 tensor shape 为 (4*hiddenSize) |
+| weight_hr | TensorList | None | 投影矩阵列表（可选，仅 projSize>0 / LSTMP 需要），每层/每个方向一个 tensor，shape 为 (projSize, hiddenSize) |
 | h0 | Tensor | None | 初始隐藏状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
 | c0 | Tensor | None | 初始细胞状态（可选，默认全 0），shape 为 (num_layers * num_directions, B, hiddenSize) |
 
@@ -201,49 +209,114 @@ def lstm(
     projSize: int = 0,
     bias_ih: Optional[List[torch.Tensor]] = None,
     bias_hh: Optional[List[torch.Tensor]] = None,
+    weight_hr: Optional[List[torch.Tensor]] = None,
     h0: Optional[torch.Tensor] = None,
     c0: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    num_directions = 2 if bidirectional else 1
-    effective_hidden_size = projSize if projSize > 0 else hiddenSize
-    lstm_layer = torch.nn.LSTM(
-        input_size=inputSize, hidden_size=hiddenSize, num_layers=numLayers,
-        bias=bias, batch_first=batchFirst,
-        dropout=dropout if numLayers > 1 else 0.0, bidirectional=bidirectional,
-        proj_size=projSize if projSize > 0 else 0
-    )
-    input_dtype = x.dtype
-    lstm_layer = lstm_layer.float()
+    """
+    LSTM 前向计算（对标 PyTorch torch.nn.LSTM）
 
+    Args:
+        x: 输入序列 (S, B, inputSize) 或 (B, S, inputSize) if batch_first
+        weight_ih: TensorList，每层每方向一个 [4*hiddenSize, input_dim] tensor
+        weight_hh: TensorList，每层每方向一个 [4*hiddenSize, hiddenSize or projSize] tensor
+        inputSize: 输入特征维度
+        hiddenSize: 隐藏状态维度
+        numLayers: 层数
+        bias: 是否使用偏置
+        batchFirst: 输入格式是否为 (batch, seq, feature)
+        dropout: 层间 dropout
+        bidirectional: 是否双向
+        projSize: 投影维度 (>0 时启用 LSTM with Projection / LSTMP)
+        bias_ih: TensorList?, 每层每方向一个 [4*hiddenSize] tensor
+        bias_hh: TensorList?, 每层每方向一个 [4*hiddenSize] tensor
+        weight_hr: TensorList?, 投影矩阵，每层每方向一个 [projSize, hiddenSize]
+            tensor；仅 projSize>0 时需要 (LSTMP)
+        h0: 初始隐藏状态 [numLayers*num_directions, B, hiddenSize or projSize]
+        c0: 初始细胞状态 [numLayers*num_directions, B, hiddenSize]
+
+    Returns:
+        y: 输出序列
+        hn: 最终隐藏状态
+        cn: 最终细胞状态
+    """
+    num_directions = 2 if bidirectional else 1
+    gate_size = 4 * hiddenSize  # LSTM: i, f, g, o
+    effective_hidden = projSize if projSize > 0 else hiddenSize
+
+    if projSize > 0 and weight_hr is None:
+        raise ValueError("projSize>0 (LSTMP) requires weight_hr (projection matrix list)")
+
+    lstm_layer = torch.nn.LSTM(
+        input_size=inputSize,
+        hidden_size=hiddenSize,
+        num_layers=numLayers,
+        bias=bias,
+        batch_first=batchFirst,
+        dropout=dropout if numLayers > 1 else 0.0,
+        bidirectional=bidirectional,
+        proj_size=projSize if projSize > 0 else 0,
+    )
+
+    input_dtype = x.dtype
+    lstm_layer = lstm_layer.float().to(x.device)
+    # Inference golden: disable inter-layer dropout so the reference is deterministic
+    # (nn.Module defaults to train mode; for numLayers>1 + dropout>0 the forward would
+    # apply a random mask each call -> nondeterministic hn/cn that no kernel can match).
+    lstm_layer.eval()
+
+    # 计算每层的输入维度
+    layer_inputs = [inputSize]
+    for layer in range(1, numLayers):
+        layer_inputs.append(effective_hidden * num_directions)
+
+    # 设置权重参数（TensorList 格式）。projSize>0 时必须设上投影权重 weight_hr，
+    # 否则 nn.LSTM 用随机初始化的投影矩阵 -> 参考输出非确定。
     with torch.no_grad():
         for layer in range(numLayers):
-            getattr(lstm_layer, f'weight_ih_l{layer}').copy_(weight_ih[layer * num_directions].float())
-            getattr(lstm_layer, f'weight_hh_l{layer}').copy_(weight_hh[layer * num_directions].float())
-            if bias and bias_ih is not None:
-                getattr(lstm_layer, f'bias_ih_l{layer}').copy_(bias_ih[layer * num_directions].float())
-            if bias and bias_hh is not None:
-                getattr(lstm_layer, f'bias_hh_l{layer}').copy_(bias_hh[layer * num_directions].float())
-            if bidirectional:
-                getattr(lstm_layer, f'weight_ih_l{layer}_reverse').copy_(weight_ih[layer * num_directions + 1].float())
-                getattr(lstm_layer, f'weight_hh_l{layer}_reverse').copy_(weight_hh[layer * num_directions + 1].float())
-                if bias and bias_ih is not None:
-                    getattr(lstm_layer, f'bias_ih_l{layer}_reverse').copy_(bias_ih[layer * num_directions + 1].float())
-                if bias and bias_hh is not None:
-                    getattr(lstm_layer, f'bias_hh_l{layer}_reverse').copy_(bias_hh[layer * num_directions + 1].float())
+            layer_input = layer_inputs[layer]
+            for d in range(num_directions):
+                idx = layer * num_directions + d
+                suffix = f"l{layer}" if d == 0 else f"l{layer}_reverse"
+
+                # 从 TensorList 中取对应 tensor
+                wi = weight_ih[idx][:gate_size, :layer_input]
+                wh = weight_hh[idx][:gate_size, :effective_hidden]
+
+                getattr(lstm_layer, f'weight_ih_{suffix}').copy_(wi.float())
+                getattr(lstm_layer, f'weight_hh_{suffix}').copy_(wh.float())
+
+                if projSize > 0:
+                    wr = weight_hr[idx][:projSize, :hiddenSize]
+                    getattr(lstm_layer, f'weight_hr_{suffix}').copy_(wr.float())
+
+                if bias and bias_ih is not None and bias_hh is not None:
+                    bi = bias_ih[idx][:gate_size]
+                    bh = bias_hh[idx][:gate_size]
+                    getattr(lstm_layer, f'bias_ih_{suffix}').copy_(bi.float())
+                    getattr(lstm_layer, f'bias_hh_{suffix}').copy_(bh.float())
 
     x_float = x.float()
     if h0 is None:
         batch_size = x.shape[1] if not batchFirst else x.shape[0]
-        h0 = torch.zeros(numLayers * num_directions, batch_size, effective_hidden_size, dtype=torch.float32)
+        h0 = torch.zeros(numLayers * num_directions, batch_size, effective_hidden,
+                         dtype=torch.float32, device=x.device)
     else:
         h0 = h0.float()
+
     if c0 is None:
         batch_size = x.shape[1] if not batchFirst else x.shape[0]
-        c0 = torch.zeros(numLayers * num_directions, batch_size, hiddenSize, dtype=torch.float32)
+        c0 = torch.zeros(numLayers * num_directions, batch_size, hiddenSize,
+                         dtype=torch.float32, device=x.device)
     else:
         c0 = c0.float()
+
     y, (hn, cn) = lstm_layer(x_float, (h0, c0))
-    return y.to(input_dtype), hn.to(input_dtype), cn.to(input_dtype)
+    y = y.to(input_dtype)
+    hn = hn.to(input_dtype)
+    cn = cn.to(input_dtype)
+
+    return y, hn, cn
 ```
 
 ## 6. 额外信息

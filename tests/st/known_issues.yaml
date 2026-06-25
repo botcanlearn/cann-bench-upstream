@@ -23,3 +23,11 @@
 - {op: GRU, case: 9, action: skip-hang, target: golden, reason: "bf16:NPU DynamicGRUV2 仅支持 fp16,EZ3002 不支持"}
 - {op: GRU, case: 13, action: skip-hang, target: golden, reason: "bf16:NPU DynamicGRUV2 仅支持 fp16,EZ3002 不支持"}
 - {op: GRU, case: 17, action: skip-hang, target: golden, reason: "bf16:NPU DynamicGRUV2 仅支持 fp16,EZ3002 不支持"}
+
+# LSTM case 19/20:投影 LSTM(projSize>0 / LSTMP)。torch_npu 的 nn.LSTM 投影在 NPU 上崩
+# (case19 L=1 → DynamicRNN inner error;case20 L=2 → aclnnCat 161002),而改手写 matmul 递推
+# 又被反作弊 TorchOpGuard 拦(禁 torch.matmul)→ 投影无法作为 guarded 候选在 NPU 评测。golden
+# (CPU 参考)已用 nn.LSTM + 传入 weight_hr 正确且确定(供真实评测),仅 ST 候选侧跳过这两个 case。
+# (注:旧 torch_npu 上 L=1 投影曾能跑,现已同样崩 → 两个都需 skip。)
+- {op: LSTM, case: 19, action: skip-hang, target: golden, reason: "LSTMP L=1:torch_npu 投影 NPU 崩(DynamicRNN inner error)+ 手写 matmul 被 guard 拦,无法作为候选评测"}
+- {op: LSTM, case: 20, action: skip-hang, target: golden, reason: "LSTMP L=2:torch_npu 投影 NPU aclnnCat 崩(161002)+ 手写被 guard 拦"}
