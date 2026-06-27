@@ -110,6 +110,22 @@ def golden_matrix_report(golden_candidate, trimmed_tasks, tmp_path_factory):
     by_op: dict[str, dict] = {}
     for op, _cid, c in iter_cases(report):
         by_op.setdefault(op.lower(), {})[case_num(c)] = c
+    # 诊断加固：报告存在但 0 case（eval-child 全崩）时，把各 operator 的失败原因
+    # + eval stderr 一起抛出。否则下游 per-op test 只能看到一句无信息的
+    # "没有该算子的任何 case"，定位不到 NPU 运行时根因。
+    if not by_op:
+        ops_fail = []
+        for op in report.get("operators", []):
+            reason = op.get("subprocess_failure_reason") or op.get("compilation_error")
+            if reason:
+                ops_fail.append(f"{op.get('operator')}: {reason}")
+        pytest.fail(
+            f"kernel_eval 产出报告但无任何 case（rc={proc.returncode}，"
+            f"operators={len(report.get('operators', []))}）。\n"
+            f"--- operator 失败原因 ---\n" + "\n".join(ops_fail or ["(报告无 operator 失败原因字段)"]) + "\n"
+            f"--- stdout tail ---\n{proc.stdout[-2000:]}\n"
+            f"--- stderr tail ---\n{proc.stderr[-3000:]}"
+        )
     return by_op
 
 

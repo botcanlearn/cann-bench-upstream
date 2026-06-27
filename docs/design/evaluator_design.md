@@ -1,6 +1,6 @@
 # 算子评测工程设计
 
-**文档版本：V0.3.0**
+**文档版本：V0.4.0**
 
 **更新摘要（自旧版主要变化）**：
 - 基类层分离：新增 `base/` 目录统一存放抽象基类，特化类移至 `benches/`
@@ -959,8 +959,8 @@ Certification Seal（CANN-Bench 认证印章）
 setup = collect_setup_info(config)
 # setup == {
 #     "metadata": {
-#         "framework": "CANN-Bench V0.3.0",
-#         "tasks_version": "0.2.0",
+#         "framework": "CANN-Bench V0.4.0",
+#         "tasks_version": "0.4.0",
 #         "date": "2026-06-16 14:30:00",
 #         "agent_skill": "DeepSeek V4 Pro",
 #         "base_model": "...",
@@ -1208,3 +1208,4 @@ BenchConfig(
 | V0.1.1 | 2026-04-29 | 文档重组，精度标准完善 |
 | V0.2.0 | 2026-05-07 | 评分体系切换为 hardware-anchored 公式 |
 | V0.3.0 | 2026-05-19 | 基类层分离 + benches 扁平化 + Registry 完善 |
+| V0.4.0 | 2026-06-25 | 多硬件多卡评测 + StanfordBench 集成 + 反作弊加固 + HAP 性能口径完善 + 报告系统重构 |

@@ -8,8 +8,8 @@ CANN-Bench 采用 **框架版本** + **评测集版本** 双层版本体系：
 
 | VERSION 文件 | 管理范围 | 当前值 |
 |-------------|---------|--------|
-| `VERSION`（项目根） | 框架核心包（`kernel_eval` + `auto_pipeline`） | 0.3.0 |
-| `tasks/VERSION` | 评测集数据（`tasks/` 目录下的算子规格、用例、golden） | 0.3.0 |
+| `VERSION`（项目根） | 框架核心包（`kernel_eval` + `auto_pipeline`） | 0.4.0 |
+| `tasks/VERSION` | 评测集数据（`tasks/` 目录下的算子规格、用例、golden） | 0.4.0 |
 
 两层版本 **独立演进**：
 - 框架 bug 修复 → 框架版本 PATCH 升级，评测集不动
@@ -103,8 +103,8 @@ git push origin master --follow-tags
 
 | Tag 格式 | 含义 | 示例 |
 |----------|------|------|
-| `vX.Y.Z` | 框架正式发布 | `v0.3.0` |
-| `tasks-vX.Y.Z` | 评测集正式发布 | `tasks-v0.3.0` |
+| `vX.Y.Z` | 框架正式发布 | `v0.4.0` |
+| `tasks-vX.Y.Z` | 评测集正式发布 | `tasks-v0.4.0` |
 | `vX.Y.Z-alpha.N` | 框架内部测试 | `v0.4.0-alpha.1` |
 | `vX.Y.Z-beta.N` | 框架外部测试 | `v0.4.0-beta.1` |
 
@@ -140,8 +140,8 @@ Changelog 条目格式示例：
 `tasks/VERSION` 文件中标注兼容的框架版本范围：
 
 ```
-0.3.0
-# requires-framework: >=0.3.0
+0.4.0
+# requires-framework: >=0.4.0
 ```
 
 框架加载评测集时应校验兼容性，不兼容时给出警告。

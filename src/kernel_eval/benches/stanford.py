@@ -103,6 +103,14 @@ def _register_stanford_components():
             case_spec_cls='stanford',
             golden_precision='native_npu',
             precision_thresholds={'atol': 0.01, 'rtol': 0.01},
+            # 按 dtype 注入 atol=rtol，对齐原生 KernelBench get_tolerance_for_precision
+            # （src/kernelbench/eval.py:83）：fp32=1e-4，fp16/bf16=1e-2。
+            # 取代原先不分 dtype 的固定 1e-2，使 fp32 判定与原生一致。
+            dtype_tolerance_map={
+                'float32': 1e-4,
+                'float16': 1e-2,
+                'bfloat16': 1e-2,
+            },
             default_tasks_root='bench_lab/stanford_bench/KernelBench/KernelBench',
             description='StanfordBench 评测集 - Scaling Intelligence',
             metadata={

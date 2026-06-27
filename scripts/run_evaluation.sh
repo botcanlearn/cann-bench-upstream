@@ -51,6 +51,9 @@ NO_PERF=false
 PROFILER_LEVEL="Level1"
 EVAL_SEED=""  # 评测种子（默认: 0 = 确定性，-1 = 纯随机）
 
+# 报告输出目录（默认在 main() 中根据 BENCH_NAME 动态设置）
+REPORTS_DIR_OVERRIDE=""
+
 # 颜色输出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -80,6 +83,7 @@ print_help() {
     echo "  --task-dir <path>         指定评测目录（bench根目录或算子目录）"
     echo "                            默认: tasks (cann) 或 bench_lab/stanford_bench/KernelBench/KernelBench (stanford)"
     echo "                            支持: tasks, tasks/level1, tasks/level1/exp 等"
+    echo "  --reports-dir <path>      报告输出目录（默认: reports/ 或 reports/<bench_name>/）"
     echo ""
     echo "设备配置:"
     echo "  --device <type>           设备类型: cpu, npu（默认: npu）"
@@ -180,6 +184,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --task-dir)
             TASK_DIR="$2"
+            shift 2
+            ;;
+        --reports-dir)
+            REPORTS_DIR_OVERRIDE="$2"
             shift 2
             ;;
         --operator)
@@ -443,7 +451,9 @@ main() {
     # 根据 bench_name 设置 reports_dir
     # CANN（默认评测集）保持历史路径 reports/，与 Python 入口(config.py)默认值一致；
     # 其它评测集（stanford 等）使用 reports/<bench_name>/ 子目录避免互相覆盖。
-    if [[ "${BENCH_NAME}" == "cann" ]]; then
+    if [[ -n "${REPORTS_DIR_OVERRIDE}" ]]; then
+        REPORTS_DIR="${REPORTS_DIR_OVERRIDE}"
+    elif [[ "${BENCH_NAME}" == "cann" ]]; then
         REPORTS_DIR="${PROJECT_ROOT}/reports"
     else
         REPORTS_DIR="${PROJECT_ROOT}/reports/${BENCH_NAME}"

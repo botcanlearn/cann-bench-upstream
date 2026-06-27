@@ -180,7 +180,7 @@ class ProcessPoolCoordinator:
         if device_id is not None:
             self.card_count = 1
         else:
-            # 多卡模式：自动检测
+            # 多卡模式：自动检测，过滤掉不健康的卡
             self.card_count = self._detect_cards()
 
         # torch_npu.profiler 使用 ACL 设备级 profiling 硬件资源，
@@ -194,7 +194,10 @@ class ProcessPoolCoordinator:
         self._active_processes: List[subprocess.Popen] = []
 
     def _detect_cards(self) -> int:
-        """检测可用 NPU 卡数，并提供详细的诊断信息"""
+        """检测可用 NPU 卡数，并提供详细的诊断信息
+
+        通过 npu-smi info 检测每张卡的健康状态，过滤掉 Alarm/异常卡。
+        """
         if self.base_config.device_type != "npu":
             return 0
 
@@ -217,15 +220,69 @@ class ProcessPoolCoordinator:
             self._check_npu_smi()
             return 0
 
-        print(f"[INFO] 检测到 {card_count} 张 NPU 卡")
-        for i in range(card_count):
+        # 检测卡健康状态，过滤掉 Alarm 卡
+        healthy_cards = self._filter_healthy_cards(card_count)
+
+        print(f"[INFO] 检测到 {card_count} 张 NPU 卡, {len(healthy_cards)} 张健康")
+        for i in healthy_cards:
             try:
                 name = torch.npu.get_device_name(i) if hasattr(torch.npu, 'get_device_name') else 'unknown'
                 print(f"  NPU:{i} - {name}")
             except Exception:
                 print(f"  NPU:{i}")
 
-        return card_count
+        if not healthy_cards:
+            print("[ERROR] 没有健康的 NPU 卡可用")
+            return 0
+
+        # 更新 card_count 为健康卡数
+        return len(healthy_cards)
+
+    # npu-smi 的 health 列位置随驱动/CANN 版本变化（有时 id+name 合并、有时 health
+    # 不在 parts[3]）。fail-open：仅当某行**明确**出现坏状态词且能解析出 npu_id 时才跳过；
+    # 解析不出或列错位时一律保留，避免把健康卡误杀导致整 eval 无可用卡（见 ST 0-case 故障）。
+    _NPU_BAD_HEALTH = ("ALARM", "CRITICAL", "WARNING", "ABNORMAL", "FAULT", "ERROR")
+
+    def _filter_healthy_cards(self, card_count: int) -> List[int]:
+        """通过 npu-smi info 检测卡健康状态，返回健康卡的 ID 列表（fail-open）。
+
+        列布局不固定，故扫描整行的 `|` 分隔 cell：任一 cell 命中坏状态词才视为异常行，
+        再从行内取首个可解析为 int 的 cell 作为 npu_id。无法对齐/解析时保留该卡。
+        """
+        healthy = list(range(card_count))
+        try:
+            result = subprocess.run(
+                ["npu-smi", "info"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return healthy
+
+            for line in result.stdout.strip().split('\n'):
+                if '|' not in line:
+                    continue
+                parts = [p.strip() for p in line.split('|')]
+                # 行内任一 cell 是坏状态词才考虑跳过；否则保留（fail-open）
+                if not any(p.upper() in self._NPU_BAD_HEALTH for p in parts):
+                    continue
+                # npu-smi 数据行：首个 cell 的首 token 是 NPU ID
+                # （可能单独 "0" 或与 name 合并 "1 Ascend910"）
+                first_cell = parts[1] if len(parts) > 1 else ""
+                id_tokens = first_cell.split()
+                if not id_tokens:
+                    continue
+                try:
+                    npu_id = int(id_tokens[0])
+                except ValueError:
+                    continue
+                if npu_id < card_count and npu_id in healthy:
+                    print(f"[WARN] NPU:{npu_id} 状态异常，跳过该卡")
+                    healthy.remove(npu_id)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+        return healthy
 
     def _check_npu_smi(self):
         """调用 npu-smi info 检查硬件状态"""
@@ -285,15 +342,15 @@ class ProcessPoolCoordinator:
         return str(task.device_id)
 
     def _should_narrow_child_visibility(self) -> bool:
-        return (
-            self.base_config.device_type == "npu"
-            and self.device_id is None
-            and self.card_count > 1
+        # 单卡模式：device_id 指定了物理卡，需要收窄子进程 visibility 到该卡
+        # 多卡模式：每张卡分到不同子进程，也需要收窄
+        return self.base_config.device_type == "npu" and (
+            self.device_id is not None or self.card_count > 1
         )
 
     def _child_device_id(self, task: TaskUnit) -> int:
-        # Once the child process sees exactly one physical NPU, torch_npu
-        # remaps that card to logical device 0.
+        # 收窄 visibility 后，子进程只看到一张物理卡，
+        # torch_npu 会把该卡重映射为逻辑设备 0。
         return 0 if self._should_narrow_child_visibility() else task.device_id
 
     def _build_env_for_task(self, base_env: Dict[str, str], task: TaskUnit) -> Dict[str, str]:
@@ -301,7 +358,12 @@ class ProcessPoolCoordinator:
         if not self._should_narrow_child_visibility():
             return env
 
-        physical_device = self._physical_device_token_for_task(task, base_env)
+        # 单卡模式：直接用 self.device_id 作为物理卡号
+        if self.device_id is not None:
+            physical_device = str(self.device_id)
+        else:
+            physical_device = self._physical_device_token_for_task(task, base_env)
+
         for var in _DEVICE_VISIBILITY_ENV_VARS:
             env[var] = physical_device
         env["KERNEL_EVAL_PHYSICAL_DEVICE_ID"] = physical_device
@@ -339,6 +401,8 @@ class ProcessPoolCoordinator:
         profiler_level = getattr(self.base_config, "profiler_level", None)
         if profiler_level:
             cmd += ["--profiler-level", str(profiler_level)]
+        if not getattr(self.base_config, "perf_freq_boost", True):
+            cmd.append("--no-freq-boost")
 
         # torch op guard 模式
         torch_op_guard_mode = getattr(self.base_config, "torch_op_guard_mode", None)

@@ -89,6 +89,7 @@ class Evaluator:
             warmup=self.config.warmup,
             repeat=self.config.repeat,
             archive_prof=True,
+            freq_boost=getattr(self.config, 'perf_freq_boost', True),
         )
 
         # 初始化算子执行器
@@ -293,7 +294,7 @@ class Evaluator:
 
             # 7. 精度对比（使用与性能采集同一次运行的输出）
             dtype = self._determine_dtype(ai_result, case)
-            merged_thresholds = self._get_merged_thresholds(case.rel_path)
+            merged_thresholds = self._get_merged_thresholds(case.rel_path, dtype)
 
             # 同精度参考输出（用于 checker 小值域判断）
             # native_cpu/native_npu 时 golden 已是同精度，直接复用以避免重复计算
@@ -887,14 +888,27 @@ class Evaluator:
             result = [c for c in result if filter_dict['dtype'].lower() in [d.lower() for d in c.dtypes]]
         return result
 
-    def _get_merged_thresholds(self, rel_path: str) -> Dict[str, float]:
-        """获取合并后的精度阈值"""
+    def _get_merged_thresholds(self, rel_path: str, dtype: str = None) -> Dict[str, float]:
+        """获取合并后的精度阈值
+
+        合并优先级（低 → 高）：
+          1. config.precision_thresholds（评测集默认 atol/rtol）
+          2. bench_config.dtype_tolerance_map（按 dtype 注入 atol=rtol，
+             对齐原生 KernelBench 精度分档：fp32=1e-4, fp16/bf16=1e-2）
+          3. op_info.precision_thresholds（算子级显式覆盖，最高）
+        """
+        merged = dict(self.config.precision_thresholds)
+        # 按 dtype 注入容差（仅当 bench 配置了 dtype_tolerance_map 且已知 dtype）
+        dtype_map = getattr(self.bench_config, 'dtype_tolerance_map', None)
+        if dtype_map and dtype:
+            tol = dtype_map.get(dtype) or dtype_map.get(dtype.lower())
+            if tol is not None:
+                merged['atol'] = tol
+                merged['rtol'] = tol
         op_info = self.operator_loader.get_operator(rel_path)
         if op_info and op_info.precision_thresholds:
-            merged = dict(self.config.precision_thresholds)
             merged.update(op_info.precision_thresholds)
-            return merged
-        return self.config.precision_thresholds
+        return merged
 
     def _get_ignore_output_indices(self, rel_path: str) -> List[int]:
         """获取需要忽略对比的输出索引"""

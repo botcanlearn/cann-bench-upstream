@@ -124,6 +124,9 @@ def create_parser() -> argparse.ArgumentParser:
                              choices=['Level1', 'Level2'],
                              help='Profiler 级别（默认: Level1）。Level1 产出 47 列 CSV，'
                                   'Level2 增加更详细的 AICPU 采集。')
+    eval_parser.add_argument('--no-freq-boost', action='store_true',
+                             help='关闭 NPU 升频清 cache（10240x10240 大矩阵 warmup）。'
+                                  '部分 NPU 卡在大矩阵运算时可能 hang，可临时关闭。')
     eval_parser.add_argument('--perf-metric-strategy', type=str, default=None,
                              help='Override perf metric strategy (kernel_details | trace_view). '
                                   'When set, overrides the strategy from BenchConfig. '
@@ -202,6 +205,8 @@ def create_parser() -> argparse.ArgumentParser:
                               help='关闭性能采集')
     child_parser.add_argument('--profiler-level', type=str, default='Level1',
                               choices=['Level1', 'Level2'])
+    child_parser.add_argument('--no-freq-boost', action='store_true',
+                              help=argparse.SUPPRESS)
     child_parser.add_argument('--torch-op-guard-mode', type=str, default=None,
                               choices=['off', 'warn', 'block'])
     child_parser.add_argument('--eval-seed', type=int, default=0)
@@ -286,6 +291,8 @@ def _create_config_from_args(args, bench_root: str) -> Config:
         config.enable_profiler = False
     if hasattr(args, 'profiler_level'):
         config.profiler_level = args.profiler_level
+    if getattr(args, 'no_freq_boost', False):
+        config.perf_freq_boost = False
     torch_op_guard_mode = getattr(args, 'torch_op_guard_mode', None)
     if torch_op_guard_mode:
         config.torch_op_guard_mode = torch_op_guard_mode
@@ -573,7 +580,12 @@ def cmd_eval_child(args):
     # 评测（复用 evaluator 的评测循环，包含设备恢复、详细输出等）
     operator_name = cases[0].operator if cases else "Unknown"
     rel_path = cases[0].rel_path if cases else ""
-    print(f"[eval-child] Card {args.device_id}: {len(cases)} 用例开始评测")
+    physical_device = os.environ.get("KERNEL_EVAL_PHYSICAL_DEVICE_ID", "")
+    if physical_device:
+        print(f"[eval-child] 物理卡 {physical_device} (逻辑设备 {args.device_id}): "
+              f"{len(cases)} 用例开始评测")
+    else:
+        print(f"[eval-child] Card {args.device_id}: {len(cases)} 用例开始评测")
 
     op_result = evaluator.run_cases(cases, operator_name, rel_path)
     case_results = op_result.results
@@ -586,7 +598,11 @@ def cmd_eval_child(args):
     Path(args.output).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
 
     passed = sum(1 for r in case_results if r.success)
-    print(f"[eval-child] Card {args.device_id}: 完成 {passed}/{len(cases)} 通过")
+    if physical_device:
+        print(f"[eval-child] 物理卡 {physical_device} (逻辑设备 {args.device_id}): "
+              f"完成 {passed}/{len(cases)} 通过")
+    else:
+        print(f"[eval-child] Card {args.device_id}: 完成 {passed}/{len(cases)} 通过")
     return 0
 
 
@@ -605,6 +621,7 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
     config.repeat = args.repeat
     config.enable_profiler = not args.no_perf
     config.profiler_level = args.profiler_level
+    config.perf_freq_boost = not getattr(args, 'no_freq_boost', False)
     config.bench_name = bench_name
     if getattr(args, 'reports_dir', None):
         config.reports_dir = args.reports_dir

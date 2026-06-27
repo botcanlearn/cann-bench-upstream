@@ -1,6 +1,6 @@
 # `cann-bench` — 多平台 CI 执行镜像
 
-CANN-BENCH 参考执行镜像。torch 2.9.0 + torch\_npu 2.9.0 + 相关科学计算栈。
+CANN-BENCH 参考执行镜像。torch 2.10.0 + torch\_npu 2.10.0 + 相关科学计算栈。
 通过 `--build-arg` 参数化 CANN 版本和硬件型号，同一 Dockerfile 适配不同设备。
 
 | 参数 | 默认值 | 说明 |

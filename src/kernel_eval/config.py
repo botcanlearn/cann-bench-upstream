@@ -60,6 +60,8 @@ class Config:
     enable_profiler: bool = True
     # Profiler 级别：Level1（默认，47列CSV）或 Level2（更详细AICPU采集）
     profiler_level: str = "Level1"
+    # NPU 升频清 cache（10240x10240 大矩阵 warmup），部分卡大矩阵会 hang 时可关闭
+    perf_freq_boost: bool = True
 
     # 评测配置
     warmup: int = 3              # 性能评测预热次数

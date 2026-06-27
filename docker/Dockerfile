@@ -41,8 +41,8 @@ RUN uv pip install --system --index-url ${PYPI_INDEX_URL:-https://mirrors.huawei
     numpy pyyaml decorator scipy attrs cloudpickle \
     ml-dtypes psutil tornado pandas expecttest protobuf \
     pytest pytest-timeout 'ruamel.yaml>=0.18' build setuptools wheel
-RUN uv pip install --system --no-deps --index-url https://download.pytorch.org/whl/cpu torch==2.9.0
-RUN uv pip install --system --no-deps --index-url ${PYPI_INDEX_URL:-https://mirrors.huaweicloud.com/repository/pypi/simple/} torch_npu==2.9.0.post2
+RUN uv pip install --system --no-deps --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+RUN uv pip install --system --no-deps --index-url ${PYPI_INDEX_URL:-https://mirrors.huaweicloud.com/repository/pypi/simple/} torch_npu==2.10.0
 
 # Pre-populate uid 1001 in /etc/passwd so getpass/getuser resolves in the
 # sandbox runtime (which executes processes as uid 1001); not a privilege drop.

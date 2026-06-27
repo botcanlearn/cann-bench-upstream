@@ -55,6 +55,10 @@ class BenchConfig:
     #   native_npu: 保持原始精度在 NPU 上计算
     golden_precision: str = "fp64_cpu"
     precision_thresholds: Dict[str, float] = field(default_factory=dict)
+    # 按 dtype 注入 atol/rtol（atol=rtol=该值），用于对齐原生 KernelBench 的精度分档。
+    # None 表示不按 dtype 注入，保持 precision_thresholds / op_info 原有合并行为。
+    # 注入优先级低于 op_info.precision_thresholds（算子级显式覆盖仍最高）。
+    dtype_tolerance_map: Optional[Dict[str, float]] = None
     # 性能指标策略：
     #   kernel_details（默认）: Σ kernel Duration 中位数，trace_view 为主 + CSV warmup 过滤
     #   trace_view: PYPTO 口径 — tilefwk/PYPTO aicore_e2e，需要 Level2 profiler 配置
@@ -116,6 +120,7 @@ class BenchConfig:
             'case_spec_cls': self.case_spec_cls,
             'golden_precision': self.golden_precision,
             'precision_thresholds': self.precision_thresholds,
+            'dtype_tolerance_map': self.dtype_tolerance_map,
             'perf_metric_strategy': self.perf_metric_strategy,
             'default_tasks_root': self.default_tasks_root,
             'description': self.description,

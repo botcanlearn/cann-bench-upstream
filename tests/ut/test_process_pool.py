@@ -327,8 +327,8 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         self.assertEqual(cmd[device_idx], "0")
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
-    def test_single_card_child_keeps_requested_device(self, mock_detect):
-        """单卡显式 device_id 模式保持原有 device-id 语义"""
+    def test_single_card_child_narrows_visibility_to_logical_zero(self, mock_detect):
+        """单卡显式 device_id：收窄 visibility 到该物理卡，子进程重映射为逻辑 0"""
         mock_detect.return_value = 4
         process_config = ProcessConfig(processes_per_card=1, enable_profiler=False)
         coordinator = ProcessPoolCoordinator(
@@ -342,9 +342,62 @@ class TestProcessPoolCoordinator(unittest.TestCase):
             cases=[make_case("Exp", 1)],
             device_id=3,
         )
+        # visibility 收窄到物理卡 3，子进程只见一张卡 → torch_npu 重映射为逻辑 0
+        env = coordinator._build_env_for_task(coordinator._build_env(), task)
+        self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "3")
+        self.assertEqual(env["ASCEND_VISIBLE_DEVICES"], "3")
+        self.assertEqual(env["NPU_VISIBLE_DEVICES"], "3")
+        self.assertEqual(env["KERNEL_EVAL_PHYSICAL_DEVICE_ID"], "3")
+        self.assertEqual(env["KERNEL_EVAL_LOGICAL_DEVICE_ID"], "0")
+        # child --device-id 用逻辑 0，而非物理 3
         cmd = coordinator._build_child_cmd(task, "/tmp/cases.json", "/tmp/out.json")
         device_idx = cmd.index("--device-id") + 1
-        self.assertEqual(cmd[device_idx], "3")
+        self.assertEqual(cmd[device_idx], "0")
+
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def test_filter_healthy_cards_misaligned_columns_keeps_card(self, mock_detect):
+        """npu-smi 列错位（health 不在 parts[3]、值为数字/用量）时 fail-open 保留卡
+
+        复现 ST 0-case 故障：旧逻辑硬取 parts[3] 当 health，用户环境的 npu-smi
+        该列是用量字段（非 'OK'）→ 健康卡被误杀 → 0 可用卡。新逻辑只在明确
+        坏状态词时才跳过。
+        """
+        mock_detect.return_value = 1
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=False),
+        )
+        # id 单独成列(parts[1]=0)、parts[3] 是用量字段(非 OK、非坏状态词)
+        fake_npu_smi = (
+            "+---+\n"
+            "| NPU  Name      | Health | Power  HBM-Usage             |\n"
+            "| 0  Ascend910B4 | 0      | 169.9  3018 / 32768        |\n"
+            "+---+\n"
+        )
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=0, stdout=fake_npu_smi, stderr="")):
+            healthy = coordinator._filter_healthy_cards(1)
+        self.assertEqual(healthy, [0])  # fail-open：不误杀健康卡
+
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def test_filter_healthy_cards_skips_alarm_card(self, mock_detect):
+        """明确 Alarm 状态的卡应被跳过"""
+        mock_detect.return_value = 2
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=False),
+        )
+        fake_npu_smi = (
+            "+---+\n"
+            "| NPU  Name      | Health | Power |\n"
+            "| 0  Ascend910   | OK     | 169.9 |\n"
+            "| 1  Ascend910   | Alarm  | 0     |\n"
+            "+---+\n"
+        )
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=0, stdout=fake_npu_smi, stderr="")):
+            healthy = coordinator._filter_healthy_cards(2)
+        self.assertEqual(healthy, [0])  # 仅跳过 Alarm 卡
 
     def test_build_child_cmd_passes_tasks_root(self):
         """eval-child 应接收 tasks_root，避免 full rel_path 被重复拼接"""

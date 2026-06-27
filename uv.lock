@@ -42,7 +42,7 @@ wheels = [
 
 [[package]]
 name = "cann-bench"
-version = "0.3.0"
+version = "0.4.0"
 source = { virtual = "." }
 dependencies = [
     { name = "attrs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
@@ -93,8 +93,8 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
     { name = "scipy" },
-    { name = "torch", specifier = "==2.9.0" },
-    { name = "torch-npu", specifier = "==2.9.0" },
+    { name = "torch", specifier = "==2.10.0" },
+    { name = "torch-npu", specifier = "==2.10.0" },
     { name = "torchvision", marker = "extra == 'vision'", specifier = ">=0.18.0" },
     { name = "tornado" },
 ]
@@ -741,7 +741,7 @@ wheels = [
 
 [[package]]
 name = "torch"
-version = "2.9.0"
+version = "2.10.0"
 source = { registry = "https://mirrors.huaweicloud.com/repository/pypi/simple" }
 dependencies = [
     { name = "filelock", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
@@ -754,31 +754,32 @@ dependencies = [
     { name = "typing-extensions", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/bb/86/245c240d2138c17ed572c943c289056c2721abab70810d772c6bf5495b28/torch-2.9.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:030bbfe367379ae6a4ae4042b6c44da25383343b8b3c68abaa9c7231efbaf2dd" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/58/fe/334225e6330e672b36aef23d77451fa906ea12881570c08638a91331a212/torch-2.9.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:c596708b5105d0b199215acf0c9be7c1db5f1680d88eddadf4b75a299259a677" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/d1/d3/3985739f3b8e88675127bf70f82b3a48ae083e39cda56305dbd90398fec0/torch-2.9.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:e5f7af1dc4c0a7c4a260c2534f41ddaf209714f7c89145e644c44712fbd6b642" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/c2/1c/90eb13833cdf4969ea9707586d7b57095c3b6e2b223a7256bf111689bcb8/torch-2.9.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:c30a17fc83eeab346913e237c64b15b5ba6407fff812f6c541e322e19bc9ea0e" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/ed/5f/9474c98fc5ae0cd04b9466035428cd360e6611a86b8352a0fc2fa504acdc/torch-2.9.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:64693568f5dc4dbd5f880a478b1cea0201cc6b510d91d1bc54fea86ac5d1a637" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/b7/84/37cf88625901934c97109e583ecc21777d21c6f54cda97a7e5bbad1ee2f2/torch-2.9.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:dfb5b8cd310ba3436c7e14e8b7833ef658cf3045e50d2bdaed23c8fc517065eb" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/62/51/dc3b4e2f9ba98ae27238f0153ca098bf9340b2dafcc67fde645d496dfc2a/torch-2.9.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:c08fb654d783899e204a32cca758a7ce8a45b2d78eeb89517cc937088316f78e" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/0c/1a/c61f36cfd446170ec27b3a4984f072fd06dab6b5d7ce27e11adb35d6c838/torch-2.10.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:5276fa790a666ee8becaffff8acb711922252521b28fbce5db7db5cf9cb2026d" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/78/89/f5554b13ebd71e05c0b002f95148033e730d3f7067f67423026cc9c69410/torch-2.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:3282d9febd1e4e476630a099692b44fdc214ee9bf8ee5377732d9d9dfe5712e4" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/cc/af/758e242e9102e9988969b5e621d41f36b8f258bb4a099109b7a4b4b50ea4/torch-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:5fd4117d89ffd47e3dcc71e71a22efac24828ad781c7e46aaaf56bf7f2796acf" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/c9/6f/f2e91e34e3fcba2e3fc8d8f74e7d6c22e74e480bbd1db7bc8900fdf3e95c/torch-2.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:5c4d217b14741e40776dd7074d9006fd28b8a97ef5654db959d8635b2fe5f29b" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/d8/14/21fbce63bc452381ba5f74a2c0a959fdf5ad5803ccc0c654e752e0dbe91a/torch-2.10.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:aae1b29cd68e50a9397f5ee897b9c24742e9e306f88a807a27d617f07adb3bd8" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/69/2b/51e663ff190c9d16d4a8271203b71bc73a16aa7619b9f271a69b9d4a936b/torch-2.10.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:233aed0659a2503b831d8a67e9da66a62c996204c0bba4f4c442ccc0c68a3f60" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/e2/65/1a05346b418ea8ccd10360eef4b3e0ce688fba544e76edec26913a8d0ee0/torch-2.10.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:716b01a176c2a5659c98f6b01bf868244abdd896526f1c692712ab36dbaf9b63" },
 ]
 
 [[package]]
 name = "torch-npu"
-version = "2.9.0"
+version = "2.10.0"
 source = { registry = "https://mirrors.huaweicloud.com/repository/pypi/simple" }
 dependencies = [
     { name = "torch", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/66/79/d169a3b085c07d967053c629f26559dc7d757bbb2fe11f3ab38cea90a20e/torch_npu-2.9.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:662e93507f2fbbe911f48a235c00bae4b60abc63da67b8421cdef90d3adb8a02" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/df/91/ea9a22a34ca108e70d9752097228091cccdb28d20af7657653cfd9dc6508/torch_npu-2.9.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:6f2bda402cb03b292e6f2327b2e20e8dd688ad5e16642edc184ff4340783ddb2" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/d0/35/bf5e0f0aba2e37cc77614bb1646ef71afb8179a3e77f9f02e7b553521804/torch_npu-2.9.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:f18901ef81584ee184cf88029897349856ffe9915e3903a65680d695c3d631cb" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/f5/2d/b688ca03ea2ba7472b61178bef96288d78be316d0b644037c735fb7eb82c/torch_npu-2.10.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:274f22a3000c89cad0e83ac487158104a51f26c422a296a3b29601747af40674" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/6d/d8/482baf4f6e02264333d033b32702e41d5f4f88a538cc882fe53535e6ef43/torch_npu-2.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:07e9d39a77577873c8a1a2d6741129d15d6b7a54d2c07a1cc3a294242689fea7" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/b5/03/1160d86b8db5e4d548fd3b84494e1b85cde839b40cd50479bd37fda88bca/torch_npu-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:93eef95dea5c089b6c59f30d680689b936ee8b6d7a2a73575abcb66764866b52" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/bc/bd/d10e3b74e35e0b6a20f97d886d8d520a0f7f8f136f38b3c48d738696fda9/torch_npu-2.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:81610da863aa80b1ccb3cece8fc6c0e85f5ea772ca7ffea5878bc5884e3cfaec" },
 ]
 
 [[package]]
 name = "torchvision"
-version = "0.24.0"
+version = "0.25.0"
 source = { registry = "https://mirrors.huaweicloud.com/repository/pypi/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://mirrors.huaweicloud.com/repository/pypi/simple" }, marker = "python_full_version < '3.11' and platform_machine == 'aarch64' and sys_platform == 'linux'" },
@@ -787,13 +788,13 @@ dependencies = [
     { name = "torch", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/88/e3/1b003ecd52bd721f8304aeb66691edfbc2002747ec83d36188ad6abab506/torchvision-0.24.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:a110a51c75e89807a8382b0d8034f5e180fb9319570be3389ffd3d4ac4fd57a9" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/f8/07/0cd6776eee784742ad3cb2bfd3295383d84cb2f9e87386119333d1587f0f/torchvision-0.24.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:bbd63bf4ebff84c48c50123eba90526cc9f794fe45bc9f5dd07cec19e8c62bce" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/00/7b/e3809b3302caea9a12c13f3adebe4fef127188438e719fd6c8dc93db1da6/torchvision-0.24.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:b0531d1483fc322d7da0d83be52f0df860a75114ab87dbeeb9de765feaeda843" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/8f/02/e2f6b0ff93ca4db5751ac9c5be43f13d5e53d9e9412324f464dca1775027/torchvision-0.24.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:fec12a269cf80f6b0b71471c8d498cd3bdd9d8e892c425bf39fecb604852c3b0" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/f7/cf/2d7e43409089ce7070f5336161f9216d58653ee1cb26bcb5d6c84cc2de36/torchvision-0.24.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:b1b3db80609c32a088554e8e94b4fc31f1033fe5bb4ac0673ec49c3eb03fb4da" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/b0/d7/69479a066ea773653e88eda99031e38681e9094046f87cb957af5036db0e/torchvision-0.24.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:73576a9c4a593223fbae85a64e8bbd77049abd1101893ecf3c5e981284fd58b4" },
-    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/a2/fd/615d8a86db1578345de7fa1edaf476fbcf4f057bf7e4fd898306b620c487/torchvision-0.24.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:64e54494043eecf9f57a9881c6fdea49c62282782e737c002ae8b1639e6ea80e" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/64/68/dc7a224f606d53ea09f9a85196a3921ec3a801b0b1d17e84c73392f0c029/torchvision-0.25.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:acc339aba4a858192998c2b91f635827e40d9c469d9cf1455bafdda6e4c28ea4" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/ae/e9/f143cd71232430de1f547ceab840f68c55e127d72558b1061a71d0b193cd/torchvision-0.25.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:f49964f96644dbac2506dffe1a0a7ec0f2bf8cf7a588c3319fed26e6329ffdf3" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/51/f8/c0e1ef27c66e15406fece94930e7d6feee4cb6374bbc02d945a630d6426e/torchvision-0.25.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:b75deafa2dfea3e2c2a525559b04783515e3463f6e830cb71de0fb7ea36fe233" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/36/b1/3d6c42f62c272ce34fcce609bb8939bdf873dab5f1b798fd4e880255f129/torchvision-0.25.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:5f271136d2d2c0b7a24c5671795c6e4fd8da4e0ea98aeb1041f62bc04c4370ef" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/28/cc/2103149761fdb4eaed58a53e8437b2d716d48f05174fab1d9fcf1e2a2244/torchvision-0.25.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:146d02c9876858420adf41f3189fe90e3d6a409cbfa65454c09f25fb33bf7266" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/80/ed/d51889da7ceaf5ff7a0574fb28f9b6b223df19667265395891f81b364ab3/torchvision-0.25.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:0b5e7f50002a8145a98c5694a018e738c50e2972608310c7e88e1bd4c058f6ce" },
+    { url = "https://mirrors.huaweicloud.com/repository/pypi/packages/b5/e2/7abb10a867db79b226b41da419b63b69c0bd5b82438c4a4ed50e084c552f/torchvision-0.25.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:40a122c3cf4d14b651f095e0f672b688dde78632783fc5cd3d4d5e4f6a828563" },
 ]
 
 [[package]]
