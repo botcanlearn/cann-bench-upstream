@@ -112,6 +112,10 @@ class OutputSpec:
     shape: Optional[List[int]] = None
     description: str = ""
     compare: bool = True
+    # 索引类输出的"指向值"校验声明（如 TopK/ArgSort 的索引输出）。
+    # 为 None 时不做索引校验。结构见 eval/index_check.py，例如：
+    #   {'input': 'x', 'dim_attr': 'dim', 'value_output': 'y'}
+    index_gather: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -121,6 +125,7 @@ class OutputSpec:
             'shape': self.shape,
             'description': self.description,
             'compare': self.compare,
+            'index_gather': self.index_gather,
             'metadata': self.metadata,
         }
 
@@ -132,6 +137,7 @@ class OutputSpec:
             shape=data.get('shape'),
             description=data.get('description', ''),
             compare=data.get('compare', True),
+            index_gather=data.get('index_gather'),
             metadata=data.get('metadata', {}),
         )
 

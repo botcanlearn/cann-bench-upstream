@@ -55,5 +55,11 @@ operator:
     description: 输出索引张量，始终为 int64 类型
     dtype:
     - int64
+    # 索引非确定（相等元素顺序不固定），不做逐元素比对；改用 tie 顺序无关的
+    # "指向值"校验：x.gather(dim, idx) 须等于值输出 y（见 eval/index_check.py，issue #40）。
     compare: false
+    index_gather:
+      input: x
+      dim_attr: dim
+      value_output: y
   schema: top_k(Tensor x, int k, int dim, bool largest) -> (Tensor y, Tensor idx)

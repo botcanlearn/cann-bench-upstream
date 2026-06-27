@@ -182,6 +182,7 @@ class CannTaskLoader(OperatorDirMixin, TaskLoader):
                 description=output_data.get('description', ''),
                 dtypes=dtype_list,
                 compare=output_data.get('compare', True),
+                index_gather=output_data.get('index_gather'),
             ))
 
         difficulty_str = data.get('difficulty', 'L1')

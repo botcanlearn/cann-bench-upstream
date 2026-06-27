@@ -54,6 +54,7 @@ from .accuracy_eval import AccuracyEvaluator, AccuracyResult
 from .perf_eval import PerfEvaluator, PerfResult
 from .results import EvalCaseResult, EvalOperatorResult, EvalSessionResult
 from .failure_synthesizer import FailureSynthesizer
+from .index_check import validate_index_gather_outputs
 from ..registry.matcher_registry import get_operator_matcher
 
 # 导入 benches 模块，确保 Registry 已注册
@@ -172,6 +173,10 @@ class Evaluator:
                 seed=case_seed,
             )
 
+            # case attrs 无条件先定义，供后续 get_input / 索引校验等多处使用
+            # （避免无 get_input 的算子在后续引用 case_attrs 时 NameError）
+            case_attrs = getattr(case, 'attrs', None) or {}
+
             # 2.5 调用 get_input 预处理（如果存在）
             get_input_func = self.golden_loader.get_input_function(case.rel_path)
             if get_input_func is not None:
@@ -187,7 +192,6 @@ class Evaluator:
                         params_for_get_input[input_info.name] = None
 
                 # 添加 attrs
-                case_attrs = getattr(case, 'attrs', None) or {}
                 for attr_key, attr_val in case_attrs.items():
                     if attr_key not in params_for_get_input:
                         params_for_get_input[attr_key] = attr_val
@@ -336,6 +340,20 @@ class Evaluator:
                     first_result=accuracy_result,
                     case_seed=case_seed,
                 )
+
+            # 索引类输出（TopK/ArgSort 等）的"指向值"校验（tie 顺序无关，见 issue #40）：
+            # 候选索引须指向其值输出对应的元素（x.gather(dim, idx) == values）。
+            # 仅当 proto 为某输出声明了 index_gather 时才生效，对其他算子零影响。
+            if accuracy_result.passed:
+                idx_ok, idx_msg = validate_index_gather_outputs(
+                    op_info, params, case_attrs, ai_result.outputs,
+                )
+                if not idx_ok:
+                    accuracy_result.passed = False
+                    accuracy_result.error_msg = (
+                        f"{accuracy_result.error_msg} | {idx_msg}"
+                        if accuracy_result.error_msg else idx_msg
+                    )
 
             # 填充 output_results 中的输出名称
             if hasattr(accuracy_result, 'output_results') and output_names:
