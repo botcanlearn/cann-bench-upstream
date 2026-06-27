@@ -323,7 +323,7 @@ def parse_csv_kernels(csv_path: str,
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                step_id = row.get('Step Id', '').strip()
+                step_id = (row.get('Step Id') or row.get('Task ID') or '').strip()
                 if not step_id:
                     continue
 
