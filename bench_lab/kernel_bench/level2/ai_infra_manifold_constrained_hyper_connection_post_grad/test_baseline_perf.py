@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 """
-multi_add_rms_norm_dynamic_quant 算子性能采集模板
+npu_ai_infra_manifold_constrained_hyper_connection_post_grad 算子性能采集脚本
 
 基于 cann-bench 性能采集规则:
 1. 使用 torch_npu.profiler 硬件级计时（非墙钟）
@@ -11,9 +11,9 @@ multi_add_rms_norm_dynamic_quant 算子性能采集模板
 5. 自动过滤升频/清cache 的 warmup kernel
 
 运行方式:
-    python3 multi_add_rms_norm_dynamic_quant_perf.py 1          # 运行 case 1
-    python3 multi_add_rms_norm_dynamic_quant_perf.py all         # 运行全部 cases
-    python3 multi_add_rms_norm_dynamic_quant_perf.py all --csv   # 输出 CSV 格式结果
+    python3 test_baseline_perf.py 1          # 运行 case 1
+    python3 test_baseline_perf.py all         # 运行全部 cases
+    python3 test_baseline_perf.py all --csv   # 输出 CSV 格式结果
 """
 
 import os
@@ -28,8 +28,6 @@ from typing import Dict, List, Tuple, Optional, Any
 
 import numpy as np
 import torch
-import cann_bench  # 触发 torch.ops.cann_bench 算子注册
-from typing import List, Tuple
 
 _logger = logging.getLogger(__name__)
 
@@ -37,23 +35,19 @@ _logger = logging.getLogger(__name__)
 # 参数配置
 # =============================================================================
 DEVICE_ID = int(os.environ.get("DEVICE_ID", "0"))
-PROFILER_WARMUP = 3       # profiler schedule warmup steps
-PROFILER_REPEAT = 5       # profiler schedule active steps
+PROFILER_WARMUP = 3
+PROFILER_REPEAT = 5
 SEED = 42
 
-# cases.csv 路径：指向 cann-bench task 目录下的用例配置
-CASES_CSV = "./cases.csv"
+CASES_CSV = os.path.join(os.path.dirname(__file__), "cases.csv")
 
-# 升频矩阵尺寸（与 cann-bench PerfEvaluator 一致）
 FREQ_BOOST_DIM = 10240
 CACHE_CLEAR_SHAPE = (96, 1024, 1024)
 
-# warmup kernel 的 Input Shapes（用于从 CSV 中过滤）
 WARMUP_KERNEL_SHAPES = {
-    "10240,10240;10240,10240",   # MatMul 升频
-    "96,1024,1024;3",            # ReduceMax 清 cache
+    "10240,10240;10240,10240",
+    "96,1024,1024;3",
 }
-
 
 # =============================================================================
 # dtype 映射
@@ -62,7 +56,6 @@ DTYPE_MAP = {
     "float32": torch.float32,
     "float16": torch.float16,
     "bfloat16": torch.bfloat16,
-    "int32": torch.int32,
 }
 
 
@@ -76,20 +69,45 @@ def load_cases(csv_path: str) -> Dict[int, dict]:
         reader = csv.DictReader(f)
         for row in reader:
             case_id = int(row["case_id"])
-            shapes = json.loads(row["input_shape"])
-            dtypes = json.loads(row["dtype"])
-            attrs = json.loads(row["attrs"])
+            shapes = json.loads(row["input_shape"])  # 5 个 tensor shape
+            dtypes = json.loads(row["dtype"])        # 5 个 dtype
             value_range = json.loads(row["value_range"])
-            x1_count = len(shapes[0]) if shapes and isinstance(shapes[0], list) and shapes[0] and isinstance(shapes[0][0], list) else attrs.get("x1_count", 1)
             cases[case_id] = {
-                "shapes": shapes,
-                "dtypes": [DTYPE_MAP[d] for d in dtypes],
-                "x1_count": x1_count,
-                "epsilon": float(attrs.get("epsilon", "1e-6")),
+                "shape_grad_output": shapes[0],
+                "shape_x": shapes[1],
+                "shape_h_res": shapes[2],
+                "shape_h_out": shapes[3],
+                "shape_h_post": shapes[4],
+                "dtype_grad_output": DTYPE_MAP[dtypes[0]],
+                "dtype_x": DTYPE_MAP[dtypes[1]],
+                "dtype_h_res": DTYPE_MAP[dtypes[2]],
+                "dtype_h_out": DTYPE_MAP[dtypes[3]],
+                "dtype_h_post": DTYPE_MAP[dtypes[4]],
                 "value_range": value_range,
                 "note": row.get("note", ""),
             }
     return cases
+
+
+def _generate_dsmat_sinkhorn(shape: List[int], device: str,
+                              max_iter: int = 100,
+                              tol: float = 1e-8) -> torch.Tensor:
+    """使用 Sinkhorn 算法生成双随机矩阵（行和=列和=1）。"""
+    random_tensor = torch.rand(shape, dtype=torch.float32, device=device) + 1e-10
+
+    for _ in range(max_iter):
+        row_sum = random_tensor.sum(dim=-1, keepdim=True)
+        random_tensor = random_tensor / (row_sum + 1e-10)
+
+        col_sum = random_tensor.sum(dim=-2, keepdim=True)
+        random_tensor = random_tensor / (col_sum + 1e-10)
+
+        row_check = torch.abs(random_tensor.sum(dim=-1) - 1).max()
+        col_check = torch.abs(random_tensor.sum(dim=-2) - 1).max()
+        if row_check < tol and col_check < tol:
+            break
+
+    return random_tensor
 
 
 def build_inputs(case_cfg: dict, device: str):
@@ -98,51 +116,41 @@ def build_inputs(case_cfg: dict, device: str):
     np.random.seed(SEED)
     random.seed(SEED)
 
-    shapes = case_cfg["shapes"]
-    dtypes = case_cfg["dtypes"]
+    def _make(shape: List[int], dtype: torch.dtype, value_range_cfg: Any):
+        # 兼容两种 value_range 格式:
+        # 1. dict 格式: {"name": "nd", "mean": [-100, 100], "std": [1, 25]}
+        # 2. list 格式: [low, high]
+        if isinstance(value_range_cfg, dict):
+            mean_range = value_range_cfg.get("mean", [-1, 1])
+            std_range = value_range_cfg.get("std", [0.1, 0.1])
+            mean = mean_range[0] if isinstance(mean_range, list) else mean_range
+            std = std_range[0] if isinstance(std_range, list) else std_range
+            low = mean - std
+            high = mean + std
+        elif isinstance(value_range_cfg, list) and len(value_range_cfg) == 2:
+            low, high = value_range_cfg
+        else:
+            low, high = -1.0, 1.0
+        t = torch.rand(shape, dtype=torch.float32, device=device) * (high - low) + low
+        if dtype != torch.float32:
+            t = t.to(dtype)
+        return t
+
     value_range = case_cfg["value_range"]
-    x1_shapes = shapes[0]  # input_shape[0] 为 x1 列表中每个 tensor 的 shape
-    x1_count = len(x1_shapes)
+    grad_output = _make(case_cfg["shape_grad_output"], case_cfg["dtype_grad_output"], value_range[0])
+    x = _make(case_cfg["shape_x"], case_cfg["dtype_x"], value_range[1])
+    h_out = _make(case_cfg["shape_h_out"], case_cfg["dtype_h_out"], value_range[3])
 
-    # shapes[1] 是 x2 的 shape
-    # shapes[2] 是 gamma 的 shape
-    # shapes[3:] 可选 smooth_scale1 / smooth_scale2
-    x2_shape = shapes[1]
-    gamma_shape = shapes[2]
+    # h_res: float32, Sinkhorn 双随机矩阵
+    h_res = _generate_dsmat_sinkhorn(case_cfg["shape_h_res"], device)
+    # h_post: float32, 直接随机生成
+    h_post = _make(case_cfg["shape_h_post"], torch.float32, value_range[4])
 
-    x1 = []
-    for i in range(x1_count):
-        x1_shape = x1_shapes[i]
-        x_range = value_range[i]
-        t = torch.rand(x1_shape, dtype=torch.float32) * (x_range[1] - x_range[0]) + x_range[0]
-        x1.append(t.to(dtypes[i]).to(device))
-
-    x_range = value_range[x1_count]
-    x2 = torch.rand(x2_shape, dtype=torch.float32) * (x_range[1] - x_range[0]) + x_range[0]
-    x2 = x2.to(dtypes[x1_count]).to(device)
-
-    gamma_range = value_range[x1_count + 1]
-    gamma = torch.rand(gamma_shape, dtype=torch.float32) * (gamma_range[1] - gamma_range[0]) + gamma_range[0]
-    gamma = gamma.to(dtypes[x1_count + 1]).to(device)
-
-    smooth_scale1 = None
-    smooth_scale2 = None
-    shape_idx = 3
-    if shape_idx < len(shapes):
-        smooth_range = value_range[x1_count + 2]
-        smooth_scale1 = torch.rand(shapes[shape_idx], dtype=torch.float32) * (smooth_range[1] - smooth_range[0]) + smooth_range[0]
-        smooth_scale1 = smooth_scale1.to(dtypes[x1_count + 2]).to(device)
-        shape_idx += 1
-    if shape_idx < len(shapes):
-        smooth_range = value_range[x1_count + 3]
-        smooth_scale2 = torch.rand(shapes[shape_idx], dtype=torch.float32) * (smooth_range[1] - smooth_range[0]) + smooth_range[0]
-        smooth_scale2 = smooth_scale2.to(dtypes[x1_count + 3]).to(device)
-
-    return x1, x2, gamma, smooth_scale1, smooth_scale2
+    return grad_output, x, h_res, h_out, h_post
 
 
 # =============================================================================
-# NPU 升频 + L2 cache 清空（与 cann-bench PerfEvaluator 一致）
+# NPU 升频 + L2 cache 清空
 # =============================================================================
 def boost_freq_and_clear_cache(device: str):
     """测量窗口前执行一次: MatMul 升频 + ReduceMax 清 L2 cache。"""
@@ -172,21 +180,9 @@ def clear_cache(device: str):
 def run_profiled(fn, prof_dir: str, device: str,
                  warmup: int = PROFILER_WARMUP,
                  repeat: int = PROFILER_REPEAT) -> str:
-    """使用 torch_npu.profiler 采集性能数据。
-
-    Args:
-        fn: 待测算子的 callable
-        prof_dir: profiler 输出目录
-        device: NPU 设备字符串
-        warmup: profiler warmup steps
-        repeat: profiler active steps
-
-    Returns:
-        prof_dir: profiler 输出目录路径
-    """
+    """使用 torch_npu.profiler 采集性能数据。"""
     import torch_npu
 
-    # 抑制 profiler 日志
     os.environ['ASCEND_SLOG_PRINT_TO_STDOUT'] = '0'
     os.environ['ASCEND_GLOBAL_LOG_LEVEL'] = '3'
     for name in ['', 'torch', 'torch_npu', 'torch_npu.profiler', 'ascend', 'profiler']:
@@ -201,13 +197,10 @@ def run_profiled(fn, prof_dir: str, device: str,
         aic_metrics=torch_npu.profiler.AiCMetrics.AiCoreNone,
     )
 
-    # 预检: 确认算子可运行
     fn()
 
-    # 升频 + 清 cache
     boost_freq_and_clear_cache(device)
 
-    # 重定向 stdout/stderr 抑制 profiler 输出
     saved_stdout_fd = os.dup(1)
     saved_stderr_fd = os.dup(2)
     sink_file = tempfile.NamedTemporaryFile(
@@ -239,7 +232,6 @@ def run_profiled(fn, prof_dir: str, device: str,
                 fn()
                 prof.step()
 
-        # 等待 profiler 异步解析完成
         try:
             from torch_npu.profiler.analysis.prof_common_func._multi_process_pool import MultiProcessPool
             pool = MultiProcessPool()
@@ -262,16 +254,14 @@ def run_profiled(fn, prof_dir: str, device: str,
 
 
 # =============================================================================
-# kernel_details.csv 解析（与 cann-bench KernelDetailsStrategy 一致）
+# kernel_details.csv 解析
 # =============================================================================
 def locate_kernel_details_csv(prof_dir: str) -> Optional[str]:
     """三层搜索 kernel_details.csv。"""
-    # 1) 直接
     direct = os.path.join(prof_dir, "kernel_details.csv")
     if os.path.isfile(direct):
         return direct
 
-    # 2) 一层子目录
     try:
         for entry in os.listdir(prof_dir):
             candidate = os.path.join(prof_dir, entry, "kernel_details.csv")
@@ -280,7 +270,6 @@ def locate_kernel_details_csv(prof_dir: str) -> Optional[str]:
     except OSError:
         pass
 
-    # 3) 递归搜索
     for root, dirs, files in os.walk(prof_dir):
         if "kernel_details.csv" in files:
             return os.path.join(root, "kernel_details.csv")
@@ -300,22 +289,7 @@ def _median(values: List[float]) -> float:
 
 
 def parse_kernel_details(csv_path: str) -> Dict[str, Any]:
-    """解析 kernel_details.csv，返回性能指标。
-
-    流程（与 cann-bench PerfMetricStrategy 一致）:
-    1. 读取 Step Id / Duration(us) / Type / Input Shapes / Name
-    2. 过滤 warmup kernel（按 Input Shapes 精确匹配）
-    3. 按 Step Id 分组 → 每步内同名 kernel Duration 求和
-    4. 每 kernel 跨步取中位数
-    5. 累加得 total_kernel_us
-
-    Returns:
-        {
-            "total_kernel_us": float,          # 所有 kernel 中位数之和
-            "device_kernels": {name: median},  # 每个 kernel 的中位数耗时
-            "step_count": int,                 # 有效 step 数量
-        }
-    """
+    """解析 kernel_details.csv，返回性能指标。"""
     step_kernel_times: Dict[str, Dict[str, List[float]]] = {}
 
     with open(csv_path, "r", encoding="utf-8") as f:
@@ -337,7 +311,6 @@ def parse_kernel_details(csv_path: str) -> Dict[str, Any]:
             if duration <= 0:
                 continue
 
-            # 过滤升频/清cache 的 warmup kernel
             if input_shapes in WARMUP_KERNEL_SHAPES:
                 continue
 
@@ -347,7 +320,6 @@ def parse_kernel_details(csv_path: str) -> Dict[str, Any]:
                 step_kernel_times[step_id][name] = []
             step_kernel_times[step_id][name].append(duration)
 
-    # 跨步聚合: 每步内同名 kernel 求和
     all_kernel_times: Dict[str, List[float]] = {}
     for step_id, kernels in step_kernel_times.items():
         for name, durations in kernels.items():
@@ -356,7 +328,6 @@ def parse_kernel_details(csv_path: str) -> Dict[str, Any]:
                 all_kernel_times[name] = []
             all_kernel_times[name].append(step_sum)
 
-    # 每 kernel 取中位数
     device_kernels = {}
     for name, times in all_kernel_times.items():
         device_kernels[name] = round(_median(times), 2)
@@ -374,47 +345,33 @@ def parse_kernel_details(csv_path: str) -> Dict[str, Any]:
 # 单 case 评测
 # =============================================================================
 def run_single_case(case_id: int, case_cfg: dict, device: str) -> Optional[Dict[str, Any]]:
-    """运行单个 case 的性能评测。
+    """运行单个 case 的性能评测。"""
+    import torch_npu
+    import omni_training_custom_ops
 
-    Returns:
-        {
-            "case_id": int,
-            "x1_count": int,
-            "x2_shape": list,
-            "gamma_shape": list,
-            "x2_dtype": str,
-            "elapsed_us": float,       # 核心指标: kernel 中位数耗时之和
-            "device_kernels": dict,     # 每 kernel 中位数
-            "step_count": int,
-            "note": str,
-        }
-        或 None（评测失败时）
-    """
-    x1, x2, gamma, smooth_scale1, smooth_scale2 = build_inputs(case_cfg, device)
-    x1_count = case_cfg["x1_count"]
-    x2_shape = list(x2.shape)
-    gamma_shape = list(gamma.shape)
-    x2_dtype = str(x2.dtype)
+    grad_output, x, h_res, h_out, h_post = build_inputs(case_cfg, device)
 
     print(f"\n{'='*60}")
-    print(f"[CASE {case_id}] x1_count={x1_count}, x2_shape={x2_shape}, gamma_shape={gamma_shape}, x2_dtype={x2_dtype}")
-    print(f"           epsilon={case_cfg['epsilon']}, smooth1={'yes' if smooth_scale1 is not None else 'no'}, "
-          f"smooth2={'yes' if smooth_scale2 is not None else 'no'}")
+    print(f"[CASE {case_id}] grad_output={case_cfg['shape_grad_output']}, x={case_cfg['shape_x']}, "
+          f"h_res={case_cfg['shape_h_res']}, h_out={case_cfg['shape_h_out']}, h_post={case_cfg['shape_h_post']}")
+    print(f"           dtypes: grad_output={case_cfg['dtype_grad_output']}, x={case_cfg['dtype_x']}, "
+          f"h_res={case_cfg['dtype_h_res']}, h_out={case_cfg['dtype_h_out']}, h_post={case_cfg['dtype_h_post']}")
     print(f"{'='*60}")
 
     def _run_op():
-        return torch.ops.cann_bench.multi_add_rms_norm_dynamic_quant(
-            x1, x2, gamma, smooth_scale1, smooth_scale2, case_cfg["epsilon"]
+        return torch.ops.custom.npu_ai_infra_manifold_constrained_hyper_connection_post_grad(
+            grad_output,
+            x,
+            h_res,
+            h_out,
+            h_post,
         )
 
-    # 创建临时 profiling 目录
     prof_dir = tempfile.mkdtemp(prefix=f"perf_case{case_id}_")
 
     try:
-        # profiler 采集
         run_profiled(_run_op, prof_dir, device)
 
-        # 定位并解析 kernel_details.csv
         csv_path = locate_kernel_details_csv(prof_dir)
         if csv_path is None:
             print(f"[ERROR] Case {case_id}: kernel_details.csv 未找到")
@@ -426,7 +383,6 @@ def run_single_case(case_id: int, case_cfg: dict, device: str) -> Optional[Dict[
         print(f"[RESULT] Case {case_id}: elapsed_us={elapsed_us:.2f} us "
               f"(kernel median sum, {metrics['step_count']} steps)")
 
-        # 打印 top-5 kernel 明细
         sorted_kernels = sorted(metrics["device_kernels"].items(),
                                 key=lambda x: x[1], reverse=True)
         for i, (name, us) in enumerate(sorted_kernels[:5]):
@@ -435,10 +391,12 @@ def run_single_case(case_id: int, case_cfg: dict, device: str) -> Optional[Dict[
 
         return {
             "case_id": case_id,
-            "x1_count": x1_count,
-            "x2_shape": x2_shape,
-            "gamma_shape": gamma_shape,
-            "x2_dtype": x2_dtype,
+            "shape_grad_output": case_cfg["shape_grad_output"],
+            "shape_x": case_cfg["shape_x"],
+            "shape_h_res": case_cfg["shape_h_res"],
+            "shape_h_out": case_cfg["shape_h_out"],
+            "shape_h_post": case_cfg["shape_h_post"],
+            "dtype_grad_output": str(case_cfg["dtype_grad_output"]),
             "elapsed_us": elapsed_us,
             "device_kernels": metrics["device_kernels"],
             "step_count": metrics["step_count"],
@@ -447,8 +405,6 @@ def run_single_case(case_id: int, case_cfg: dict, device: str) -> Optional[Dict[
 
     except Exception as e:
         print(f"[ERROR] Case {case_id} 评测失败: {e}")
-        import traceback
-        traceback.print_exc()
         return None
 
     finally:
@@ -498,28 +454,27 @@ def main():
         if result:
             results.append(result)
 
-    # 汇总
     print(f"\n{'='*60}")
     print(f"[SUMMARY] 成功: {len(results)} / {len(case_ids)}")
     print(f"{'='*60}")
 
     if results:
-        print(f"\n{'case_id':>8} {'x1_count':>10} {'x2_shape':>24} {'x2_dtype':>12} {'elapsed_us':>12} {'note'}")
-        print("-" * 90)
+        print(f"\n{'case_id':>8} {'shape_x':>22} {'dtype':>10} {'elapsed_us':>12} {'note'}")
+        print("-" * 72)
         for r in results:
-            print(f"{r['case_id']:>8} {r['x1_count']:>10} {str(r['x2_shape']):>24} "
-                  f"{r['x2_dtype']:>12} {r['elapsed_us']:>12.2f} {r['note']}")
+            shape_str = str(r['shape_x'])
+            print(f"{r['case_id']:>8} {shape_str:>22} {r['dtype_grad_output']:>10} {r['elapsed_us']:>12.2f} {r['note']}")
 
     if output_csv and results:
         print("\n--- CSV OUTPUT ---")
-        print("case_id,x1_count,x2_shape,gamma_shape,x2_dtype,elapsed_us,step_count,note")
+        print("case_id,shape_x,dtype_grad_output,elapsed_us,step_count,note")
         for r in results:
-            print(f"{r['case_id']},{r['x1_count']},\"{r['x2_shape']}\",\"{r['gamma_shape']}\","
-                  f"{r['x2_dtype']},{r['elapsed_us']:.2f},{r['step_count']},{r['note']}")
+            shape_json = json.dumps(r['shape_x'])
+            print(f"{r['case_id']},\"{shape_json}\",{r['dtype_grad_output']},"
+                  f"{r['elapsed_us']:.2f},{r['step_count']},{r['note']}")
 
-    # 保存 JSON 结果
     if results:
-        output_json = os.path.join(os.path.dirname(__file__), "perf_results_multi_add_rms_norm_dynamic_quant.json")
+        output_json = os.path.join(os.path.dirname(__file__), "perf_results.json")
         with open(output_json, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, ensure_ascii=False, default=str)
         print(f"\n[INFO] 结果已保存到: {output_json}")

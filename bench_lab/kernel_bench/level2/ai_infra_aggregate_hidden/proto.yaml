@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: AggregateHidden
+  name: AiInfraAggregateHidden
   category: Convolution
   difficulty: L2
   formula: "output[i,j] = mask[j,i] * sum(k=0..W-1) input[i-k,j] * weight[W-1-k]"
@@ -36,4 +36,4 @@ operator:
     dtype:
     - bfloat16
     - float16
-  schema: aggregate_hidden(Tensor input, Tensor weight, Tensor? mask=None) -> Tensor output
+  schema: ai_infra_aggregate_hidden(Tensor input, Tensor weight, Tensor? mask=None) -> Tensor output

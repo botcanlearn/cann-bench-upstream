@@ -299,7 +299,6 @@ cases:
   - float16
   - float16
   - float16
-  - float16
   attrs:
     epsilon: 1e-6
   value_range:
@@ -333,7 +332,6 @@ cases:
   - float16
   - float16
   - float16
-  - float16
   attrs:
     epsilon: 1e-6
   value_range:
@@ -363,7 +361,6 @@ cases:
   - bfloat16
   - bfloat16
   - bfloat16
-  - bfloat16
   attrs:
     epsilon: 1e-6
   value_range:
@@ -390,7 +387,6 @@ cases:
   - - 60546
   - - 60546
   dtype:
-  - bfloat16
   - bfloat16
   - bfloat16
   - bfloat16
@@ -428,8 +424,6 @@ cases:
   - - 12134
   - - 12134
   dtype:
-  - bfloat16
-  - bfloat16
   - bfloat16
   - bfloat16
   - bfloat16
@@ -476,9 +470,6 @@ cases:
   - float16
   - float16
   - float16
-  - float16
-  - float16
-  - float16
   attrs:
     epsilon: 1e-6
   value_range:
@@ -516,9 +507,6 @@ cases:
   - - 50446
   - - 50446
   dtype:
-  - bfloat16
-  - bfloat16
-  - bfloat16
   - bfloat16
   - bfloat16
   - bfloat16
@@ -562,9 +550,6 @@ cases:
   - bfloat16
   - bfloat16
   - bfloat16
-  - bfloat16
-  - bfloat16
-  - bfloat16
   attrs:
     epsilon: 1e-6
   value_range:
@@ -601,10 +586,6 @@ cases:
     - 12307
   - - 12307
   dtype:
-  - float16
-  - float16
-  - float16
-  - float16
   - float16
   - float16
   - float16
@@ -656,10 +637,6 @@ cases:
     - 23065
   - - 23065
   dtype:
-  - float16
-  - float16
-  - float16
-  - float16
   - float16
   - float16
   - float16

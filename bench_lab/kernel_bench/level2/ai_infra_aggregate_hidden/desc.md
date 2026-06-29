@@ -1,4 +1,4 @@
-# AggregateHidden 算子 API 描述
+# AiInfraAggregateHidden 算子 API 描述
 
 ## 1. 算子简介
 
@@ -34,22 +34,107 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.aggregate_hidden(Tensor input, Tensor weight, Tensor? mask=None) -> Tensor output
+cann_bench.ai_infra_aggregate_hidden(Tensor input, Tensor weight, Tensor? mask=None) -> Tensor output
 ```
 
 ### 输入参数说明
 
-| 参数名 | 输入/输出 | 描述 | 使用说明 | 数据类型 | 数据格式 | 维度(shape) | 非连续Tensor |
-|--------|----------|------|---------|---------|---------|------------|-------------|
-| input | 输入 | 待计算的数据 | shape为[S, B, H]，不支持空Tensor | BFLOAT16, FLOAT16 | ND | 3 | 支持 |
-| weight | 输入 | 卷积权重 | shape为[W, H]，W目前只支持3，数据类型需与input一致 | BFLOAT16, FLOAT16 | ND | 2 | 支持 |
-| mask | 输入(可选) | 输出掩码 | shape为[B, S]，可选输入，默认值None | BOOL | ND | 2 | 支持 |
+<table style="undefined;table-layout: fixed; width: 1565px">
+  <colgroup>
+    <col style="width: 146px">
+    <col style="width: 135px">
+    <col style="width: 326px">
+    <col style="width: 246px">
+    <col style="width: 275px">
+    <col style="width: 101px">
+    <col style="width: 190px">
+    <col style="width: 146px">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>参数名</th>
+      <th>输入/输出</th>
+      <th>描述</th>
+      <th>使用说明</th>
+      <th>数据类型</th>
+      <th>数据格式</th>
+      <th>维度(shape)</th>
+      <th>非连续Tensor</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>input</td>
+      <td>输入</td>
+      <td>Device侧的aclTensor，表示待计算的数据，对应公式中的input。</td>
+      <td><ul><li>不支持空Tensor。<li>shape为[S, B, H]。</ul></td>
+      <td>BFLOAT16、FLOAT16</td>
+      <td>ND</td>
+      <td>3</td>
+      <td>√</td>
+    </tr>
+    <tr>
+      <td>weight</td>
+      <td>输入</td>
+      <td>Device侧的aclTensor，表示卷积权重，对应公式中的weight。</td>
+      <td><ul><li>不支持空Tensor。<li>shape为[W, H]。<li>W目前只支持3。<li>数据类型需与input一致。</ul></td>
+      <td>BFLOAT16、FLOAT16</td>
+      <td>ND</td>
+      <td>2</td>
+      <td>√</td>
+    </tr>
+    <tr>
+      <td>maskOptional</td>
+      <td>输入</td>
+      <td>Device侧的aclTensor，表示卷积操作的输出掩码，对应公式中的mask。</td>
+      <td><ul><li>shape为[B, S]。<li>可选输入，默认值是None。</ul></td>
+      <td>BOOL</td>
+      <td>ND</td>
+      <td>2</td>
+      <td>√</td>
+    </tr>
+  </tbody>
+</table>
+
 
 ### 输出说明
 
-| 参数名 | 描述 | 数据类型 | 数据格式 | 维度(shape) |
-|--------|------|---------|---------|------------|
-| output | 卷积输出结果 | 与input一致 | ND | 与input一致[S, B, H] |
+<table style="undefined;table-layout: fixed; width: 1565px">
+  <colgroup>
+    <col style="width: 146px">
+    <col style="width: 135px">
+    <col style="width: 326px">
+    <col style="width: 246px">
+    <col style="width: 275px">
+    <col style="width: 101px">
+    <col style="width: 190px">
+    <col style="width: 146px">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>参数名</th>
+      <th>输入/输出</th>
+      <th>描述</th>
+      <th>使用说明</th>
+      <th>数据类型</th>
+      <th>数据格式</th>
+      <th>维度(shape)</th>
+      <th>非连续Tensor</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>workspaceSize</td>
+      <td>输出</td>
+      <td>返回需要在Device侧申请的workspace大小。</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+    </tr>
+  </tbody>
+</table>
 
 ### 数据类型
 
@@ -91,7 +176,7 @@ cann_bench.aggregate_hidden(Tensor input, Tensor weight, Tensor? mask=None) -> T
 import torch
 import torch.nn.functional as F
 
-def aggregate_hidden(input: torch.Tensor, weight: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def ai_infra_aggregate_hidden(input: torch.Tensor, weight: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
     对 hidden 层的 token 进行一维分组因果卷积。
 
@@ -144,12 +229,12 @@ def aggregate_hidden(input: torch.Tensor, weight: torch.Tensor, mask: torch.Tens
 
 ```python
 import torch
-
+import cann_bench
 S, B, H, W = 4096, 4, 768, 3
 input = torch.randn(S, B, H, dtype=torch.bfloat16, device='npu')
 weight = torch.randn(W, H, dtype=torch.bfloat16, device='npu')
 mask = torch.ones(B, S, dtype=torch.bool, device='npu')
 
-output = torch.ops.custom.npu_ai_infra_aggregate_hidden(input, weight, mask)
+output = cann_bench.ai_infra_aggregate_hidden(input, weight, mask=mask)
 # output shape: [S, B, H] = [4096, 4, 768]
 ```

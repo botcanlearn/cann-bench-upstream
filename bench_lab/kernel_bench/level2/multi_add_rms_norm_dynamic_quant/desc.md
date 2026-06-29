@@ -10,7 +10,7 @@
 
 **算子特征**：
 - 难度等级：L2（Normalization + Quantization 融合）
-- 3~9 输入（x1 列表 1~5 个 + x2 + gamma + 可选 smooth_scale1 + 可选 smooth_scale2），6 输出
+- 3~7 输入（x1 列表 1~5 个 + x2 + gamma + 可选 smooth_scale1 + 可选 smooth_scale2），6 输出
 - 支持 ND 格式输入，支持 2D 及以上维度
 - 可选属性：epsilon
 - 3 种 tiling 策略（normal / single_row / cut_d）
@@ -66,18 +66,25 @@ $$
 ### 算子原型
 
 ```python
-cann_bench.multi_add_rms_norm_dynamic_quant(Tensor t0, Tensor t1, Tensor t2, Tensor t3=None, Tensor t4=None, Tensor t5=None, Tensor t6=None, Tensor t7=None, Tensor t8=None, float epsilon=1e-6, int64 x1_count=1) -> (Tensor y1, Tensor y2, Tensor x, Tensor y, Tensor scale1, Tensor scale2)
+cann_bench.multi_add_rms_norm_dynamic_quant(
+    x1: List[torch.Tensor],           # 1~5 个 x1 张量，shape 与 x2 相同
+    x2: torch.Tensor,                 # 残差输入，shape 与 x1 相同
+    gamma: torch.Tensor,              # 归一化权重，shape [D]
+    smooth_scale1: torch.Tensor = None,
+    smooth_scale2: torch.Tensor = None,
+    epsilon: float = 1e-6
+) -> (Tensor y1, Tensor y2, Tensor x, Tensor y, Tensor scale1, Tensor scale2)
 ```
+
+> **注意**：`x1_count` 不通过属性传入，而是由 `cases.yaml` / `cases.csv` 中 `input_shape[0]` 的嵌套长度决定。例如 `input_shape[0] = [[7823, 659], [7823, 659]]` 表示 `x1_count = 2`。
 
 ### 输入参数说明
 
-输入 tensor 按以下顺序排列（由 x1_count 属性确定 x1 列表长度）：
-
 | 参数 | 描述 | 数据类型 | 数据格式 |
-|------|------|------|---------|---------|
+|------|------|------|---------|
 | x1 列表 | 标准化过程中的源数据张量列表（1~5 个），对应公式中 x1a~x1e | FLOAT16, BFLOAT16 | ND |
 | x2 | 标准化过程中的源数据张量，shape 同 x1 | FLOAT16, BFLOAT16 | ND |
-| gamma | 归一化权重张量，shape [D]，D 为 x1 最后一维 | FLOAT16, BFLOAT16 | ND |
+| gamma | 归一化权重张量，shape [D]，D 为 x1/x2 最后一维 | FLOAT16, BFLOAT16 | ND |
 | smooth_scale1 | 可选，量化路径 1 的 smooth 系数，shape [D] | FLOAT16, BFLOAT16 | ND |
 | smooth_scale2 | 可选，量化路径 2 的 smooth 系数，shape [D] | FLOAT16, BFLOAT16 | ND |
 
@@ -112,11 +119,23 @@ cann_bench.multi_add_rms_norm_dynamic_quant(Tensor t0, Tensor t1, Tensor t2, Ten
 - 所有输入 tensor dtype 必须一致（同为 float16 或同为 bfloat16）
 - 支持 Atlas A2/A3 训练/推理系列产品（ascend910b, ascend910_93）
 
+### cases.yaml / cases.csv 编码约定
+
+`input_shape` 按如下顺序组织：
+
+1. `input_shape[0]`：x1 列表中每个 tensor 的 shape，以嵌套列表形式给出，长度即 `x1_count`
+2. `input_shape[1]`：x2 的 shape
+3. `input_shape[2]`：gamma 的 shape
+4. `input_shape[3]`（可选）：smooth_scale1 的 shape
+5. `input_shape[4]`（可选）：smooth_scale2 的 shape
+
+`dtype` 按同样顺序给出，x1 列表中各 tensor 的 dtype 均需列出。
+
 ### 支持范围
 
 | 参数 | 范围 | 备注 |
 |------|------|------|
-| x1_count | 1 ~ 5 | x1 列表长度 |
+| x1_count | 1 ~ 5 | 由 `input_shape[0]` 的嵌套长度决定 |
 | 输入维度 | 2D 及以上 | ND 格式 |
 | D（最后一维） | 任意 | gamma/smooth 长度 |
 | epsilon | 任意正浮点数 | 默认 1e-6 |
@@ -153,45 +172,83 @@ cann_bench.multi_add_rms_norm_dynamic_quant(Tensor t0, Tensor t1, Tensor t2, Ten
 
 ```python
 import torch
+from typing import Optional, List
+
 
 def multi_add_rms_norm_dynamic_quant(
-    t0: torch.Tensor, t1: torch.Tensor, t2: torch.Tensor,
-    t3: torch.Tensor = None, t4: torch.Tensor = None,
-    t5: torch.Tensor = None, t6: torch.Tensor = None,
-    t7: torch.Tensor = None, t8: torch.Tensor = None,
-    epsilon: float = 1e-6, x1_count: int = 1
+    x1: List[torch.Tensor],
+    x2: torch.Tensor,
+    gamma: torch.Tensor,
+    smooth_scale1: Optional[torch.Tensor] = None,
+    smooth_scale2: Optional[torch.Tensor] = None,
+    epsilon: float = 1e-6
 ):
-    all_tensors = [t for t in [t0, t1, t2, t3, t4, t5, t6, t7, t8] if t is not None]
-    x1_list = all_tensors[:x1_count]
-    remaining = all_tensors[x1_count:]
-    x2, gamma = remaining[0], remaining[1]
-    smooth1 = remaining[2] if len(remaining) > 2 else None
-    smooth2 = remaining[3] if len(remaining) > 3 else None
+    """
+    MultiAddRmsNormDynamicQuant golden implementation.
 
+    Fuses Add + RmsNorm + DynamicQuant:
+      1. x = x1 + x2
+      2. y = RmsNorm(x, gamma, epsilon)
+      3. y1, scale1 = DynamicQuant(y, smooth1)  (smooth1 optional)
+      4. y2, scale2 = DynamicQuant(y, smooth2)  (smooth2 optional)
+
+    Returns:
+      (y1, y2, x, y, scale1, scale2)
+      - y1: int8, quantized output path 1
+      - y2: int8, quantized output path 2 (zeros if smooth2 absent)
+      - x:  original dtype, x1 + x2
+      - y:  original dtype, RmsNorm result
+      - scale1: float32, per-row quant scale path 1
+      - scale2: float32, per-row quant scale path 2 (zeros if smooth2 absent)
+    """
     ori_dtype = x2.dtype
-    x1_sum = torch.zeros_like(x2, dtype=torch.float32)
-    for x1_t in x1_list:
-        x1_sum = x1_sum + x1_t.float()
-    x_sum = x1_sum + x2.float()
 
+    # Convert to float32 for computation
+    x1_fp32 = [t.float() for t in x1]
+    x2_fp32 = x2.float()
+    gamma_fp32 = gamma.float()
+
+    # Step 1: Add all x1 tensors with x2
+    x_sum = x2_fp32.clone()
+    for t in x1_fp32:
+        x_sum = x_sum + t
+
+    # Step 2: RmsNorm
     rstd = torch.rsqrt(x_sum.pow(2).mean(dim=-1, keepdim=True) + epsilon)
-    y_fp32 = x_sum * rstd * gamma.float()
+    y_fp32 = x_sum * rstd * gamma_fp32
 
-    input1 = y_fp32 * smooth1.float() if smooth1 is not None else y_fp32
+    # Step 3: DynamicQuant path 1
+    if smooth_scale1 is not None:
+        input1 = y_fp32 * smooth_scale1.float()
+    else:
+        input1 = y_fp32
+
     x_max1 = torch.max(torch.abs(input1), dim=-1, keepdim=True)[0]
-    y1 = torch.round(input1 * (127.0 / x_max1)).to(torch.int8)
-    scale1 = (x_max1 / 127.0).squeeze(-1)
+    x_max1 = torch.clamp(x_max1, min=1e-8)#防止除零
+    gs_rev1 = 127.0 / x_max1
+    scale1 = x_max1 / 127.0
+    y1 = torch.round(input1 * gs_rev1).to(torch.int8)
 
-    if smooth2 is not None:
-        input2 = y_fp32 * smooth2.float()
+    # Step 4: DynamicQuant path 2
+    if smooth_scale2 is not None:
+        input2 = y_fp32 * smooth_scale2.float()
         x_max2 = torch.max(torch.abs(input2), dim=-1, keepdim=True)[0]
-        y2 = torch.round(input2 * (127.0 / x_max2)).to(torch.int8)
-        scale2 = (x_max2 / 127.0).squeeze(-1)
+        gs_rev2 = 127.0 / x_max2
+        scale2 = x_max2 / 127.0
+        y2 = torch.round(input2 * gs_rev2).to(torch.int8)
     else:
         y2 = torch.zeros_like(y1)
         scale2 = torch.zeros_like(scale1)
 
-    return y1, y2, x_sum.to(ori_dtype), y_fp32.to(ori_dtype), scale1.float(), scale2.float()
+    # Convert outputs to original dtype
+    x_out = x_sum.to(ori_dtype)
+    y_out = y_fp32.to(ori_dtype)
+
+    # Remove keepdim from scale
+    scale1_out = scale1.squeeze(-1).float()
+    scale2_out = scale2.squeeze(-1).float()
+
+    return y1, y2, x_out, y_out, scale1_out, scale2_out
 ```
 
 ## 6. 额外信息
@@ -210,6 +267,6 @@ smooth1 = torch.randn(7680, dtype=torch.bfloat16, device="npu")
 smooth2 = torch.randn(7680, dtype=torch.bfloat16, device="npu")
 
 y1, y2, x, y, scale1, scale2 = cann_bench.multi_add_rms_norm_dynamic_quant(
-    x1a, x2, gamma, smooth1, smooth2, epsilon=1e-6, x1_count=1
+    [x1a], x2, gamma, smooth1, smooth2, epsilon=1e-6
 )
 ```

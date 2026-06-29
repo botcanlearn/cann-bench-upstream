@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from typing import Optional
 
 
-def aggregate_hidden(input: torch.Tensor, weight: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def ai_infra_aggregate_hidden(input: torch.Tensor, weight: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
     对 hidden 层的 token 进行一维分组因果卷积。
 
