@@ -253,6 +253,30 @@ class PerfEvaluator:
                 except RuntimeError:
                     torch.npu.synchronize(reduce_input.device)
 
+    def _synchronize_profile_step(self) -> None:
+        """Wait for candidate NPU work before advancing profiler step.
+
+        Direct-launch kernels are asynchronous with respect to the Python
+        return path. Advancing ``prof.step()`` before the stream is idle can
+        leave long-running candidate kernels outside the active profiler
+        window, which later looks like an empty ``kernel_details.csv``.
+        """
+        if self.device_manager is not None:
+            self.device_manager.synchronize()
+        elif hasattr(torch, "npu"):
+            torch.npu.synchronize()
+
+    def _run_profile_step(self, fn: Callable, prof) -> Optional[BaseException]:
+        """Run one scheduled profiler step and return any deferred exception."""
+        try:
+            fn()
+            self._synchronize_profile_step()
+        except BaseException as e:
+            prof.step()
+            return e
+        prof.step()
+        return None
+
     def _profile(self, fn: Callable, prof_dir: str, warmup: int, repeat: int):
         """Execute warmup + repeat calls with NPU profiler.
 
@@ -319,6 +343,7 @@ class PerfEvaluator:
         # 精度验证自然成为 profiler 的门卫，无需额外 pre-flight。
         try:
             fn()
+            self._synchronize_profile_step()
         except BaseException:
             _logger.info("perf_eval: fn() pre-flight failed — skipping profiler session")
             raise
@@ -370,13 +395,9 @@ class PerfEvaluator:
                 for i in range(warmup + repeat):
                     if self.freq_boost and i >= warmup:
                         self._clear_cache()
-                    try:
-                        fn()
-                    except BaseException as e:
-                        fn_exc = e
-                        prof.step()
+                    fn_exc = self._run_profile_step(fn, prof)
+                    if fn_exc is not None:
                         break
-                    prof.step()
                 if fn_exc is not None:
                     raise fn_exc
 

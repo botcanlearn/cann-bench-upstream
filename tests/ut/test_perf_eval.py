@@ -151,3 +151,55 @@ def test_run_profiled_uses_trace_view_strategy():
     assert result.metadata["perf_source"] == "trace_view"
     assert result.metadata["elapsed_us_source"] == "trace_view.aicore_e2e"
     mock_parse.assert_called_once()
+
+
+class TestProfilerStepSynchronization:
+    """测试 profiler step 边界同步"""
+
+    def test_profile_step_synchronizes_before_step(self):
+        """候选算子返回后应先等待 NPU stream，再推进 profiler step"""
+        calls = []
+
+        class FakeDeviceManager:
+            def synchronize(self):
+                calls.append("sync")
+
+        class FakeProfiler:
+            def step(self):
+                calls.append("step")
+
+        config = Config(enable_profiler=True, perf_metric_strategy_override="kernel_details")
+        evaluator = PerfEvaluator(config, device_manager=FakeDeviceManager(), archive_prof=False, freq_boost=False)
+
+        def fn():
+            calls.append("fn")
+
+        exc = evaluator._run_profile_step(fn, FakeProfiler())
+
+        assert exc is None
+        assert calls == ["fn", "sync", "step"]
+
+    def test_profile_step_advances_step_when_sync_fails(self):
+        """同步暴露异步执行错误时仍推进 step，让 profiler 上下文干净退出"""
+        calls = []
+
+        class FakeDeviceManager:
+            def synchronize(self):
+                calls.append("sync")
+                raise RuntimeError("device failed")
+
+        class FakeProfiler:
+            def step(self):
+                calls.append("step")
+
+        config = Config(enable_profiler=True, perf_metric_strategy_override="kernel_details")
+        evaluator = PerfEvaluator(config, device_manager=FakeDeviceManager(), archive_prof=False, freq_boost=False)
+
+        def fn():
+            calls.append("fn")
+
+        exc = evaluator._run_profile_step(fn, FakeProfiler())
+
+        assert isinstance(exc, RuntimeError)
+        assert str(exc) == "device failed"
+        assert calls == ["fn", "sync", "step"]
