@@ -301,7 +301,15 @@ def parse_trace_view_kernels(trace_view_path: str,
 
 def parse_csv_kernels(csv_path: str,
                        warmup_names: Set[str] = None) -> Dict[str, Any]:
-    """从 kernel_details.csv 解析 kernel 级数据（与原 _parse_kernel_details_csv 一致）。
+    """从 kernel_details.csv 解析 kernel 级数据。
+
+    kernel_details.csv 没有 Step Id 字段，Task ID 是 per-kernel-launch 的唯一 ID，
+    不能直接用作 step 分组。当算子在单次 measurement step 内多次 launch 同一 kernel
+    （例如 foreach_norm 一个 step 执行 3 对 reduce+combine），用 Task ID 分组会把
+    每次 launch 当成独立 step，导致 per-step total 被低估到 1/N。
+
+    修复：用 cache-clear kernel（ReduceMax/MatMulV3 warmup kernel）作为 step 分隔符，
+    分隔符之间的所有非 warmup kernel 归为同一个 measurement step。
 
     Args:
         csv_path: kernel_details.csv 文件路径
@@ -317,45 +325,88 @@ def parse_csv_kernels(csv_path: str,
         return {}
 
     warmup_names = warmup_names or set()
-    step_kernel_times: Dict[str, Dict[str, List[float]]] = {}
 
+    # 第一遍：读取所有行，识别 warmup kernel（step 分隔符）
+    all_rows: List[Dict[str, str]] = []
+    warmup_indices: List[int] = []
     try:
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                step_id = (row.get('Step Id') or row.get('Task ID') or '').strip()
-                if not step_id:
-                    continue
+            for i, row in enumerate(reader):
+                op_type = (row.get('Type') or '').strip()
+                input_shapes = (row.get('Input Shapes') or '').strip()
+                name = (row.get('Name') or op_type).strip()
+                duration_str = (row.get('Duration(us)') or '0').strip()
 
-                duration_str = row.get('Duration(us)', '0')
-                try:
-                    duration = float(duration_str)
-                except (ValueError, TypeError):
-                    continue
+                row['_name'] = name
+                row['_op_type'] = op_type
+                row['_input_shapes'] = input_shapes
+                row['_duration_str'] = duration_str
+                all_rows.append(row)
 
-                if duration <= 0:
-                    continue
-
-                op_type = row.get('Type', '')
-                input_shapes = row.get('Input Shapes', '')
-                name = row.get('Name', op_type)
-
-                # warmup 过滤：优先用 CSV 的 Input Shapes 精确匹配
                 if _is_warmup_kernel(op_type, input_shapes):
+                    warmup_indices.append(i)
+    except Exception as e:
+        _logger.warning("parse_csv_kernels failed to read %s: %s", csv_path, e)
+        return {}
+
+    if not all_rows:
+        return {}
+
+    # 第二遍：按 warmup kernel 分隔 step
+    # 每个 measurement step = warmup_kernel + N 个目标 kernel launch
+    # warmup kernel 本身不纳入统计
+    step_kernel_times: Dict[int, Dict[str, List[float]]] = {}
+
+    if warmup_indices:
+        for si, wi in enumerate(warmup_indices):
+            step_id = si
+            start = wi + 1
+            end = warmup_indices[si + 1] if si + 1 < len(warmup_indices) else len(all_rows)
+            for i in range(start, end):
+                row = all_rows[i]
+                name = row['_name']
+                if not name:
                     continue
-                # 也过滤来自 warmup_names 集合的（一致性保障）
+                if _is_warmup_kernel(row['_op_type'], row['_input_shapes']):
+                    continue
                 if name in warmup_names:
                     continue
-
+                try:
+                    duration = float(row['_duration_str'])
+                except (ValueError, TypeError):
+                    continue
+                if duration <= 0:
+                    continue
                 if step_id not in step_kernel_times:
                     step_kernel_times[step_id] = {}
                 if name not in step_kernel_times[step_id]:
                     step_kernel_times[step_id][name] = []
                 step_kernel_times[step_id][name].append(duration)
-
-    except Exception as e:
-        _logger.warning("parse_csv_kernels failed for %s: %s", csv_path, e)
-        return {}
+    else:
+        # Fallback: 无 warmup kernel（freq_boost=False），用 Task ID 分组
+        for row in all_rows:
+            step_id_str = (row.get('Step Id') or row.get('Task ID') or '').strip()
+            if not step_id_str:
+                continue
+            try:
+                step_id = int(step_id_str)
+            except ValueError:
+                step_id = abs(hash(step_id_str)) % (10 ** 9)
+            name = row['_name']
+            if not name or name in warmup_names:
+                continue
+            try:
+                duration = float(row['_duration_str'])
+            except (ValueError, TypeError):
+                continue
+            if duration <= 0:
+                continue
+            if step_id not in step_kernel_times:
+                step_kernel_times[step_id] = {}
+            if name not in step_kernel_times[step_id]:
+                step_kernel_times[step_id][name] = []
+            step_kernel_times[step_id][name].append(duration)
 
     if not step_kernel_times:
         return {}

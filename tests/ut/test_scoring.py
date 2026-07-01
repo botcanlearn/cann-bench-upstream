@@ -22,6 +22,7 @@ Eq.5 (calculate_overall_score / calculate_level_score)。
 import pytest
 
 from kernel_eval.base.result import (
+    AccuracyResult,
     FAILURE_TYPE_COMPILE_RUNTIME_ERROR,
     FAILURE_TYPE_PRECISION_MISMATCH,
 )
@@ -311,6 +312,43 @@ class TestScoringCalculator:
         )
         info = ScoringCalculator().calculate_operator_score(op)
         assert info.compile_passed is False
+        assert info.compilation_score == 0.0
+        assert info.function_score == 0.0
+        assert info.performance_score == 0.0
+        assert info.total_score == 0.0
+
+    def test_runtime_failure_in_case_error_msg_deducts_compile_runtime(self):
+        """Runtime execution failure recorded on the case-level ``error_msg``
+        (aclnn call failed / AclOpKernelInit failed) — with ``failure_type``
+        unset and a bare accuracy stub — must deduct the compile/runtime
+        component, not default to a precision mismatch that keeps the
+        ``wc*100`` compile credit.
+
+        Regression: previously the case-level ``error_msg`` was only consulted
+        in the dict-input branch of ``is_compile_runtime_case_failure``; live
+        ``EvalCaseResult`` objects fell through to ``get_accuracy_failure_type``
+        which only inspects ``accuracy_result.error_msg``, so a runtime-failed
+        operator with a bare accuracy stub kept the 20-point compile credit and
+        inflated the total score.
+        """
+        runtime_case = EvalCaseResult(
+            case_id="c", rel_path="level2/softmax", operator="Softmax",
+            case_num=0, success=False, perf_result=None,
+            baseline_perf_us=100, t_hw_us=50,
+            accuracy_result=AccuracyResult(passed=False, metadata={"dtype": "06"}),
+            error_msg=(
+                "AI算子执行失败: call aclnnSoftmax failed, detail:EZ9999: "
+                "Inner Error! AclOpKernelInit failed opType. SoftmaxAiCore failed."
+            ),
+            failure_type=None,
+        )
+        op = EvalOperatorResult(
+            rel_path="level2/softmax", operator="Softmax",
+            total_cases=1, passed_cases=0, failed_cases=1, skipped_cases=0,
+            results=[runtime_case], pass_rate=0.0, avg_speedup=0.0,
+        )
+        info = ScoringCalculator().calculate_operator_score(op)
+        assert info.compile_runtime_fail_cases == 1
         assert info.compilation_score == 0.0
         assert info.function_score == 0.0
         assert info.performance_score == 0.0

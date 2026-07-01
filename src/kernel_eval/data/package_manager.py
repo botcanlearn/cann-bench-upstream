@@ -352,14 +352,31 @@ class PackageManager:
             #   --quiet        静默安装
             #   --install-path OPP 根目录，触发生成 set_env.bash（含 LD_LIBRARY_PATH 等环境变量）
             abs_run_path = str(run_file.resolve())
+            cmd = [abs_run_path, "--quiet", f"--install-path={opp_path}"]
             result = subprocess.run(
-                [abs_run_path, "--quiet",
-                 f"--install-path={opp_path}"],
+                cmd,
                 cwd=str(run_file.parent),
                 capture_output=True,
                 text=True,
                 timeout=120  # 2分钟超时
             )
+
+            if result.returncode != 0:
+                # 首次安装失败时，探测 makeself 安装器是否支持 --force
+                # （跳过共享库验证）。当 libcust_opapi.so 的 ELF NEEDED 链
+                # 缺少 libopapi.so 时，验证器单独加载 libcust_opapi.so 无法
+                # 解析 l0op::Contiguous 等内置符号，--force 可兜底绕过。
+                first_output = result.stderr or result.stdout
+                if self._run_supports_force(abs_run_path):
+                    print(f"[WARN] run包首次安装失败，尝试 --force 重试: {first_output[:200]}")
+                    result = subprocess.run(
+                        [abs_run_path, "--quiet", "--force",
+                         f"--install-path={opp_path}"],
+                        cwd=str(run_file.parent),
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
 
             if result.returncode != 0:
                 output = result.stderr or result.stdout
@@ -391,6 +408,22 @@ class PackageManager:
             raise
         except Exception as e:
             raise RuntimeError(f"run包安装异常: {e}")
+
+    @staticmethod
+    def _run_supports_force(run_path: str) -> bool:
+        """探测 makeself 安装器是否支持 --force（跳过共享库验证）。
+
+        不同 CANN 版本打包的 makeself 安装器参数可能不同，通过 --help
+        输出探测而非硬编码，避免对不支持的版本传无效参数。
+        """
+        try:
+            r = subprocess.run(
+                [run_path, "--help"],
+                capture_output=True, text=True, timeout=10
+            )
+            return "--force" in (r.stdout + r.stderr)
+        except Exception:
+            return False
 
     @staticmethod
     def _source_set_env_bash(opp_path: str) -> None:

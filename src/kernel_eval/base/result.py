@@ -251,6 +251,22 @@ def is_compile_runtime_case_failure(case_result: Any) -> bool:
     if failure_type:
         return not is_precision_failure_type(failure_type)
 
+    # Runtime/structural execution failures (aclnn call failed, AclOpKernelInit
+    # failed, shape/interface errors, Python exceptions during the case run) are
+    # recorded on the case-level ``error_msg`` when the NPU kernel never produced
+    # a numeric result for the accuracy checker to compare — the accuracy result
+    # is then a bare ``{passed: False}`` stub with no ``failure_type``/``error_msg``.
+    # Consult the case-level ``error_msg`` here so these cases deduct the
+    # compile/runtime component instead of falling through to a precision-
+    # mismatch default (which would wrongly keep the wc*100 compile credit and
+    # let "compile-but-can't-run" operators inflate the total score).
+    if isinstance(case_result, dict):
+        case_error_msg = str(case_result.get("error_msg") or "")
+    else:
+        case_error_msg = str(getattr(case_result, "error_msg", None) or "")
+    if case_error_msg and any(marker in case_error_msg for marker in STRUCTURAL_FAILURE_MARKERS):
+        return True
+
     accuracy_result = getattr(case_result, "accuracy_result", None)
     if accuracy_result is None and isinstance(case_result, dict):
         accuracy_result = case_result.get("accuracy")
