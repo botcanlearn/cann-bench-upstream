@@ -65,12 +65,11 @@ class DataGenerator:
         elif is_int_dtype(dtype):
             if min_val == max_val:
                 return torch.full(shape, int(min_val), dtype=torch_dtype)
-            # torch.randint 不支持 generator 参数，使用 torch.rand 替代
+            # torch.randint 不支持 generator 参数，使用 torch.rand + 缩放实现确定性
             if generator is not None:
                 rand_f64 = torch.rand(shape, dtype=torch.float64, generator=generator)
-                tensor = torch.randint(int(min_val), int(max_val) + 1, shape, dtype=torch_dtype)
-                # 对于整数类型，generator 控制通过 torch.rand + 转换实现
-                # 但 torch.randint 不接受 generator，此处保留原有行为
+                tensor = (rand_f64 * (int(max_val) - int(min_val) + 1)).to(torch_dtype) + int(min_val)
+                tensor = torch.clamp(tensor, int(min_val), int(max_val))
                 return tensor
             return torch.randint(int(min_val), int(max_val) + 1, shape, dtype=torch_dtype)
         else:
