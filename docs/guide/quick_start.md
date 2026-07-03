@@ -6,22 +6,22 @@
 
 ## 前置条件
 
-- Python 3.8+
+- Python 3.10+
 - PyTorch 2.0+
 - torch_npu（NPU 模式）
 - CANN 环境（NPU 模式）
 
 ## 安装
 
-仓内运行不需要 `pip install`——只需安装依赖并配置 `PYTHONPATH`：
+仓内运行通常不需要安装本项目包，只需安装依赖并配置 `PYTHONPATH`：
 
 ```bash
 pip install -r requirements.txt
 export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 ```
 
-> 当前仓库未提供 `pyproject.toml` / `setup.py`，所以 `pip install -e .` 会失败。
-> 若需打包发布或独立安装，请先在仓库根目录补 `pyproject.toml`。
+> 仓库根目录已提供 `pyproject.toml`，但推荐的仓内运行方式仍是 `PYTHONPATH=src`。
+> 若使用 `pip install -e .`，pip 会解析完整依赖（包括 `torch` / `torch_npu`），请确保当前 Python、CANN 和 NPU 依赖版本匹配。
 
 ## 评测命令
 
