@@ -3,7 +3,7 @@
     "description": "TileLang Ascend Bench baseline 性能数据",
     "hardware": "910b2",
     "generated_at": "2026-06-27T07:22:48.838491",
-    "source": "从 bench_lab/tl_gemm_bench/metadata/910b2.json 迁移 baseline_perf_us 与 t_hw_us",
+    "source": "从 bench_lab/tl_gemm_bench/metadata/910b2.json 迁移 baseline_perf_us 与 t_hw_us"
   },
   "gemm": {
     "1": {

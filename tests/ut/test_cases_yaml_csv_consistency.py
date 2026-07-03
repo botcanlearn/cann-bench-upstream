@@ -140,6 +140,46 @@ def _coerce_perf_us(value: object) -> object:
     return value
 
 
+def _metadata_json_files() -> list[Path]:
+    """扫描 tasks/ 和 bench_lab/ 下所有 metadata JSON"""
+    root = get_project_root()
+    json_files: list[Path] = []
+    tasks_metadata = root / "tasks" / "metadata"
+    if tasks_metadata.is_dir():
+        json_files.extend(tasks_metadata.glob("*.json"))
+    bench_lab = root / "bench_lab"
+    if bench_lab.is_dir():
+        json_files.extend(bench_lab.glob("*/metadata/*.json"))
+    return sorted(json_files)
+
+
+def _walk_perf_entries(node: object, path: tuple[str, ...] = ()):
+    """递归查找同时包含 baseline_perf_us 和 t_hw_us 的条目"""
+    if isinstance(node, dict):
+        if "baseline_perf_us" in node and "t_hw_us" in node:
+            yield path, node
+        for key, value in node.items():
+            yield from _walk_perf_entries(value, (*path, str(key)))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _walk_perf_entries(value, (*path, str(index)))
+
+
+def _iter_perf_pairs(entry: dict):
+    """生成可比较的 baseline_perf_us/t_hw_us 数值对，兼容 dict 和标量格式"""
+    baseline = entry.get("baseline_perf_us")
+    t_hw = entry.get("t_hw_us")
+
+    if isinstance(baseline, dict) or isinstance(t_hw, dict):
+        baseline_map = baseline if isinstance(baseline, dict) else {"default": baseline}
+        t_hw_map = t_hw if isinstance(t_hw, dict) else {"default": t_hw}
+        for key in sorted(set(baseline_map) & set(t_hw_map)):
+            yield key, _coerce_perf_us(baseline_map[key]), _coerce_perf_us(t_hw_map[key])
+        return
+
+    yield "", _coerce_perf_us(baseline), _coerce_perf_us(t_hw)
+
+
 def _parse_csv_field(raw: str) -> object:
     """将 CSV 字符串字段反序列化为 Python 对象
 
@@ -528,6 +568,32 @@ class TestBaselineJsonConsistency:
         root = get_project_root()
         json_path = root / "tasks" / "metadata" / "910b2.json"
         assert json_path.is_file(), f"baseline JSON 不存在: {json_path}"
+
+    def test_t_hw_us_not_greater_than_baseline_perf_us(self):
+        """metadata JSON 中 t_hw_us 不应大于 baseline_perf_us"""
+        root = get_project_root()
+        violations: list[str] = []
+
+        for json_path in _metadata_json_files():
+            with json_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            rel_path = json_path.relative_to(root)
+            for entry_path, entry in _walk_perf_entries(data):
+                for perf_key, baseline_perf, t_hw in _iter_perf_pairs(entry):
+                    if baseline_perf is None or t_hw is None:
+                        continue
+                    if not isinstance(baseline_perf, (int, float)) or not isinstance(t_hw, (int, float)):
+                        continue
+                    if t_hw > baseline_perf:
+                        entry_name = "/".join(entry_path)
+                        if perf_key:
+                            entry_name = f"{entry_name}:{perf_key}"
+                        violations.append(
+                            f"{rel_path}:{entry_name} t_hw_us={t_hw} > baseline_perf_us={baseline_perf}"
+                        )
+
+        assert not violations, "metadata 中存在 t_hw_us > baseline_perf_us:\n" + "\n".join(violations[:20])
 
     def test_baseline_store_loads_correctly(self):
         """BaselineStore 能从 bench_root 向上查找 metadata/ 并正确加载 baseline 数据"""
