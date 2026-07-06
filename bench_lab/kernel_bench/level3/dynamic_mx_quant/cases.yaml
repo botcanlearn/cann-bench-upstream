@@ -120,29 +120,29 @@ cases:
   value_range: [-200, 200]
   note: "alg1-FP8E4M3-bf16-5D-2.7M-非尾轴axis=3-blocksize64"
 # ============================================================
-# scale_alg=2 FP4自定义max
+# FP4_E2M1 — scale_alg=0（950PR arch35 不支持 scale_alg=2）
 # ============================================================
 - operator: DynamicMxQuant
   case_id: 16
   input_shape: [[512, 2048]]
   dtype: [float16]
-  attrs: {axis: -1, round_mode: rint, dst_type: 40, blocksize: 32, scale_alg: 2, dst_type_max: 6.0}
+  attrs: {axis: -1, round_mode: rint, dst_type: 40, blocksize: 32, scale_alg: 0, dst_type_max: 0.0}
   value_range: [-5, 5]
-  note: "alg2-FP4E2M1-fp16-2D-1M-dstTypeMax=6.0"
+  note: "alg0-FP4E2M1-fp16-2D-1M-950PR(原alg2/dstTypeMax=6.0)"
 - operator: DynamicMxQuant
   case_id: 17
   input_shape: [[3, 7, 11, 1022]]
   dtype: [bfloat16]
-  attrs: {axis: -1, round_mode: rint, dst_type: 40, blocksize: 32, scale_alg: 2, dst_type_max: 7.0}
+  attrs: {axis: -1, round_mode: rint, dst_type: 40, blocksize: 32, scale_alg: 0, dst_type_max: 0.0}
   value_range: [-6, 6]
-  note: "alg2-FP4E2M1-bf16-4D-236K-非对齐尾维1022-dstTypeMax=7.0"
+  note: "alg0-FP4E2M1-bf16-4D-236K-非对齐尾维1022-950PR(原alg2/dstTypeMax=7.0)"
 - operator: DynamicMxQuant
   case_id: 18
   input_shape: [[64, 128, 1024]]
   dtype: [float16]
-  attrs: {axis: -1, round_mode: floor, dst_type: 40, blocksize: 32, scale_alg: 2, dst_type_max: 8.0}
+  attrs: {axis: -1, round_mode: floor, dst_type: 40, blocksize: 32, scale_alg: 0, dst_type_max: 0.0}
   value_range: [-8, 8]
-  note: "alg2-FP4E2M1-fp16-3D-8M-dstTypeMax=8.0-floor"
+  note: "alg0-FP4E2M1-fp16-3D-8M-floor-950PR(原alg2/dstTypeMax=8.0)"
 # ============================================================
 # 边界/特殊 case
 # ============================================================
