@@ -97,6 +97,14 @@ class EvalCaseResult:
     # "skipped"          — 因设备不可恢复而跳过
     failure_type: Optional[str] = None
 
+    # 性能阶段精度复检诊断标记（仅 staged 合并阶段填充）：
+    # 当一个 case 在 correctness 阶段精度通过、但在 performance 阶段重跑时
+    # 精度复检失败（大概率是 NPU 非确定性算子——同一输入两次跑输出不同），
+    # 记录该"翻车"来源，便于在 results.json 中定位疑似非确定算子。
+    # 结构: {'status': str, 'correctness_passed': bool,
+    #        'perf_failure_type': str, 'note': str}
+    perf_recheck: Optional[Dict[str, Any]] = None
+
     def get_speedup(self) -> float:
         """计算加速比（保留为诊断指标）
 
@@ -149,6 +157,7 @@ class EvalCaseResult:
             'baseline_perf_us': self.baseline_perf_us,
             't_hw_us': self.t_hw_us,
             'failure_type': self.failure_type,
+            'perf_recheck': self.perf_recheck,
         }
 
     @classmethod
@@ -238,6 +247,7 @@ class EvalCaseResult:
             baseline_perf_us=data.get('baseline_perf_us', 0.0),
             t_hw_us=data.get('t_hw_us', 0.0),
             failure_type=data.get('failure_type'),
+            perf_recheck=data.get('perf_recheck'),
         )
 
 

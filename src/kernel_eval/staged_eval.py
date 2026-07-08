@@ -226,24 +226,74 @@ def _merge_results(
     performance_ops: List[EvalOperatorResult],
 ) -> List[EvalOperatorResult]:
     from .eval.results import EvalOperatorResult
+    from .base.result import (
+        FAILURE_TYPE_PRECISION_MISMATCH,
+        is_precision_failure_type,
+    )
 
-    perf_cases = {
+    # 全量索引性能阶段所有 case（含失败），用途有二：
+    #  1) 成功 → 回填时延；
+    #  2) 精度失败 → 识别"correctness 过、performance 精度翻车"的 case。
+    #     两次跑输入与 golden 完全一致（已定种子），唯一变量是 NPU kernel 自身输出，
+    #     故这类翻车基本等价于"算子非确定"。按策略视为该 case 的精度错误。
+    perf_all = {
         _case_result_key(case): case
         for op_result in performance_ops
         for case in op_result.results
-        if case.success
     }
 
     merged: List[EvalOperatorResult] = []
     for op_result in correctness_ops:
         cases = []
         for case in op_result.results:
-            perf_case = perf_cases.get(_case_result_key(case)) if case.success else None
-            if perf_case is not None:
+            if not case.success:
+                # correctness 阶段本就失败：保持原判定，无性能分。
+                case.perf_result = None
+                cases.append(case)
+                continue
+
+            perf_case = perf_all.get(_case_result_key(case))
+            if perf_case is not None and perf_case.success:
+                # 性能阶段精度复检同样通过 → 回填时延。
                 case.perf_result = perf_case.perf_result
                 case.ai_run_result = perf_case.ai_run_result
-            else:
+            elif perf_case is not None and is_precision_failure_type(perf_case.failure_type):
+                # correctness 过、performance 精度翻车 → 视为该 case 精度错误：
+                # success=False + precision_mismatch，按原公式扣精度分（不扣编译分），
+                # 且无对应性能分；同时打标签便于在 results.json 中定位疑似非确定算子。
+                case.success = False
+                case.failure_type = FAILURE_TYPE_PRECISION_MISMATCH
+                if perf_case.accuracy_result is not None:
+                    case.accuracy_result = perf_case.accuracy_result
+                case.error_msg = (
+                    "性能阶段精度复检失败（correctness 阶段已通过）——疑似 NPU 非确定性算子: "
+                    + (perf_case.error_msg or "")
+                )
                 case.perf_result = None
+                case.perf_recheck = {
+                    "status": "precision_unstable",
+                    "correctness_passed": True,
+                    "perf_failure_type": perf_case.failure_type,
+                    "note": (
+                        "passed precision in the correctness stage but failed the "
+                        "precision re-check in the performance stage; likely a "
+                        "non-deterministic NPU kernel."
+                    ),
+                }
+            else:
+                # 性能阶段无法测量（timeout / runtime / 未重跑）：非精度问题，
+                # 沿用 correctness 通过判定，仅标注缺失原因，无性能分。
+                case.perf_result = None
+                if perf_case is not None and not perf_case.success:
+                    case.perf_recheck = {
+                        "status": "perf_unmeasured",
+                        "correctness_passed": True,
+                        "perf_failure_type": perf_case.failure_type,
+                        "note": (
+                            "passed correctness but the performance stage could not "
+                            "produce a valid timing (e.g. timeout / runtime error)."
+                        ),
+                    }
             cases.append(case)
 
         speedups = [case.get_speedup() for case in cases if case.success and case.get_speedup() > 0]
