@@ -21,7 +21,9 @@ def get_input(x_norm: torch.Tensor, grad_y: torch.Tensor, expert_idx: torch.Tens
     M, K = expert_idx.shape
     N = x_norm.shape[1]
     # 每行从 [0, N) 中无放回采样 K 个索引
-    rand_matrix = torch.rand(M, N)
+    # 固定种子：确保精度阶段与性能阶段生成相同输入，跨 eval 可复现
+    g = torch.Generator().manual_seed(0)
+    rand_matrix = torch.rand(M, N, generator=g)
     unique_idx = torch.argsort(rand_matrix, dim=1)[:, :K].to(torch.int32)
     return (x_norm, grad_y, unique_idx)
 

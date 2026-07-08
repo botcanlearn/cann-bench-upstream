@@ -45,7 +45,9 @@ def get_input(
     num_blocks = key_cache.shape[0]
     block_size = key_cache.shape[2]
     bs = key.shape[0]
-    slot_mapping = torch.randperm(num_blocks * block_size)[:bs].to(torch.int32)
+    # 固定种子：确保精度阶段与性能阶段生成相同 slot_mapping，跨 eval 可复现
+    g = torch.Generator().manual_seed(0)
+    slot_mapping = torch.randperm(num_blocks * block_size, generator=g)[:bs].to(torch.int32)
 
     return (
         key, key_cache, slot_mapping, value, value_cache,

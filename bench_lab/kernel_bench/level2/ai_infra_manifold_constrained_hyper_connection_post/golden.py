@@ -42,7 +42,10 @@ def _generate_dsmat_sinkhorn(orig_tsr: torch.Tensor,
     orig_dtype = orig_tsr.dtype
 
     # 创建随机正矩阵
-    random_tensor = torch.rand(shape_list, dtype=torch.float32, device=orig_device) + 1e-10
+    # 固定种子：确保精度阶段与性能阶段生成相同双随机矩阵，跨 eval 可复现
+    # （CPU generator 生成后再 .to(device)，避免非 CPU 设备不支持 Generator）
+    g = torch.Generator().manual_seed(0)
+    random_tensor = torch.rand(shape_list, dtype=torch.float32, generator=g).to(orig_device) + 1e-10
 
     # Sinkhorn 迭代归一化
     for _ in range(max_iter):

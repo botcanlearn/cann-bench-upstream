@@ -67,7 +67,12 @@ def get_input(
         )
 
     # 生成与正向输出同 shape 的随机梯度
-    grad = torch.randn_like(indices, dtype=x.dtype)
+    # 固定种子：确保精度阶段与性能阶段生成相同 grad，跨 eval 可复现
+    # （torch.randn_like 不支持 generator，改用 torch.randn + 显式 shape）
+    # CPU generator 生成后再 .to(device)，保持与 randn_like 一致的设备语义
+    # （torch.randn 默认生成 CPU 张量，需显式对齐 indices/x 的设备，避免设备不匹配）
+    g = torch.Generator().manual_seed(0)
+    grad = torch.randn(indices.shape, dtype=x.dtype, generator=g).to(indices.device)
     return x, grad, indices
 
 
