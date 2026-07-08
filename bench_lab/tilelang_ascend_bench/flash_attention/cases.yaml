@@ -34,7 +34,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq1_Skv128_N32_D512_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq1_Skv128_N32_D512_float16'
 
 - operator: FlashAttention
   case_id: 2
@@ -61,7 +61,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B8_Sq256_Skv256_N16_D128_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B8_Sq256_Skv256_N16_D128_bfloat16'
 
 - operator: FlashAttention
   case_id: 3
@@ -88,7 +88,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B1_Sq1_Skv128_N8_D512_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B1_Sq1_Skv128_N8_D512_float16'
 
 - operator: FlashAttention
   case_id: 4
@@ -115,7 +115,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq128_Skv128_N8_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq128_Skv128_N8_D128_float16'
 
 - operator: FlashAttention
   case_id: 5
@@ -142,7 +142,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq1_Skv473_N16_D256_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq1_Skv473_N16_D256_float16'
 
 - operator: FlashAttention
   case_id: 6
@@ -169,7 +169,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq473_Skv473_N8_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq473_Skv473_N8_D128_float16'
 
 - operator: FlashAttention
   case_id: 7
@@ -196,7 +196,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq512_Skv512_N32_D512_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq512_Skv512_N32_D512_float16'
 
 - operator: FlashAttention
   case_id: 8
@@ -223,7 +223,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B2_Sq1_Skv183_N32_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B2_Sq1_Skv183_N32_D128_float16'
 
 - operator: FlashAttention
   case_id: 9
@@ -250,7 +250,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B8_Sq12_Skv512_N8_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B8_Sq12_Skv512_N8_D128_float16'
 
 - operator: FlashAttention
   case_id: 10
@@ -277,7 +277,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq1_Skv97_N8_D512_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq1_Skv97_N8_D512_float16'
 
 - operator: FlashAttention
   case_id: 11
@@ -304,7 +304,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B1_Sq1_Skv128_N8_D512_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B1_Sq1_Skv128_N8_D512_bfloat16'
 
 - operator: FlashAttention
   case_id: 12
@@ -331,7 +331,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq128_Skv128_N8_D128_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq128_Skv128_N8_D128_bfloat16'
 
 - operator: FlashAttention
   case_id: 13
@@ -358,7 +358,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq25_Skv512_N16_D256_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq25_Skv512_N16_D256_bfloat16'
 
 - operator: FlashAttention
   case_id: 14
@@ -385,7 +385,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq473_Skv473_N8_D128_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq473_Skv473_N8_D128_bfloat16'
 
 - operator: FlashAttention
   case_id: 15
@@ -412,7 +412,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B4_Sq512_Skv512_N32_D512_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B4_Sq512_Skv512_N32_D512_bfloat16'
 
 - operator: FlashAttention
   case_id: 16
@@ -439,7 +439,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B2_Sq1_Skv183_N32_D128_bfloat16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B2_Sq1_Skv183_N32_D128_bfloat16'
 
 - operator: FlashAttention
   case_id: 17
@@ -466,7 +466,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B1_Sq1_Skv128_N4_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B1_Sq1_Skv128_N4_D128_float16'
 
 - operator: FlashAttention
   case_id: 18
@@ -493,7 +493,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B1_Sq16_Skv256_N4_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B1_Sq16_Skv256_N4_D128_float16'
 
 - operator: FlashAttention
   case_id: 19
@@ -520,7 +520,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B1_Sq64_Skv64_N4_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B1_Sq64_Skv64_N4_D128_float16'
 
 - operator: FlashAttention
   case_id: 20
@@ -547,5 +547,5 @@ cases:
   value_range:
   - -1
   - 1
-  note: 'B1_Sq128_Skv256_N4_D128_float16 | baseline_kernels: FusedInferAttentionScore'
+  note: 'B1_Sq128_Skv256_N4_D128_float16'
 
