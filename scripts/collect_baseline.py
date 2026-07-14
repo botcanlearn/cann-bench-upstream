@@ -14,9 +14,10 @@
 """
 Baseline 性能采集脚本
 
-复用评测体系的性能采集逻辑（PerfEvaluator + KernelDetailsStrategy），
-复用 inner 的 NPU 参考算子代码（refs/level{1-4}.py + inputs.py），
-产出 metadata/<hardware>.json（BaselineStore 可加载）。
+复用评测体系的 PerfEvaluator（单算子 benchmark：ACL launch + msprof export，
+MsProfSummaryStrategy），复用 NPU 参考算子代码（refs/level{1-4}.py + inputs.py），
+默认产出 scripts/baseline/output/<hardware>.json（格式与 BaselineStore 兼容，
+需人工审核后合并到 <bench>/metadata/<hardware>.json）。
 
 使用方式:
     python scripts/collect_baseline.py --op level1/exp
@@ -180,9 +181,9 @@ class GenericRefModule:
 class BaselineCollector:
     """Baseline 性能采集器
 
-    复用评测体系的 PerfEvaluator + KernelDetailsStrategy，
+    复用评测体系的 PerfEvaluator（ACL launch + msprof export，MsProfSummaryStrategy），
     复用 refs 体系的 ref_fn + inputs.py，
-    产出 metadata/<hardware>.json。
+    默认产出 scripts/baseline/output/<hardware>.json。
     """
 
     def __init__(self, config: Config, bench_root: Path,
@@ -525,7 +526,7 @@ class BaselineCollector:
                 "description": "CANN baseline 性能数据（collect_baseline.py 采集）",
                 "hardware": self.hardware,
                 "generated_at": datetime.now().isoformat(),
-                "source": "collect_baseline.py (PerfEvaluator + KernelDetailsStrategy + refs)",
+                "source": "collect_baseline.py (PerfEvaluator + MsProfSummaryStrategy + refs)",
                 "warmup": self.warmup,
                 "repeat": self.repeat,
                 "profiler_level": self.config.profiler_level,

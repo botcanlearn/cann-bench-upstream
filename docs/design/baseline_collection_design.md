@@ -4,6 +4,12 @@
 
 ---
 
+> **⚠️ 实现现状（权威）**：本文正文为早期设计，`scripts/collect_baseline.py` 的实际实现与其有三点关键出入，**以本节为准**：
+>
+> 1. **Profiler 口径**：实际采用 **ACL launch + msprof export + `MsProfSummaryStrategy`**（`enable_acl_launch_mode=True` / `enable_msprof_export=True` / `perf_metric_strategy_override="msprof_summary"`），**并非**正文多处所述的 `torch_npu.profiler` + `KernelDetailsStrategy`。故 baseline 采集口径与 `run_evaluation` 默认口径**不完全相同**，采集值需人工核对。
+> 2. **默认输出**：默认写到隔离目录 **`scripts/baseline/output/<hardware>.json`**（注释明确“不污染 tasks/metadata/”），**需人工审核后再合并**到 `<bench>/metadata/<hardware>.json` 才会被评分加载——并非“默认即产出 BaselineStore 可直接加载的 metadata”。
+> 3. **`--patch-yaml` 未实现**：脚本无此参数、无 cases.yaml 回填逻辑；且 baseline 已外置（cases.yaml/csv 不再含 `baseline_perf_us`/`t_hw_us`，由 `test_cases_yaml_csv_consistency` 强制），回填方案已作废。
+
 ## 1. 背景
 
 当前 baseline 性能数据 (`baseline_perf_us` / `t_hw_us`) 的采集有两套独立实现：
@@ -15,7 +21,7 @@
 
 两套系统的**Profiler API、数据解析口径、采集参数**完全不同，导致同一算子同一 case 测出的 `elapsed_us` 可能不一致。baseline 校准值和评测评分的口径脱节会影响评分公平性。
 
-**目标**：设计一个 `scripts/collect_baseline.py` 脚本，**复用评测体系的性能采集逻辑**（`PerfEvaluator` + `KernelDetailsStrategy`），同时**迁移 inner 的 NPU 参考算子代码**（`refs/level{1-4}.py` + `ref_registry.py` + `inputs.py`）到 `scripts/baseline/`，不侵入 `src/kernel_eval/` 代码。
+**目标**：设计一个 `scripts/collect_baseline.py` 脚本，**复用评测体系的 `PerfEvaluator`**（实际以 ACL launch + msprof export + `MsProfSummaryStrategy` 采集，见顶部实现现状），同时**迁移 NPU 参考算子代码**（`refs/level{1-4}.py` + `ref_registry.py` + `inputs.py`）到 `scripts/baseline/`，不侵入 `src/kernel_eval/` 代码。
 
 > **v3 更新说明**：v2 设计错误地将 `golden.py` 作为 baseline 参考算子。实际上 **`golden.py` 和 `refs/` 是两套不同的实现**，用途不同：
 >
@@ -38,10 +44,10 @@
 
 | 原则 | 说明 |
 |------|------|
-| **口径一致** | 采集方式与 `run_evaluation` 完全一致（同一 `PerfEvaluator` + `KernelDetailsStrategy`），baseline 值和评分用的 `elapsed_us` 来自同一把尺子 |
+| **口径（现状）** | 复用同一 `PerfEvaluator`，但 baseline 采集强制 `MsProfSummaryStrategy`（ACL 单算子下发），与 `run_evaluation` 默认口径不完全相同；采集值需人工核对后再采纳（见顶部实现现状） |
 | **不侵入 src** | 脚本通过 import 使用 `src/kernel_eval` 的公开类，但不修改 `src/` 下任何文件 |
 | **迁移 refs** | 将 `inner/baseline_perf_prof/scripts/` 下的 `ref_registry.py`、`refs/`、`inputs.py` 迁移到 `scripts/baseline/`，与采集脚本同层，ref_registry.py 保持 auto-discovery 不变 |
-| **优先 metadata JSON** | 产出 `metadata/<hardware>.json`（`BaselineStore` 直接可加载），为默认输出模式；可选回填 `cases.yaml` |
+| **metadata JSON 格式** | 产出与 `BaselineStore` 兼容的 JSON；默认写隔离目录 `scripts/baseline/output/<hardware>.json`，需人工审核后合并到 `<bench>/metadata/<hardware>.json`（`--patch-yaml` 未实现，见顶部实现现状） |
 | **单命令执行** | 一条命令即可采集指定算子/级别的 baseline，无需手动组合多个脚本 |
 
 ---
@@ -71,15 +77,15 @@ scripts/collect_baseline.py
          │               PerfEvaluator.run_profiled()
          │                                 │
          │                                 ▼
-         │               KernelDetailsStrategy.parse()
+         │               MsProfSummaryStrategy.parse()
          │                                 │
          │                                 ▼
          │               PerfResult.elapsed_us + metadata
          │                                 │
 ┌──────────────────────────────────────────▼──────────────────────────┐
 │ Output Writer                                                        │
-│ ├─ metadata/<hardware>.json  (默认，BaselineStore 可加载)           │
-│ └─ cases.yaml patch          (可选 --patch-yaml 回填)               │
+│ └─ scripts/baseline/output/<hardware>.json （默认，隔离目录）        │
+│    需人工审核后合并到 <bench>/metadata/<hardware>.json 才被评分加载  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -123,7 +129,7 @@ from kernel_eval.eval.perf_eval import PerfEvaluator
 from kernel_eval.eval.op_runner import OpRunner
 from kernel_eval.config import Config
 from kernel_eval.utils.device_manager import DeviceManager, DeviceConfig
-from kernel_eval.base.perf_strategy import KernelDetailsStrategy
+from kernel_eval.base.perf_strategy import MsProfSummaryStrategy
 from kernel_eval.data.data_generator import DataGenerator
 from kernel_eval.utils.param_builder import ParamBuilder
 ```
@@ -259,9 +265,6 @@ python scripts/collect_baseline.py --op level1/exp --warmup 5 --repeat 20
 # 仅输出到 metadata JSON（默认行为）
 python scripts/collect_baseline.py --level 1
 
-# 同时回填到 cases.yaml
-python scripts/collect_baseline.py --level 1 --patch-yaml
-
 # dry-run（只打印计划，不执行）
 python scripts/collect_baseline.py --level 1 --dry-run
 
@@ -359,7 +362,7 @@ class BaselineCollector:
         }
 ```
 
-> **与 bench_baseline.py 的关键差异**：`bench_baseline.py` 使用 `AdvancedPerformanceEngine`（ACL profiling + msprof），而 `collect_baseline.py` 使用 `OpRunner.run()` → `PerfEvaluator.run_profiled()`（`torch_npu.profiler` + `KernelDetailsStrategy`）。这是**口径统一的根本改进**——两套 profiler 的数据解析方式不同，现在统一为评测体系的标准口径。
+> **与 bench_baseline.py 的关系（现状订正）**：`collect_baseline.py` 通过 `PerfEvaluator` 采集，但对单算子 benchmark 场景**同样启用 ACL launch + msprof export**（`MsProfSummaryStrategy`），与旧 `bench_baseline.py` 的 ACL+msprof 路线接近，而**不是**早期设想的 `torch_npu.profiler` + `KernelDetailsStrategy`。因此它与 `run_evaluation` 默认口径并非完全一致，采集值以人工核对为准。
 
 ### 5.3 Case 发现与批量采集
 
@@ -425,7 +428,7 @@ def collect_op(self, op_path: str, cases_filter: set = None):
 
 ### 5.4 输出格式
 
-#### metadata JSON（默认输出，与 BaselineStore 兼容）
+#### metadata JSON（格式与 BaselineStore 兼容；默认写 `scripts/baseline/output/<hardware>.json`）
 
 ```json
 {
@@ -433,7 +436,7 @@ def collect_op(self, op_path: str, cases_filter: set = None):
     "description": "CANN baseline 性能数据（collect_baseline.py 采集）",
     "hardware": "910b2",
     "generated_at": "2026-06-06T15:30:00",
-    "source": "collect_baseline.py (PerfEvaluator + KernelDetailsStrategy + refs)",
+    "source": "collect_baseline.py (PerfEvaluator + MsProfSummaryStrategy + refs)",
     "warmup": 5,
     "repeat": 20,
     "profiler_level": "Level1",
@@ -453,9 +456,11 @@ def collect_op(self, op_path: str, cases_filter: set = None):
 
 > **注意**：`t_hw_us` 来自现有 metadata JSON（或旧版 cases.yaml），不是采集产出。脚本采集时从 `BaselineStore` / `CannCaseSpec` 读取 `t_hw_us`，写入 metadata JSON 时一并携带。新增采集的 case 只更新 `baseline_perf_us`，不修改已有的 `t_hw_us`。
 
-#### cases.yaml 回填（可选 `--patch-yaml`）
+#### cases.yaml 回填（`--patch-yaml`，**未实现 / 已作废**）
 
-通过 regex-based 行级编辑（复用 `apply_baselines.py` 的 patch 逻辑），将 `baseline_perf_us` 回填到 `cases.yaml`：
+> **现状**：脚本无 `--patch-yaml` 参数、无回填逻辑；且 baseline 已外置到 `metadata/<hardware>.json`，cases.yaml/csv 不再承载 `baseline_perf_us`（由 `test_cases_yaml_csv_consistency` 强制）。以下回填方案仅为早期设计，已作废，保留供历史参考。
+
+早期设想（未落地）：通过 regex-based 行级编辑（复用 `apply_baselines.py` 的 patch 逻辑），将 `baseline_perf_us` 回填到 `cases.yaml`：
 
 - 使用 `ruamel.yaml` 保留注释和格式的行级编辑
 - 保留 `baseline_source: auto` + `baseline_updated_at` 时间戳标记
@@ -573,6 +578,7 @@ scripts/
 ├── baseline/                    # refs 迁移目录（从 inner 复制而来）
 │   ├── ref_registry.py          # 迁移：参考算子注册表（auto-discovery）
 │   ├── inputs.py                # 迁移：输入构建 + NPU 别名处理
+│   ├── output/                  # 默认输出：<hardware>.json（隔离目录，审核后合并到 tasks/metadata/）
 │   └── refs/
 │       ├── __init__.py          # 迁移：空 __init__
 │       ├── level1.py            # 迁移：level1 NPU 参考实现（8 个算子）
@@ -586,9 +592,9 @@ scripts/
 │   └── ...
 └── ...
 
-tasks/                           # 不修改任何文件（除可选 --patch-yaml）
+tasks/                           # 脚本不写入（默认输出在 scripts/baseline/output/）
 ├── metadata/
-│   ├── 910b2.json               # 输出：baseline JSON（BaselineStore 加载）
+│   ├── 910b2.json               # 合并目标：人工审核后从 scripts/baseline/output/ 合入（BaselineStore 加载）
 │   └── ...
 ├── level1/
 │   ├── exp/
@@ -606,7 +612,7 @@ src/kernel_eval/                 # 不修改任何文件
 │   ├── evaluator.py             # 参考: Evaluator 初始化+执行流程
 │   └── ...
 ├── base/
-│   ├── perf_strategy.py         # import: KernelDetailsStrategy
+│   ├── perf_strategy.py         # import: MsProfSummaryStrategy
 │   ├── result.py                # import: PerfResult
 │   └── ...
 ├── data/
@@ -649,15 +655,15 @@ src/kernel_eval/                 # 不修改任何文件
 | 替代关系 | inner 旧脚本 | 新脚本 |
 |----------|--------------|--------|
 | 算子代码 | refs/level{1-4}.py + ref_registry（原地引用） | refs/level{1-4}.py + ref_registry（迁移到 scripts/baseline/） |
-| Profiler | ACL acl.prof + msprof (perf_engine.py) | torch_npu.profiler Level1/Level2 (PerfEvaluator) |
-| 数据解析 | Pattern 区间 (op_summary) | KernelDetailsStrategy (kernel_details CSV) |
+| Profiler | ACL acl.prof + msprof (perf_engine.py) | ACL launch + msprof export（PerfEvaluator，`enable_msprof_export`） |
+| 数据解析 | Pattern 区间 (op_summary) | MsProfSummaryStrategy（msprof summary） |
 | 输入构建 | inputs.py（原地引用） | inputs.py（迁移到 scripts/baseline/） |
 | Case 发现 | 手动枚举 (LEVEL1_OPS 等硬编码列表) | CannTaskLoader + CannCaseLoader（自动发现） |
-| 输出格式 | baseline_perf_<soc>_<ts>.json | metadata/<hardware>.json + 可选 cases.yaml 回填 |
+| 输出格式 | baseline_perf_<soc>_<ts>.json | metadata/<hardware>.json 格式（默认写隔离目录 scripts/baseline/output/） |
 
 ### 8.2 `apply_baselines.py` (inner/tests/)
 
-`apply_baselines.py` 的 cases.yaml 回填逻辑可被 `collect_baseline.py` 的 `--patch-yaml` 模式替代。
+`apply_baselines.py` 的 cases.yaml 回填逻辑已随 baseline 外置而废弃（`--patch-yaml` 未实现，见 §5.4），不再需要等价替代。
 
 ### 8.3 `migrate_baseline_to_data.py` (scripts/)
 
@@ -673,7 +679,7 @@ src/kernel_eval/                 # 不修改任何文件
 
 ### 8.5 `perf_engine.py` (inner/)
 
-`perf_engine.py`（`AdvancedPerformanceEngine`）是 inner 的旧 profiler engine（ACL profiling + msprof），不迁移。`collect_baseline.py` 使用 `PerfEvaluator` + `KernelDetailsStrategy` 替代，口径统一。
+`perf_engine.py`（`AdvancedPerformanceEngine`）是旧 profiler engine（ACL profiling + msprof），不迁移。`collect_baseline.py` 用 `PerfEvaluator`（同样 ACL launch + msprof export，`MsProfSummaryStrategy`）替代。
 
 ---
 
@@ -744,7 +750,7 @@ src/kernel_eval/                 # 不修改任何文件
 | P0 | metadata JSON 输出 | 默认输出，与 BaselineStore 对齐 |
 | P0 | Case 发现 | CannCaseLoader + CannTaskLoader，自动发现 cases |
 | P1 | 全级别采集 | `--level 1` / `--all`，批量采集 |
-| P1 | cases.yaml 回填 | `--patch-yaml`，自动回填 |
+| P1 | cases.yaml 回填（已作废） | `--patch-yaml` 未实现，见 §5.4 |
 | P1 | 断点续采 | `--skip-existing`，跳过已采集的 case |
 | P2 | 采集报告 | 人类可读的表格输出 |
 | P2 | dry-run | `--dry-run`，列出计划但不执行 |
@@ -756,9 +762,9 @@ src/kernel_eval/                 # 不修改任何文件
 
 ## 12. 验收标准
 
-1. **口径一致性**：同一算子同一 case，`collect_baseline.py` 的 `elapsed_us` 与 `run_evaluation` 使用同一 `KernelDetailsStrategy` 解析同一 profiler 输出格式，数值偏差 < 5%（允许 warmup/repeat 参数不同带来的正常波动）
-2. **BaselineStore 可加载**：输出的 `metadata/<hardware>.json` 可被 `BaselineStore` 直接加载，`get_perf()` / `get_t_hw()` 返回正确值
-3. **cases.yaml 回填**：`--patch-yaml` 后 `cases.yaml` 的 `baseline_perf_us` 字段正确更新，`cases.csv` 同步再生
+1. **口径可核对**：`collect_baseline.py` 以 `MsProfSummaryStrategy`（ACL + msprof export）采集 `elapsed_us`；由于与 `run_evaluation` 默认口径不完全一致，采集值须与现有 baseline / 评测实测人工核对后再采纳
+2. **BaselineStore 可加载**：默认产出 `scripts/baseline/output/<hardware>.json`（格式与 `BaselineStore` 兼容）；经人工审核合并到 `<bench>/metadata/<hardware>.json` 后可被 `BaselineStore` 加载，`get_perf()` / `get_t_hw()` 返回正确值
+3. **cases.yaml 回填（已作废，不作为验收条件）**：`--patch-yaml` 未实现；baseline 已外置到 metadata JSON，cases.yaml/csv 不再承载 `baseline_perf_us`（由 `test_cases_yaml_csv_consistency` 强制），故不再核验此项（见顶部实现现状与 §5.4）
 4. **不侵入 src**：`src/kernel_eval/` 下无任何文件被修改
 5. **ref_registry 可加载**：`ref_registry.get_ref()` 返回的 callable 与 inner 旧脚本的 ref_fn 一致
 6. **refs 覆盖范围**：迁移后的 refs/level{1-4}.py 覆盖与 inner 一致的算子集合
@@ -778,7 +784,7 @@ src/kernel_eval/                 # 不修改任何文件
 | **UT: GenericRefModule** | wrapper 正确将 `(inputs, attrs)` 签名适配为 `(*flat_args)` | 对比 ref_fn(inputs, attrs) vs model(flat_args) 输出 |
 | **E2E: 单算子采集** | `collect_baseline.py --op level1/exp` 完整执行 | 在 NPU 环境执行，验证输出 |
 | **E2E: 全级别 dry-run** | `collect_baseline.py --all --dry-run` 列出所有算子+case | 检查输出计划完整性 |
-| **E2E: 口径对比** | 同一 case，`collect_baseline.py` vs `run_evaluation` 的 elapsed_us | 偏差 < 5% |
+| **E2E: 口径对比** | 同一 case，`collect_baseline.py`（MsProfSummaryStrategy）vs `run_evaluation`（默认口径）的 elapsed_us | 人工核对并记录偏差原因；两者 profiler 口径不同，不设固定偏差阈值 |
 | **E2E: 与 inner 对比** | 同一 case，`collect_baseline.py` vs `bench_baseline.py` 的 ref kernel topology | kernel 名称和数量一致 |
 | **E2E: 无 NPU 环境** | `collect_baseline.py` 在无 torch_npu 环境下优雅退出 | 检查 exit code + 输出消息 |
 | **E2E: 断点续采** | 中断后重新运行，已有结果不重复采集 | 验证 `--skip-existing` |
