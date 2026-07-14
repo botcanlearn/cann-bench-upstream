@@ -95,7 +95,7 @@
 | 算子分类与难度分级 | L1~L4四级难度体系，不同难度对应不同分值权重 | 元数据标签 |
 | 测试用例集 | 每个算子20+开放用例，覆盖Shape/dtype/属性/值域 | cases.csv |
 | Golden实现 | 基于PyTorch官方API的标杆计算函数 | golden.py |
-| 性能基线 | 每个用例对应的基准执行时间 | baseline_perf_us |
+| 性能基线 | 每个用例对应的基准执行时间与硬件下界（baseline_perf_us / t_hw_us） | metadata/&lt;hardware&gt;.json |
 | 内部泛化验证集 | CANN官方CI工程维护的80条泛化用例（不公开） | 内部数据集 |
 
 **评测层**：基于数据层提供的数据，执行三大维度的评测。
@@ -126,7 +126,7 @@
 | desc.md | 算子描述（计算公式、功能说明、典型使用场景） |
 | proto.yaml | 算子原型定义（输入输出schema、属性列表、数据类型） |
 | golden.py | 算子标杆函数（基于PyTorch的参考实现） |
-| cases.csv | 算子用例集（Shape、dtype、属性、值域、性能基线） |
+| cases.csv | 算子用例集（Shape、dtype、属性、值域）；性能基线不在此文件，见 metadata/&lt;hardware&gt;.json |
 
 | 输出文件 | 说明 |
 |----------|------|
@@ -147,7 +147,7 @@
 |--------|----------|------|------|------|
 | 编译评测 | 无 | AI生成的算子工程源码 | 编译是否通过（Pass/Fail） | cmake、bisheng编译器 |
 | 精度评测 | 编译通过 | 编译后的算子 + cases.csv + golden.py | 用例精度通过率；非数值精度类运行/接口错误 | evaluation框架 |
-| 性能评测 | 精度通过 | 通过精度用例的算子 + cases.csv基线数据 | SpeedUp加速比 | msprof/TorchNPU.prof |
+| 性能评测 | 精度通过 | 通过精度用例的算子 + metadata/&lt;hardware&gt;.json 基线数据 | SpeedUp加速比 | msprof/TorchNPU.prof |
 
 **阶段三：CANN官方评测**
 
@@ -287,15 +287,12 @@ y = cann_bench.exp(x, -1.0, 1.0, 0.0)
 
 **算子用例定义文件：** cases.csv
 ```
-operator,case_id,input_shape,dtype,attrs,value_range,baseline_perf_us,t_hw_us,note
-Exp,1,"[[1024, 1024]]",["float16"],"{""base"": -1.0, ""scale"": 1.0, ""shift"": 0.0}","[-1, 1]",13.96,2.18,float16-1M-对齐-对称小值域-base=-1
-Exp,2,"[[2048, 2048]]",["float32"],"{""base"": -1.0, ""scale"": 1.5, ""shift"": 0.0}","[-2, 2]",46.86,17.48,float32-4M-对齐-对称小值域-scale=1.5
+operator,case_id,input_shape,dtype,attrs,value_range,note
+Exp,1,"[[1024, 1024]]",["float16"],"{""base"": -1.0, ""scale"": 1.0, ""shift"": 0.0}","[-1, 1]",float16-1M-对齐-对称小值域-base=-1
+Exp,2,"[[2048, 2048]]",["float32"],"{""base"": -1.0, ""scale"": 1.5, ""shift"": 0.0}","[-2, 2]",float32-4M-对齐-对称小值域-scale=1.5
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `baseline_perf_us` | float / 空 | PyTorch 参考实现在目标 NPU 上的实测时间 |
-| `t_hw_us` | float / 空 | 硬件下界 T_HW（微秒），用于 hardware-anchored 性能评分 |
+> **性能基线已外置**：`baseline_perf_us`（PyTorch 参考实现实测时间）与 `t_hw_us`（硬件下界 T_HW，单位 µs）**不写入 cases.csv / cases.yaml**，改由 `<bench>/metadata/<hardware>.json` 按硬件维护，运行时经 `BaselineStore` 加载。在 cases 文件中出现这两列会被一致性测试 `tests/ut/test_cases_yaml_csv_consistency.py` 判为失败。
 
 ### 3.4 Golden脚本
 
@@ -361,7 +358,7 @@ $$
 - T_cand = T_HW ⇒ score = 1.0（达到硬件下界）
 - T_cand → ∞ ⇒ score → 0（远低于基准）
 
-T_HW 由 cases.yaml 中 `t_hw_us` 字段给出，是该用例在对应硬件上的硬件下界（支持 910B2 / 910_93 / 950 等多硬件）。`baseline_perf_us` 同 yaml 同行。
+T_HW 由 `<bench>/metadata/<hardware>.json` 中的 `t_hw_us` 给出，是该用例在对应硬件上的硬件下界（支持 910B2 / 910_93 / 950 等多硬件，按 `BaselineStore` 解析的硬件名加载）；`baseline_perf_us` 同文件同一用例条目下给出。
 
 **单算子综合评分** (bench.tex Eq. 4)：
 

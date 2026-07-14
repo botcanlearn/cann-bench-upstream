@@ -39,7 +39,7 @@ $$
 \text{HAP}_i = \frac{T_{\text{baseline},i} - T_{\text{HW},i}}{(T_{\text{cand},i} - T_{\text{HW},i}) + (T_{\text{baseline},i} - T_{\text{HW},i})}
 $$
 
-其中 `T_HW = t_hw_us` 为硬件理论性能上界，已在 cases.yaml 中提供；`T_baseline = baseline_perf_us` 为CANN基线性能，也已在 cases.yaml 中提供（由于torch接口功能限制，部分基线实现由算子拼接得到）；`T_cand` 为候选 kernel 实测时间。这个公式的设计保证了如果性能低于基线（T_cand > T_baseline），HAP 为 0-0.5；如果性能优于基线（T_cand < T_baseline），HAP 0.5 以上；如果性能达到硬件上界或更高（T_cand <= T_HW），HAP 为 1 以上。
+其中 `T_HW = t_hw_us` 为硬件理论性能上界，`T_baseline = baseline_perf_us` 为CANN基线性能（由于torch接口功能限制，部分基线实现由算子拼接得到）——二者均由 `<bench>/metadata/<hardware>.json` 按硬件提供（不再内嵌于 cases.yaml/csv）；`T_cand` 为候选 kernel 实测时间。这个公式的设计保证了如果性能低于基线（T_cand > T_baseline），HAP 为 0-0.5；如果性能优于基线（T_cand < T_baseline），HAP 0.5 以上；如果性能达到硬件上界或更高（T_cand <= T_HW），HAP 为 1 以上。
 
 > **HAP 是饱和型指标，不是加速比（speedup）。** 它衡量的是“候选 kernel 逼近硬件理论上界的程度”，而非“比 baseline 快多少倍”。当 baseline 本身很慢（$T_{\text{baseline}} \gg T_{\text{HW}}$）时，即使候选相对 baseline 有巨大的 speedup，HAP 也只会趋近于 1 附近而不会线性放大；只有 $T_{\text{cand}} < T_{\text{HW}}$（快于硬件理论上界）时 HAP 才会 > 1。
 >
@@ -191,7 +191,7 @@ result = cann_bench.add(x, y)
    | `proto.yaml`        | 算子原型定义，包括输入输出张量形状、数据类型、属性参数等             |
    | `golden.py`         | PyTorch参考实现，用于功能正确性验证（需覆盖所有测试用例场景）        |
    | `desc.md`           | 算子详细说明文档，包括功能描述、数学公式、实现约束、参考资料等       |
-   | `cases.csv` 或 `cases.yaml` | 测试用例定义，包含输入数据、预期输出、性能基线等信息（推荐Yaml格式） |
+   | `cases.csv` 或 `cases.yaml` | 测试用例定义，包含输入 shape、dtype、属性、值域等信息（推荐Yaml格式）；性能基线已外置到 `<bench>/metadata/<hardware>.json` |
 
 3. **提交PR**  
    将算子目录提交至主仓库，PR需包含：

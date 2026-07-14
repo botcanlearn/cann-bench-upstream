@@ -351,8 +351,6 @@ cases:
   dtype: [dtype1, dtype2, ...]
   attrs: {<attr_name>: <value>, ...}
   value_range: [[min1, max1], [min2, max2], ...]
-  baseline_perf_us: None
-  t_hw_us: None
   note: <简短描述>
 - operator: <OpName>
   case_id: 2
@@ -369,9 +367,9 @@ cases:
 | `dtype` | list[string] \| [string] | 是 | 每个输入张量的数据类型；支持单值简写 `[dtype]` 表示所有 tensor 使用相同类型 |
 | `attrs` | dict | 是 | 属性键值对，键名与 `proto.yaml` 中 `attrs[].name` 一致 |
 | `value_range` | list[list] | 是 | 每个输入张量的随机数取值范围 `[min, max]`，数量与 `input_shape` 一致。特殊值：`[-inf, inf]`、`[nan, nan]`、`[0, 0]`；可选参数对应位置用 `[0, 0]` 或 `null` |
-| `baseline_perf_us` | float / None | 是 | 性能基线（微秒），PyTorch 参考实现在目标 NPU 上的实测时间，未测量时填 `None` |
-| `t_hw_us` | float / None | 是 | 硬件下界 T_HW（微秒），用于 hardware-anchored 性能评分，未给出时填 `None` |
 | `note` | string | 是 | 用例简短描述，建议格式：`<dtype>-<数据规模>-<对齐/非对齐>-<特征>` |
+
+> **注意（baseline 已外置）**：性能基线 `baseline_perf_us` 与硬件下界 `t_hw_us` **不再写入 cases.yaml / cases.csv**，已统一外置到 `<bench>/metadata/<hardware>.json`（由 `BaselineStore` 按硬件加载）。在 cases 文件中写这两个字段会被一致性测试 `tests/ut/test_cases_yaml_csv_consistency.py`（`test_yaml_no_baseline_fields` / `test_csv_no_baseline_columns`）判为失败。
 
 ### 4.3 input_shape 可选参数处理
 
@@ -451,9 +449,9 @@ dtype: [float32]                  # 单值简写，自动展开为6个float32
 | `dtype` | `dtype` | JSON 数组字符串，如 `"['float16', 'float16', 'float16']"` |
 | `attrs` | `attrs` | Python dict 字符串，如 `"{'kernelSize': [3, 3], 'stride': [1, 1]}"` |
 | `value_range` | `value_range` | JSON 数组字符串，如 `"[[-1, 1], [-1, 1], [-0.1, 0.1]]"` |
-| `baseline_perf_us` | `baseline_perf_us` | 浮点数或空 |
-| `t_hw_us` | `t_hw_us` | 浮点数或空（硬件下界 T_HW，单位 µs） |
 | `note` | `note` | 字符串 |
+
+> `cases.csv` 同样**不含** `baseline_perf_us` / `t_hw_us` 列（baseline 已外置到 `<bench>/metadata/<hardware>.json`，见 §4.2 注意）。
 
 ### 5.2 一致性要求
 
