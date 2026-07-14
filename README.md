@@ -124,7 +124,7 @@ pip install -r requirements.txt
    # 或位置参数形式：
    ./scripts/run_evaluation.sh generated_project
    ```
-    评测报告输出到 `reports/`（含 `eval_report.json`、`eval_report.md`、`eval_report.html`、`summary.md`）。
+    评测报告输出到 `reports/`（其它评测集为 `reports/<bench_name>/`），文件名形如 `<bench>_<stage>_eval_<时间戳>.{json,md,html}`（cann 分阶段评测分别产出 `cann_correctness_eval_*`、`cann_performance_eval_*`、`cann_final_eval_*`）。
 
     更多用法见 [docs/guide/quick_start.md](docs/guide/quick_start.md)。
 

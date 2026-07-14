@@ -139,7 +139,7 @@ PyPTO 默认使用传入的 `--workspace` 作为运行仓库，并在该 workspa
 
 - converter runner: `opencode`
 - eval perf source: `trace_view`
-- eval args: `--no-subprocess-isolation --op-timeout-sec 3600 --verbose`
+- eval args: `--op-timeout-sec 3600 --verbose`（并按配置注入 `--no-perf` / `--no-iterative-compile`）
 - device id: 来自 `--devices` 调度，同时注入 PyPTO generator 和 kernel_eval
 
 ## AKG 示例

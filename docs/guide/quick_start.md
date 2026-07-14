@@ -121,10 +121,10 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 | `--no-perf` | 关闭性能采集（仅精度验证） | False |
 | `--profiler-level <level>` | Profiler 级别 (Level1/Level2) | Level1 |
 
-> shell 暴露的是最常用子集。若需要 `--no-subprocess-isolation` / `--op-timeout-sec` / `--no-iterative-compile` / `--reports-dir` / `--eval-code` 等更精细控制，请直调 cli：
+> shell 暴露的是最常用子集。若需要 `--op-timeout-sec` / `--no-iterative-compile` / `--eval-code` / `--eval-seed` 等更精细控制，请直调 cli：
 > ```bash
 > PYTHONPATH=src python -m kernel_eval.cli eval --source-dir /path/to/ai_ops \
->     --no-subprocess-isolation --op-timeout-sec 480
+>     --op-timeout-sec 480
 > ```
 > cli 完整参数表见 [evaluator_design.md §3.3](../design/evaluator_design.md#33-命令行参数)。
 
@@ -142,11 +142,11 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 
 ## 评测报告
 
-评测完成后，报告输出到 `reports/` 目录：
+评测完成后，报告输出到 `reports/`（其它评测集为 `reports/<bench_name>/`）目录。文件名由“语义前缀 + 阶段 + 时间戳”组成，形如 `<bench>_<stage>_eval_<时间戳>.{json,md,html}`（cann 分阶段评测会分别产出 `cann_correctness_eval_*`、`cann_performance_eval_*`、`cann_final_eval_*`）：
 
-- `reports/eval_report.json`：JSON 格式详细报告
-- `reports/eval_report.md`：Markdown 格式报告
-- `reports/summary.md`：摘要报告
+- `<...>.json`：JSON 格式详细报告
+- `<...>.md`：Markdown 格式报告
+- `<...>.html`：HTML 格式报告
 - `reports/prof_data/`：性能采集数据
 
 ## 下一步

@@ -197,7 +197,7 @@
 ```
 src/kernel_eval/
 ├── __init__.py              # 包入口，导出公共API + 版本号
-├── cli.py                   # 命令行入口（eval/list/info/config/eval-child/simulate）
+├── cli.py                   # 命令行入口（eval/list/info/config/eval-child）
 ├── config.py                # 配置管理（Config 数据类 + 全局配置）
 ├── simulation.py            # CPU 仿真评测模块
 ├── _version.py              # 版本管理（从 VERSION 文件动态读取）
@@ -505,7 +505,7 @@ if hasattr(torch.ops, 'cann_bench'):
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| 子命令 | `eval` / `list` / `info` / `config` / `eval-child` / `simulate` | 无 |
+| 子命令 | `eval` / `list` / `info` / `config` / `eval-child`（CPU 模拟走 `eval --device cpu`，无独立 `simulate` 子命令） | 无 |
 | `-v, --verbose` | 详细输出 | False |
 | `--bench-name <name>` | 评测集名称 | `cann` |
 
@@ -523,22 +523,18 @@ if hasattr(torch.ops, 'cann_bench'):
 | `--timeout-per-operator <n>` | 多卡并行单算子超时（秒） | 300 | ✓ |
 | `--warmup <n>` | 预热次数 | 3 | ✓ |
 | `--repeat <n>` | 采集次数 | 5 | ✓ |
-| `--reports-dir <dir>` | 报告输出目录 | `reports` | ✗ |
+| `--reports-dir <dir>` | 报告输出目录 | `reports` | ✓ |
 | `--output <dir>` | 报告输出目录（覆盖 --reports-dir） | None | ✗ |
 | `--eval-code <code>` | 评测代号 | None | ✗ |
 | `--bench-name <name>` | 评测集名称 | `cann` | ✗ |
-| `--no-subprocess-isolation` | 关闭子进程隔离 | False | ✗ |
 | `--op-timeout-sec <n>` | 单进程隔离下 per-op 超时 | 240 | ✗ |
 | `--no-iterative-compile` | 关闭迭代隔离编译 | False | ✗ |
 | `--no-perf` | 关闭性能采集 | False | ✓ |
 | `--profiler-level <level>` | Profiler 级别 | `Level1` | ✓ |
-| `--checker <name>` | 精度判断器名称 | `relative_error` | ✗ |
+| `--no-freq-boost` | 关闭升频预热（部分卡防挂死） | False | ✗ |
 | `--eval-seed <n>` | 确定性种子（0=自动hash, -1=纯随机, N=偏移） | 0 | ✗ |
 | `--torch-op-guard-mode <mode>` | Torch 算子守卫模式（off/warn/block） | `block` | ✗ |
 | `--perf-metric-strategy <name>` | 性能策略覆盖 | None | ✗ |
-| `--agent-skill <name>` | Agent/Skill 名称（写入报告） | None | ✗ |
-| `--base-model <name>` | BaseModel 名称（写入报告） | None | ✗ |
-| `--enable-accuracy-retry` | 启用防作弊二次验证 | False | ✗ |
 
 **多卡并行判定**（`src/kernel_eval/cli.py`）：
 ```python
@@ -548,9 +544,9 @@ use_multi_card = (device == 'npu' and device_id is None and not source_dir)
 
 **eval-child 内部子命令**：仅供 ProcessPoolCoordinator 调用，接收 `--cases-file`（JSON 用例列表）和 `--output`（结果文件路径），在子进程中独立执行评测。
 
-#### 仿真（`simulate`）参数
+#### CPU 仿真
 
-等价于 `eval --device cpu`，独立入口用于无 NPU 环境下的功能验证。
+无独立 `simulate` 子命令；无 NPU 环境下的功能验证使用 `eval --device cpu`。
 
 #### 列表（`list`）参数
 
@@ -591,17 +587,11 @@ python -m kernel_eval.cli eval --operator Exp --torch-op-guard-mode block
 # Torch 算子守卫 warn 模式（仅记日志，便于排查）
 python -m kernel_eval.cli eval --operator Exp --torch-op-guard-mode warn
 
-# 启用防作弊二次验证
-python -m kernel_eval.cli eval --operator Exp --enable-accuracy-retry
-
 # 使用 Level2 Profiler
 ./scripts/run_evaluation.sh --action eval --operator Exp --profiler-level Level2
 
-# CPU 仿真评测
-python -m kernel_eval.cli simulate --operator Exp
-
-# 使用 AllClose Checker（快速验证）
-python -m kernel_eval.cli eval --operator Exp --checker allclose
+# CPU 仿真评测（无独立 simulate 子命令，用 eval --device cpu）
+python -m kernel_eval.cli eval --device cpu --operator Exp
 
 # 使用 MsProfSummary 性能策略（基准采集）
 python -m kernel_eval.cli eval --operator Exp --perf-metric-strategy msprof_summary
@@ -1116,7 +1106,7 @@ def geometric_mean_speedup(speedups):
 | 测试项 | 验证方法 |
 |--------|----------|
 | BenchConfig 组件获取 | 验证 get_bench_components 返回正确实例 |
-| Checker 注册切换 | 验证 --checker 参数切换判断器 |
+| Checker 注册切换 | 验证 checker 注册与切换判断器 |
 | Bench 名称切换 | 验证 --bench-name 参数切换评测集 |
 | 性能策略切换 | 验证 --perf-metric-strategy 参数切换策略 |
 
