@@ -103,6 +103,8 @@ operator:
 | `default` | any | 否 | 默认值。`bool` 类型须用字符串 `"true"` / `"false"` |
 | `required` | bool | 是 | 是否必填，使用字符串 `"true"` / `"false"` 或 YAML bool |
 
+> 注：`required` 目前为声明性字段，CANN loader 暂未据此对入参做强制校验（仅供文档/审查参考）。
+
 #### type 枚举
 
 | 取值 | 含义 | 示例 |
@@ -126,6 +128,10 @@ operator:
 | `description` | string | 是 | 中文描述 |
 | `dtype` | list[string] | 是 | 支持的数据类型列表，取值见下方 dtype 枚举 |
 
+> **输出专用字段**（仅 `outputs` 项可用）：
+> - `compare`（bool，默认 `true`）：该输出是否参与精度比对。对非确定性输出（如 TopK / ArgSort 的索引）设 `false` 可跳过逐值比对。
+> - `index_gather`（dict）：为索引类输出声明 tie-order 无关校验，字段为 `{input: <源张量名>, dim_attr: <维度属性名>, value_output: <对应值输出名>}`。框架据此校验 `源张量.gather(dim, 本索引输出) == 值输出`，从而在不依赖并列元素顺序的前提下验证索引正确性（示例见 `tasks/level3/top_k/proto.yaml`）。
+
 #### dtype 枚举
 
 | 取值 | 含义 |
@@ -142,6 +148,11 @@ operator:
 | `uint16` | 16位无符号整型 |
 | `uint8` | 8位无符号整型 |
 | `bool` | 布尔型 |
+| `float8_e4m3fn` | FP8 E4M3（低精度，**仅 Ascend 950**，见下方 SoC 红线） |
+| `float8_e5m2` | FP8 E5M2（低精度，**仅 Ascend 950**） |
+| `hifloat32` | HiFLOAT32（精度阈值见 benchmark_spec §4.4） |
+
+> **SoC dtype 红线**：Ascend 910B / 910C（含 A3）**不支持** fp8（e4m3 / e5m2）、hifloat8、mxfp8 / mxfp4、e8m0（mx scale）、fp4 等低精度类型——这些类型**仅 Ascend 950** 支持。为 910B / 910C 设计用例时请勿使用上述 dtype，否则会在评审阶段被判为无效。特例：量化算子若以整数 `dst_type` 属性表达输出、且输入仅为 fp16 / bf16，则不触发此红线。
 
 ### 1.6 schema 签名
 
@@ -212,6 +223,8 @@ def <op_name>(
 | **优先使用 PyTorch 内置 API** | 如 `torch.nn.functional.conv2d`、`torch.nn.functional.interpolate`、`torch.unique` 等 |
 | **参数名与 proto.yaml 一致** | golden 函数签名中的参数名须与 `schema` 中的参数名逐一对应 |
 | **无额外依赖** | 只允许 import `torch`，不允许 import 第三方库 |
+| **纯 CPU / 不引用 torch_npu** | golden 默认以 fp64-on-CPU 执行（框架内部将输入上升为 float64 并置于 CPU 计算）；**不得 import 或调用 `torch_npu`**，否则该参考执行路径会崩溃 |
+| **输出顺序与 proto 一致** | 返回值（单输出或 tuple）顺序须与 `proto.yaml` 的 `outputs` 声明顺序逐一对应——框架按**位置**将 golden 输出与候选输出配对比对 |
 | **参数转换明确** | `list` → `tuple` 等转换须在函数体内显式写出 |
 | **无冗余代码** | 不要写死代码、未使用的 import、多余类型转换 |
 | **dtype 保持** | 输出 dtype 须与输入 dtype 一致（除非算子本身改变 dtype） |
