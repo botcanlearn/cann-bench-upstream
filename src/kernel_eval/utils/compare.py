@@ -548,18 +548,13 @@ def _compare_single_tensor(
     small_value_cpu_error_count = int(cpu_small_value_error_mask.sum())
 
     # === 小值域兜底判定 ===
-    # 小值域兜底判定：ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
-    # 设计意图：如果 CPU 在同精度下也会在小值域犯错，NPU 犯错可以容忍（ratio ≤ 2）
-    # 但当 CPU 参考是完美截断（native_output=None 时 cpu_diff=0）且 CPU 无错误时，
-    # NPU 的任何错误都不应被容忍，否则会出现误判（如 golden=1e-6, output=65504 仍通过）
+    # 判定标准严格对齐 docs/spec/benchmark_spec.md「小值域通过标准」：
+    #     ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
+    # 即 CPU 无小值域错误时分母取 1，NPU 至多 2 个小值域错误仍判通过。
     if small_value_total_count > 0:
-        if small_value_cpu_error_count == 0:
-            # CPU 无错误 → NPU 必须也无错误才算通过
-            small_value_passed = (small_value_error_count == 0)
-        else:
-            max_cpu_error = max(small_value_cpu_error_count, 1)
-            small_value_ratio = small_value_error_count / max_cpu_error
-            small_value_passed = small_value_ratio <= 2
+        max_cpu_error = max(small_value_cpu_error_count, 1)
+        small_value_ratio = small_value_error_count / max_cpu_error
+        small_value_passed = small_value_ratio <= 2
     else:
         small_value_passed = True
 
@@ -584,15 +579,12 @@ def _compare_single_tensor(
     cancel_cpu_error_mask = cancel_mask & (cpu_relative_error > mare_threshold)
     cancel_cpu_error_count = int(cancel_cpu_error_mask.sum())
 
-    # 相消位置兜底判定：与小值域相同逻辑
-    # 当 CPU 无错误时，NPU 的任何错误都不应被容忍
+    # 相消位置兜底判定：与小值域相同标准，对齐 benchmark_spec.md「相消位置通过标准」：
+    #     ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
     if cancel_total_count > 0:
-        if cancel_cpu_error_count == 0:
-            cancel_passed = (cancel_error_count == 0)
-        else:
-            max_cpu_cancel_error = max(cancel_cpu_error_count, 1)
-            cancel_ratio = cancel_error_count / max_cpu_cancel_error
-            cancel_passed = cancel_ratio <= 2
+        max_cpu_cancel_error = max(cancel_cpu_error_count, 1)
+        cancel_ratio = cancel_error_count / max_cpu_cancel_error
+        cancel_passed = cancel_ratio <= 2
     else:
         cancel_passed = True
 

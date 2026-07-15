@@ -208,17 +208,16 @@ class TestCompareTensors:
 
 
 class TestSmallValueFallback:
-    """小值域兜底判定修复测试
+    """小值域兜底判定测试
 
-    Bug 场景：当 native_output=None 时，CPU 参考是 perfect truncation（cpu_diff=0），
-    导致 small_value_cpu_error_count=0。旧逻辑 ratio = NPU_errors / max(0,1) = NPU_errors，
-    即使 NPU 在小值域有巨大误差（如 golden=1e-6, output=65504）也会通过兜底。
-
-    修复：当 cpu_error_count=0 时，要求 NPU 也必须无错误才算通过。
+    判定标准对齐 docs/spec/benchmark_spec.md「小值域通过标准」：
+        ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
+    当 CPU 无小值域错误（cpu_error=0，如 native_output=None 的完美截断）时分母取 1，
+    NPU 至多 2 个小值域错误仍判通过、≥3 个才判失败。
     """
 
-    def test_small_value_huge_error_fails_when_cpu_clean(self):
-        """golden 很小 + output 极大 → 应失败（修复前会误判通过）"""
+    def test_small_value_over_2_errors_fail_when_cpu_clean(self):
+        """CPU 无错误 + NPU 小值域错误 >2（ratio>2）→ 应失败"""
         # 构造场景：约一半 golden 值很小（小值域区域）
         n = 1000
         golden = torch.zeros(n, dtype=torch.float64)
@@ -226,18 +225,42 @@ class TestSmallValueFallback:
         golden[:small_count] = 1e-6   # 小值域区域
         golden[small_count:] = 1.0    # 正常区域
 
-        # output 基本匹配，但在一个小值域位置有巨大偏差
+        # output 基本匹配，但在 3 个小值域位置有巨大偏差（ratio = 3 / max(0,1) = 3 > 2）
         output = golden.half()
-        output[0] = 65504.0  # fp16 max，误差 = 65504 / 1e-6 = 6.55e10
+        output[0] = 65504.0  # fp16 max
+        output[1] = 65504.0
+        output[2] = 65504.0
 
         # native_output=None → CPU 参考是 golden_truncated（完美截断，cpu_diff=0）
         result = compare_tensors(output, golden, "float16")
 
-        # 修复后应失败
         assert result.passed is False
-        assert result.small_value_error_count > 0
+        assert result.small_value_error_count > 2
         assert result.small_value_cpu_error_count == 0
         assert result.mismatch_count > 0
+
+    def test_small_value_le2_errors_pass_when_cpu_clean(self):
+        """CPU 无错误 + NPU 小值域错误 ≤2（ratio = 2/max(0,1) = 2 ≤ 2）→ 应通过
+
+        这是对齐文档公式后的行为：cpu_error=0 时分母取 1，容忍最多 2 个 NPU 小值域错误。
+        （旧实现在此场景要求 NPU 零错误，与文档不一致，已改为以文档为准。）
+        """
+        n = 1000
+        golden = torch.zeros(n, dtype=torch.float64)
+        golden[:500] = 1e-6   # 小值域区域
+        golden[500:] = 1.0    # 正常区域
+
+        output = golden.half()
+        output[0] = 65504.0   # 2 个小值域巨大偏差
+        output[1] = 65504.0
+
+        result = compare_tensors(output, golden, "float16")
+
+        assert result.small_value_error_count == 2
+        assert result.small_value_cpu_error_count == 0
+        assert result.small_value_passed is True
+        # 正常值域全部匹配 → 整体判定由小值域兜底决定，应通过
+        assert result.passed is True
 
     def test_small_value_passes_when_both_npu_and_cpu_have_errors(self):
         """NPU 和 CPU 都有小值域误差（ratio ≤ 2）→ 应通过"""
@@ -300,22 +323,45 @@ class TestSmallValueFallback:
 
 
 class TestCancelFallback:
-    """相消区域兜底判定修复测试（与小值域相同逻辑）"""
+    """相消区域兜底判定测试（与小值域相同标准：npu / max(cpu,1) ≤ 2）
 
-    def test_cancel_huge_error_fails_when_cpu_clean(self):
-        """相消区域巨大误差 + CPU 无错误 → 应失败"""
-        # 构造相消场景：output ≈ 0，golden 在 cancel_boundary 附近
-        n = 100
-        golden = torch.full((n,), 0.01, dtype=torch.float64)  # 在 cancel boundary 附近
-        output = torch.zeros(n, dtype=torch.float16)
-        # 一个位置 output 不接近 0（触发 cancel error）
-        output[0] = 0.5
+    构造纯相消场景以真正走到 cancel 兜底路径：golden 全部落在相消区间
+    [small_value_threshold, cancel_boundary)（fp16 为 [4.88e-4, 0.03125)），
+    output 全部 near-zero（< cancel_zero_threshold），从而所有位置都进入 cancel_mask、
+    无 normal_mismatch —— 整体判定完全由 cancel 兜底决定。
+    """
 
+    def _make_cancel_case(self, n=100, n_err=0):
+        """golden=0.01（相消区间内），output≈0.01（near-zero 但非错误），
+        前 n_err 个位置 output=0（相消错误）。native_output=None → CPU 无相消错误。"""
+        golden = torch.full((n,), 0.01, dtype=torch.float64)
+        output = golden.half()          # ≈0.01，near-zero 区间内，rel_err 极小→非错误
+        output[:n_err] = 0.0            # n_err 个 near-zero 巨大相对误差→相消错误
+        return output, golden
+
+    def test_cancel_over_2_errors_fail_when_cpu_clean(self):
+        """CPU 无相消错误 + NPU 相消错误 >2（ratio>2）→ 应失败"""
+        output, golden = self._make_cancel_case(n_err=3)
         result = compare_tensors(output, golden, "float16")
 
-        # 如果有 cancel mismatch 且 CPU 无错误，应失败
-        if result.cancel_error_count > 0:
-            assert result.passed is False
+        assert result.cancel_error_count > 2
+        assert result.cancel_cpu_error_count == 0
+        assert result.cancel_passed is False
+        # 无正常值域误差 → 判定确由 cancel 兜底决定
+        assert result.passed is False
+
+    def test_cancel_le2_errors_pass_when_cpu_clean(self):
+        """CPU 无相消错误 + NPU 相消错误 ≤2（ratio = 2/max(0,1) = 2 ≤ 2）→ 应通过
+
+        对齐文档 npu / max(cpu,1) ≤ 2；旧实现在 cpu_error=0 时要求零错误，与文档不一致，已改。
+        """
+        output, golden = self._make_cancel_case(n_err=2)
+        result = compare_tensors(output, golden, "float16")
+
+        assert result.cancel_error_count == 2
+        assert result.cancel_cpu_error_count == 0
+        assert result.cancel_passed is True
+        assert result.passed is True
 
 
 class TestBitExactFloat:
@@ -377,22 +423,25 @@ class TestCompareResultFallbackFlags:
         assert result.cancel_passed is True
 
     def test_small_value_passed_false_propagated(self):
-        """小值域兜底未通过时，small_value_passed 应为 False"""
-        from kernel_eval.utils.thresholds import get_small_value_threshold, get_small_value_error
-        # 构造小值域兜底失败场景：CPU 无错误，NPU 有错误
+        """小值域兜底未通过时，small_value_passed 应为 False 并传播。
+
+        构造 CPU 无错误、NPU 有 50 个小值域错误：ratio = 50 / max(0,1) = 50 > 2 →
+        兜底判定失败（按文档公式 npu / max(cpu,1) ≤ 2）。
+        """
         n = 100
         golden = torch.zeros(n, dtype=torch.float64)
         golden[:50] = 1e-6  # 小值域
         golden[50:] = 1.0
-        # NPU 在小值域有巨大误差
+        # NPU 在小值域有巨大误差（50 个 >> 2）
         output = golden.half()
         output[:50] = 100.0  # 小值域位置严重偏离
 
         result = compare_tensors(output, golden, "float16")
 
-        # 验证 small_value_passed 为 False（当 CPU 无错误时，NPU 有小值域错误应判定为未通过）
-        if result.small_value_error_count > 0 and result.small_value_cpu_error_count == 0:
-            assert result.small_value_passed is False
+        # 50 个 NPU 错误、CPU 0 错误 → ratio 50 > 2 → small_value_passed 必为 False
+        assert result.small_value_error_count == 50
+        assert result.small_value_cpu_error_count == 0
+        assert result.small_value_passed is False
 
     def test_small_value_passed_reflected_in_output_metadata(self):
         """small_value_passed 应通过 output_results metadata 传播"""
