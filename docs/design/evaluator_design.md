@@ -296,7 +296,7 @@ src/kernel_eval/
 |------|------|
 | `enums.py` | 通用枚举：DifficultyLevel(L1-L4)、BackendType(torch/torch_npu/ascendc/…)、SourceType(file/code/module/generated)、GoldenReference(file/self/fp64_cpu/none)、EvaluationMode(accuracy/performance/full) |
 | `models.py` | 统一数据模型基类：AttrSpec、InputSpec、OutputSpec、TaskSpec、CaseSpec、SolutionSpec；支持 to_dict/from_dict 序列化 |
-| `loaders.py` | 加载器抽象基类：TaskLoader（list_tasks/get_task/get_statistics）、CaseLoader（scan_all/scan_by_task）、OperatorDirMixin（proto.yaml+cases.yaml+golden.py 三文件检测）、GoldenLoaderBase（get_golden_function/get_input_function） |
+| `loaders.py` | 加载器抽象基类：TaskLoader（list_tasks/get_task/get_statistics）、CaseLoader（scan_all/scan_by_task）、OperatorDirMixin（proto.yaml+cases.yaml+golden.py 三文件检测）、GoldenLoaderBase（get_golden_function/get_input_function/get_output_function） |
 | `matcher.py` | 算子匹配器抽象基类：OperatorMatcherBase（load_ai_operator/find_operator_info/clear_cache/find_operator_info_by_snake） |
 | `checker.py` | 精度判断器抽象基类：CorrectnessChecker（get_name/check/辅助方法 _normalize_outputs/_ensure_cpu/_check_output_count） |
 | `result.py` | 评测结果基类：OutputResult（ABC + 注册表反序列化）、AccuracyResult（passed/threshold/output_results/metadata）、PerfResult（elapsed_us/op_times/metadata + 便捷方法 get_speedup/get_baseline_us/get_t_hw_us）、compute_speedup |

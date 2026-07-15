@@ -272,6 +272,52 @@ y = torch.topk(x, k, dim=-1, largest=True, sorted=True)
 - `tasks/level3/grouped_matmul/`：plain（fp16/bf16 操作数升 fp32 累加，即 A16W16 bench）+ `_oracle`（fp64），无 `_bench`。
 - `tasks/level3/weight_quant_batch_matmul/`：plain（int8 反量化到输出精度 T + fp32 累加，即 A16W8 bench）+ `_oracle`（fp64 反量化真值），无 `_bench`。
 
+### 2.5 可选钩子函数
+
+golden.py 中除主函数外，还可定义两个**可选**钩子函数，框架会自动检测并调用。
+
+#### get_input — 输入前处理
+
+当框架随机生成的输入无法满足算子约束时（如 NMS 需要规整 `x1≤x2, y1≤y2`、ROIAlign 需要合法的 ROI 框），定义 `get_input` 对输入进行规整。其返回值会**同时替换** golden 和 AI 算子的输入，确保对比公平。
+
+```python
+def get_input(
+    boxes: torch.Tensor,       # 按 proto.yaml inputs 声明名传入
+    scores: torch.Tensor,
+    iou_threshold: float = 0.5,  # attrs 按名传入
+    **kwargs,
+) -> list:
+    """规整测试输入，使算子良定义且可被真实单算子复现"""
+    # ... 规整逻辑 ...
+    return [boxes_normalized, scores_normalized]
+```
+
+#### get_output — 输出后处理
+
+当算子输出在对比前需要处理时（如截断极端值、消除非确定性排序、剥离 padding），定义 `get_output` 对输出进行变换。框架在精度对比前对 **golden / AI / 同精度参考** 三路输出统一调用同一函数，确保变换一致、对比公平。
+
+```python
+def get_output(
+    y: torch.Tensor,           # 按 proto.yaml outputs 声明名传入
+    idx: torch.Tensor,         # 多输出时每个输出按名传入
+    dim: int = -1,             # attrs 按名传入
+    **kwargs,
+) -> list:
+    """对算子输出进行后处理，返回变换后的输出列表"""
+    # ... 变换逻辑（如截断、排序、剥离 padding） ...
+    return [y_transformed, idx_transformed]
+```
+
+| 对比项 | `get_input` | `get_output` |
+|--------|-------------|--------------|
+| 时机 | 算子执行**前** | 算子执行**后**、精度对比**前** |
+| 作用对象 | golden 和 AI 的输入 | golden / AI / 同精度参考的输出 |
+| 参数 | proto inputs 名 + attrs | proto outputs 名 + attrs |
+| 返回值 | 替换后的输入列表 | 变换后的输出列表 |
+| 默认行为 | 不定义则不做前处理 | 不定义则不做后处理 |
+
+> **注意**：`get_output` 的变换结果仅用于精度对比，不影响 `index_gather` 索引自洽校验（后者仍对原始输出执行）。
+
 ---
 
 ## 3. desc.md
@@ -512,4 +558,5 @@ dtype: [float32]                  # 单值简写，自动展开为6个float32
 - [ ] `desc.md` 中 Golden 代码块与 `golden.py` 内容一致
 - [ ] `desc.md` 中算子示例代码的参数名与 `proto.yaml` schema 一致
 - [ ] `golden.py` 只 import `torch`，无额外依赖
+- [ ] `golden.py` 中 `get_input`/`get_output`（如有）返回值为 list，长度与 proto.yaml inputs/outputs 一致
 - [ ] `proto.yaml` 中 type 使用统一命名：`ListInt`/`ListFloat`/`Int`/`float`/`bool`

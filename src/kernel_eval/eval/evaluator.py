@@ -322,9 +322,25 @@ class Evaluator:
             op_info = self.operator_loader.get_operator(case.rel_path)
             output_names = [out.name for out in op_info.outputs] if op_info and op_info.outputs else []
 
+            # 7.5 调用 get_output 后处理（如果存在）
+            # 与 get_input 对称：对 golden / AI / native 三路输出统一变换后再对比，
+            # 确保变换一致、对比公平。不修改 ai_result.outputs 原始引用，
+            # 使 validate_index_gather_outputs 仍能对原始输出做索引自洽校验。
+            golden_outs = golden_result.outputs
+            ai_outs = ai_result.outputs
+            get_output_func = self.golden_loader.get_output_function(case.rel_path)
+            if get_output_func is not None:
+                golden_outs = self._apply_get_output(
+                    get_output_func, golden_outs, op_info, case_attrs)
+                ai_outs = self._apply_get_output(
+                    get_output_func, ai_outs, op_info, case_attrs)
+                if native_out is not None:
+                    native_out = self._apply_get_output(
+                        get_output_func, native_out, op_info, case_attrs)
+
             accuracy_result = self.accuracy_evaluator.evaluate(
-                ai_output=ai_result.outputs,
-                golden_output=golden_result.outputs,
+                ai_output=ai_outs,
+                golden_output=golden_outs,
                 dtype=dtype,
                 custom_thresholds=merged_thresholds,
                 native_output=native_out,
@@ -934,6 +950,34 @@ class Evaluator:
                     ignore_indices.append(idx)
         return ignore_indices
 
+    @staticmethod
+    def _apply_get_output(get_output_func, outputs, op_info, case_attrs):
+        """调用 get_output 对算子输出进行后处理，返回变换后的输出列表。
+
+        与 get_input 对称：按 proto.yaml 声明的输出名 + attrs 作为 kwargs 传入，
+        返回值规整为 list。对 golden / AI / native 三路输出分别调用同一函数，
+        确保变换一致、对比公平。
+        """
+        if outputs is None:
+            return None
+        outs = list(outputs) if isinstance(outputs, (list, tuple)) else [outputs]
+
+        kwargs = {}
+        if op_info and op_info.outputs:
+            for i, output_info in enumerate(op_info.outputs):
+                kwargs[output_info.name] = outs[i] if i < len(outs) else None
+        if case_attrs:
+            for attr_key, attr_val in case_attrs.items():
+                if attr_key not in kwargs:
+                    kwargs[attr_key] = attr_val
+
+        transformed = get_output_func(**kwargs)
+        if isinstance(transformed, tuple):
+            return list(transformed)
+        if isinstance(transformed, list):
+            return transformed
+        return [transformed]
+
     def _retry_with_fresh_inputs(self, case, golden_func, ai_op_func, dtype,
                                   merged_thresholds, ignore_output_indices,
                                   first_result, case_seed=None):
@@ -993,9 +1037,21 @@ class Evaluator:
                     error_msg=f"二次验证失败：AI 算子崩溃 ({ai_result2.error})",
                 )
 
+            # 与主流程一致：若存在 get_output 则对 golden / AI 输出统一变换后再对比
+            golden_outs2 = golden_result2.outputs
+            ai_outs2 = ai_result2.outputs
+            get_output_func = self.golden_loader.get_output_function(case.rel_path)
+            if get_output_func is not None:
+                op_info = self.operator_loader.get_operator(case.rel_path)
+                retry_attrs = getattr(case, 'attrs', None) or {}
+                golden_outs2 = self._apply_get_output(
+                    get_output_func, golden_outs2, op_info, retry_attrs)
+                ai_outs2 = self._apply_get_output(
+                    get_output_func, ai_outs2, op_info, retry_attrs)
+
             return self.accuracy_evaluator.evaluate(
-                ai_output=ai_result2.outputs,
-                golden_output=golden_result2.outputs,
+                ai_output=ai_outs2,
+                golden_output=golden_outs2,
                 dtype=dtype,
                 custom_thresholds=merged_thresholds,
                 native_output=None,

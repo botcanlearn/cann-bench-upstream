@@ -17,21 +17,21 @@ import torch
 Add算子Torch Golden参考实现（评测流水线 fixture）
 
 逐元素加法运算
-公式: z = x + y
+公式: y = x1 + x2
 """
 def add(
-    x: torch.Tensor, y: torch.Tensor
+    x1: torch.Tensor, x2: torch.Tensor
 ) -> torch.Tensor:
     """
     逐元素加法运算
 
-    公式: z = x + y
+    公式: y = x1 + x2
 
     Args:
-        x: 第1个输入张量
-        y: 第2个输入张量（与x同shape）
+        x1: 第1个输入张量
+        x2: 第2个输入张量（与x1同shape）
 
     Returns:
         输出张量，逐元素加法结果
     """
-    return torch.add(x, y)
+    return torch.add(x1, x2)

@@ -14,6 +14,7 @@ npu_dynamic_mx_quant 算子性能测试脚本
     msprof --application="python3 test_baseline_perf.py 1" --output=./prof_out
 """
 
+import ast
 import os
 import sys
 import csv
@@ -55,6 +56,77 @@ DST_TYPE_NPU_MAP = {
 }
 
 
+ROUND_MODES = {"rint", "floor", "round"}
+
+
+def _is_int(x):
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _is_number(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def _literal(field, raw):
+    try:
+        return ast.literal_eval(raw)
+    except (ValueError, SyntaxError) as e:
+        raise ValueError(f"字段 {field} 不是合法字面量: {raw!r} ({e})")
+
+
+def _parse_input_shape(raw):
+    shapes = _literal("input_shape", raw)
+    if not isinstance(shapes, list) or len(shapes) != 1:
+        raise ValueError(f"input_shape 必须形如 [[M,N,...]]，实际: {raw!r}")
+    shape = shapes[0]
+    if not isinstance(shape, list) or not shape:
+        raise ValueError(f"input_shape[0] 必须是非空列表，实际: {shape!r}")
+    if not all(_is_int(d) and d > 0 for d in shape):
+        raise ValueError(f"input_shape 维度必须为正整数，实际: {shape!r}")
+    return shapes
+
+
+def _parse_dtype(raw):
+    dtypes = _literal("dtype", raw)
+    if not isinstance(dtypes, list) or not dtypes:
+        raise ValueError(f"dtype 必须是非空列表，实际: {raw!r}")
+    for d in dtypes:
+        if not isinstance(d, str) or d not in DTYPE_MAP:
+            raise ValueError(f"dtype 元素必须是 {sorted(DTYPE_MAP)} 之一，实际: {d!r}")
+    return dtypes
+
+
+def _parse_attrs(raw):
+    attrs = _literal("attrs", raw)
+    if not isinstance(attrs, dict):
+        raise ValueError(f"attrs 必须是 dict，实际: {raw!r}")
+    for key in ("axis", "round_mode", "dst_type", "blocksize", "scale_alg", "dst_type_max"):
+        if key not in attrs:
+            raise ValueError(f"attrs 缺少必填字段 {key}")
+    if not _is_int(attrs["axis"]):
+        raise ValueError(f"attrs[axis] 必须为 int，实际: {attrs['axis']!r}")
+    if not isinstance(attrs["round_mode"], str) or attrs["round_mode"] not in ROUND_MODES:
+        raise ValueError(f"round_mode 必须是 {sorted(ROUND_MODES)} 之一，实际: {attrs['round_mode']!r}")
+    if not _is_int(attrs["dst_type"]) or attrs["dst_type"] not in DST_TYPE_NPU_MAP:
+        raise ValueError(f"dst_type 必须是 {sorted(DST_TYPE_NPU_MAP)} 之一，实际: {attrs['dst_type']!r}")
+    if not _is_int(attrs["blocksize"]) or attrs["blocksize"] <= 0:
+        raise ValueError(f"blocksize 必须为正整数，实际: {attrs['blocksize']!r}")
+    if not _is_int(attrs["scale_alg"]) or attrs["scale_alg"] < 0:
+        raise ValueError(f"scale_alg 必须为非负整数，实际: {attrs['scale_alg']!r}")
+    if not _is_number(attrs["dst_type_max"]):
+        raise ValueError(f"dst_type_max 必须为数值，实际: {attrs['dst_type_max']!r}")
+    return attrs
+
+
+def _parse_value_range(raw):
+    vr = _literal("value_range", raw)
+    if not isinstance(vr, list) or len(vr) != 2:
+        raise ValueError(f"value_range 必须形如 [vmin, vmax]，实际: {raw!r}")
+    if not all(_is_number(v) for v in vr):
+        raise ValueError(f"value_range 元素必须为数值，实际: {vr!r}")
+    return vr
+
+
 def load_cases(csv_path):
     """从 cases.csv 加载测试用例。"""
     cases = {}
@@ -62,10 +134,10 @@ def load_cases(csv_path):
         reader = csv.DictReader(f)
         for row in reader:
             case_id = int(row["case_id"])
-            shapes = eval(row["input_shape"])    # [[M, N, ...]]
-            dtypes = eval(row["dtype"])          # ["float16"] or ["bfloat16"]
-            attrs = eval(row["attrs"])
-            value_range = eval(row["value_range"])
+            shapes = _parse_input_shape(row["input_shape"])
+            dtypes = _parse_dtype(row["dtype"])
+            attrs = _parse_attrs(row["attrs"])
+            value_range = _parse_value_range(row["value_range"])
             cases[case_id] = {
                 "input_shape": shapes[0],
                 "dtype": DTYPE_MAP[dtypes[0]],

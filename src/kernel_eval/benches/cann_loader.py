@@ -578,6 +578,13 @@ class GoldenLoader(GoldenLoaderBase):
             return getattr(module, 'get_input')
         return None
 
+    def get_output_function(self, rel_path: str) -> Optional[Callable]:
+        """获取 get_output 函数（可选）"""
+        module = self._load_module(rel_path)
+        if hasattr(module, 'get_output'):
+            return getattr(module, 'get_output')
+        return None
+
     def get_golden_by_operator_name(self, operator: str) -> Callable:
         """按算子名称查找golden函数（遍历查找）"""
         for proto_path in self.bench_root.rglob("proto.yaml"):

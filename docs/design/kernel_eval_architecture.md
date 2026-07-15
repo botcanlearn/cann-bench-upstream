@@ -376,7 +376,8 @@ src/kernel_eval/
 │  │  TaskLoader        - 任务加载器 ABC (list_tasks/get_task)│   │
 │  │  CaseLoader        - 用例加载器 ABC (scan_all/scan_by_task)│ │
 │  │  GoldenLoaderBase  - Golden 加载器 ABC                   │   │
-│  │    (get_golden_function / get_input_function)            │   │
+│  │    (get_golden_function / get_input_function /           │   │
+│  │     get_output_function)                                 │   │
 │  │  OperatorDirMixin  - 算子目录扫描 (proto+cases+golden)   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
@@ -640,10 +641,11 @@ src/kernel_eval/
 │   │   │ 4. Golden 执行 (精度策略: fp64_cpu/native_cpu/native_npu)   │  │  │
 │   │   │ 5. AI 算子执行 (TorchOpGuard 监听 + profiler 采集)           │  │  │
 │   │   │ 6. 同精度参考 (fp64_cpu时单独执行, 其他复用golden)           │  │  │
-│   │   │ 7. Checker 三输入模式 (AI/Golden/同精度参考)                 │  │  │
-│   │   │ 7.5 防作弊二次验证 (enable_accuracy_retry, 偏移种子+微扰)   │  │  │
-│   │   │ 8. 性能数据 (从 profiler 运行中直接提取)                    │  │  │
-│   │   │ 9. 生成 EvalCaseResult                                      │  │  │
+│   │   │ 7. get_output 后处理 (如有, 对 golden/AI/同精度参考三路)     │  │  │
+│   │   │ 8. Checker 三输入模式 (AI/Golden/同精度参考)                 │  │  │
+│   │   │ 8.5 防作弊二次验证 (enable_accuracy_retry, 偏移种子+微扰)   │  │  │
+│   │   │ 9. 性能数据 (从 profiler 运行中直接提取)                    │  │  │
+│   │   │ 10. 生成 EvalCaseResult                                     │  │  │
 │   │   └─────────────────────────────────────────────────────────────┘  │  │
 │   │                                                                     │  │
 │   │   run_cases(cases): 渐进设备恢复                                    │  │

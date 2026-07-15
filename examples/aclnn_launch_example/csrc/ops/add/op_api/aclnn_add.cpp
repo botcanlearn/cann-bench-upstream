@@ -32,7 +32,7 @@ using namespace op;
 #define ACLNN_MAX_SHAPE_RANK 8
 
 static const std::initializer_list<op::DataType> DTYPE_SUPPORT = {
-    DataType::DT_FLOAT, DataType::DT_FLOAT16, DataType::DT_INT32
+    DataType::DT_FLOAT, DataType::DT_FLOAT16, DataType::DT_INT32, DataType::DT_BF16
 };
 
 static bool IsDtypeSupported(DataType dtype)

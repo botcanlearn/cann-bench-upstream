@@ -52,14 +52,6 @@ from ..config import Config, get_config, get_project_root
 from ..base.models import CaseSpec
 
 
-_DEVICE_VISIBILITY_ENV_VARS = (
-    "ASCEND_RT_VISIBLE_DEVICES",
-    "ASCEND_VISIBLE_DEVICES",
-    "NPU_VISIBLE_DEVICES",
-)
-
-
-
 # ---------------------------------------------------------------------------
 # 数据类
 # ---------------------------------------------------------------------------
@@ -70,6 +62,11 @@ class ProcessConfig:
     processes_per_card: int = 2      # 每卡最大并发进程数
     timeout_per_operator: int = 300  # 单算子超时（秒）
     enable_profiler: bool = True     # 是否启用 profiler
+    max_retries: int = 1             # 最大重试次数
+    retry_on_timeout: bool = True    # 超时是否重试
+    retry_on_oom: bool = True        # OOM 是否重试
+    retry_on_failure: bool = True    # 子进程异常是否重试
+    exclude_repeatedly_failed_cases: bool = True  # 排除多次失败的case
 
 
 @dataclass
@@ -79,6 +76,13 @@ class TaskUnit:
     rel_path: str               # 算子相对路径
     cases: List[CaseSpec]       # 该进程需要跑的用例列表
     device_id: int              # 分配的 NPU 卡 ID
+    retry_count: int = 0        # 重试次数
+    excluded_devices: set = None  # 排除的设备ID集合
+    parent_task_id: str = None  # 父任务ID（用于追踪）
+
+    def __post_init__(self):
+        if self.excluded_devices is None:
+            self.excluded_devices = set()
 
 
 # ---------------------------------------------------------------------------
@@ -323,58 +327,57 @@ class ProcessPoolCoordinator:
 
         return env
 
-    @staticmethod
-    def _visible_device_tokens_from_env(env: Dict[str, str]) -> List[str]:
-        """Return parent-visible physical device tokens in logical order."""
-        for var in _DEVICE_VISIBILITY_ENV_VARS:
-            raw = env.get(var, "")
-            if not raw:
-                continue
-            tokens = [token.strip() for token in raw.split(",") if token.strip()]
-            if tokens and not any(token.lower() in {"all", "none"} for token in tokens):
-                return tokens
-        return []
-
-    def _physical_device_token_for_task(self, task: TaskUnit, env: Dict[str, str]) -> str:
-        visible_tokens = self._visible_device_tokens_from_env(env)
-        if len(visible_tokens) >= self.card_count and 0 <= task.device_id < len(visible_tokens):
-            return visible_tokens[task.device_id]
-        return str(task.device_id)
-
-    def _should_narrow_child_visibility(self) -> bool:
-        # 单卡模式：device_id 指定了物理卡，需要收窄子进程 visibility 到该卡
-        # 多卡模式：每张卡分到不同子进程，也需要收窄
-        return self.base_config.device_type == "npu" and (
-            self.device_id is not None or self.card_count > 1
-        )
-
-    def _child_device_id(self, task: TaskUnit) -> int:
-        # 收窄 visibility 后，子进程只看到一张物理卡，
-        # torch_npu 会把该卡重映射为逻辑设备 0。
-        return 0 if self._should_narrow_child_visibility() else task.device_id
-
     def _build_env_for_task(self, base_env: Dict[str, str], task: TaskUnit) -> Dict[str, str]:
+        """构建子进程的环境变量
+
+        F745: 为每个子进程设置独立的 ASCEND_RT_VISIBLE_DEVICES，
+        让每个进程只能看到分配给它的那张卡，从而彻底隔离多卡之间的资源竞争。
+
+        关键语义：task.device_id 是**相对父进程可见集的逻辑索引**（0..card_count-1），
+        因为 card_count 来自 torch.npu.device_count()，已受父进程可见性约束。
+        ASCEND_RT_VISIBLE_DEVICES 接受的也是父进程可见空间内的相对索引，而非全局
+        物理卡号——因此这里直接写 task.device_id 即可，无需做物理号映射。
+
+        （曾误改为"逻辑→物理号映射"，在父进程用 ASCEND_VISIBLE_DEVICES=12,13 收窄时
+        会写出 ASCEND_RT_VISIBLE_DEVICES=12 导致子进程 device_count=0、set_device 失败。）
+        """
         env = base_env.copy()
-        if not self._should_narrow_child_visibility():
-            return env
 
-        # 单卡模式：直接用 self.device_id 作为物理卡号
-        if self.device_id is not None:
-            physical_device = str(self.device_id)
-        else:
-            physical_device = self._physical_device_token_for_task(task, base_env)
+        # 让每个子进程只看到分配给它的那张卡（相对父进程可见集的索引）
+        env['ASCEND_RT_VISIBLE_DEVICES'] = str(task.device_id)
 
-        for var in _DEVICE_VISIBILITY_ENV_VARS:
-            env[var] = physical_device
-        env["KERNEL_EVAL_PHYSICAL_DEVICE_ID"] = physical_device
-        env["KERNEL_EVAL_LOGICAL_DEVICE_ID"] = "0"
         return env
+
+    def _select_device_for_retry(
+        self,
+        original_device: int,
+        excluded_devices: set,
+        healthy_cards: List[int]
+    ) -> int:
+        """为重试任务选择设备，优先选择未出问题的卡
+
+        Args:
+            original_device: 原始失败的设备ID
+            excluded_devices: 已排除的设备ID集合
+            healthy_cards: 健康的卡ID列表
+
+        Returns:
+            选择的设备ID
+        """
+        # 优先选择从未失败过的卡
+        available = [d for d in healthy_cards if d not in excluded_devices]
+        if available:
+            # 轮询选择（简单的负载均衡）
+            return available[0]
+
+        # 所有卡都有问题，重用原设备（可能是偶发问题）
+        return original_device
 
     def _build_child_cmd(self, task: TaskUnit, cases_file: str, output_file: str) -> List[str]:
         """构建 eval-child 子进程命令"""
         cmd = [sys.executable, "-u", "-m", "kernel_eval.cli", "eval-child",
                "--bench-name", self.base_config.bench_name,
-               "--device-id", str(self._child_device_id(task)),
+               "--device-id", str(task.device_id),
                "--cases-file", cases_file,
                "--output", output_file,
                "--warmup", str(self.base_config.warmup),
@@ -421,6 +424,7 @@ class ProcessPoolCoordinator:
 
         每个 TaskUnit 启动一个 eval-child 子进程，
         通过 ThreadPoolExecutor 实现多卡并行和动态负载均衡。
+        支持失败任务自动重试机制。
         """
         if self.card_count == 0:
             if os.environ.get("ALLOW_NO_NPU_CARDS") == "1":
@@ -441,13 +445,21 @@ class ProcessPoolCoordinator:
         print(f"[INFO] TaskUnit 数: {len(task_units)}, 用例数: {total_cases}")
         print(f"[INFO] 单算子超时: {self.process_config.timeout_per_operator}s")
         print(f"[INFO] 最大并发: {max_workers}")
+        if self.process_config.max_retries > 0:
+            print(f"[INFO] 重试策略: 最大重试 {self.process_config.max_retries} 次 "
+                  f"(timeout={self.process_config.retry_on_timeout}, "
+                  f"oom={self.process_config.retry_on_oom}, "
+                  f"failure={self.process_config.retry_on_failure})")
 
         base_env = self._build_env()
         all_case_results: List[EvalCaseResult] = []
         completed_count = 0
+        retry_queue: List[TaskUnit] = []  # 重试队列
+        healthy_cards = list(range(self.card_count))
+        case_failure_count: Dict[str, int] = defaultdict(int)  # 记录每个case的失败次数
 
         def _run_task(idx_and_task):
-            """在线程中运行一个 TaskUnit"""
+            """在线程中运行一个 TaskUnit，返回 (task, case_results, should_retry, failure_type)"""
             idx, task = idx_and_task
             # 写 cases JSON 文件
             fd, cases_file = tempfile.mkstemp(suffix=".json", prefix="cases_")
@@ -496,9 +508,19 @@ class ProcessPoolCoordinator:
                             f"子进程超时 ({timeout}s) 被 SIGTERM/SIGKILL")
                         print(f"[INFO] {task.operator}: 超时后恢复 {len(partial)} 个已完成用例，"
                               f"合成 {len(oom_rest)} 个超时失败用例")
-                        return (task, partial + oom_rest)
+                        # 判断是否应该重试
+                        should_retry = (
+                            self.process_config.retry_on_timeout and
+                            task.retry_count < self.process_config.max_retries and
+                            len(remaining) > 0
+                        )
+                        return (task, partial + oom_rest, should_retry, "timeout", remaining)
+                    should_retry = (
+                        self.process_config.retry_on_timeout and
+                        task.retry_count < self.process_config.max_retries
+                    )
                     return (task, _synthesize_failure_cases(task.cases, "timeout",
-                        f"子进程超时 ({timeout}s) 被 SIGTERM/SIGKILL"))
+                        f"子进程超时 ({timeout}s) 被 SIGTERM/SIGKILL"), should_retry, "timeout", task.cases)
 
                 # 从活跃列表移除已完成的子进程，避免内存累积
                 try:
@@ -518,13 +540,27 @@ class ProcessPoolCoordinator:
                             print(f"[WARN] {task.operator}@Card{task.device_id}: OOM Kill (rc={rc})")
                             print(f"[INFO] {task.operator}: OOM Kill 后恢复 {len(partial)} 个已完成用例，"
                                   f"合成 {len(oom_rest)} 个 OOM 失败用例")
-                            return (task, partial + oom_rest)
+                            # 判断是否应该重试
+                            should_retry = (
+                                self.process_config.retry_on_oom and
+                                task.retry_count < self.process_config.max_retries and
+                                len(remaining) > 0
+                            )
+                            return (task, partial + oom_rest, should_retry, "oom_killed", remaining)
                         print(f"[WARN] {task.operator}@Card{task.device_id}: OOM Kill (rc={rc})，无部分结果可恢复")
+                        should_retry = (
+                            self.process_config.retry_on_oom and
+                            task.retry_count < self.process_config.max_retries
+                        )
                         return (task, _synthesize_failure_cases(task.cases, "oom_killed",
-                            "子进程被 OOM Killer 杀死 (SIGKILL/-9)，内存不足"))
+                            "子进程被 OOM Killer 杀死 (SIGKILL/-9)，内存不足"), should_retry, "oom_killed", task.cases)
                     print(f"[WARN] {task.operator}@Card{task.device_id}: 子进程异常退出 rc={rc}")
+                    should_retry = (
+                        self.process_config.retry_on_failure and
+                        task.retry_count < self.process_config.max_retries
+                    )
                     return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
-                        f"子进程异常退出 rc={rc}"))
+                        f"子进程异常退出 rc={rc}"), should_retry, "subprocess_failure", task.cases)
 
                 # 正常退出：读取完整结果
                 # 从活跃列表移除已完成的子进程
@@ -537,11 +573,15 @@ class ProcessPoolCoordinator:
                     data = json.loads(Path(output_file).read_text())
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"[WARN] TaskUnit {task.operator}@Card{task.device_id} 结果解析失败: {e}")
+                    should_retry = (
+                        self.process_config.retry_on_failure and
+                        task.retry_count < self.process_config.max_retries
+                    )
                     return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
-                        f"子进程结果 JSON 解析失败: {e}"))
+                        f"子进程结果 JSON 解析失败: {e}"), should_retry, "subprocess_failure", task.cases)
 
                 case_results = [EvalCaseResult.from_dict(r) for r in data.get("case_results", [])]
-                return (task, case_results)
+                return (task, case_results, False, None, [])  # 成功，不需要重试
 
             finally:
                 try:
@@ -564,13 +604,67 @@ class ProcessPoolCoordinator:
                 item = futures[future]
                 idx, task = item
                 try:
-                    task_info, case_results = future.result()
+                    task_info, case_results, should_retry, failure_type, failed_cases = future.result()
                     completed_count += 1
                     all_case_results.extend(case_results)
                     passed = sum(1 for r in case_results if r.success)
                     status = "✅" if passed > 0 else "❌"
                     print(f"[INFO] [{completed_count}/{len(task_units)}] Card {task.device_id}: "
                           f"{task.operator} {status} ({passed}/{len(task.cases)})")
+
+                    # 处理重试逻辑
+                    if should_retry and failed_cases:
+                        # 更新失败计数
+                        for case in failed_cases:
+                            case_id = case.get_case_id_str()
+                            case_failure_count[case_id] += 1
+
+                        # 过滤掉多次失败的case（如果启用了排除策略）
+                        if self.process_config.exclude_repeatedly_failed_cases:
+                            repeatedly_failed = []
+                            cases_to_retry = []
+                            for case in failed_cases:
+                                case_id = case.get_case_id_str()
+                                if case_failure_count[case_id] >= 2:
+                                    # 已经失败2次，不再重试
+                                    repeatedly_failed.append(case)
+                                else:
+                                    cases_to_retry.append(case)
+
+                            # 将多次失败的case记录到结果中（标记为最终失败）
+                            if repeatedly_failed:
+                                for case in repeatedly_failed:
+                                    case_id = case.get_case_id_str()
+                                    print(f"[WARN] 用例 {case_id} 已连续失败 {case_failure_count[case_id]} 次，"
+                                          f"不再重试，标记为最终失败")
+                        else:
+                            cases_to_retry = failed_cases
+
+                        # 只有还有需要重试的case时才创建重试任务
+                        if cases_to_retry:
+                            # 创建重试任务
+                            new_device = self._select_device_for_retry(
+                                task.device_id,
+                                task.excluded_devices,
+                                healthy_cards
+                            )
+                            retry_task = TaskUnit(
+                                operator=task.operator,
+                                rel_path=task.rel_path,
+                                cases=cases_to_retry,
+                                device_id=new_device,
+                                retry_count=task.retry_count + 1,
+                                excluded_devices=task.excluded_devices | {task.device_id},
+                                parent_task_id=f"{task.operator}@Card{task.device_id}"
+                            )
+                            retry_queue.append(retry_task)
+                            excluded_count = len(failed_cases) - len(cases_to_retry)
+                            excluded_msg = f", 排除 {excluded_count} 个多次失败的用例" if excluded_count > 0 else ""
+                            print(f"[INFO] 重试任务已加入队列: {task.operator} "
+                                  f"(retry {retry_task.retry_count}/{self.process_config.max_retries}, "
+                                  f"{len(cases_to_retry)} 个用例{excluded_msg}, "
+                                  f"Card{task.device_id}→Card{new_device}, "
+                                  f"原因: {failure_type})")
 
                     # 定期清理已退出的子进程引用，避免内存累积
                     self._cleanup_completed_processes()
@@ -589,8 +683,149 @@ class ProcessPoolCoordinator:
                     print(f"[WARN] [{completed_count}/{len(task_units)}] Card {task.device_id}: "
                           f"{task.operator} 异常: {e}")
 
-        print(f"[INFO] 调度完成: {completed_count}/{len(task_units)} 个 TaskUnit")
+        print(f"[INFO] 初次调度完成: {completed_count}/{len(task_units)} 个 TaskUnit")
+
+        # 处理重试队列
+        if retry_queue:
+            print(f"[INFO] 开始处理重试队列: {len(retry_queue)} 个任务")
+            retry_results = self._process_retry_queue(retry_queue, base_env, max_workers)
+            all_case_results.extend(retry_results)
+
+        print(f"[INFO] 调度完成: 总共 {len(task_units)} + {len(retry_queue)} 个 TaskUnit")
+
+        # F744: 移除父进程的统一等待（无效）
+        # 原因：父进程等待时，子进程已经退出，profiler 解析进程已被杀死
+        # 正确的方案：在子进程退出前等待（cli.py 中的 20 秒等待）
+
         return all_case_results
+
+    def _process_retry_queue(
+        self,
+        retry_queue: List[TaskUnit],
+        base_env: Dict[str, str],
+        max_workers: int
+    ) -> List[EvalCaseResult]:
+        """处理重试队列中的任务
+
+        Args:
+            retry_queue: 需要重试的TaskUnit列表
+            base_env: 基础环境变量
+            max_workers: 最大并发数
+
+        Returns:
+            重试任务的用例结果列表
+        """
+        retry_results: List[EvalCaseResult] = []
+        completed_count = 0
+
+        def _run_retry_task(idx_and_task):
+            """运行重试任务（不再生成新的重试）"""
+            idx, task = idx_and_task
+            fd, cases_file = tempfile.mkstemp(suffix=".json", prefix="retry_cases_")
+            os.close(fd)
+            try:
+                Path(cases_file).write_text(json.dumps([c.to_dict() for c in task.cases], ensure_ascii=False))
+
+                fd, output_file = tempfile.mkstemp(suffix=".json", prefix="retry_cannbench_")
+                os.close(fd)
+
+                cmd = self._build_child_cmd(task, cases_file, output_file)
+                env = self._build_env_for_task(base_env, task)
+                timeout = len(task.cases) * self.process_config.timeout_per_operator
+
+                proc = subprocess.Popen(cmd, start_new_session=True, env=env)
+                self._active_processes.append(proc)
+                _write_oom_score_adj(proc.pid, 1000)
+
+                try:
+                    rc = proc.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    try:
+                        self._active_processes.remove(proc)
+                    except ValueError:
+                        pass
+                    print(f"[WARN] 重试任务 {task.operator}@Card{task.device_id} 仍然超时")
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    partial = _try_recover_partial_results(output_file)
+                    if partial:
+                        completed_ids = {r.case_id for r in partial}
+                        remaining = [c for c in task.cases if c.get_case_id_str() not in completed_ids]
+                        failed = _synthesize_failure_cases(remaining, "timeout",
+                            f"重试后仍超时 ({timeout}s)")
+                        return (task, partial + failed)
+                    return (task, _synthesize_failure_cases(task.cases, "timeout",
+                        f"重试后仍超时 ({timeout}s)"))
+
+                try:
+                    self._active_processes.remove(proc)
+                except ValueError:
+                    pass
+
+                if rc != 0:
+                    if _is_oom_killed(proc, rc):
+                        partial = _try_recover_partial_results(output_file)
+                        if partial:
+                            completed_ids = {r.case_id for r in partial}
+                            remaining = [c for c in task.cases if c.get_case_id_str() not in completed_ids]
+                            failed = _synthesize_failure_cases(remaining, "oom_killed",
+                                "重试后仍 OOM Kill")
+                            return (task, partial + failed)
+                        return (task, _synthesize_failure_cases(task.cases, "oom_killed",
+                            "重试后仍 OOM Kill"))
+                    return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
+                        f"重试后仍异常退出 rc={rc}"))
+
+                try:
+                    data = json.loads(Path(output_file).read_text())
+                    case_results = [EvalCaseResult.from_dict(r) for r in data.get("case_results", [])]
+                    return (task, case_results)
+                except (json.JSONDecodeError, OSError) as e:
+                    return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
+                        f"重试后结果解析失败: {e}"))
+
+            finally:
+                try:
+                    os.unlink(cases_file)
+                except OSError:
+                    pass
+                try:
+                    os.unlink(output_file)
+                except OSError:
+                    pass
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            indexed_tasks = list(enumerate(retry_queue))
+            futures = {
+                executor.submit(_run_retry_task, item): item
+                for item in indexed_tasks
+            }
+
+            for future in as_completed(futures):
+                item = futures[future]
+                idx, task = item
+                try:
+                    task_info, case_results = future.result()
+                    completed_count += 1
+                    retry_results.extend(case_results)
+                    passed = sum(1 for r in case_results if r.success)
+                    status = "✅" if passed > 0 else "❌"
+                    print(f"[INFO] [重试 {completed_count}/{len(retry_queue)}] Card {task.device_id}: "
+                          f"{task.operator} {status} ({passed}/{len(task.cases)}) "
+                          f"(retry {task.retry_count})")
+
+                    self._cleanup_completed_processes()
+
+                except Exception as e:
+                    completed_count += 1
+                    print(f"[WARN] [重试 {completed_count}/{len(retry_queue)}] Card {task.device_id}: "
+                          f"{task.operator} 异常: {e}")
+
+        return retry_results
 
     def _cleanup_completed_processes(self):
         """清理已完成的子进程引用，避免内存累积。

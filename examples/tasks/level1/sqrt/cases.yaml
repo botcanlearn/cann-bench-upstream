@@ -33,12 +33,12 @@ cases:
   case_id: 3
   input_shape:
   - [1023, 1023]
-  dtype: [bfloat16]
+  dtype: [float16]
   attrs: {}
   value_range: [0, 2]
   baseline_perf_us: 0.0
   t_hw_us: 0.0
-  note: "fixture-S-bfloat16-1M-非对齐-非负小值域 | pipeline_smoke_test"
+  note: "fixture-S-float16-1M-非对齐-非负小值域 | pipeline_smoke_test"
 - operator: Sqrt
   case_id: 4
   input_shape:

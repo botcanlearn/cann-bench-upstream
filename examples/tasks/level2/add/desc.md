@@ -15,13 +15,13 @@ Add 是逐元素加法运算，对两个相同 shape 的输入张量逐位相加
 ### 数学公式
 
 $$
-z = x + y
+y = x1 + x2
 $$
 
 ### 接口规范
 
 ```python
-cann_bench.add(Tensor x, Tensor y) -> Tensor z
+add(Tensor x1, Tensor x2) -> Tensor y
 ```
 
 ### 数据类型

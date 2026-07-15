@@ -21,24 +21,24 @@
 
 namespace cann_bench {
 
-static torch::Tensor add_meta(const torch::Tensor& x, const torch::Tensor& y) {
-    TORCH_CHECK(x.sizes() == y.sizes(),
-                "add: shapes must match, got ", x.sizes(), " vs ", y.sizes());
-    TORCH_CHECK(x.scalar_type() == y.scalar_type(),
-                "add: dtypes must match, got ", x.scalar_type(), " vs ", y.scalar_type());
-    return torch::empty_like(x);
+static torch::Tensor add_meta(const torch::Tensor& x1, const torch::Tensor& x2) {
+    TORCH_CHECK(x1.sizes() == x2.sizes(),
+                "add: shapes must match, got ", x1.sizes(), " vs ", x2.sizes());
+    TORCH_CHECK(x1.scalar_type() == x2.scalar_type(),
+                "add: dtypes must match, got ", x1.scalar_type(), " vs ", x2.scalar_type());
+    return torch::empty_like(x1);
 }
 
-static torch::Tensor add_npu(const torch::Tensor& x, const torch::Tensor& y) {
-    auto x_c = x.contiguous();
-    auto y_c = y.contiguous();
-    auto z = torch::empty_like(x_c);
-    ACLNN_CMD(aclnnAdd, x_c, y_c, z);
-    return z;
+static torch::Tensor add_npu(const torch::Tensor& x1, const torch::Tensor& x2) {
+    auto x1_c = x1.contiguous();
+    auto x2_c = x2.contiguous();
+    auto y = torch::empty_like(x1_c);
+    ACLNN_CMD(aclnnAdd, x1_c, x2_c, y);
+    return y;
 }
 
 TORCH_LIBRARY_FRAGMENT(cann_bench, m) {
-    m.def("add(Tensor x, Tensor y) -> Tensor");
+    m.def("add(Tensor x1, Tensor x2) -> Tensor");
 }
 
 TORCH_LIBRARY_IMPL(cann_bench, Meta, m) {

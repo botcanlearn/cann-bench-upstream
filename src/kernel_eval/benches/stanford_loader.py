@@ -345,6 +345,10 @@ class StanfordGoldenLoader(GoldenLoaderBase):
 
         return get_inputs_wrapper
 
+    def get_output_function(self, task_id: str) -> Optional[Callable]:
+        """StanfordBench 不支持 get_output 后处理"""
+        return None
+
     def get_operator_dir(self, task_id: str) -> Path:
         py_path = self._task_id_to_py(task_id)
         return py_path.parent if py_path else Path()

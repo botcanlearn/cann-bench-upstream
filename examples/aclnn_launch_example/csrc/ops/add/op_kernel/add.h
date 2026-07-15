@@ -23,9 +23,21 @@ namespace NsAdd {
 
 using namespace AscendC;
 
+template <typename T>
+struct CalcTypeTraits {
+    using type = T;
+};
+
+template <>
+struct CalcTypeTraits<bfloat16_t> {
+    using type = float;
+};
+
 template <typename T, int BUFFER_MODE>
 class Add {
     static constexpr int32_t BUFFER_NUM = BUFFER_MODE ? 2 : 1;
+    using CalcT = typename CalcTypeTraits<T>::type;
+    static constexpr bool NEED_CAST = !std::is_same<T, CalcT>::value;
 
 public:
     __aicore__ inline Add(){};
@@ -42,6 +54,9 @@ private:
     TQue<QuePosition::VECIN, BUFFER_NUM> inputQueueX;
     TQue<QuePosition::VECIN, BUFFER_NUM> inputQueueY;
     TQue<QuePosition::VECOUT, BUFFER_NUM> outputQueueZ;
+    TBuf<TPosition::VECCALC> tempBufX;
+    TBuf<TPosition::VECCALC> tempBufY;
+    TBuf<TPosition::VECCALC> tempBufZ;
     GlobalTensor<T> inputGMX, inputGMY, outputGMZ;
     int64_t blockLength_ = 0, ubLength_ = 0;
 };
@@ -60,6 +75,11 @@ __aicore__ inline void Add<T, BUFFER_MODE>::Init(GM_ADDR x, GM_ADDR y, GM_ADDR z
     pipe.InitBuffer(inputQueueX, BUFFER_NUM, ubLength_ * sizeof(T));
     pipe.InitBuffer(inputQueueY, BUFFER_NUM, ubLength_ * sizeof(T));
     pipe.InitBuffer(outputQueueZ, BUFFER_NUM, ubLength_ * sizeof(T));
+    if constexpr (NEED_CAST) {
+        pipe.InitBuffer(tempBufX, ubLength_ * sizeof(CalcT));
+        pipe.InitBuffer(tempBufY, ubLength_ * sizeof(CalcT));
+        pipe.InitBuffer(tempBufZ, ubLength_ * sizeof(CalcT));
+    }
 }
 
 template <typename T, int BUFFER_MODE>
@@ -89,7 +109,19 @@ __aicore__ inline void Add<T, BUFFER_MODE>::Compute(int64_t currentNum)
     LocalTensor<T> xLocal = inputQueueX.template DeQue<T>();
     LocalTensor<T> yLocal = inputQueueY.template DeQue<T>();
     LocalTensor<T> zLocal = outputQueueZ.template AllocTensor<T>();
-    AscendC::Add(zLocal, xLocal, yLocal, currentNum);
+
+    if constexpr (NEED_CAST) {
+        LocalTensor<CalcT> xCalc = tempBufX.Get<CalcT>();
+        LocalTensor<CalcT> yCalc = tempBufY.Get<CalcT>();
+        LocalTensor<CalcT> zCalc = tempBufZ.Get<CalcT>();
+        Cast(xCalc, xLocal, RoundMode::CAST_NONE, currentNum);
+        Cast(yCalc, yLocal, RoundMode::CAST_NONE, currentNum);
+        AscendC::Add(zCalc, xCalc, yCalc, currentNum);
+        Cast(zLocal, zCalc, RoundMode::CAST_RINT, currentNum);
+    } else {
+        AscendC::Add(zLocal, xLocal, yLocal, currentNum);
+    }
+
     outputQueueZ.template EnQue<T>(zLocal);
     inputQueueX.FreeTensor(xLocal);
     inputQueueY.FreeTensor(yLocal);

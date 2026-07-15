@@ -37,7 +37,6 @@ cann_bench.sqrt(Tensor x) -> Tensor y
 |-----------|-----------|
 | float16 | float16 |
 | float32 | float32 |
-| bfloat16 | bfloat16 |
 
 ### 规则与约束
 

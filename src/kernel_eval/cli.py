@@ -548,7 +548,22 @@ def cmd_eval_child(args):
     # 初始化 NPU 设备
     import torch
     import torch_npu
-    torch.npu.set_device(args.device_id)
+    # F745: 当设置了 ASCEND_RT_VISIBLE_DEVICES 后，子进程只能看到一张卡，
+    # 这张卡在子进程内部被重新编号为 npu:0，无论物理卡号是多少。
+    # 例如：ASCEND_RT_VISIBLE_DEVICES=1 时，物理卡1 在子进程中变成 npu:0
+    #
+    # 因此，我们需要根据可见设备数量来决定使用哪个设备 ID：
+    # - 如果只能看到 1 张卡（隔离模式）：使用 npu:0
+    # - 如果能看到多张卡（非隔离模式）：使用传入的 device_id
+    visible_device_count = torch.npu.device_count()
+    if visible_device_count == 1:
+        # 隔离模式：只有一张卡可见，使用 npu:0
+        actual_device_id = 0
+    else:
+        # 非隔离模式：使用传入的 device_id
+        actual_device_id = args.device_id
+
+    torch.npu.set_device(actual_device_id)
     try:
         torch.npu.set_compile_mode(jit_compile=False)
     except Exception as e:
@@ -560,7 +575,7 @@ def cmd_eval_child(args):
 
     config = _create_config_from_args_for_child(args, bench_root)
     config.device_type = "npu"
-    config.device_id = args.device_id
+    config.device_id = actual_device_id  # 使用调整后的 device_id
 
     from .eval.evaluator import Evaluator
     evaluator = Evaluator(config, bench_name=args.bench_name,
@@ -580,15 +595,17 @@ def cmd_eval_child(args):
     # 评测（复用 evaluator 的评测循环，包含设备恢复、详细输出等）
     operator_name = cases[0].operator if cases else "Unknown"
     rel_path = cases[0].rel_path if cases else ""
-    physical_device = os.environ.get("KERNEL_EVAL_PHYSICAL_DEVICE_ID", "")
-    if physical_device:
-        print(f"[eval-child] 物理卡 {physical_device} (逻辑设备 {args.device_id}): "
-              f"{len(cases)} 用例开始评测")
-    else:
-        print(f"[eval-child] Card {args.device_id}: {len(cases)} 用例开始评测")
+    print(f"[eval-child] Card {args.device_id}: {len(cases)} 用例开始评测")
 
     op_result = evaluator.run_cases(cases, operator_name, rel_path)
     case_results = op_result.results
+
+    # F747: 移除显式等待，依赖 shutdown() 中的 close_pool(wait=True) 同步机制
+    # shutdown() 中会调用 MultiProcessPool.close_pool(wait=True)，
+    # 这应该足够等待所有 profiler 解析完成。
+    #
+    # 测试：如果移除显式等待后仍然成功，说明同步机制有效；
+    # 如果失败，说明 close_pool(wait=True) 不可靠，需要显式等待。
 
     evaluator.shutdown()
     guard.verify()
@@ -598,11 +615,7 @@ def cmd_eval_child(args):
     Path(args.output).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
 
     passed = sum(1 for r in case_results if r.success)
-    if physical_device:
-        print(f"[eval-child] 物理卡 {physical_device} (逻辑设备 {args.device_id}): "
-              f"完成 {passed}/{len(cases)} 通过")
-    else:
-        print(f"[eval-child] Card {args.device_id}: 完成 {passed}/{len(cases)} 通过")
+    print(f"[eval-child] Card {args.device_id}: 完成 {passed}/{len(cases)} 通过")
     return 0
 
 

@@ -32,7 +32,6 @@ using Ops::Base::FloorAlign;
 using Ops::Base::GetUbBlockSize;
 
 constexpr uint32_t WS_SYS_SIZE = 0U;
-constexpr int64_t TYPE_SIZE = 4;
 constexpr int64_t MIN_SPLIT_THRESHOLD = 1024;
 
 static const gert::Shape g_vec_1_shape = {1};
@@ -76,7 +75,7 @@ static ge::graphStatus GetShapeAttrsInfo(gert::TilingContext* context, int64_t& 
         return ge::GRAPH_FAILED);
 
     totalIdx = inputShapeX.GetShapeSize();
-    const std::set<ge::DataType> supportedDtype = {ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32};
+    const std::set<ge::DataType> supportedDtype = {ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_BF16};
     auto inputDesc = context->GetInputDesc(0);
     OP_CHECK_NULL_WITH_CONTEXT(context, inputDesc);
     dataType = inputDesc->GetDataType();
@@ -116,13 +115,19 @@ static ge::graphStatus AddTilingFunc(gert::TilingContext* context)
         OP_LOGE(context, "set tiling data error"), return ge::GRAPH_FAILED);
 
     int64_t ubBlockSize = Ops::Base::GetUbBlockSize(context);
+    int64_t typeSize = ge::GetSizeByDataType(dataType);
+    int64_t calcTypeSize = (dataType == ge::DT_BF16) ? sizeof(float) : typeSize;
+
     tiling->totalNum = totalIdx;
     tiling->blockFactor = CeilAlign(CeilDiv(totalIdx, coreNum), ubBlockSize);
     int64_t usedCoreNum = Ops::Base::CeilDiv(totalIdx, tiling->blockFactor);
 
     uint64_t useDoubleBuffer = (totalIdx > MIN_SPLIT_THRESHOLD) ? 1 : 0;
     int64_t bufferNum = useDoubleBuffer ? 6 : 3;
-    tiling->ubFactor = FloorAlign(FloorDiv(static_cast<int64_t>(ubSize) / TYPE_SIZE, bufferNum), ubBlockSize);
+    if (dataType == ge::DT_BF16) {
+        bufferNum += useDoubleBuffer ? 6 : 3;
+    }
+    tiling->ubFactor = FloorAlign(FloorDiv(static_cast<int64_t>(ubSize) / calcTypeSize, bufferNum), ubBlockSize);
 
     context->SetBlockDim(usedCoreNum);
 

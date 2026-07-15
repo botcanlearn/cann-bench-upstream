@@ -774,6 +774,18 @@ class ExternalGoldenLoader(GoldenLoaderBase):
         spec.loader.exec_module(module)
         
         return getattr(module, 'get_inputs', None)
+    
+    def get_output_function(self, task_id: str) -> Optional[Callable]:
+        """从 prepare_inputs.py 加载 get_output（如有）"""
+        prep_path = self.bench_root / task_id / "validation" / "prepare_inputs.py"
+        if not prep_path.exists():
+            return None
+        
+        spec = importlib.util.spec_from_file_location("prepare_inputs", prep_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        
+        return getattr(module, 'get_output', None)
 ```
 
 ### 场景 B：PyTorch 标准实现作为 Golden
@@ -819,6 +831,10 @@ class PyTorchRefLoader(GoldenLoaderBase):
     
     def get_input_function(self, task_id: str) -> Optional[Callable]:
         """PyTorch 标准实现通常不需要自定义输入生成"""
+        return None
+    
+    def get_output_function(self, task_id: str) -> Optional[Callable]:
+        """PyTorch 标准实现通常不需要输出后处理"""
         return None
 ```
 

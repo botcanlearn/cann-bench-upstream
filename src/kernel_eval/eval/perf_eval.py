@@ -229,13 +229,10 @@ class PerfEvaluator:
             from ..security.torch_op_guard import TorchOpGuard
             with TorchOpGuard.pause():
                 mm1, mm2, reduce_input = self._warmup_tensors
-                try:
-                    torch.matmul(mm1, mm2)
-                    torch.npu.synchronize(mm1.device)
-                    torch.max(reduce_input)
-                    torch.npu.synchronize(mm1.device)
-                except RuntimeError:
-                    torch.npu.synchronize(mm1.device)
+                torch.matmul(mm1, mm2)
+                torch.npu.synchronize(mm1.device)
+                torch.max(reduce_input)
+                torch.npu.synchronize(mm1.device)
 
     def _clear_cache(self):
         """清空 L2 cache (在每次测量 step 前调用，保证测量间 cache 状态一致)
@@ -247,11 +244,8 @@ class PerfEvaluator:
             from ..security.torch_op_guard import TorchOpGuard
             with TorchOpGuard.pause():
                 _, _, reduce_input = self._warmup_tensors
-                try:
-                    torch.max(reduce_input)
-                    torch.npu.synchronize(reduce_input.device)
-                except RuntimeError:
-                    torch.npu.synchronize(reduce_input.device)
+                torch.max(reduce_input)
+                torch.npu.synchronize(reduce_input.device)
 
     def _synchronize_profile_step(self) -> None:
         """Wait for candidate NPU work before advancing profiler step.
@@ -402,8 +396,6 @@ class PerfEvaluator:
                     raise fn_exc
 
             # ACL 硬件复位等待：保留极小缓冲防调度抖动。
-            # 注意：sleep(0.5) / sleep(5.0) 均无法解决 PROF_* 缺失问题
-            # （根因是 fn() 异常导致 parser pool 残留而非 ACL 时间）。
             time.sleep(0.1)
 
             # 诊断日志：记录 profiler session 完成后的 PROF_* 目录状态
@@ -413,17 +405,18 @@ class PerfEvaluator:
                          prof_dir, post_prof_dirs)
 
         finally:
-            # 等待 profiler 解析子进程池完成 — 必须在 finally 中以确保 fn() 异常时也能执行。
-            # 当 fn() 抛异常（EZ1001 等），raise fn_exc 跳过 with 块后面的代码，
-            # 导致 parser 子进程池以空路径("CANN path ''")残留，污染下一个 profiler session。
-            # close_pool(wait=True) 等待子进程完成（空路径时它们会快速失败退出），
-            # 确保 pool 完全清理后再启动下一个 session。
-            try:
-                from torch_npu.profiler.analysis.prof_common_func._multi_process_pool import MultiProcessPool
-                pool = MultiProcessPool()
-                pool.close_pool(wait=True)
-            except Exception as e:
-                _logger.debug("perf_eval: finally close_pool(wait=True) failed: %s", e)
+            # F741: 移除此处的 close_pool 调用，避免多次关闭进程池
+            # 原问题：每个 case 执行完都关闭进程池，可能导致后续的解析子进程无法正常运行
+            # 修复：只在 shutdown() 中统一关闭一次进程池
+            #
+            # 注释掉的原代码：
+            # try:
+            #     from torch_npu.profiler.analysis.prof_common_func._multi_process_pool import MultiProcessPool
+            #     pool = MultiProcessPool()
+            #     pool.close_pool(wait=True)
+            #     time.sleep(0.5)
+            # except Exception as e:
+            #     _logger.debug("perf_eval: finally close_pool(wait=True) failed: %s", e)
 
             # Restore original stdout/stderr
             os.dup2(saved_stdout_fd, 1)
@@ -472,6 +465,38 @@ class PerfEvaluator:
                      warmup: int = None, repeat: int = None,
                      inputs: List = None, use_input_pool: bool = False,
                      **kwargs) -> Tuple[Any, PerfResult]:
+        """Profile func with warmup + repeat steps, return (outputs, result).
+
+        NPU path uses torch_npu.profiler (Level1/Level2)，解析 kernel_details.csv。
+        CPU fallback measures wall-clock time when ``self.config.enable_profiler`` is False.
+
+        Args:
+            case_id: case identifier (used in PerfResult and archive path).
+            func: the callable under test.
+            *args, **kwargs: forwarded to func.
+            warmup: warmup steps (default: instance setting).
+            repeat: measurement steps (default: instance setting).
+            inputs: tensor list for InputPool rotation (prevents data-ptr
+                    caching).  Ignored unless *use_input_pool* is True.
+            use_input_pool: rotate input from *inputs* each step if True.
+
+        Returns:
+            (outputs, PerfResult) where outputs = func(*args, **kwargs) result
+            from the final repeat-step iteration, and PerfResult holds parsed
+            perf metrics or error state.
+        """
+        # F748: 移除设备锁（DeviceLock）
+        # 原因：threading.Lock 只在进程内有效，多卡并行是多进程架构。
+        # 设备隔离（ASCEND_RT_VISIBLE_DEVICES）已经从根本上解决了资源竞争。
+        return self._run_profiled_impl(case_id, func, *args,
+                                       warmup=warmup, repeat=repeat,
+                                       inputs=inputs, use_input_pool=use_input_pool,
+                                       **kwargs)
+
+    def _run_profiled_impl(self, case_id: str, func: Callable, *args,
+                          warmup: int = None, repeat: int = None,
+                          inputs: List = None, use_input_pool: bool = False,
+                          **kwargs) -> Tuple[Any, PerfResult]:
         """Profile func with warmup + repeat steps, return (outputs, result).
 
         NPU path uses torch_npu.profiler (Level1/Level2)，解析 kernel_details.csv。
@@ -800,20 +825,29 @@ class PerfEvaluator:
         """兼容旧接口，当前为同步解析，无需等待。"""
 
     def shutdown(self):
-        """清理warmup tensors 并强制关闭 profiler 进程池"""
+        """清理warmup tensors 并关闭 profiler 进程池
+
+        F735: 修复多卡并行场景下最后一个 case 性能数据丢失问题。
+
+        根因：最后一个 case 执行完后，profiler 数据还在异步解析中，
+        但 shutdown() 使用 wait=False 立即强制关闭进程池，导致解析未完成。
+
+        修复：改为 wait=True，等待进程池完成所有解析任务后再关闭。
+        """
         if self._warmup_tensors is not None:
             del self._warmup_tensors
             self._warmup_tensors = None
 
-        # 强制关闭 profiler ProcessPoolExecutor，不等待 fork 子进程
+        # 等待 profiler 进程池完成所有解析任务
         try:
             from torch_npu.profiler.analysis.prof_common_func._multi_process_pool import MultiProcessPool
             pool = MultiProcessPool()
-            # close_pool(wait=False) 不等待 fork 子进程完成，直接关闭
-            pool.close_pool(wait=False)
+            # F735: 改为 wait=True，确保最后一个 case 的 profiler 数据解析完成
+            _logger.debug("perf_evaluator.shutdown: waiting for profiler pool to complete...")
+            pool.close_pool(wait=True)
+            _logger.debug("perf_evaluator.shutdown: profiler pool closed successfully")
         except Exception as e:
-            # F047: 不再静默吞 — debug 日志便于排查 profiler shutdown 失败
-            _logger.debug("MultiProcessPool close_pool(wait=False) failed: %s", e)
+            _logger.debug("MultiProcessPool close_pool(wait=True) failed: %s", e)
 
 
     @staticmethod

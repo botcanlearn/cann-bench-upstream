@@ -79,6 +79,17 @@ skill_*.md
 待解决问题.md
 docs/superpowers/
 
+# 根目录临时诊断/分析/方案文档（调试会话产物，非项目文档）
+/[A-Z]*_ANALYSIS.md
+/[A-Z]*_BUG_REPORT.md
+/[A-Z]*_DIAGNOSIS.md
+/[A-Z]*_SUMMARY.md
+/[A-Z]*_SOLUTION*.md
+/[A-Z]*_ISSUE*.md
+/[A-Z]*_PROBLEM*.md
+/SOLUTION*.md
+/ge_check_op.json
+
 # inner/tests/baseline/results/ 是 runtime msprof JSON 落盘点，每次跑都更新
 inner/tests/baseline/results/*.json
 !inner/tests/baseline/results/.gitkeep

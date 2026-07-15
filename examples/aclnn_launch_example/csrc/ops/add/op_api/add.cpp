@@ -26,7 +26,7 @@ namespace l0op {
 OP_TYPE_REGISTER(Add);
 
 static const std::initializer_list<op::DataType> DTYPE_SUPPORT = {
-    DataType::DT_FLOAT, DataType::DT_FLOAT16, DataType::DT_INT32
+    DataType::DT_FLOAT, DataType::DT_FLOAT16, DataType::DT_INT32, DataType::DT_BF16
 };
 
 static bool IsAiCoreSupport(const aclTensor* x1, const aclTensor* x2)

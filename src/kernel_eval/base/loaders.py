@@ -148,6 +148,22 @@ class GoldenLoaderBase(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_output_function(self, task_id: str) -> Optional[Callable]:
+        """获取输出后处理函数（可选）
+
+        若 golden.py 中定义了 get_output，则返回该函数；
+        框架在精度对比前对 golden / AI / native 三路输出统一调用，
+        确保变换一致、对比公平。
+
+        Args:
+            task_id: 任务标识
+
+        Returns:
+            Optional[Callable]: get_output 函数，或 None
+        """
+        pass
+
     def get_operator_dir(self, task_id: str) -> str:
         """获取任务目录路径（可选实现）
 

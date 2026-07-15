@@ -26,11 +26,13 @@ print(torch.npu.get_device_name(0))
 " 2>/dev/null)
 
     if [ -n "${torch_soc}" ]; then
-        # 注意: Ascend910_93* 模式会误匹配 Ascend910_9361/9362（它们是 910B 而非 910_93）
-        # 必须将 910B 的产品 ID（936x 系列）放在 910_93 通配之前
+        # 这里的短名是 CANN 的**编译目录短名**（opp/.../kernel/config/<短名>/），
+        # 依据 CANN SOC_TO_SHORT_SOC_MAP：Ascend910_9362/9372/9381/9382/9391/9392
+        # 均归 ascend910_93（已在 CANN 9.0.0 上用 acl.get_soc_name() 核对）。
+        # 注意：勿与 baseline_resolver.py 的逻辑标签 910b2 混淆——那是 baseline
+        # 数据的业务硬件名，与编译短名是两套独立体系，不必相等。
         case "${torch_soc}" in
             Ascend910B*)     echo "ascend910b" ; return ;;
-            Ascend910_936*)  echo "ascend910b" ; return ;;  # 9361=B1, 9362=B2, 等 910B 产品 ID
             Ascend910_93*)   echo "ascend910_93" ; return ;;
             Ascend950*)      echo "ascend950" ; return ;;
         esac
