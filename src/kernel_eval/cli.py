@@ -210,6 +210,9 @@ def create_parser() -> argparse.ArgumentParser:
     child_parser.add_argument('--torch-op-guard-mode', type=str, default=None,
                               choices=['off', 'warn', 'block'])
     child_parser.add_argument('--eval-seed', type=int, default=0)
+    child_parser.add_argument('--perf-metric-strategy', type=str, default=None,
+                              choices=['kernel_details', 'trace_view', 'msprof_summary'],
+                              help=argparse.SUPPRESS)
 
     
     return parser
@@ -650,6 +653,10 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
     torch_op_guard_mode = getattr(args, 'torch_op_guard_mode', None)
     if torch_op_guard_mode:
         config.torch_op_guard_mode = torch_op_guard_mode
+
+    perf_metric_strategy = getattr(args, 'perf_metric_strategy', None)
+    if perf_metric_strategy:
+        config.perf_metric_strategy_override = perf_metric_strategy
 
     set_config(config)
     return config

@@ -1,5 +1,50 @@
 请以 pypto-op-orchestrator 角色为算子 `{{ op_name }}` 跑完本次 benchmark 所需的 PyPTO 原生工作流。
 
+{% if is_class_subdir %}
+================================================================
+【多 class 子目录命名约束】
+================================================================
+
+本次运行于 class 子目录 ({{ class_subdir }})，为多 class dispatcher 算子的一个专门化实现。
+
+**重要**：所有产物文件命名、.orchestrator_state.json 中的 operator_name、
+以及代码注释中的算子名，必须使用真实算子名 **`{{ op_name }}`**，
+而非子目录名 "{{ class_subdir }}"。
+
+示例文件命名：
+  - {{ op_name }}_impl.py     (不是 {{ class_subdir }}_impl.py)
+  - {{ op_name }}_golden.py   (不是 {{ class_subdir }}_golden.py)
+  - test_{{ op_name }}.py      (不是 test_{{ class_subdir }}.py)
+  - .orchestrator_state.json 中: "operator_name": "{{ op_name }}"
+
+子目录 {{ class_subdir }} 仅用于物理隔离不同 class 的实现，不影响算子标识。
+
+================================================================
+
+{% endif %}
+================================================================
+【精度验收口径对齐】
+================================================================
+
+Stage 6 验收必须与 cann-bench kernel_eval 精度判据完全对齐：
+
+1. **输入生成种子**：每个 case 用 case_id 的 SHA256 hash 派生确定性种子
+   （见 pypto-op-verify SKILL.md「精度验收口径」章节），禁止硬编码全局
+   manual_seed(42) 或其它固定种子。
+
+2. **验收真值来源**：必须使用本目录的 golden.py（随 cases.yaml 下发的
+   任务材料，cann-bench 权威 golden），在 fp64/CPU 上计算后截断到目标
+   dtype 与 NPU impl 比较。<op>_golden.py（pypto-friendly）仅用于开发期
+   模块拆解，不得作为验收真值（它与 impl 同精度，会掩盖累加误差）。
+
+3. **Native 参考**：小值域/相消兜底判定需要同精度 CPU 参考，由 golden.py
+   在同 dtype 输入上再算一遍得到，传给 detailed_tensor_compare 的
+   native_output 参数。
+
+详细契约见 pypto-op-verify SKILL.md。
+
+================================================================
+
 {% if device_mode == "pool" and pool_device_id is not none %}
 ================================================================
 【设备约束 -- device_mode=pool, 外层 runner 已分配并独占设备】

@@ -417,6 +417,11 @@ class ProcessPoolCoordinator:
         if eval_seed is not None:
             cmd += ["--eval-seed", str(eval_seed)]
 
+        # perf-metric-strategy (trace_view / kernel_details / msprof_summary)
+        perf_strategy = getattr(self.base_config, "perf_metric_strategy_override", None)
+        if perf_strategy:
+            cmd += ["--perf-metric-strategy", str(perf_strategy)]
+
         return cmd
 
     def evaluate_task_units(self, task_units: List[TaskUnit]) -> List[EvalCaseResult]:

@@ -218,6 +218,7 @@ class PyptoOrchestratorAgent:
         self._prepare_pypto_workspace(task_info, op_dir, case_class)
         reference_text = _reference_impl_text(reference, parent_op_dir) if reference else ""
         benchmark_context = case_material_prompt_context(task_info, op_dir_rel)
+        is_class_subdir = case_class.subdir != "."
         pypto_prompt = _render_pypto_prompt(
             op_name=task_info.op_name,
             op_dir_rel=op_dir_rel,
@@ -228,6 +229,8 @@ class PyptoOrchestratorAgent:
             pool_device_id=self.device_id,
             perf_round=self.perf_round,
             reference_impl_text=reference_text,
+            is_class_subdir=is_class_subdir,
+            class_subdir=case_class.subdir if is_class_subdir else "",
         )
         extra_env = dict(self.extra_env)
         if self.device_id is not None:
@@ -388,6 +391,8 @@ def _render_pypto_prompt(
     pool_device_id: Optional[int],
     perf_round: int,
     reference_impl_text: str = "",
+    is_class_subdir: bool = False,
+    class_subdir: str = "",
 ) -> str:
     return render_prompt_file(
         _ORCHESTRATOR_TEMPLATE,
@@ -400,6 +405,8 @@ def _render_pypto_prompt(
         pool_device_id=pool_device_id,
         perf_round=perf_round,
         reference_impl_text=reference_impl_text,
+        is_class_subdir=is_class_subdir,
+        class_subdir=class_subdir,
     )
 
 
