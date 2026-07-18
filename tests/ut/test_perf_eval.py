@@ -19,12 +19,14 @@ PerfEvaluator 单元测试
 1. run_profiled 临时目录清理（finally 块）
 2. profiler 异常后资源不泄漏
 3. perf_metric_strategy 从 Config 自取
+4. profiler 采集失败后的自动重试机制
 """
 
 from unittest.mock import patch
 
 from kernel_eval.config import Config
 from kernel_eval.eval.perf_eval import PerfEvaluator
+from kernel_eval.base.perf_strategy import ProfFileLocations
 
 
 class TestProfileOperatorTempDirCleanup:
@@ -203,3 +205,218 @@ class TestProfilerStepSynchronization:
         assert isinstance(exc, RuntimeError)
         assert str(exc) == "device failed"
         assert calls == ["fn", "sync", "step"]
+
+
+class TestProfilerRetry:
+    """Test profiler collection retry mechanism.
+
+    When kernel_details.csv is missing or elapsed_us <= 0 but the op executed
+    successfully (Host side dispatched the kernel — last_outputs is not None),
+    the profiler collection should be automatically retried instead of
+    directly scoring 0.
+    """
+
+    def _make_evaluator(self, max_retries=2, retry_delay=0.0):
+        config = Config(
+            enable_profiler=True,
+            perf_metric_strategy_override="kernel_details",
+            profiler_max_retries=max_retries,
+            profiler_retry_delay=retry_delay,
+        )
+        return PerfEvaluator(config, archive_prof=False, freq_boost=False)
+
+    @staticmethod
+    def _run_stub(fn, prof_dir, warmup, repeat):
+        fn()
+
+    def test_retry_succeeds_on_second_attempt(self):
+        """First attempt elapsed_us=0, retry produces valid data."""
+        evaluator = self._make_evaluator(max_retries=2, retry_delay=0.0)
+        strategy = evaluator.perf_metric_strategy
+
+        parse_calls = [0]
+
+        def fake_parse(prof_files, result):
+            parse_calls[0] += 1
+            if parse_calls[0] == 1:
+                result.elapsed_us = 0.0
+                result.error_msg = "no csv"
+            else:
+                result.elapsed_us = 42.0
+                result.error_msg = None
+            return result
+
+        with patch.object(evaluator, '_profile', side_effect=self._run_stub), \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch.object(evaluator, '_locate_prof_files',
+                          return_value=ProfFileLocations()), \
+             patch.object(strategy, 'parse', side_effect=fake_parse), \
+             patch('time.sleep'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 42.0
+        assert result.metadata.get("profiler_retries_used") == 1
+        assert parse_calls[0] == 2
+
+    def test_retry_when_profile_raises_but_op_ran(self):
+        """_profile raises but last_outputs set (op ran in pre-flight) → retry."""
+        evaluator = self._make_evaluator(max_retries=2, retry_delay=0.0)
+        strategy = evaluator.perf_metric_strategy
+
+        profile_calls = [0]
+
+        def profile_stub(fn, prof_dir, warmup, repeat):
+            fn()
+            profile_calls[0] += 1
+            if profile_calls[0] == 1:
+                raise RuntimeError("profiler crashed")
+
+        def fake_parse(prof_files, result):
+            result.elapsed_us = 77.0
+            return result
+
+        with patch.object(evaluator, '_profile', side_effect=profile_stub), \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch.object(evaluator, '_locate_prof_files',
+                          return_value=ProfFileLocations()), \
+             patch.object(strategy, 'parse', side_effect=fake_parse), \
+             patch('time.sleep'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 77.0
+        assert result.metadata.get("profiler_retries_used") == 1
+        assert profile_calls[0] == 2
+
+    def test_no_retry_when_op_fails(self):
+        """When _profile raises and last_outputs is None, no retry."""
+        evaluator = self._make_evaluator(max_retries=2, retry_delay=0.0)
+
+        with patch.object(evaluator, '_profile',
+                          side_effect=RuntimeError("crash")) as mock_profile, \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch('time.sleep'), \
+             patch('shutil.rmtree'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("profiler_retries_used") is None
+        assert result.metadata.get("profiler_retries_exhausted") is None
+        assert mock_profile.call_count == 1
+
+    def test_no_retry_when_first_attempt_succeeds(self):
+        """When first attempt produces valid elapsed_us, no retry."""
+        evaluator = self._make_evaluator(max_retries=2, retry_delay=0.0)
+        strategy = evaluator.perf_metric_strategy
+
+        def fake_parse(prof_files, result):
+            result.elapsed_us = 99.0
+            return result
+
+        with patch.object(evaluator, '_profile', side_effect=self._run_stub) as mock_profile, \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch.object(evaluator, '_locate_prof_files',
+                          return_value=ProfFileLocations()), \
+             patch.object(strategy, 'parse', side_effect=fake_parse), \
+             patch('time.sleep'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 99.0
+        assert result.metadata.get("profiler_retries_used") is None
+        assert mock_profile.call_count == 1
+
+    def test_retries_exhausted(self):
+        """All attempts fail → profiler_retries_exhausted=True."""
+        evaluator = self._make_evaluator(max_retries=2, retry_delay=0.0)
+        strategy = evaluator.perf_metric_strategy
+
+        def fake_parse(prof_files, result):
+            result.elapsed_us = 0.0
+            result.error_msg = "no csv"
+            return result
+
+        with patch.object(evaluator, '_profile', side_effect=self._run_stub) as mock_profile, \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch.object(evaluator, '_locate_prof_files',
+                          return_value=ProfFileLocations()), \
+             patch.object(strategy, 'parse', side_effect=fake_parse), \
+             patch('time.sleep'), \
+             patch('shutil.rmtree'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("profiler_retries_exhausted") is True
+        assert len(result.metadata.get("profiler_retry_reasons", [])) == 2
+        assert mock_profile.call_count == 3
+
+    def test_no_retry_when_disabled(self):
+        """profiler_max_retries=0 means no retry."""
+        evaluator = self._make_evaluator(max_retries=0, retry_delay=0.0)
+        strategy = evaluator.perf_metric_strategy
+
+        def fake_parse(prof_files, result):
+            result.elapsed_us = 0.0
+            result.error_msg = "no csv"
+            return result
+
+        with patch.object(evaluator, '_profile', side_effect=self._run_stub) as mock_profile, \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch.object(evaluator, '_locate_prof_files',
+                          return_value=ProfFileLocations()), \
+             patch.object(strategy, 'parse', side_effect=fake_parse), \
+             patch('time.sleep'), \
+             patch('shutil.rmtree'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("profiler_retries_exhausted") is None
+        assert mock_profile.call_count == 1
+
+    def test_prof_dir_cleaned_between_retries(self):
+        """_clean_prof_dir_contents called before each retry attempt."""
+        evaluator = self._make_evaluator(max_retries=2, retry_delay=0.0)
+        strategy = evaluator.perf_metric_strategy
+
+        parse_calls = [0]
+
+        def fake_parse(prof_files, result):
+            parse_calls[0] += 1
+            if parse_calls[0] <= 2:
+                result.elapsed_us = 0.0
+                result.error_msg = "no csv"
+            else:
+                result.elapsed_us = 50.0
+                result.error_msg = None
+            return result
+
+        with patch.object(evaluator, '_profile', side_effect=self._run_stub), \
+             patch.object(evaluator, '_parse_case_id',
+                          return_value=('L1/Add', '0001')), \
+             patch.object(evaluator, '_locate_prof_files',
+                          return_value=ProfFileLocations()), \
+             patch.object(strategy, 'parse', side_effect=fake_parse), \
+             patch.object(evaluator, '_clean_prof_dir_contents') as mock_clean, \
+             patch('time.sleep'):
+            outputs, result = evaluator.run_profiled(
+                "L1/Add_0001", lambda: "ok", warmup=1, repeat=2,
+            )
+
+        assert result.elapsed_us == 50.0
+        assert mock_clean.call_count == 2

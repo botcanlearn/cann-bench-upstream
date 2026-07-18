@@ -5,26 +5,25 @@
 /*!
  * \file extension.cpp
  * \brief Python extension entry point for cann_bench_utils
+ *
+ * Exposes warmup_npu, cache_clean_npu and their meta variants as pybind11
+ * functions. Op schemas are defined via torch.library.define in Python,
+ * with impls registered through torch.library.impl calling into _C.so.
  */
 
-#include <Python.h>
+#include <torch/python.h>
+#include <torch/all.h>
 
-extern "C"
-{
-    // _C 模块本身不导出任何 Python 方法；它的唯一作用是作为一个可被 import 的
-    // 扩展入口。Python 首次 import _C 时会 dlopen 本 .so，从而触发链接进来的
-    // 各 op_plugin（warmup / cache_clean）中由 TORCH_LIBRARY_FRAGMENT /
-    // TORCH_LIBRARY_IMPL 注册的静态初始化器，把自定义算子挂到
-    // torch.ops.cann_bench_utils 命名空间下。
-    PyObject *PyInit__C(void)
-    {
-        static struct PyModuleDef module_def = {
-            PyModuleDef_HEAD_INIT,
-            "_C",
-            nullptr,
-            -1,
-            nullptr,
-        };
-        return PyModule_Create(&module_def);
-    }
+namespace cann_bench_utils {
+torch::Tensor warmup_npu(const torch::Tensor &x, const torch::Tensor &y, const torch::Tensor &z);
+torch::Tensor cache_clean_npu(const torch::Tensor &x, const torch::Tensor &out);
+torch::Tensor warmup_meta(const torch::Tensor &x, const torch::Tensor &y);
+torch::Tensor cache_clean_meta(const torch::Tensor &x);
+}
+
+PYBIND11_MODULE(_C, m) {
+    m.def("warmup_npu", &cann_bench_utils::warmup_npu, "CannBenchWarmup NPU impl");
+    m.def("cache_clean_npu", &cann_bench_utils::cache_clean_npu, "CannBenchCacheClean NPU impl");
+    m.def("warmup_meta", &cann_bench_utils::warmup_meta, "CannBenchWarmup Meta impl");
+    m.def("cache_clean_meta", &cann_bench_utils::cache_clean_meta, "CannBenchCacheClean Meta impl");
 }

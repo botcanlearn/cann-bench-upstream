@@ -44,7 +44,8 @@ done
 # dry-run 模式跳过（仅预览 mv，不应触发编译）。
 ensure_cann_bench_utils() {
   [[ $DRY_RUN -eq 1 ]] && { echo "[INFO] dry-run: 跳过 cann_bench_utils 检查"; return 0; }
-  if python3 -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
+  local py="${PYTHON:-python3}"
+  if "$py" -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
     echo "✓ cann_bench_utils 已安装"
     return 0
   fi
@@ -56,7 +57,7 @@ ensure_cann_bench_utils() {
     exit 1
   fi
   echo "[INFO] 编译 cann_bench_utils..."
-  ( cd "${UTILS_DIR}" && bash build.sh ) &> /tmp/cann_bench_utils_build.log || {
+  ( cd "${UTILS_DIR}" && PYTHON="$py" bash build.sh --clean ) &> /tmp/cann_bench_utils_build.log || {
     echo "[ERROR] cann_bench_utils 编译失败，日志: /tmp/cann_bench_utils_build.log"
     tail -15 /tmp/cann_bench_utils_build.log
     exit 1
@@ -68,11 +69,11 @@ ensure_cann_bench_utils() {
     echo "[ERROR] 未找到编译的 wheel 包"
     exit 1
   fi
-  pip install "${WHEEL}" --force-reinstall &> /tmp/cann_bench_utils_install.log || {
+  "$py" -m pip install "${WHEEL}" --force-reinstall --no-deps &> /tmp/cann_bench_utils_install.log || {
     echo "[ERROR] cann_bench_utils 安装失败，日志: /tmp/cann_bench_utils_install.log"
     exit 1
   }
-  if python3 -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
+  if "$py" -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
     echo "✓ cann_bench_utils 安装成功"
   else
     echo "[ERROR] cann_bench_utils 安装验证失败"

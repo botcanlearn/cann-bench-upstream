@@ -283,7 +283,8 @@ check_python() {
 
 # V3 Anti-Cheat: 检测并安装 cann_bench_utils（强制依赖）
 ensure_cann_bench_utils() {
-    if python -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
+    local py="${PYTHON:-python}"
+    if "$py" -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
         log_info "cann_bench_utils 已安装"
         return 0
     fi
@@ -300,7 +301,7 @@ ensure_cann_bench_utils() {
     # 编译
     log_info "编译 cann_bench_utils..."
     cd "${UTILS_DIR}"
-    if ! bash build.sh &> /tmp/cann_bench_utils_build.log; then
+    if ! PYTHON="$py" bash build.sh --clean &> /tmp/cann_bench_utils_build.log; then
         log_error "cann_bench_utils 编译失败，查看日志: /tmp/cann_bench_utils_build.log"
         exit 1
     fi
@@ -313,7 +314,7 @@ ensure_cann_bench_utils() {
         exit 1
     fi
 
-    if ! pip install "${WHEEL}" --force-reinstall &> /tmp/cann_bench_utils_install.log; then
+    if ! "$py" -m pip install "${WHEEL}" --force-reinstall --no-deps &> /tmp/cann_bench_utils_install.log; then
         log_error "cann_bench_utils 安装失败，查看日志: /tmp/cann_bench_utils_install.log"
         exit 1
     fi
@@ -321,7 +322,7 @@ ensure_cann_bench_utils() {
     cd "${PROJECT_ROOT}"
 
     # 验证安装
-    if python -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
+    if "$py" -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
         log_info "cann_bench_utils 安装成功"
     else
         log_error "cann_bench_utils 安装验证失败"

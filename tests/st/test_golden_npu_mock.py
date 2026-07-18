@@ -33,6 +33,7 @@ from harness import (
     TASKS,
     run_eval_cli,
     has_npu,
+    ensure_cann_bench_utils,
     build_golden_candidate,
     latest_report_json,
     load_report,
@@ -81,6 +82,7 @@ def golden_candidate(tmp_path_factory):
     """Build the runtime golden `cann_bench` candidate once per session."""
     if not has_npu():
         pytest.skip("needs Ascend NPU to run the golden candidate")
+    ensure_cann_bench_utils()
     return build_golden_candidate(tmp_path_factory.mktemp("golden_candidate"))
 
 

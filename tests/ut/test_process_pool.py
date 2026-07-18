@@ -24,6 +24,7 @@
 
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -39,6 +40,7 @@ from src.kernel_eval.eval.process_pool import (
     build_task_units,
     aggregate_by_operator,
     ProcessPoolCoordinator,
+    _DevicePool,
 )
 from src.kernel_eval.eval.subprocess_utils import (
     _CANN_ENV_VARS,
@@ -47,7 +49,7 @@ from src.kernel_eval.eval.subprocess_utils import (
     _synthesize_failure_cases,
     _try_recover_partial_results,
 )
-from src.kernel_eval.eval.results import EvalCaseResult, summarize_case_results
+from src.kernel_eval.eval.results import EvalCaseResult, summarize_case_results, dedup_case_results
 from src.kernel_eval.benches import CannCaseSpec
 from src.kernel_eval.config import Config
 
@@ -188,6 +190,78 @@ class TestAggregateByOperator(unittest.TestCase):
                 self.assertEqual(op_result.passed_cases, 1)
                 self.assertEqual(op_result.skipped_cases, 1)
 
+    def test_aggregate_dedup_stub_and_real(self):
+        """子进程崩溃桩 + 重跑真实结果应去重，total_cases 不虚高"""
+        from src.kernel_eval.eval.accuracy_eval import AccuracyResult
+
+        # case 1-6: 子进程崩溃合成的 all-FAIL 桩（无 accuracy_result）
+        stubs = [
+            EvalCaseResult(case_id=f"level1/Exp_{i}", rel_path="level1/Exp",
+                           operator="Exp", case_num=i, success=False,
+                           error_msg="子进程异常退出 rc=1",
+                           failure_type="subprocess_failure")
+            for i in range(1, 7)
+        ]
+        # case 1-20: 重跑的真实结果（有 accuracy_result）
+        real = [
+            EvalCaseResult(case_id=f"level1/Exp_{i}", rel_path="level1/Exp",
+                           operator="Exp", case_num=i,
+                           success=(i in (18, 19)),
+                           accuracy_result=AccuracyResult(passed=(i in (18, 19))))
+            for i in range(1, 21)
+        ]
+
+        results = aggregate_by_operator(stubs + real)
+        self.assertEqual(len(results), 1)
+        op = results[0]
+        # 6 桩 + 20 真实 → 去重后应 20，而非 26
+        self.assertEqual(op.total_cases, 20)
+        self.assertEqual(op.passed_cases, 2)
+        # 保留的是有 accuracy_result 的真实记录，而非桩
+        for r in op.results:
+            self.assertIsNotNone(r.accuracy_result)
+
+
+class TestDedupCaseResults(unittest.TestCase):
+    """测试 dedup_case_results"""
+
+    def test_dedup_prefers_accuracy(self):
+        """有 accuracy_result 的真实记录优先于无 accuracy 的桩"""
+        from src.kernel_eval.eval.accuracy_eval import AccuracyResult
+
+        stub = EvalCaseResult(case_id="op_1", rel_path="level1/op",
+                              operator="op", case_num=1, success=False,
+                              failure_type="subprocess_failure")
+        real = EvalCaseResult(case_id="op_1", rel_path="level1/op",
+                              operator="op", case_num=1, success=True,
+                              accuracy_result=AccuracyResult(passed=True))
+        deduped = dedup_case_results([stub, real])
+        self.assertEqual(len(deduped), 1)
+        self.assertTrue(deduped[0].success)
+        self.assertIsNotNone(deduped[0].accuracy_result)
+
+    def test_dedup_keeps_last_when_both_stubs(self):
+        """两条都是桩时保留最后出现的（重试结果）"""
+        stub1 = EvalCaseResult(case_id="op_1", rel_path="level1/op",
+                               operator="op", case_num=1, success=False,
+                               error_msg="first", failure_type="subprocess_failure")
+        stub2 = EvalCaseResult(case_id="op_1", rel_path="level1/op",
+                               operator="op", case_num=1, success=False,
+                               error_msg="retry", failure_type="subprocess_failure")
+        deduped = dedup_case_results([stub1, stub2])
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(deduped[0].error_msg, "retry")
+
+    def test_dedup_no_duplicates(self):
+        """无重复时原样返回"""
+        cases = [
+            EvalCaseResult(case_id=f"op_{i}", rel_path="level1/op",
+                           operator="op", case_num=i, success=True)
+            for i in range(3)
+        ]
+        deduped = dedup_case_results(cases)
+        self.assertEqual(len(deduped), 3)
+
 
 class TestProcessPoolCoordinator(unittest.TestCase):
     """测试 ProcessPoolCoordinator"""
@@ -282,7 +356,7 @@ class TestProcessPoolCoordinator(unittest.TestCase):
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_multi_card_child_visibility_is_narrowed(self, mock_detect):
-        """多卡 child 只暴露分配到的单张物理卡"""
+        """多卡 child 通过 ASCEND_RT_VISIBLE_DEVICES 收窄到分配的逻辑卡"""
         mock_detect.return_value = 4
         process_config = ProcessConfig(processes_per_card=1, enable_profiler=False)
         with patch.dict(os.environ, {
@@ -301,15 +375,12 @@ class TestProcessPoolCoordinator(unittest.TestCase):
                 device_id=2,
             )
             env = coordinator._build_env_for_task(coordinator._build_env(), task)
-            self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "6")
-            self.assertEqual(env["ASCEND_VISIBLE_DEVICES"], "6")
-            self.assertEqual(env["NPU_VISIBLE_DEVICES"], "6")
-            self.assertEqual(env["KERNEL_EVAL_PHYSICAL_DEVICE_ID"], "6")
-            self.assertEqual(env["KERNEL_EVAL_LOGICAL_DEVICE_ID"], "0")
+            # ASCEND_RT_VISIBLE_DEVICES 设为逻辑索引（相对父进程可见集）
+            self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "2")
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_multi_card_child_uses_logical_device_zero(self, mock_detect):
-        """多卡 child 收窄 visibility 后使用逻辑 device 0"""
+        """多卡 child 的 --device-id 直接使用 task.device_id（逻辑索引）"""
         mock_detect.return_value = 2
         process_config = ProcessConfig(processes_per_card=1, enable_profiler=False)
         coordinator = ProcessPoolCoordinator(
@@ -324,11 +395,11 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         )
         cmd = coordinator._build_child_cmd(task, "/tmp/cases.json", "/tmp/out.json")
         device_idx = cmd.index("--device-id") + 1
-        self.assertEqual(cmd[device_idx], "0")
+        self.assertEqual(cmd[device_idx], "1")
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_single_card_child_narrows_visibility_to_logical_zero(self, mock_detect):
-        """单卡显式 device_id：收窄 visibility 到该物理卡，子进程重映射为逻辑 0"""
+        """单卡显式 device_id：ASCEND_RT_VISIBLE_DEVICES 设为该逻辑索引，--device-id 直接使用该值"""
         mock_detect.return_value = 4
         process_config = ProcessConfig(processes_per_card=1, enable_profiler=False)
         coordinator = ProcessPoolCoordinator(
@@ -342,17 +413,13 @@ class TestProcessPoolCoordinator(unittest.TestCase):
             cases=[make_case("Exp", 1)],
             device_id=3,
         )
-        # visibility 收窄到物理卡 3，子进程只见一张卡 → torch_npu 重映射为逻辑 0
+        # ASCEND_RT_VISIBLE_DEVICES 设为逻辑索引 3
         env = coordinator._build_env_for_task(coordinator._build_env(), task)
         self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "3")
-        self.assertEqual(env["ASCEND_VISIBLE_DEVICES"], "3")
-        self.assertEqual(env["NPU_VISIBLE_DEVICES"], "3")
-        self.assertEqual(env["KERNEL_EVAL_PHYSICAL_DEVICE_ID"], "3")
-        self.assertEqual(env["KERNEL_EVAL_LOGICAL_DEVICE_ID"], "0")
-        # child --device-id 用逻辑 0，而非物理 3
+        # child --device-id 直接使用 task.device_id
         cmd = coordinator._build_child_cmd(task, "/tmp/cases.json", "/tmp/out.json")
         device_idx = cmd.index("--device-id") + 1
-        self.assertEqual(cmd[device_idx], "0")
+        self.assertEqual(cmd[device_idx], "3")
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_filter_healthy_cards_misaligned_columns_keeps_card(self, mock_detect):
@@ -600,6 +667,372 @@ class TestCLI(unittest.TestCase):
             self.fail("eval-process 不应被 parser 接受")
         except SystemExit:
             pass
+
+
+class TestDevicePool(unittest.TestCase):
+    """测试 _DevicePool 设备池"""
+
+    def test_pool_acquire_release(self):
+        """acquire 后 release，卡回到池中可再取"""
+        pool = _DevicePool([0, 1], 1)
+        card1 = pool.acquire()
+        self.assertIn(card1, [0, 1])
+        # 2卡1槽，取1张后仍有1张可用
+        self.assertTrue(pool.has_available())
+        card2 = pool.acquire()
+        self.assertNotEqual(card1, card2)
+        # 两张都取出 → 池空
+        self.assertFalse(pool.has_available())
+        pool.release(card1)
+        self.assertTrue(pool.has_available())
+
+    def test_pool_empty_returns_none(self):
+        """空池 acquire 返回 None"""
+        pool = _DevicePool([], 1)
+        self.assertFalse(pool.has_available())
+        self.assertIsNone(pool.acquire())
+
+    def test_pool_total_slots(self):
+        """total_slots = len(cards) * slots_per_card"""
+        pool = _DevicePool([0, 1, 2], 3)
+        self.assertEqual(pool.total_slots(), 9)
+
+    def test_pool_acquire_with_exclude(self):
+        """exclude 集合中的卡被跳过"""
+        pool = _DevicePool([0, 1, 2], 1)
+        card = pool.acquire(exclude={0, 2})
+        self.assertEqual(card, 1)
+
+    def test_pool_acquire_all_excluded_returns_none(self):
+        """全部被 exclude 时返回 None"""
+        pool = _DevicePool([0, 1], 1)
+        card = pool.acquire(exclude={0, 1})
+        self.assertIsNone(card)
+
+    def test_pool_multi_slots_per_card(self):
+        """每卡多槽位：同一卡可被 acquire 多次"""
+        pool = _DevicePool([0], 3)
+        cards = []
+        for _ in range(3):
+            cards.append(pool.acquire())
+        self.assertEqual(cards, [0, 0, 0])
+        self.assertFalse(pool.has_available())
+
+
+class TestCardIdleDetection(unittest.TestCase):
+    """测试卡空闲检测"""
+
+    def setUp(self):
+        self.base_config = Config()
+        self.base_config.tasks_root = str(project_root / "tasks")
+        self.base_config.device_type = "npu"
+
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def _make_coordinator(self, mock_detect, card_count=2):
+        mock_detect.return_value = card_count
+        return ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=False),
+        )
+
+    def test_process_config_idle_defaults(self):
+        """ProcessConfig 默认值"""
+        config = ProcessConfig()
+        self.assertEqual(config.card_idle_wait_timeout, 300)
+        self.assertEqual(config.card_idle_poll_interval, 5)
+
+    def test_build_device_mapping_parses_npu_smi_m(self):
+        """正常解析 npu-smi info -m"""
+        coordinator = self._make_coordinator()
+        fake_output = (
+            "\tNPU ID  Chip ID  Chip Logic ID  Chip Phy-ID  Chip Name\n"
+            "\t6       0        0              12           Ascend910\n"
+            "\t6       1        1              13           Ascend910\n"
+            "\t6       2        -              -            Mcu\n"
+        )
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=0, stdout=fake_output, stderr="")):
+            mapping = coordinator._build_device_mapping()
+        self.assertEqual(mapping, {0: (6, 0), 1: (6, 1)})
+
+    def test_build_device_mapping_fail_open_on_failure(self):
+        """命令失败时返回空 dict"""
+        coordinator = self._make_coordinator()
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=1, stdout="", stderr="")):
+            mapping = coordinator._build_device_mapping()
+        self.assertEqual(mapping, {})
+
+    def test_build_device_mapping_fail_open_on_exception(self):
+        """命令异常时返回空 dict"""
+        coordinator = self._make_coordinator()
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   side_effect=FileNotFoundError("npu-smi not found")):
+            mapping = coordinator._build_device_mapping()
+        self.assertEqual(mapping, {})
+
+    def test_is_card_idle_no_process(self):
+        """卡空闲 → True"""
+        coordinator = self._make_coordinator()
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=0,
+                                     stdout="\tNo process in device.\n", stderr="")):
+            self.assertTrue(coordinator._is_card_idle(6, 0))
+
+    def test_is_card_idle_has_process(self):
+        """卡被占用 → False"""
+        coordinator = self._make_coordinator()
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=0,
+                                     stdout="\tProcess id:1667341 Process name:python3 Process memory(MB):138\n",
+                                     stderr="")):
+            self.assertFalse(coordinator._is_card_idle(6, 0))
+
+    def test_is_card_idle_fail_open_on_error(self):
+        """命令异常时 fail-open 返回 True"""
+        coordinator = self._make_coordinator()
+        with patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   return_value=Mock(returncode=215, stdout="Invalid card id.", stderr="")):
+            self.assertTrue(coordinator._is_card_idle(6, 0))
+
+    def test_filter_idle_cards_all_idle(self):
+        """所有卡空闲 → 返回全部，无等待"""
+        coordinator = self._make_coordinator()
+        mapping = {0: (6, 0), 1: (6, 1)}
+        with patch.object(coordinator, '_is_card_idle', return_value=True):
+            result = coordinator._filter_idle_cards([0, 1], mapping)
+        self.assertEqual(sorted(result), [0, 1])
+
+    def test_filter_idle_cards_busy_timeout_skipped(self):
+        """部分卡忙超时被跳过"""
+        coordinator = self._make_coordinator()
+        coordinator.process_config.card_idle_wait_timeout = 1
+        coordinator.process_config.card_idle_poll_interval = 1
+        mapping = {0: (6, 0), 1: (6, 1)}
+
+        # 卡0 空闲，卡1 始终忙
+        def mock_idle(npu_id, chip_id):
+            return npu_id == 6 and chip_id == 0
+
+        with patch.object(coordinator, '_is_card_idle', side_effect=mock_idle):
+            result = coordinator._filter_idle_cards([0, 1], mapping)
+        self.assertEqual(result, [0])
+
+    def test_filter_idle_cards_all_busy_fail_open(self):
+        """全部卡忙且超时 → fail-open 返回全部"""
+        coordinator = self._make_coordinator()
+        coordinator.process_config.card_idle_wait_timeout = 1
+        coordinator.process_config.card_idle_poll_interval = 1
+        mapping = {0: (6, 0), 1: (6, 1)}
+        with patch.object(coordinator, '_is_card_idle', return_value=False):
+            result = coordinator._filter_idle_cards([0, 1], mapping)
+        self.assertEqual(sorted(result), [0, 1])
+
+    def test_filter_idle_cards_no_mapping(self):
+        """mapping 为空 → 跳过检测，返回全部"""
+        coordinator = self._make_coordinator()
+        with patch.object(coordinator, '_is_card_idle', return_value=False) as mock_idle:
+            result = coordinator._filter_idle_cards([0, 1], {})
+        self.assertEqual(sorted(result), [0, 1])
+        mock_idle.assert_not_called()
+
+
+class TestDynamicDispatch(unittest.TestCase):
+    """测试设备池动态调度"""
+
+    def setUp(self):
+        self.base_config = Config()
+        self.base_config.tasks_root = str(project_root / "tasks")
+        self.base_config.device_type = "npu"
+
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def _make_coordinator(self, mock_detect, card_count=2, processes_per_card=1):
+        mock_detect.return_value = card_count
+        return ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(
+                processes_per_card=processes_per_card,
+                enable_profiler=False,
+            ),
+        )
+
+    def test_dispatch_assigns_from_pool(self):
+        """4个任务、2卡1槽 → 每次最多2并发，卡从池中取"""
+        coordinator = self._make_coordinator(card_count=2, processes_per_card=1)
+        assigned_devices = []
+
+        original_popen = subprocess.Popen
+
+        def mock_popen(cmd, **kwargs):
+            # 从 env 中提取分配的卡
+            env = kwargs.get('env', {})
+            dev = env.get('ASCEND_RT_VISIBLE_DEVICES', '?')
+            assigned_devices.append(dev)
+            proc = Mock()
+            proc.pid = 12345
+            proc.wait = Mock(return_value=0)
+            proc.poll = Mock(return_value=0)
+            # 写 output 文件
+            output_file = cmd[cmd.index('--output') + 1]
+            Path(output_file).write_text('{"case_results": []}')
+            return proc
+
+        cases = [make_case("Exp", i) for i in range(4)]
+        task_units = [TaskUnit(operator="Exp", rel_path="level1/Exp",
+                               cases=[c], device_id=0) for c in cases]
+
+        with patch('src.kernel_eval.eval.process_pool.subprocess.Popen', side_effect=mock_popen), \
+             patch('src.kernel_eval.eval.process_pool._write_oom_score_adj', return_value=True):
+            results = coordinator.evaluate_task_units(task_units)
+
+        self.assertEqual(len(results), 0)  # 空 case_results
+        # 4 个任务被分配，每次最多 2 并发
+        self.assertEqual(len(assigned_devices), 4)
+        # 每个分配的设备都在 [0, 1] 范围内
+        for dev in assigned_devices:
+            self.assertIn(dev, ['0', '1'])
+
+    def test_dispatch_card_returned_after_completion(self):
+        """任务完成后卡归还池，后续任务可复用"""
+        coordinator = self._make_coordinator(card_count=1, processes_per_card=1)
+
+        def mock_popen(cmd, **kwargs):
+            proc = Mock()
+            proc.pid = 12345
+            proc.wait = Mock(return_value=0)
+            proc.poll = Mock(return_value=0)
+            output_file = cmd[cmd.index('--output') + 1]
+            Path(output_file).write_text('{"case_results": []}')
+            return proc
+
+        cases = [make_case("Exp", i) for i in range(3)]
+        task_units = [TaskUnit(operator="Exp", rel_path="level1/Exp",
+                               cases=[c], device_id=0) for c in cases]
+
+        with patch('src.kernel_eval.eval.process_pool.subprocess.Popen', side_effect=mock_popen), \
+             patch('src.kernel_eval.eval.process_pool._write_oom_score_adj', return_value=True):
+            results = coordinator.evaluate_task_units(task_units)
+
+        # 3 个任务都能完成（1卡1槽，串行执行）
+        self.assertEqual(len(results), 0)
+
+    def test_dispatch_respects_processes_per_card(self):
+        """2卡×2槽 → 最多4并发"""
+        coordinator = self._make_coordinator(card_count=2, processes_per_card=2)
+        concurrent_count = []
+        max_concurrent = [0]
+        current = [0]
+
+        def mock_popen(cmd, **kwargs):
+            current[0] += 1
+            concurrent_count.append(current[0])
+            max_concurrent[0] = max(max_concurrent[0], current[0])
+            proc = Mock()
+            proc.pid = 12345
+            proc.wait = Mock(return_value=0)
+            proc.poll = Mock(return_value=0)
+            output_file = cmd[cmd.index('--output') + 1]
+            Path(output_file).write_text('{"case_results": []}')
+            current[0] -= 1
+            return proc
+
+        cases = [make_case("Exp", i) for i in range(6)]
+        task_units = [TaskUnit(operator="Exp", rel_path="level1/Exp",
+                               cases=[c], device_id=0) for c in cases]
+
+        with patch('src.kernel_eval.eval.process_pool.subprocess.Popen', side_effect=mock_popen), \
+             patch('src.kernel_eval.eval.process_pool._write_oom_score_adj', return_value=True):
+            coordinator.evaluate_task_units(task_units)
+
+        # max_concurrent 不超过 4 (2卡 × 2槽)
+        self.assertLessEqual(max_concurrent[0], 4)
+
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def test_dispatch_retry_uses_pool(self, mock_detect):
+        """重试阶段也动态分配卡"""
+        mock_detect.return_value = 2
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(
+                processes_per_card=1, enable_profiler=False,
+                retry_on_failure=True, max_retries=1,
+            ),
+        )
+
+        call_count = [0]
+
+        def mock_popen(cmd, **kwargs):
+            call_count[0] += 1
+            proc = Mock()
+            proc.pid = 12345
+            proc.poll = Mock(return_value=0)
+            output_file = cmd[cmd.index('--output') + 1]
+            if call_count[0] == 1:
+                # 第一次：失败，触发重试
+                proc.wait = Mock(return_value=1)
+                Path(output_file).write_text('{"case_results": []}')
+            else:
+                # 后续：成功
+                proc.wait = Mock(return_value=0)
+                Path(output_file).write_text('{"case_results": []}')
+            return proc
+
+        case = make_case("Exp", 1)
+        task_units = [TaskUnit(operator="Exp", rel_path="level1/Exp",
+                               cases=[case], device_id=0)]
+
+        with patch('src.kernel_eval.eval.process_pool.subprocess.Popen', side_effect=mock_popen), \
+             patch('src.kernel_eval.eval.process_pool._is_oom_killed', return_value=False), \
+             patch('src.kernel_eval.eval.process_pool._write_oom_score_adj', return_value=True):
+            coordinator.evaluate_task_units(task_units)
+
+        # 第一次失败 + 1次重试 = 2 次调用
+        self.assertEqual(call_count[0], 2)
+
+    def test_detect_cards_integrates_idle_filter(self):
+        """_detect_cards 端到端整合：健康 + 空闲过滤"""
+        import sys
+
+        healthy_smi = (
+            "+---+\n"
+            "| NPU  Name      | Health | Power |\n"
+            "| 0  Ascend910   | OK     | 169.9 |\n"
+            "| 1  Ascend910   | OK     | 169.9 |\n"
+            "+---+\n"
+        )
+        mapping_output = (
+            "\t6       0        0              12           Ascend910\n"
+            "\t6       1        1              13           Ascend910\n"
+        )
+
+        def mock_subprocess_run(cmd, **kwargs):
+            if '-m' in cmd:
+                return Mock(returncode=0, stdout=mapping_output, stderr="")
+            elif 'proc-mem' in cmd:
+                return Mock(returncode=0, stdout="\tNo process in device.\n", stderr="")
+            else:
+                return Mock(returncode=0, stdout=healthy_smi, stderr="")
+
+        mock_torch_npu = Mock()
+
+        with patch.dict(sys.modules, {'torch_npu': mock_torch_npu}), \
+             patch('src.kernel_eval.eval.process_pool.torch') as mock_torch, \
+             patch('src.kernel_eval.eval.process_pool.subprocess.run',
+                   side_effect=mock_subprocess_run):
+
+            mock_npu = Mock()
+            mock_npu.is_available.return_value = True
+            mock_npu.device_count.return_value = 2
+            mock_npu.get_device_name.return_value = "Ascend910"
+            mock_torch.npu = mock_npu
+
+            coordinator = ProcessPoolCoordinator(
+                base_config=self.base_config,
+                process_config=ProcessConfig(enable_profiler=False),
+            )
+
+            self.assertEqual(coordinator.card_count, 2)
+            self.assertEqual(coordinator._available_cards, [0, 1])
 
 
 if __name__ == '__main__':

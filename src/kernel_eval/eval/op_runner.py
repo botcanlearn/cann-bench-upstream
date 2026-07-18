@@ -179,6 +179,9 @@ class OpRunner:
         drg_mode = guard_mode
         if self.perf_evaluator is not None:
             drg_mode = getattr(self.perf_evaluator.config, 'device_residency_guard_mode', guard_mode)
+        if enable_perf and self.perf_evaluator is not None:
+            self.perf_evaluator._prepare_warmup_tensors()
+            self.perf_evaluator._boost_freq_and_clear_cache()
         with TorchOpGuard(mode=guard_mode), DeviceResidencyGuard(mode=drg_mode):
             # 如果需要性能采集且evaluator可用，临时启用
             if enable_perf and self.perf_evaluator:

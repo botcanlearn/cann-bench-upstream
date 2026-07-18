@@ -62,6 +62,12 @@ class Config:
     profiler_level: str = "Level1"
     # NPU 升频清 cache（10240x10240 大矩阵 warmup），部分卡大矩阵会 hang 时可关闭
     perf_freq_boost: bool = True
+    # Profiler 采集失败后的自动重试次数（0=不重试，2=最多重试2次共3次尝试）
+    # 当 kernel_details.csv 缺失或 elapsed_us<=0 但算子已成功执行（Host 侧有 kernel launch
+    # 记录，即 last_outputs is not None）时自动重试，避免 flaky capture 导致误判 0 分
+    profiler_max_retries: int = 2
+    # 重试间隔（秒），用于等待 profiler session 状态清理
+    profiler_retry_delay: float = 1.0
 
     # 评测配置
     warmup: int = 3              # 性能评测预热次数

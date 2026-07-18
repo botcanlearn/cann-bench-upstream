@@ -10,6 +10,7 @@
 #include <ATen/Operators.h>
 #include <torch/all.h>
 #include <torch/library.h>
+#include "torch_npu/csrc/core/npu/NPUGuard.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "torch_npu/csrc/framework/OpCommand.h"
 
@@ -17,30 +18,25 @@
 
 namespace cann_bench_utils {
 
-TORCH_LIBRARY_FRAGMENT(cann_bench_utils, m)
-{
-    m.def("cann_bench_warmup(Tensor x, Tensor y) -> Tensor");
-}
-
-torch::Tensor warmup_meta(const torch::Tensor &x, const torch::Tensor &y)
+static void warmup_check(const torch::Tensor &x, const torch::Tensor &y)
 {
     TORCH_CHECK(x.dim() == 2 && y.dim() == 2, "CannBenchWarmup expects 2D tensors");
     TORCH_CHECK(x.size(0) == 10240 && x.size(1) == 10240, "CannBenchWarmup expects x shape (10240, 10240)");
     TORCH_CHECK(y.size(0) == 10240 && y.size(1) == 10240, "CannBenchWarmup expects y shape (10240, 10240)");
     TORCH_CHECK(x.scalar_type() == torch::kFloat16, "CannBenchWarmup expects fp16");
     TORCH_CHECK(y.scalar_type() == torch::kFloat16, "CannBenchWarmup expects fp16");
+}
+
+torch::Tensor warmup_meta(const torch::Tensor &x, const torch::Tensor &y)
+{
+    warmup_check(x, y);
     return torch::empty_like(x);
 }
 
-TORCH_LIBRARY_IMPL(cann_bench_utils, Meta, m)
+torch::Tensor warmup_npu(const torch::Tensor &x, const torch::Tensor &y, const torch::Tensor &z)
 {
-    m.impl("cann_bench_warmup", warmup_meta);
-}
-
-torch::Tensor warmup_npu(const torch::Tensor &x, const torch::Tensor &y)
-{
-    const c10::OptionalDeviceGuard guard(x.device());
-    auto z = warmup_meta(x, y);
+    c10_npu::NPUGuard guard(x.device().index());
+    warmup_check(x, y);
     auto stream = c10_npu::getCurrentNPUStream().stream(false);
 
     int64_t totalLength = x.numel();
@@ -59,11 +55,6 @@ torch::Tensor warmup_npu(const torch::Tensor &x, const torch::Tensor &y)
     // CRITICAL: Set kernel name to "CannBenchWarmup" for profiling filtering
     at_npu::native::OpCommand::RunOpApi("CannBenchWarmup", acl_call);
     return z;
-}
-
-TORCH_LIBRARY_IMPL(cann_bench_utils, PrivateUse1, m)
-{
-    m.impl("cann_bench_warmup", warmup_npu);
 }
 
 } // namespace cann_bench_utils

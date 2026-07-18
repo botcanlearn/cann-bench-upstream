@@ -69,6 +69,31 @@ def summarize_case_results(case_results: List[Any]) -> CaseResultSummary:
     )
 
 
+def dedup_case_results(case_results: List[Any]) -> List[Any]:
+    """按 case_id 去重，保留最有信息量的记录。
+
+    子进程崩溃重试场景下，同一 case_id 可能同时存在两份结果：
+    - 合成的 all-FAIL 桩（_synthesize_failure_cases，accuracy_result=None）
+    - 重跑得到的真实结果（accuracy_result 非 None）
+    优先保留有 accuracy_result 的真实记录；同级时保留最后出现的（即重试结果，
+    因为 retry_results 在初次 stubs 之后 extend 进 all_case_results）。
+    """
+    best: Dict[str, Any] = {}
+    for cr in case_results:
+        key = cr.case_id
+        if key not in best:
+            best[key] = cr
+            continue
+        existing = best[key]
+        if cr.accuracy_result is not None and existing.accuracy_result is None:
+            best[key] = cr
+        elif cr.accuracy_result is None and existing.accuracy_result is not None:
+            pass
+        else:
+            best[key] = cr
+    return list(best.values())
+
+
 from .op_runner import OpRunResult
 from .accuracy_eval import AccuracyResult
 from .perf_eval import PerfResult

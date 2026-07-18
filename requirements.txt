@@ -12,6 +12,7 @@
 # ==================== 核心依赖（对齐 pyproject.toml [project].dependencies）====================
 # torch / torch_npu 精确钉 2.10.0，版本须严格匹配，详见 https://www.hiascend.com/document
 # torch_npu 是 NPU 评测路径的硬依赖（cli.py / evaluator.py 等无条件 import）；仅 CPU-only 单测可省略。
+build
 torch==2.10.0
 torch_npu==2.10.0
 numpy>=1.21.0

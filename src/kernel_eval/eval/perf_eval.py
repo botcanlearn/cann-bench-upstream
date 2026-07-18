@@ -26,6 +26,7 @@
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -200,6 +201,9 @@ class PerfEvaluator:
         Pinned to the configured NPU — bare ``.npu()`` would go to current
         device 0 and either hijack the wrong card or fail outright when the
         runner is using a different device.
+
+        Must be called OUTSIDE TorchOpGuard/DeviceResidencyGuard context.
+        Idempotent (safe to call multiple times).
         """
         if self._warmup_tensors is None and self.freq_boost:
             device = (self.device_manager.get_device()
@@ -329,8 +333,7 @@ class PerfEvaluator:
         )
 
         # 频率提升 + 初始 cache 清理（仅在测量窗口前执行一次）
-        if self.freq_boost:
-            self._boost_freq_and_clear_cache()
+        # 已移至 op_runner.run_ai_op 在 guard 之前执行
 
         # 预检（pre-flight）：每个 profiler session 启动前，先不带 profiler 执行 fn()。
         # 若 fn() 抛异常（EZ1001 dtype 不支持等），直接 raise 不启动 profiler —
@@ -547,18 +550,15 @@ class PerfEvaluator:
         if self.archive_prof:
             prof_dir = os.path.join(self.prof_data_dir, rel_path, caseid)
             os.makedirs(prof_dir, exist_ok=True)
-            # 清理上次评测遗留的时间戳子目录，避免读取到脏数据
-            try:
-                for entry in os.listdir(prof_dir):
-                    entry_path = os.path.join(prof_dir, entry)
-                    if os.path.isdir(entry_path):
-                        shutil.rmtree(entry_path, ignore_errors=True)
-            except OSError as e:
-                _logger.debug("profiler archive dir cleanup skipped for %s: %s", prof_dir, e)
+            self._clean_prof_dir_contents(prof_dir)
         else:
             prof_dir = tempfile.mkdtemp(prefix="cann_prof_")
 
+        max_retries = getattr(self.config, 'profiler_max_retries', 0)
+        retry_delay = getattr(self.config, 'profiler_retry_delay', 1.0)
+
         last_outputs = None
+        retry_reasons: List[str] = []
 
         try:
             # 注意：torch_npu.profiler 内部使用全局单例 ProcessPoolExecutor
@@ -569,73 +569,129 @@ class PerfEvaluator:
             # 当前实现：当 enable_profiler=True 时使用 profiler（需确保单线程执行）
             # 多线程并行评测应设置 enable_profiler=False
             # profiler parser logs 已在 _profile 内部抑制
-            if inputs and use_input_pool:
-                pool = InputPool(inputs, warmup + repeat)
-                def _fn():
-                    nonlocal last_outputs
-                    last_outputs = func(*pool.get_next())
-            else:
-                def _fn():
-                    nonlocal last_outputs
-                    last_outputs = func(*args, **kwargs)
+            for attempt in range(1 + max_retries):
+                if attempt > 0:
+                    _logger.warning(
+                        "perf_eval: case %s — retry %d/%d "
+                        "(prev elapsed_us=%.2f, error=%s)",
+                        case_id, attempt, max_retries,
+                        result.elapsed_us, result.error_msg,
+                    )
+                    retry_reasons.append(result.error_msg or "elapsed_us<=0")
+                    self._clean_prof_dir_contents(prof_dir)
+                    if retry_delay > 0:
+                        time.sleep(retry_delay)
+                    result.elapsed_us = 0.0
+                    result.op_times = {}
+                    result.error_msg = None
+                    for _mk in ("profile_exception_type", "profile_exception",
+                                "profile_exception_traceback",
+                                "data_source", "elapsed_us_source"):
+                        result.metadata.pop(_mk, None)
 
-            self._profile(_fn, prof_dir, warmup, repeat)
+                pool = None
+                if inputs and use_input_pool:
+                    pool = InputPool(inputs, warmup + repeat)
+                    def _fn():
+                        nonlocal last_outputs
+                        last_outputs = func(*pool.get_next())
+                else:
+                    def _fn():
+                        nonlocal last_outputs
+                        last_outputs = func(*args, **kwargs)
 
-            # msprof export（仅 MsProfSummaryStrategy 需要）
-            if self._need_msprof_export:
-                self._export_msprof_summary(prof_dir)
-
-            # Clean up InputPool now (trace already written to disk).
-            if inputs and use_input_pool:
-                pool.clear()
-
-        except Exception as e:
-            result.error_msg = f"{type(e).__name__}: {e}"
-            result.metadata["profile_exception_type"] = type(e).__name__
-            result.metadata["profile_exception"] = str(e)
-            result.metadata["profile_exception_traceback"] = traceback.format_exc()
-            # 算子执行已失败，无需再解析 perf 文件——直接返回，保留原始异常信息
-            # 清理临时目录后返回（确保非 archive 模式下 temp dir 不残留）
-            if not self.archive_prof and os.path.isdir(prof_dir):
+                exec_exception = None
                 try:
-                    shutil.rmtree(prof_dir, ignore_errors=True)
-                except OSError:
-                    pass
-            return last_outputs, result
+                    self._profile(_fn, prof_dir, warmup, repeat)
+                    if self._need_msprof_export:
+                        self._export_msprof_summary(prof_dir)
+                except Exception as e:
+                    exec_exception = e
+                    result.error_msg = f"{type(e).__name__}: {e}"
+                    result.metadata["profile_exception_type"] = type(e).__name__
+                    result.metadata["profile_exception"] = str(e)
+                    result.metadata["profile_exception_traceback"] = traceback.format_exc()
+                finally:
+                    if pool is not None:
+                        try:
+                            pool.clear()
+                        except Exception:
+                            pass
 
-        try:
-            # 定位 profiler 产出文件（只返回路径，不做解析）
-            prof_files = self._locate_prof_files(prof_dir)
+                if exec_exception is None:
+                    try:
+                        prof_files = self._locate_prof_files(prof_dir)
 
-            # 诊断日志：记录文件定位结果
-            prof_dirs = [e for e in os.listdir(prof_dir)
-                         if e.startswith("PROF") and os.path.isdir(os.path.join(prof_dir, e))]
-            _logger.info(
-                "perf_eval: case %s — prof_files: csv=%s, trace_view=%s, "
-                "ascend_output=%s, PROF dirs: %s",
-                case_id, prof_files.csv_path, prof_files.trace_view_path,
-                prof_files.ascend_output_dir, prof_dirs,
-            )
+                        prof_dirs = [e for e in os.listdir(prof_dir)
+                                     if e.startswith("PROF")
+                                     and os.path.isdir(os.path.join(prof_dir, e))]
+                        _logger.info(
+                            "perf_eval: case %s — prof_files: csv=%s, "
+                            "trace_view=%s, ascend_output=%s, PROF dirs: %s",
+                            case_id, prof_files.csv_path,
+                            prof_files.trace_view_path,
+                            prof_files.ascend_output_dir, prof_dirs,
+                        )
 
-            # 交由 strategy 解析性能数据
-            if self.perf_metric_strategy:
-                result = self.perf_metric_strategy.parse(prof_files, result)
-            else:
-                result.elapsed_us = 0.0
-                result.error_msg = "no perf_metric_strategy configured"
+                        if self.perf_metric_strategy:
+                            result = self.perf_metric_strategy.parse(
+                                prof_files, result)
+                        else:
+                            result.elapsed_us = 0.0
+                            result.error_msg = (
+                                "no perf_metric_strategy configured")
 
-            _logger.info(
-                "perf_eval: case %s — strategy=%s, elapsed_us=%.2f, "
-                "data_source=%s, error_msg=%s",
-                case_id,
-                self.perf_metric_strategy.get_strategy_name() if self.perf_metric_strategy else "none",
-                result.elapsed_us,
-                result.metadata.get("data_source", "?"),
-                result.error_msg,
-            )
+                        _logger.info(
+                            "perf_eval: case %s — strategy=%s, "
+                            "elapsed_us=%.2f, data_source=%s, error_msg=%s",
+                            case_id,
+                            self.perf_metric_strategy.get_strategy_name()
+                            if self.perf_metric_strategy else "none",
+                            result.elapsed_us,
+                            result.metadata.get("data_source", "?"),
+                            result.error_msg,
+                        )
+                    except Exception as e:
+                        result.error_msg = (
+                            f"parse error: {type(e).__name__}: {e}")
+                        _logger.warning(
+                            "perf_eval: case %s — parse exception: %s",
+                            case_id, e,
+                        )
+
+                # --- retry decision ---
+                if result.elapsed_us > 0:
+                    if attempt > 0:
+                        result.metadata["profiler_retries_used"] = attempt
+                        result.metadata["profiler_retry_reasons"] = (
+                            retry_reasons)
+                    break
+
+                # No valid perf data — decide whether to retry.
+                # Retry only when the op produced outputs (Host side dispatched
+                # the kernel). If last_outputs is None the op itself failed to
+                # execute, so retrying the profiler won't help.
+                if last_outputs is None:
+                    _logger.warning(
+                        "perf_eval: case %s — no host launch detected "
+                        "(last_outputs=None), skipping retry",
+                        case_id,
+                    )
+                    break
+
+                if attempt >= max_retries:
+                    _logger.warning(
+                        "perf_eval: case %s — profiler retries exhausted "
+                        "(%d attempts), elapsed_us=%.2f, error=%s",
+                        case_id, 1 + max_retries, result.elapsed_us,
+                        result.error_msg,
+                    )
+                    if max_retries > 0:
+                        result.metadata["profiler_retries_exhausted"] = True
+                        result.metadata["profiler_retry_reasons"] = (
+                            retry_reasons)
 
         finally:
-            # Clean up temp dir (non-archive mode).
             if not self.archive_prof and os.path.isdir(prof_dir):
                 try:
                     shutil.rmtree(prof_dir, ignore_errors=True)
@@ -643,6 +699,25 @@ class PerfEvaluator:
                     pass
 
         return last_outputs, result
+
+    def _clean_prof_dir_contents(self, prof_dir: str) -> None:
+        """Remove profiler output subdirectories/files from *prof_dir*.
+
+        Called before the first attempt (to clear stale data from prior runs)
+        and between retry attempts (to ensure each attempt starts clean).
+        """
+        try:
+            for entry in os.listdir(prof_dir):
+                entry_path = os.path.join(prof_dir, entry)
+                if os.path.isdir(entry_path):
+                    shutil.rmtree(entry_path, ignore_errors=True)
+                else:
+                    try:
+                        os.remove(entry_path)
+                    except OSError:
+                        pass
+        except OSError as e:
+            _logger.debug("prof_dir cleanup skipped for %s: %s", prof_dir, e)
 
     def _parse_case_id(self, case_id: str) -> Tuple[str, str]:
         """Parse case_id like ``level2/scatter_1`` into ``(rel_path, case_num)``.

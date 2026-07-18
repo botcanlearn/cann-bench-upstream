@@ -119,10 +119,9 @@ add_library(_C SHARED
 set_target_properties(_C PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     PREFIX ""
-    SUFFIX ".abi3.so"
+    SUFFIX ".so"
     OUTPUT_NAME "_C"
-)
-target_compile_definitions(_C PRIVATE Py_LIMITED_API=0x03080000)
+ )
 target_compile_options(_C PRIVATE ${COMPILE_OPTIONS})
 target_include_directories(_C SYSTEM PRIVATE ${INCLUDE_DIRECTORIES})
 target_link_directories(_C PRIVATE ${LINK_DIRECTORIES})

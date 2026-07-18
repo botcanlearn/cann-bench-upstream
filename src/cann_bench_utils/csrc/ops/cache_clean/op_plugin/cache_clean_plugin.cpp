@@ -10,6 +10,7 @@
 #include <ATen/Operators.h>
 #include <torch/all.h>
 #include <torch/library.h>
+#include "torch_npu/csrc/core/npu/NPUGuard.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "torch_npu/csrc/framework/OpCommand.h"
 
@@ -17,29 +18,24 @@
 
 namespace cann_bench_utils {
 
-TORCH_LIBRARY_FRAGMENT(cann_bench_utils, m)
-{
-    m.def("cann_bench_cache_clean(Tensor x) -> Tensor");
-}
-
-torch::Tensor cache_clean_meta(const torch::Tensor &x)
+static void cache_clean_check(const torch::Tensor &x)
 {
     TORCH_CHECK(x.dim() == 3, "CannBenchCacheClean expects 3D tensor");
     TORCH_CHECK(x.size(0) == 96 && x.size(1) == 1024 && x.size(2) == 1024,
                 "CannBenchCacheClean expects shape (96, 1024, 1024)");
     TORCH_CHECK(x.scalar_type() == torch::kFloat16, "CannBenchCacheClean expects fp16");
+}
+
+torch::Tensor cache_clean_meta(const torch::Tensor &x)
+{
+    cache_clean_check(x);
     return torch::empty({}, x.options());
 }
 
-TORCH_LIBRARY_IMPL(cann_bench_utils, Meta, m)
+torch::Tensor cache_clean_npu(const torch::Tensor &x, const torch::Tensor &out)
 {
-    m.impl("cann_bench_cache_clean", cache_clean_meta);
-}
-
-torch::Tensor cache_clean_npu(const torch::Tensor &x)
-{
-    const c10::OptionalDeviceGuard guard(x.device());
-    auto out = cache_clean_meta(x);
+    c10_npu::NPUGuard guard(x.device().index());
+    cache_clean_check(x);
     auto stream = c10_npu::getCurrentNPUStream().stream(false);
 
     int64_t totalLength = x.numel();
@@ -57,11 +53,6 @@ torch::Tensor cache_clean_npu(const torch::Tensor &x)
     // CRITICAL: Set kernel name to "CannBenchCacheClean" for profiling filtering
     at_npu::native::OpCommand::RunOpApi("CannBenchCacheClean", acl_call);
     return out;
-}
-
-TORCH_LIBRARY_IMPL(cann_bench_utils, PrivateUse1, m)
-{
-    m.impl("cann_bench_cache_clean", cache_clean_npu);
 }
 
 } // namespace cann_bench_utils

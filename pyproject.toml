@@ -6,6 +6,7 @@ license = {text = "CANN Open Software License v2.0"}
 requires-python = ">=3.10"
 # torch/torch_npu 钉 2.10.0,其余精确版本交 uv.lock 锁定。
 dependencies = [
+    "build",
     "torch==2.10.0",
     "numpy>=1.21.0",
     "pyyaml>=6.0",

@@ -38,7 +38,7 @@ class EvalResult:
     """单用例评测结果"""
     rel_path: str = ""
     operator: str = ""
-    case_id: int = 0
+    case_id: str = ""
     status: str = ""  # success / failed / skipped
     elapsed_us: Optional[float] = 0  # None 表示未采集性能(--no-perf / 非 profiler 路径)
     op_times: Optional[Dict[str, Dict[str, float]]] = None
@@ -83,7 +83,7 @@ class EvalResult:
         return cls(
             rel_path=result.rel_path,
             operator=result.operator,
-            case_id=result.case_num,
+            case_id=result.case_id,
             status=status,
             elapsed_us=result.perf_result.elapsed_us if result.perf_result else None,
             op_times=result.perf_result.op_times if result.perf_result else {},

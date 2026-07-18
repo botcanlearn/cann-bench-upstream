@@ -6,7 +6,7 @@ Split by concern: eval_run (调用 kernel_eval) · golden_mock (golden 候选;�
 """
 from .eval_run import (
     REPO_ROOT, KERNEL_EVAL_SRC, TASKS, RUN_EVALUATION_SH, LEVELS,
-    has_npu, kernel_eval_env, build_eval_cmd, run_eval_cli,
+    has_npu, ensure_cann_bench_utils, kernel_eval_env, build_eval_cmd, run_eval_cli,
 )
 from .golden_mock import build_golden_candidate
 from .report import (

@@ -49,11 +49,9 @@ class BinaryDistribution(Distribution):
         return True
 
 
-class ABI3Wheel(bdist_wheel):
+class CustomWheel(bdist_wheel):
     def get_tag(self):
         python, abi, plat = super().get_tag()
-        python = "cp38"
-        abi = "abi3"
         return python, abi, plat
 
     def run(self):
@@ -101,7 +99,7 @@ class CMakeBuildCommand(Command):
 
 cmdclass = {
     'clean': CleanCommand,
-    'bdist_wheel': ABI3Wheel,
+    'bdist_wheel': CustomWheel,
     'cmake_build': CMakeBuildCommand,
 }
 
@@ -110,10 +108,13 @@ setup(
     version=VERSION,
     description=DESCRIPTION,
     packages=find_packages(),
-    package_data={PACKAGE_NAME: ['*.abi3.so']},
+    package_data={PACKAGE_NAME: ['*.so']},
     distclass=BinaryDistribution,
     cmdclass=cmdclass,
     zip_safe=False,
-    install_requires=["torch", "torch_npu"],
+    # torch/torch_npu are runtime prerequisites provided by the CANN image.
+    # Listing them here lets `pip install --force-reinstall` (without --no-deps)
+    # upgrade torch to latest PyPI, breaking the ABI-matched build.
+    install_requires=[],
     python_requires='>=3.8',
 )

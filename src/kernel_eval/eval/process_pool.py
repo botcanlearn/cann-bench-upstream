@@ -32,15 +32,15 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import torch
 
-from .results import EvalOperatorResult, EvalCaseResult, summarize_case_results
+from .results import EvalOperatorResult, EvalCaseResult, summarize_case_results, dedup_case_results
 from .subprocess_utils import (
     _CANN_ENV_VARS,
     _write_oom_score_adj,
@@ -67,6 +67,8 @@ class ProcessConfig:
     retry_on_oom: bool = True        # OOM 是否重试
     retry_on_failure: bool = True    # 子进程异常是否重试
     exclude_repeatedly_failed_cases: bool = True  # 排除多次失败的case
+    card_idle_wait_timeout: int = 300   # 等待忙卡变空闲的最大秒数
+    card_idle_poll_interval: int = 5    # 轮询间隔（秒）
 
 
 @dataclass
@@ -138,6 +140,9 @@ def aggregate_by_operator(
 
     results: List[EvalOperatorResult] = []
     for op_name, case_results in grouped.items():
+        # 去重：子进程崩溃重试时，同一 case_id 会同时存在合成桩与真实结果，
+        # 保留有 accuracy_result 的真实记录，丢弃桩，避免 total_cases 虚高。
+        case_results = dedup_case_results(case_results)
         summary = summarize_case_results(case_results)
         rel_path = case_results[0].rel_path if case_results else ""
         results.append(EvalOperatorResult(
@@ -153,6 +158,49 @@ def aggregate_by_operator(
         ))
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# _DevicePool — 设备池，动态卡分配
+# ---------------------------------------------------------------------------
+
+class _DevicePool:
+    """设备池 — 动态卡分配，每卡含 slots_per_card 个槽位。
+
+    仅在主调度线程中调用 acquire/release（worker 线程不接触池），
+    因此无需加锁。
+    """
+
+    def __init__(self, cards: List[int], slots_per_card: int):
+        self._pool: deque = deque()
+        for card in cards:
+            for _ in range(slots_per_card):
+                self._pool.append(card)
+        self._total = len(self._pool)
+
+    def acquire(self, exclude: Optional[set] = None) -> Optional[int]:
+        """取一张可用卡。可指定排除集（排除集中的卡不被选中）。
+
+        全部被排除时返回 None。
+        """
+        if exclude is None:
+            exclude = set()
+        for _ in range(len(self._pool)):
+            card = self._pool.popleft()
+            if card not in exclude:
+                return card
+            self._pool.append(card)
+        return None
+
+    def release(self, card_id: int):
+        """归还卡到池中"""
+        self._pool.append(card_id)
+
+    def has_available(self) -> bool:
+        return len(self._pool) > 0
+
+    def total_slots(self) -> int:
+        return self._total
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +231,14 @@ class ProcessPoolCoordinator:
         # 单卡模式：所有进程绑定到指定卡
         if device_id is not None:
             self.card_count = 1
+            self._available_cards = [device_id]
         else:
-            # 多卡模式：自动检测，过滤掉不健康的卡
+            # 多卡模式：自动检测，过滤掉不健康和忙碌的卡
             self.card_count = self._detect_cards()
+            # _detect_cards 内部设置 self._available_cards；
+            # 若被 mock（单测）未设置，则回退到全卡
+            if not getattr(self, '_available_cards', None):
+                self._available_cards = list(range(self.card_count))
 
         # torch_npu.profiler 使用 ACL 设备级 profiling 硬件资源，
         # 同一 NPU 卡上多进程并发 profile 会竞争该资源。
@@ -237,9 +290,15 @@ class ProcessPoolCoordinator:
 
         if not healthy_cards:
             print("[ERROR] 没有健康的 NPU 卡可用")
+            self._available_cards = []
             return 0
 
-        # 更新 card_count 为健康卡数
+        # 过滤掉被外部进程占用的卡
+        mapping = self._build_device_mapping()
+        if mapping:
+            healthy_cards = self._filter_idle_cards(healthy_cards, mapping)
+
+        self._available_cards = healthy_cards
         return len(healthy_cards)
 
     # npu-smi 的 health 列位置随驱动/CANN 版本变化（有时 id+name 合并、有时 health
@@ -308,6 +367,113 @@ class ProcessPoolCoordinator:
             print("\n[诊断] npu-smi info 执行超时")
         except Exception as e:
             print(f"\n[诊断] npu-smi info 执行异常: {e}")
+
+    def _build_device_mapping(self) -> Dict[int, tuple]:
+        """解析 npu-smi info -m，构建 {logic_id: (npu_id, chip_id)} 映射。
+
+        fail-open：解析失败时返回空 dict，调用方按逻辑ID直查（退化为不检测）。
+        """
+        mapping = {}
+        try:
+            result = subprocess.run(
+                ["npu-smi", "info", "-m"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return mapping
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split()
+                # 格式: NPU_ID  Chip_ID  Chip_Logic_ID  Phy_ID  Name
+                if len(parts) >= 4 and parts[2] != '-':
+                    try:
+                        logic_id = int(parts[2])
+                        npu_id = int(parts[0])
+                        chip_id = int(parts[1])
+                        mapping[logic_id] = (npu_id, chip_id)
+                    except ValueError:
+                        continue
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            pass
+        return mapping
+
+    def _is_card_idle(self, npu_id: int, chip_id: int) -> bool:
+        """通过 npu-smi info -t proc-mem 检测指定卡是否空闲。
+
+        Returns:
+            True  — 空闲（"No process in device."）
+            False — 有进程占用
+        fail-open：命令执行异常时返回 True（不阻塞调度）
+        """
+        try:
+            result = subprocess.run(
+                ["npu-smi", "info", "-t", "proc-mem",
+                 "-i", str(npu_id), "-c", str(chip_id)],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                return True
+            return "No process in device." in result.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            return True
+
+    def _filter_idle_cards(
+        self,
+        healthy_cards: List[int],
+        mapping: Dict[int, tuple],
+    ) -> List[int]:
+        """从健康卡中筛选空闲卡，忙卡等待至超时后跳过。
+
+        流程：
+        1. 首轮扫描：检测每张卡，立即获得 idle/busy 快照
+        2. 忙卡进入等待循环：每隔 poll_interval 秒重检
+        3. 超时后仍忙的卡被跳过（从列表移除）
+        4. 若所有卡都忙且超时 → fail-open，返回全部健康卡
+        """
+        timeout = self.process_config.card_idle_wait_timeout
+        interval = self.process_config.card_idle_poll_interval
+
+        idle_cards: List[int] = []
+        busy_cards: List[int] = []
+
+        # 首轮扫描
+        for logic_id in healthy_cards:
+            physical = mapping.get(logic_id)
+            if physical is None:
+                idle_cards.append(logic_id)
+                continue
+            if self._is_card_idle(*physical):
+                idle_cards.append(logic_id)
+            else:
+                busy_cards.append(logic_id)
+
+        if busy_cards:
+            print(f"[INFO] {len(busy_cards)} 张卡被进程占用，等待空闲 "
+                  f"(超时 {timeout}s, 轮询 {interval}s): {busy_cards}")
+
+        # 等待循环
+        deadline = time.time() + timeout
+        while busy_cards and time.time() < deadline:
+            time.sleep(interval)
+            still_busy: List[int] = []
+            for logic_id in busy_cards:
+                physical = mapping[logic_id]
+                if self._is_card_idle(*physical):
+                    idle_cards.append(logic_id)
+                    print(f"[INFO] Card {logic_id} 已空闲")
+                else:
+                    still_busy.append(logic_id)
+            busy_cards = still_busy
+
+        # 超时处理
+        if busy_cards:
+            if idle_cards:
+                print(f"[WARN] 卡 {busy_cards} 等待超时仍忙碌，跳过 "
+                      f"(使用 {len(idle_cards)} 张空闲卡)")
+            else:
+                print(f"[WARN] 所有卡等待超时仍忙碌，fail-open 使用全部健康卡")
+                idle_cards = list(healthy_cards)
+
+        return idle_cards
 
     def _build_env(self) -> Dict[str, str]:
         """构建子进程环境变量"""
@@ -460,7 +626,6 @@ class ProcessPoolCoordinator:
         all_case_results: List[EvalCaseResult] = []
         completed_count = 0
         retry_queue: List[TaskUnit] = []  # 重试队列
-        healthy_cards = list(range(self.card_count))
         case_failure_count: Dict[str, int] = defaultdict(int)  # 记录每个case的失败次数
 
         def _run_task(idx_and_task):
@@ -598,95 +763,102 @@ class ProcessPoolCoordinator:
                 except OSError:
                     pass
 
+        pool = _DevicePool(self._available_cards, self.process_config.processes_per_card)
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            indexed_tasks = list(enumerate(task_units))
-            futures = {
-                executor.submit(_run_task, item): item
-                for item in indexed_tasks
-            }
+            pending = deque(enumerate(task_units))
+            active: Dict = {}  # future -> task
 
-            for future in as_completed(futures):
-                item = futures[future]
-                idx, task = item
-                try:
-                    task_info, case_results, should_retry, failure_type, failed_cases = future.result()
-                    completed_count += 1
-                    all_case_results.extend(case_results)
-                    passed = sum(1 for r in case_results if r.success)
-                    status = "✅" if passed > 0 else "❌"
-                    print(f"[INFO] [{completed_count}/{len(task_units)}] Card {task.device_id}: "
-                          f"{task.operator} {status} ({passed}/{len(task.cases)})")
+            while pending or active:
+                # 有空闲卡时派发任务
+                while pending and pool.has_available():
+                    idx, task = pending.popleft()
+                    task.device_id = pool.acquire(exclude=task.excluded_devices or None)
+                    if task.device_id is None:
+                        task.device_id = pool.acquire()
+                    future = executor.submit(_run_task, (idx, task))
+                    active[future] = task
 
-                    # 处理重试逻辑
-                    if should_retry and failed_cases:
-                        # 更新失败计数
-                        for case in failed_cases:
-                            case_id = case.get_case_id_str()
-                            case_failure_count[case_id] += 1
+                if not active:
+                    break
 
-                        # 过滤掉多次失败的case（如果启用了排除策略）
-                        if self.process_config.exclude_repeatedly_failed_cases:
-                            repeatedly_failed = []
-                            cases_to_retry = []
+                done, _ = wait(list(active.keys()), return_when=FIRST_COMPLETED)
+                for future in done:
+                    task = active.pop(future)
+                    pool.release(task.device_id)
+                    try:
+                        task_info, case_results, should_retry, failure_type, failed_cases = future.result()
+                        completed_count += 1
+                        all_case_results.extend(case_results)
+                        passed = sum(1 for r in case_results if r.success)
+                        status = "✅" if passed > 0 else "❌"
+                        print(f"[INFO] [{completed_count}/{len(task_units)}] Card {task.device_id}: "
+                              f"{task.operator} {status} ({passed}/{len(task.cases)})")
+
+                        # 处理重试逻辑
+                        if should_retry and failed_cases:
+                            # 更新失败计数
                             for case in failed_cases:
                                 case_id = case.get_case_id_str()
-                                if case_failure_count[case_id] >= 2:
-                                    # 已经失败2次，不再重试
-                                    repeatedly_failed.append(case)
-                                else:
-                                    cases_to_retry.append(case)
+                                case_failure_count[case_id] += 1
 
-                            # 将多次失败的case记录到结果中（标记为最终失败）
-                            if repeatedly_failed:
-                                for case in repeatedly_failed:
+                            # 过滤掉多次失败的case（如果启用了排除策略）
+                            if self.process_config.exclude_repeatedly_failed_cases:
+                                repeatedly_failed = []
+                                cases_to_retry = []
+                                for case in failed_cases:
                                     case_id = case.get_case_id_str()
-                                    print(f"[WARN] 用例 {case_id} 已连续失败 {case_failure_count[case_id]} 次，"
-                                          f"不再重试，标记为最终失败")
-                        else:
-                            cases_to_retry = failed_cases
+                                    if case_failure_count[case_id] >= 2:
+                                        # 已经失败2次，不再重试
+                                        repeatedly_failed.append(case)
+                                    else:
+                                        cases_to_retry.append(case)
 
-                        # 只有还有需要重试的case时才创建重试任务
-                        if cases_to_retry:
-                            # 创建重试任务
-                            new_device = self._select_device_for_retry(
-                                task.device_id,
-                                task.excluded_devices,
-                                healthy_cards
-                            )
-                            retry_task = TaskUnit(
-                                operator=task.operator,
-                                rel_path=task.rel_path,
-                                cases=cases_to_retry,
-                                device_id=new_device,
-                                retry_count=task.retry_count + 1,
-                                excluded_devices=task.excluded_devices | {task.device_id},
-                                parent_task_id=f"{task.operator}@Card{task.device_id}"
-                            )
-                            retry_queue.append(retry_task)
-                            excluded_count = len(failed_cases) - len(cases_to_retry)
-                            excluded_msg = f", 排除 {excluded_count} 个多次失败的用例" if excluded_count > 0 else ""
-                            print(f"[INFO] 重试任务已加入队列: {task.operator} "
-                                  f"(retry {retry_task.retry_count}/{self.process_config.max_retries}, "
-                                  f"{len(cases_to_retry)} 个用例{excluded_msg}, "
-                                  f"Card{task.device_id}→Card{new_device}, "
-                                  f"原因: {failure_type})")
+                                # 将多次失败的case记录到结果中（标记为最终失败）
+                                if repeatedly_failed:
+                                    for case in repeatedly_failed:
+                                        case_id = case.get_case_id_str()
+                                        print(f"[WARN] 用例 {case_id} 已连续失败 {case_failure_count[case_id]} 次，"
+                                              f"不再重试，标记为最终失败")
+                            else:
+                                cases_to_retry = failed_cases
 
-                    # 定期清理已退出的子进程引用，避免内存累积
-                    self._cleanup_completed_processes()
+                            # 只有还有需要重试的case时才创建重试任务
+                            if cases_to_retry:
+                                # 创建重试任务（device_id 占位，_process_retry_queue 中由设备池动态分配）
+                                retry_task = TaskUnit(
+                                    operator=task.operator,
+                                    rel_path=task.rel_path,
+                                    cases=cases_to_retry,
+                                    device_id=task.device_id,
+                                    retry_count=task.retry_count + 1,
+                                    excluded_devices=task.excluded_devices | {task.device_id},
+                                    parent_task_id=f"{task.operator}@Card{task.device_id}"
+                                )
+                                retry_queue.append(retry_task)
+                                excluded_count = len(failed_cases) - len(cases_to_retry)
+                                excluded_msg = f", 排除 {excluded_count} 个多次失败的用例" if excluded_count > 0 else ""
+                                print(f"[INFO] 重试任务已加入队列: {task.operator} "
+                                      f"(retry {retry_task.retry_count}/{self.process_config.max_retries}, "
+                                      f"{len(cases_to_retry)} 个用例{excluded_msg}, "
+                                      f"原卡 Card{task.device_id} 故障 ({failure_type}), 将动态分配新卡)")
 
-                    # 每完成 3 个任务执行一次 GC，回收主进程临时对象
-                    if completed_count % 3 == 0:
-                        import gc
-                        gc.collect()
-                        avail_mb = self._get_available_memory_mb()
-                        if avail_mb > 0 and avail_mb < 2048:
-                            print(f"[WARN] 可用内存低: {avail_mb:.0f} MB，"
-                                  f"活跃子进程: {len(self._active_processes)}", flush=True)
+                        # 定期清理已退出的子进程引用，避免内存累积
+                        self._cleanup_completed_processes()
 
-                except Exception as e:
-                    completed_count += 1
-                    print(f"[WARN] [{completed_count}/{len(task_units)}] Card {task.device_id}: "
-                          f"{task.operator} 异常: {e}")
+                        # 每完成 3 个任务执行一次 GC，回收主进程临时对象
+                        if completed_count % 3 == 0:
+                            import gc
+                            gc.collect()
+                            avail_mb = self._get_available_memory_mb()
+                            if avail_mb > 0 and avail_mb < 2048:
+                                print(f"[WARN] 可用内存低: {avail_mb:.0f} MB，"
+                                      f"活跃子进程: {len(self._active_processes)}", flush=True)
+
+                    except Exception as e:
+                        completed_count += 1
+                        print(f"[WARN] [{completed_count}/{len(task_units)}] Card {task.device_id}: "
+                              f"{task.operator} 异常: {e}")
 
         print(f"[INFO] 初次调度完成: {completed_count}/{len(task_units)} 个 TaskUnit")
 
@@ -803,32 +975,44 @@ class ProcessPoolCoordinator:
                 except OSError:
                     pass
 
+        pool = _DevicePool(self._available_cards, self.process_config.processes_per_card)
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            indexed_tasks = list(enumerate(retry_queue))
-            futures = {
-                executor.submit(_run_retry_task, item): item
-                for item in indexed_tasks
-            }
+            pending = deque(enumerate(retry_queue))
+            active: Dict = {}
 
-            for future in as_completed(futures):
-                item = futures[future]
-                idx, task = item
-                try:
-                    task_info, case_results = future.result()
-                    completed_count += 1
-                    retry_results.extend(case_results)
-                    passed = sum(1 for r in case_results if r.success)
-                    status = "✅" if passed > 0 else "❌"
-                    print(f"[INFO] [重试 {completed_count}/{len(retry_queue)}] Card {task.device_id}: "
-                          f"{task.operator} {status} ({passed}/{len(task.cases)}) "
-                          f"(retry {task.retry_count})")
+            while pending or active:
+                while pending and pool.has_available():
+                    idx, task = pending.popleft()
+                    task.device_id = pool.acquire(exclude=task.excluded_devices or None)
+                    if task.device_id is None:
+                        task.device_id = pool.acquire()
+                    future = executor.submit(_run_retry_task, (idx, task))
+                    active[future] = task
 
-                    self._cleanup_completed_processes()
+                if not active:
+                    break
 
-                except Exception as e:
-                    completed_count += 1
-                    print(f"[WARN] [重试 {completed_count}/{len(retry_queue)}] Card {task.device_id}: "
-                          f"{task.operator} 异常: {e}")
+                done, _ = wait(list(active.keys()), return_when=FIRST_COMPLETED)
+                for future in done:
+                    task = active.pop(future)
+                    pool.release(task.device_id)
+                    try:
+                        task_info, case_results = future.result()
+                        completed_count += 1
+                        retry_results.extend(case_results)
+                        passed = sum(1 for r in case_results if r.success)
+                        status = "✅" if passed > 0 else "❌"
+                        print(f"[INFO] [重试 {completed_count}/{len(retry_queue)}] Card {task.device_id}: "
+                              f"{task.operator} {status} ({passed}/{len(task.cases)}) "
+                              f"(retry {task.retry_count})")
+
+                        self._cleanup_completed_processes()
+
+                    except Exception as e:
+                        completed_count += 1
+                        print(f"[WARN] [重试 {completed_count}/{len(retry_queue)}] Card {task.device_id}: "
+                              f"{task.operator} 异常: {e}")
 
         return retry_results
 

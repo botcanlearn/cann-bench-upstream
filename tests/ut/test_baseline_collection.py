@@ -70,8 +70,8 @@ class TestRefRegistry:
 
     def test_total_registered_ops(self):
         keys = ref_registry.all_keys()
-        # 8 (L1) + 16 (L2) + 17 (L3) + 8 (L4) = 49
-        assert len(keys) == 49
+        # 8 (L1) + 16 (L2) + 18 (L3) + 8 (L4) = 50
+        assert len(keys) == 50
 
     def test_level1_ops_registered(self):
         keys = set(ref_registry.all_keys())
