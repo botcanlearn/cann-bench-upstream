@@ -28,6 +28,7 @@ import pytest
 from kernel_eval.base.perf_strategy import (
     ProfFileLocations,
     KernelDetailsStrategy,
+    MsProfSummaryStrategy,
     parse_csv_kernels,
 )
 from kernel_eval.base.result import PerfResult
@@ -112,3 +113,53 @@ class TestKernelDetailsStrategyPrefersCsv:
         speedup = baseline_us / result.elapsed_us
         assert speedup < 100, f"speedup 仍然虚高: {speedup:.1f}x"
         assert speedup == pytest.approx(22.4, abs=1.0)
+
+
+class TestKernelDetailsStrategyCollectionFailed:
+    """perf_collection_failed metadata 区分采集异常与 CPU fallback。"""
+
+    def test_no_csv_marks_collection_failed(self):
+        """CSV 未产出 → perf_collection_failed=True（采集异常，不触发反作弊）。"""
+        prof_files = ProfFileLocations(csv_path=None)
+        result = KernelDetailsStrategy().parse(prof_files, PerfResult())
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("perf_collection_failed") is True
+
+    def test_csv_present_no_kernels_marks_not_collection_failed(self, tmp_path):
+        """CSV 已产出但无有效 kernel → perf_collection_failed=False（CPU fallback，触发反作弊）。"""
+        csv_path = tmp_path / "kernel_details.csv"
+        fieldnames = ["Step Id", "Name", "Type", "Duration(us)", "Input Shapes"]
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+
+        prof_files = ProfFileLocations(csv_path=str(csv_path))
+        result = KernelDetailsStrategy().parse(prof_files, PerfResult())
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("perf_collection_failed") is False
+
+
+class TestMsProfSummaryStrategyCollectionFailed:
+    """MsProfSummaryStrategy 同样区分采集异常与 CPU fallback。"""
+
+    def test_no_files_marks_collection_failed(self):
+        """无任何 profiler 输出 → perf_collection_failed=True。"""
+        prof_files = ProfFileLocations(
+            csv_path=None, msprof_summary_paths=[],
+        )
+        result = MsProfSummaryStrategy().parse(prof_files, PerfResult())
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("perf_collection_failed") is True
+
+    def test_csv_present_no_kernels_marks_not_collection_failed(self, tmp_path):
+        """CSV 已产出但无有效 kernel → perf_collection_failed=False。"""
+        csv_path = tmp_path / "kernel_details.csv"
+        fieldnames = ["Step Id", "Name", "Type", "Duration(us)", "Input Shapes"]
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+
+        prof_files = ProfFileLocations(csv_path=str(csv_path), msprof_summary_paths=[])
+        result = MsProfSummaryStrategy().parse(prof_files, PerfResult())
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("perf_collection_failed") is False

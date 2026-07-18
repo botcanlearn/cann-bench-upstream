@@ -254,16 +254,38 @@ _NO_NPU_PERF_WARNED_RUN: set = set()
 def _warn_no_npu_perf(
     n_func_pass: int, n_no_perf_pass: int, rel_path: Optional[str] = None
 ) -> None:
-    """精度通过但 profiler 没有采到 NPU kernel 时间，整算子置 0 分。"""
+    """精度通过但 profiler 已产出 CSV 却无 NPU kernel（疑似 CPU fallback），整算子置 0 分。"""
     key = (rel_path, n_func_pass, n_no_perf_pass)
     if key in _NO_NPU_PERF_WARNED_RUN:
         return
     _NO_NPU_PERF_WARNED_RUN.add(key)
     op_prefix = f"[{rel_path}] " if rel_path else ""
     _logger.warning(
-        "%saggregate_eq4: %d / %d 个精度通过的 case 未检测到 NPU 算子性能数据，"
-        "疑似 CPU fallback 或未执行提交的 NPU kernel，整算子按 0 分处理。",
+        "%saggregate_eq4: %d / %d 个精度通过的 case 已采集 kernel_details.csv "
+        "但未检测到 NPU 算子性能数据，疑似 CPU fallback 或未执行提交的 NPU kernel，"
+        "整算子按 0 分处理。",
         op_prefix, n_no_perf_pass, n_func_pass,
+    )
+
+
+_PERF_COLLECTION_FAILED_WARNED_RUN: set = set()
+
+
+def _warn_perf_collection_failed(
+    n_collection_failed: int, n_func_pass: int, rel_path: Optional[str] = None
+) -> None:
+    """精度通过但 profiler 采集功能异常（未产出 CSV 等），该 case 性能项按 0 计入，
+    不触发反作弊。"""
+    key = (rel_path, n_func_pass, n_collection_failed)
+    if key in _PERF_COLLECTION_FAILED_WARNED_RUN:
+        return
+    _PERF_COLLECTION_FAILED_WARNED_RUN.add(key)
+    op_prefix = f"[{rel_path}] " if rel_path else ""
+    _logger.warning(
+        "%saggregate_eq4: %d / %d 个精度通过的 case 因 profiler 采集功能异常"
+        "（未产出 kernel_details.csv 等）无性能数据，该 case 性能项按 0 计入，"
+        "不触发反作弊。请排查 profiler/环境问题。",
+        op_prefix, n_collection_failed, n_func_pass,
     )
 
 
@@ -315,10 +337,12 @@ def aggregate_eq4(
             ``success`` 对应 δ_acc,i；``score_i_or_None`` 缺锚点时为 None
             （按 §3.3 极限按 0 计入性能项，不影响精度项）。
         wc, wf, wp: 权重，默认 0.2 / 0.3 / 0.5。
-        n_no_perf_pass: 精度通过但没有有效 NPU 性能数据的 case 数。
-            这与 score_i=None 的"缺 baseline/T_HW 锚点"不同：缺锚点只扣该
-            case 性能分；没有 NPU 性能数据说明可能 CPU fallback 或没有执行
-            提交的 NPU kernel，整算子按反作弊规则置 0 分。
+        n_no_perf_pass: 精度通过、kernel_details.csv 已产出但无有效 NPU kernel
+            的 case 数（疑似 CPU fallback）。这与 score_i=None 的"缺 baseline/T_HW
+            锚点"不同：缺锚点只扣该 case 性能分；CSV 已产出但无 NPU kernel 说明
+            可能 CPU fallback 或没有执行提交的 NPU kernel，整算子按反作弊规则置 0 分。
+            注意：profiler 采集功能异常（未产出 CSV）的 case 不计入此参数——
+            那些属于基础设施问题，不应触发反作弊。
         n_compile_runtime_fail: 编译通过后，在 correctness 阶段暴露出的
             非数值精度失败 case 数，例如运行时异常、输出数量/shape 不匹配、
             dtype/接口不支持等。每个这样的 case 会扣除 ``wc / N`` 的
@@ -447,13 +471,29 @@ class ScoringCalculator:
         case_scores: List[Tuple[bool, Optional[float]]] = []
         n_no_perf_pass = 0
         n_compile_runtime_fail = 0
+        n_collection_failed = 0
+        n_func_pass = 0
         for case in result.results:
             if not case.success:
                 if is_compile_runtime_case_failure(case):
                     n_compile_runtime_fail += 1
                 case_scores.append((case.success, None))
                 continue
+            n_func_pass += 1
             if case.perf_result is None or case.perf_result.elapsed_us <= 0:
+                # 区分采集功能异常与 CPU fallback：
+                # - perf_collection_failed=True（或 perf_result=None）：profiler 未产出
+                #   kernel_details.csv 等，属采集功能异常，不触发反作弊。
+                # - perf_collection_failed=False：CSV 已产出但无有效 NPU kernel，
+                #   疑似 CPU fallback，触发反作弊。
+                is_collection_failure = (
+                    case.perf_result is None
+                    or case.perf_result.metadata.get("perf_collection_failed", False)
+                )
+                if is_collection_failure:
+                    n_collection_failed += 1
+                    case_scores.append((True, None))
+                    continue
                 n_no_perf_pass += 1
                 case_scores.append((True, None))
                 continue
@@ -464,6 +504,11 @@ class ScoringCalculator:
                 rel_path=result.rel_path,
             )
             case_scores.append((True, score_i))
+
+        if n_collection_failed > 0:
+            _warn_perf_collection_failed(
+                n_collection_failed, n_func_pass, result.rel_path,
+            )
 
         agg = aggregate_eq4(
             compile_passed=compile_passed,

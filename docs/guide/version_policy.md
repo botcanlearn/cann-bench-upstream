@@ -8,8 +8,8 @@ CANN-Bench 采用 **框架版本** + **评测集版本** 双层版本体系：
 
 | VERSION 文件 | 管理范围 | 当前值 |
 |-------------|---------|--------|
-| `VERSION`（项目根） | 框架核心包（`kernel_eval` + `auto_pipeline`） | 0.4.0 |
-| `tasks/VERSION` | 评测集数据（`tasks/` 目录下的算子规格、用例、golden） | 0.4.0 |
+| `VERSION`（项目根） | 框架核心包（`kernel_eval` + `auto_pipeline`） | 1.0.0 |
+| `tasks/VERSION` | 评测集数据（`tasks/` 目录下的算子规格、用例、golden） | 1.0.0 |
 
 两层版本 **独立演进**：
 - 框架 bug 修复 → 框架版本 PATCH 升级，评测集不动
@@ -76,11 +76,11 @@ kernel_eval.TASKS_VERSION     # 评测集版本
 ```bash
 # 1. 判断是否到达里程碑触发条件
 # 2. 修改 VERSION 文件
-echo "0.4.0" > VERSION
+echo "1.0.0" > VERSION
 
 # 3. 修改 tasks/VERSION（如果评测集也升级）
-echo "0.4.0" > tasks/VERSION
-echo "# requires-framework: >=0.4.0" >> tasks/VERSION
+echo "1.0.0" > tasks/VERSION
+echo "# requires-framework: >=1.0.0" >> tasks/VERSION
 
 # 4. 更新 docs/changelog.md（新增版本条目，标注里程碑）
 
@@ -89,11 +89,11 @@ pytest tests/ut/test_version_consistency.py
 
 # 6. 提交
 git add VERSION tasks/VERSION docs/changelog.md
-git commit -m "release: V0.4.0 / tasks-v0.4.0"
+git commit -m "release: V1.0.0 / tasks-v1.0.0"
 
 # 7. 打 tag
-git tag -a v0.4.0 -m "V0.4.0: <里程碑描述>"
-git tag -a tasks-v0.4.0 -m "tasks-v0.4.0: <里程碑描述>"  # 如评测集也升级
+git tag -a v1.0.0 -m "V1.0.0: <里程碑描述>"
+git tag -a tasks-v1.0.0 -m "tasks-v1.0.0: <里程碑描述>"  # 如评测集也升级
 
 # 8. 推送
 git push origin master --follow-tags
@@ -108,7 +108,7 @@ git push origin master --follow-tags
 | `vX.Y.Z-alpha.N` | 框架内部测试 | `v0.4.0-alpha.1` |
 | `vX.Y.Z-beta.N` | 框架外部测试 | `v0.4.0-beta.1` |
 
-里程碑发布时打 **双 tag**：`v0.4.0` + `tasks-v0.4.0`（如果两者同时升级）。
+里程碑发布时打 **双 tag**：`v1.0.0` + `tasks-v1.0.0`（如果两者同时升级）。
 
 ## 6. Changelog 维护规范
 
@@ -122,7 +122,7 @@ git push origin master --follow-tags
 Changelog 条目格式示例：
 
 ```markdown
-## V0.4.0 (2026-06-XX) · git tag: v0.4.0
+## V1.0.0 (2026-07-XX) · git tag: v1.0.0
 
 **里程碑：新增5个L2算子 + 性能评测流程优化**
 
@@ -130,7 +130,7 @@ Changelog 条目格式示例：
 - 性能评测增加 InputPool 防缓存攻击机制
 - 修复 case_loader 参数解析 bug
 
-### 评测集变更 (tasks-v0.4.0)
+### 评测集变更 (tasks-v1.0.0)
 - 新增 L2 算子：ApplyRotaryPosEmb、CrossEntropyLoss、DynamicQuant、Gather、GroupNorm
 - 修正 L1 Exp 用例 value_range 参数
 ```
@@ -140,8 +140,8 @@ Changelog 条目格式示例：
 `tasks/VERSION` 文件中标注兼容的框架版本范围：
 
 ```
-0.4.0
-# requires-framework: >=0.4.0
+1.0.0
+# requires-framework: >=1.0.0
 ```
 
 框架加载评测集时应校验兼容性，不兼容时给出警告。

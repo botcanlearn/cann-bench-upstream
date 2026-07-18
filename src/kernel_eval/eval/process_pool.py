@@ -67,8 +67,6 @@ class ProcessConfig:
     retry_on_oom: bool = True        # OOM 是否重试
     retry_on_failure: bool = True    # 子进程异常是否重试
     exclude_repeatedly_failed_cases: bool = True  # 排除多次失败的case
-    card_idle_wait_timeout: int = 300   # 等待忙卡变空闲的最大秒数
-    card_idle_poll_interval: int = 5    # 轮询间隔（秒）
 
 
 @dataclass
@@ -293,11 +291,6 @@ class ProcessPoolCoordinator:
             self._available_cards = []
             return 0
 
-        # 过滤掉被外部进程占用的卡
-        mapping = self._build_device_mapping()
-        if mapping:
-            healthy_cards = self._filter_idle_cards(healthy_cards, mapping)
-
         self._available_cards = healthy_cards
         return len(healthy_cards)
 
@@ -395,85 +388,6 @@ class ProcessPoolCoordinator:
         except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
             pass
         return mapping
-
-    def _is_card_idle(self, npu_id: int, chip_id: int) -> bool:
-        """通过 npu-smi info -t proc-mem 检测指定卡是否空闲。
-
-        Returns:
-            True  — 空闲（"No process in device."）
-            False — 有进程占用
-        fail-open：命令执行异常时返回 True（不阻塞调度）
-        """
-        try:
-            result = subprocess.run(
-                ["npu-smi", "info", "-t", "proc-mem",
-                 "-i", str(npu_id), "-c", str(chip_id)],
-                capture_output=True, text=True, timeout=10,
-            )
-            if result.returncode != 0:
-                return True
-            return "No process in device." in result.stdout
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
-            return True
-
-    def _filter_idle_cards(
-        self,
-        healthy_cards: List[int],
-        mapping: Dict[int, tuple],
-    ) -> List[int]:
-        """从健康卡中筛选空闲卡，忙卡等待至超时后跳过。
-
-        流程：
-        1. 首轮扫描：检测每张卡，立即获得 idle/busy 快照
-        2. 忙卡进入等待循环：每隔 poll_interval 秒重检
-        3. 超时后仍忙的卡被跳过（从列表移除）
-        4. 若所有卡都忙且超时 → fail-open，返回全部健康卡
-        """
-        timeout = self.process_config.card_idle_wait_timeout
-        interval = self.process_config.card_idle_poll_interval
-
-        idle_cards: List[int] = []
-        busy_cards: List[int] = []
-
-        # 首轮扫描
-        for logic_id in healthy_cards:
-            physical = mapping.get(logic_id)
-            if physical is None:
-                idle_cards.append(logic_id)
-                continue
-            if self._is_card_idle(*physical):
-                idle_cards.append(logic_id)
-            else:
-                busy_cards.append(logic_id)
-
-        if busy_cards:
-            print(f"[INFO] {len(busy_cards)} 张卡被进程占用，等待空闲 "
-                  f"(超时 {timeout}s, 轮询 {interval}s): {busy_cards}")
-
-        # 等待循环
-        deadline = time.time() + timeout
-        while busy_cards and time.time() < deadline:
-            time.sleep(interval)
-            still_busy: List[int] = []
-            for logic_id in busy_cards:
-                physical = mapping[logic_id]
-                if self._is_card_idle(*physical):
-                    idle_cards.append(logic_id)
-                    print(f"[INFO] Card {logic_id} 已空闲")
-                else:
-                    still_busy.append(logic_id)
-            busy_cards = still_busy
-
-        # 超时处理
-        if busy_cards:
-            if idle_cards:
-                print(f"[WARN] 卡 {busy_cards} 等待超时仍忙碌，跳过 "
-                      f"(使用 {len(idle_cards)} 张空闲卡)")
-            else:
-                print(f"[WARN] 所有卡等待超时仍忙碌，fail-open 使用全部健康卡")
-                idle_cards = list(healthy_cards)
-
-        return idle_cards
 
     def _build_env(self) -> Dict[str, str]:
         """构建子进程环境变量"""

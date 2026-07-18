@@ -184,8 +184,31 @@ class TestScoringCalculator:
     """ScoringCalculator.calculate_operator_score 与 dict 路径一致性"""
 
     @staticmethod
-    def _make_case(success, baseline_us, t_hw, elapsed_us, failure_type=None):
-        perf = PerfResult(elapsed_us=elapsed_us, metadata={'baseline_us': baseline_us, 't_hw_us': t_hw}) if elapsed_us else None
+    def _make_case(success, baseline_us, t_hw, elapsed_us, failure_type=None,
+                   perf_collection_failed=None):
+        """Build an EvalCaseResult for scoring tests.
+
+        perf_collection_failed:
+          - None (default): perf=None when elapsed_us<=0 (profiler 未运行/采集异常)
+          - True:  perf with elapsed_us=0, metadata perf_collection_failed=True (采集异常)
+          - False: perf with elapsed_us=0, metadata perf_collection_failed=False (CSV 已产出但无 NPU kernel = 作弊)
+        """
+        if elapsed_us and elapsed_us > 0:
+            perf = PerfResult(
+                elapsed_us=elapsed_us,
+                metadata={'baseline_us': baseline_us, 't_hw_us': t_hw},
+            )
+        elif perf_collection_failed is not None:
+            perf = PerfResult(
+                elapsed_us=0.0,
+                metadata={
+                    'baseline_us': baseline_us,
+                    't_hw_us': t_hw,
+                    'perf_collection_failed': perf_collection_failed,
+                },
+            )
+        else:
+            perf = None
         return EvalCaseResult(
             case_id="c", rel_path="level1/exp", operator="Exp",
             case_num=0, success=success, perf_result=perf,
@@ -222,10 +245,11 @@ class TestScoringCalculator:
         assert info.total_cases == 10
         assert info.function_score == pytest.approx(2 * WEIGHT_FUNCTION / 10 * 100)
 
-    def test_accuracy_pass_without_perf_zeroes_operator(self):
+    def test_accuracy_pass_csv_present_no_npu_kernel_zeroes_operator(self):
+        """CSV 已产出但无 NPU kernel（perf_collection_failed=False）→ 反作弊触发，整算子 0 分。"""
         cases = [
             self._make_case(True, 100, 50, 50),
-            self._make_case(True, 100, 50, 0),
+            self._make_case(True, 100, 50, 0, perf_collection_failed=False),
         ]
         op = EvalOperatorResult(
             rel_path="level1/exp", operator="Exp",
@@ -247,6 +271,46 @@ class TestScoringCalculator:
         assert report.score_error == NO_NPU_PERF_ERROR
         assert report.cases[0].performance_error_msg is None
         assert report.cases[1].performance_error_msg == NO_NPU_PERF_ERROR
+
+    def test_accuracy_pass_perf_none_not_cheating(self):
+        """perf_result=None（profiler 未运行/采集异常）→ 不触发反作弊，保留编译/精度分。"""
+        cases = [
+            self._make_case(True, 100, 50, 50),
+            self._make_case(True, 100, 50, 0),  # perf=None
+        ]
+        op = EvalOperatorResult(
+            rel_path="level1/exp", operator="Exp",
+            total_cases=2, passed_cases=2, failed_cases=0, skipped_cases=0,
+            results=cases, pass_rate=1.0, avg_speedup=1.0,
+        )
+        info = ScoringCalculator().calculate_operator_score(op)
+        assert info.compilation_score == pytest.approx(WEIGHT_COMPILATION * 100)
+        assert info.function_score == pytest.approx(WEIGHT_FUNCTION * 100)
+        assert info.performance_score == pytest.approx(
+            WEIGHT_PERFORMANCE * 1.0 / 2 * 100
+        )
+        assert info.score_error_code is None
+        assert info.zeroed_by_no_npu_perf is False
+
+    def test_accuracy_pass_collection_failed_not_cheating(self):
+        """perf_collection_failed=True（采集异常）→ 不触发反作弊，保留编译/精度分。"""
+        cases = [
+            self._make_case(True, 100, 50, 50),
+            self._make_case(True, 100, 50, 0, perf_collection_failed=True),
+        ]
+        op = EvalOperatorResult(
+            rel_path="level1/exp", operator="Exp",
+            total_cases=2, passed_cases=2, failed_cases=0, skipped_cases=0,
+            results=cases, pass_rate=1.0, avg_speedup=1.0,
+        )
+        info = ScoringCalculator().calculate_operator_score(op)
+        assert info.compilation_score == pytest.approx(WEIGHT_COMPILATION * 100)
+        assert info.function_score == pytest.approx(WEIGHT_FUNCTION * 100)
+        assert info.performance_score == pytest.approx(
+            WEIGHT_PERFORMANCE * 1.0 / 2 * 100
+        )
+        assert info.score_error_code is None
+        assert info.zeroed_by_no_npu_perf is False
 
     def test_empty_operator_returns_zero(self):
         # F062: 空壳算子（0 声明 + 0 实测）直接 0 分，不适用 max(..., 1) floor

@@ -216,6 +216,22 @@ def parse_trace_view_kernels(trace_view_path: str,
 
     warmup_names = warmup_names or set()
 
+    # 大文件阈值检查：trace_view.json > 100 MB 时不解析，
+    # 避免一次性 json.load 把内存撑到 10GB+ 导致 CPU 100% 死循环。
+    # kernel_details.csv 已是 elapsed_us 的唯一权威源，
+    # trace_view 仅用于补充 tilefwk 指标和 sanity check，跳过不影响评分。
+    try:
+        tv_size = os.path.getsize(trace_view_path)
+        if tv_size > 100 * 1024 * 1024:
+            _logger.warning(
+                "parse_trace_view_kernels: skip parsing %s — file too large "
+                "(%.2f MB > 100 MB); only kernel_details.csv will be used.",
+                trace_view_path, tv_size / 1024 / 1024,
+            )
+            return {}
+    except OSError:
+        return {}
+
     try:
         with open(trace_view_path, 'r') as f:
             data = json.load(f)
@@ -490,6 +506,21 @@ def parse_tilefwk_metrics(trace_view_path: str,
     if not trace_view_path or not os.path.isfile(trace_view_path):
         return {}
 
+    # 大文件阈值检查：trace_view.json > 100 MB 时不解析，
+    # 避免 json.load 把内存撑到 GB 级导致解析死循环。
+    # tilefwk 指标是补充项，跳过不影响 elapsed_us（已用 CSV 计算）。
+    try:
+        tv_size = os.path.getsize(trace_view_path)
+        if tv_size > 100 * 1024 * 1024:
+            _logger.warning(
+                "parse_tilefwk_metrics: skip parsing %s — file too large "
+                "(%.2f MB > 100 MB); tilefwk/PYPTO metrics unavailable.",
+                trace_view_path, tv_size / 1024 / 1024,
+            )
+            return {}
+    except OSError:
+        return {}
+
     try:
         with open(trace_view_path, 'r') as f:
             data = json.load(f)
@@ -576,7 +607,14 @@ class KernelDetailsStrategy(PerfMetricStrategy):
     """
 
     def parse(self, prof_files: ProfFileLocations, result: Any) -> Any:
-        """解析 profiler 产出文件，填充 PerfResult。"""
+        """解析 profiler 产出文件，填充 PerfResult。
+
+        perf_collection_failed metadata 区分两种无性能数据场景：
+        - True:  profiler 未产出 kernel_details.csv（采集功能异常）—— 评分侧
+                  不触发反作弊，该 case 性能项按 0 计入但不整算子置 0。
+        - False: CSV 已产出但无有效 NPU kernel（疑似 CPU fallback）—— 评分侧
+                  触发反作弊，整算子置 0 分。
+        """
         from .result import PerfResult
 
         warmup_names = extract_warmup_names_from_csv(prof_files.csv_path)
@@ -620,12 +658,20 @@ class KernelDetailsStrategy(PerfMetricStrategy):
                         )
                 return result
 
-        # CSV 不可用 → 明确报错（不 fallback 到 trace_view，
-        # 因为 parse_trace_view_kernels 的 aclnn*AiCore_ 过滤器会漏掉自定义 kernel，
-        # 且有 trace_view 时 CSV 必然存在——两者是同批次 profiler 产出）
+            # CSV 已产出但无有效 NPU kernel —— 疑似 CPU fallback（反作弊场景）
+            result.metadata["perf_collection_failed"] = False
+            result.elapsed_us = 0.0
+            result.error_msg = (
+                f"KernelDetailsStrategy: kernel_details.csv present but no valid "
+                f"NPU kernels — csv_path={prof_files.csv_path}"
+            )
+            return result
+
+        # CSV 未产出 —— 采集功能异常（不触发反作弊）
+        result.metadata["perf_collection_failed"] = True
         result.elapsed_us = 0.0
         result.error_msg = (
-            f"KernelDetailsStrategy: kernel_details.csv not found or empty — "
+            f"KernelDetailsStrategy: kernel_details.csv not found — "
             f"csv_path={prof_files.csv_path}"
         )
         return result
@@ -790,6 +836,12 @@ class MsProfSummaryStrategy(PerfMetricStrategy):
     """
 
     def parse(self, prof_files: ProfFileLocations, result: Any) -> Any:
+        """解析 profiler 产出文件，填充 PerfResult。
+
+        perf_collection_failed metadata 区分两种无性能数据场景：
+        - True:  profiler 未产出任何输出文件（采集功能异常）—— 评分侧不触发反作弊。
+        - False: 输出文件已产出但无有效 NPU kernel（疑似 CPU fallback）—— 触发反作弊。
+        """
         from .result import PerfResult
 
         # === 第一优先级：kernel_details.csv ===
@@ -843,7 +895,14 @@ class MsProfSummaryStrategy(PerfMetricStrategy):
                 self._add_trace_view_supplement(prof_files, result, warmup_names)
                 return result
 
-        # === 全部不可用 → 明确报错 ===
+        # === 全部不可用 → 区分采集异常与 CPU fallback ===
+        any_prof_output = prof_files.csv_path or prof_files.msprof_summary_paths
+        if not any_prof_output:
+            # 无任何 profiler 输出文件 —— 采集功能异常（不触发反作弊）
+            result.metadata["perf_collection_failed"] = True
+        else:
+            # 输出文件已产出但无有效 NPU kernel —— 疑似 CPU fallback（触发反作弊）
+            result.metadata["perf_collection_failed"] = False
         result.elapsed_us = 0.0
         result.error_msg = (
             f"MsProfSummaryStrategy: kernel_details.csv and msprof op_summary "

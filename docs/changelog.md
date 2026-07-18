@@ -1,5 +1,39 @@
 # 版本变更记录
 
+## V1.0.0 (2026-07-18) · git tag: v1.0.0 / tasks-v1.0.0
+
+**里程碑：首个正式版 —— 反作弊 V3 加固 + oracle/bench golden 拆分 + 性能阶段精度复检 + 文档全面对齐**
+
+### 框架变更
+
+- **反作弊 V3 加固**：新增 `cann_bench_utils` C++ 扩展包（自定义 `cache_clean` / `warmup` AscendC 算子）+ V3 脚本（`disable_builtin_kernels_v3.sh` / `restore_builtin_kernels_v3.sh`），禁用整个内置 kernel 树并由自定义 warmup 算子替代，杜绝缓存命中/硬编码结果作弊；`run_evaluation.sh` 集成 V3 启用流程；`perf_strategy` 增加 warmup 阶段配置（替换旧 V1/V2 脚本）
+- **oracle/bench golden 拆分**：新增可选 loader 钩子 `get_oracle_function` / `get_bench_function`（向后兼容，缺失时回退 golden 本身）；`evaluator.py` 接线，保留 fp64 数学真值（oracle）与同精度参考（bench）双轨，修复 `|bench−oracle|=0` 退化导致的小值域/相消误杀
+- **性能阶段精度复检**：`staged_eval.py` 将 performance 阶段精度翻车判为精度错误（`failure_type=precision_mismatch`），扣精度分、无性能分、不扣编译分；新增 `EvalCaseResult.perf_recheck` 诊断字段写入 `results.json`，标记疑似非确定算子
+- **精度判定对齐文档**：`compare.py` 小值域/相消兜底统一为 `npu / max(cpu,1) ≤ 2` 比值判定（对齐 `benchmark_spec.md`，移除 `cpu==0→npu==0` 特例）
+- **输入确定性**：`DataGenerator` 整型分支直接透传 generator 给 `torch.randint`；5 个算子 `get_input` 钩子补固定种子，确保精度/性能阶段输入一致、结果可复现
+- **技术报告更新**：`docs/technical-report.pdf` 重写反作弊章节，采用"提交规范 / 运行时检查 / 测量完整性 / NPU 执行归因"分层防御模型
+- **依赖对齐**：`requirements.txt` 对齐到 `pyproject.toml`（torch/torch_npu 钉 `==2.10.0`，补齐缺失依赖，修正版本冲突）
+- **文档全面对齐**：修正评测使用文档（删除已移除的 CLI 参数/子命令、报告文件名对齐实现）；baseline 外置说明（移除 cases.yaml/csv 内嵌 baseline 字段）；contributing 补齐 dtype SoC 红线、proto 输出字段（compare/index_gather）、golden 承重规则；清理文档索引与失效引用；对齐 baseline_collection_design 与 collect_baseline.py 实现
+
+### 评测集变更 (tasks-v1.0.0)
+
+- **golden 拆分**：`weight_quant_batch_matmul` 收敛为 plain(=bench) + `_oracle`（反量化改 bf16/fp16 + fp32 累加，删冗余 `_bench`）；`grouped_matmul` 新增 dtype-agnostic `_oracle`（910B2 实测 14/20 → 17/20，修相消退化）
+- **baseline 元数据**：`tasks/metadata/910b2.json` 更新；新增 metadata 性能基线校验（防止 `t_hw_us` 高于可比较的 `baseline_perf_us`）
+
+### bench_lab（孵化区，不纳入版本管理）
+
+- **新增算子**：tilelang_ascend_bench 新增 `flash_attention`（20 case + 910b2 baseline）
+- **baseline 补全**：填充 `bench_lab/kernel_bench` 缺失的 `t_hw_us`（910b2 120 条 + 950pr 180 条，共 300 条，floor 1μs）
+- **一致性修复**：tilelang flash_attention/gemm 的 cases.yaml/csv 一致性（note 后缀 + dtype JSON 引号）；修复 tilelang 与 910b2 metadata 无效 JSON/尾随逗号
+
+### 示例
+
+- **pypto example**：新增 swi_glu pypto 生成示例（c1–c8 共 8 个候选实现）；修复性能评测 `trace_view` 参数传递；pypto 生成任务增加精度要求传递
+
+### 测试
+
+- 新增 `test_process_pool`（+467 行）、`test_perf_eval`（+217 行）、`test_device_visibility`、`test_get_output`、`test_retry_mechanism`、`test_weight_quant_oracle_bench`、`test_reference_func_selection`、`test_golden_loader` 等
+
 ## V0.4.0 (2026-06-25) · git tag: v0.4.0 / tasks-v0.4.0
 
 **里程碑：多硬件多卡评测 + StanfordBench 集成 + 反作弊加固 + HAP 性能口径完善 + 报告系统重构**

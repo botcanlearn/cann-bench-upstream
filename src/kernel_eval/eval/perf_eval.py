@@ -87,7 +87,6 @@ def _profile_standalone(fn, prof_dir: str, warmup: int, repeat: int) -> None:
 
             with torch_npu.profiler.profile(
                 activities=[
-                    torch_npu.profiler.ProfilerActivity.CPU,
                     torch_npu.profiler.ProfilerActivity.NPU,
                 ],
                 schedule=torch_npu.profiler.schedule(
@@ -378,7 +377,6 @@ class PerfEvaluator:
 
             with torch_npu.profiler.profile(
                 activities=[
-                    torch_npu.profiler.ProfilerActivity.CPU,
                     torch_npu.profiler.ProfilerActivity.NPU,
                 ],
                 schedule=torch_npu.profiler.schedule(
@@ -586,7 +584,8 @@ class PerfEvaluator:
                     result.error_msg = None
                     for _mk in ("profile_exception_type", "profile_exception",
                                 "profile_exception_traceback",
-                                "data_source", "elapsed_us_source"):
+                                "data_source", "elapsed_us_source",
+                                "perf_collection_failed"):
                         result.metadata.pop(_mk, None)
 
                 pool = None
@@ -611,6 +610,7 @@ class PerfEvaluator:
                     result.metadata["profile_exception_type"] = type(e).__name__
                     result.metadata["profile_exception"] = str(e)
                     result.metadata["profile_exception_traceback"] = traceback.format_exc()
+                    result.metadata["perf_collection_failed"] = True
                 finally:
                     if pool is not None:
                         try:
