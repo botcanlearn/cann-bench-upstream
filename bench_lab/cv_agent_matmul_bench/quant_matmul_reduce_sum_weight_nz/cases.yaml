@@ -1,0 +1,690 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: QuantMatmulReduceSum
+  case_id: 1
+  input_shape:
+  - - 2
+    - 16
+    - 64
+  - - 2
+    - 1
+    - 4
+    - 16
+    - 32
+  - - 2
+    - 16
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-smoke-B2xM16xK64xN32
+- operator: QuantMatmulReduceSum
+  case_id: 2
+  input_shape:
+  - - 1
+    - 8
+    - 32
+  - - 1
+    - 1
+    - 2
+    - 16
+    - 32
+  - - 1
+    - 8
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-smoke-singleB-M8xK32xN32
+- operator: QuantMatmulReduceSum
+  case_id: 3
+  input_shape:
+  - - 8
+    - 32
+    - 64
+  - - 8
+    - 1
+    - 4
+    - 16
+    - 32
+  - - 8
+    - 32
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-kernelUT-like-B8xM32xK64xN32
+- operator: QuantMatmulReduceSum
+  case_id: 4
+  input_shape:
+  - - 3
+    - 17
+    - 80
+  - - 3
+    - 2
+    - 5
+    - 16
+    - 32
+  - - 3
+    - 17
+  - - 48
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-tailM17-padK80xN48
+- operator: QuantMatmulReduceSum
+  case_id: 5
+  input_shape:
+  - - 4
+    - 32
+    - 96
+  - - 4
+    - 3
+    - 6
+    - 16
+    - 32
+  - - 4
+    - 32
+  - - 96
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-B4xM32xK96xN96
+- operator: QuantMatmulReduceSum
+  case_id: 6
+  input_shape:
+  - - 5
+    - 33
+    - 64
+  - - 5
+    - 4
+    - 4
+    - 16
+    - 32
+  - - 5
+    - 33
+  - - 128
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-tailM33-B5xK64xN128
+- operator: QuantMatmulReduceSum
+  case_id: 7
+  input_shape:
+  - - 1
+    - 512
+    - 512
+  - - 1
+    - 16
+    - 32
+    - 16
+    - 32
+  - - 1
+    - 512
+  - - 512
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-singleB-M512xK512xN512
+- operator: QuantMatmulReduceSum
+  case_id: 8
+  input_shape:
+  - - 2
+    - 1024
+    - 1024
+  - - 2
+    - 32
+    - 64
+    - 16
+    - 32
+  - - 2
+    - 1024
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-B2xM1024xK1024xN1024
+- operator: QuantMatmulReduceSum
+  case_id: 9
+  input_shape:
+  - - 4
+    - 2048
+    - 1024
+  - - 4
+    - 64
+    - 64
+    - 16
+    - 32
+  - - 4
+    - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-B4xM2048xK1024xN2048
+- operator: QuantMatmulReduceSum
+  case_id: 10
+  input_shape:
+  - - 2
+    - 4096
+    - 2048
+  - - 2
+    - 16
+    - 128
+    - 16
+    - 32
+  - - 2
+    - 4096
+  - - 512
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-bigM4096-K2048xN512
+- operator: QuantMatmulReduceSum
+  case_id: 11
+  input_shape:
+  - - 8
+    - 512
+    - 4096
+  - - 8
+    - 32
+    - 256
+    - 16
+    - 32
+  - - 8
+    - 512
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-B8-bigK4096-M512xN1024
+- operator: QuantMatmulReduceSum
+  case_id: 12
+  input_shape:
+  - - 1
+    - 5120
+    - 2048
+  - - 1
+    - 64
+    - 128
+    - 16
+    - 32
+  - - 1
+    - 5120
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-singleB-maxM5120-K2048xN2048
+- operator: QuantMatmulReduceSum
+  case_id: 13
+  input_shape:
+  - - 4
+    - 1536
+    - 1536
+  - - 4
+    - 96
+    - 96
+    - 16
+    - 32
+  - - 4
+    - 1536
+  - - 3072
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-B4xM1536xK1536xN3072
+- operator: QuantMatmulReduceSum
+  case_id: 14
+  input_shape:
+  - - 2
+    - 2304
+    - 760
+  - - 2
+    - 48
+    - 48
+    - 16
+    - 32
+  - - 2
+    - 2304
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-nonAlignedK760-M2304xN1536
+- operator: QuantMatmulReduceSum
+  case_id: 15
+  input_shape:
+  - - 3
+    - 4096
+    - 5120
+  - - 3
+    - 16
+    - 320
+    - 16
+    - 32
+  - - 3
+    - 4096
+  - - 512
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-maxK5120-B3xM4096xN512
+- operator: QuantMatmulReduceSum
+  case_id: 16
+  input_shape:
+  - - 6
+    - 1000
+    - 1152
+  - - 6
+    - 72
+    - 72
+    - 16
+    - 32
+  - - 6
+    - 1000
+  - - 2300
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-nonAlignedN2300-B6xM1000xK1152
+- operator: QuantMatmulReduceSum
+  case_id: 17
+  input_shape:
+  - - 1
+    - 4096
+    - 4096
+  - - 1
+    - 128
+    - 256
+    - 16
+    - 32
+  - - 1
+    - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-singleB-square4096
+- operator: QuantMatmulReduceSum
+  case_id: 18
+  input_shape:
+  - - 4
+    - 2048
+    - 3072
+  - - 4
+    - 48
+    - 192
+    - 16
+    - 32
+  - - 4
+    - 2048
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-B4xM2048xK3072xN1536
+- operator: QuantMatmulReduceSum
+  case_id: 19
+  input_shape:
+  - - 8
+    - 640
+    - 2048
+  - - 8
+    - 160
+    - 128
+    - 16
+    - 32
+  - - 8
+    - 640
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-maxN5120-B8xM640xK2048
+- operator: QuantMatmulReduceSum
+  case_id: 20
+  input_shape:
+  - - 2
+    - 5120
+    - 5120
+  - - 2
+    - 32
+    - 320
+    - 16
+    - 32
+  - - 2
+    - 5120
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F2-LLM-maxMK5120-B2xN1024

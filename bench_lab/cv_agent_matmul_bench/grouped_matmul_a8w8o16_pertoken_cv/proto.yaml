@@ -1,0 +1,84 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: GroupedMatmul
+  category: Contraction
+  difficulty: L3
+  formula: |
+    for expert i:
+      Xi = x[group_start:group_end]
+      Yi = (Xi.int32 @ weight[i].int32) * scale[i] * perTokenScale[group_start:group_end, None]
+      y[group_start:group_end] = Yi
+  description: grouped_matmul A8W8O16 per-token C->V path. This benchmark fixes cumsum groupList, no bias, no offset, int8 x/weight, per-channel scale, per-token scale, and bfloat16/float16 output.
+  shape_support: |
+    x: [M, K] int8
+    weight: [E, K, N] int8
+    scale: [E, N] float32/bfloat16
+    groupList: [E] int64 cumsum
+    perTokenScale: [M] float32
+    y: [M, N] bfloat16/float16
+  attrs:
+  - name: variant
+    type: string
+    default: A8W8O16_pertoken_CV
+    description: selected kernel path
+    required: false
+  - name: group_list_values
+    type: ListInt
+    description: deterministic cumsum group list used by golden and data preparation
+    required: true
+  - name: y_dtype
+    type: string
+    default: bfloat16
+    description: output dtype
+    required: false
+  - name: split_item
+    type: int
+    default: 3
+    description: fixed to 3 in this benchmark
+    required: false
+  - name: group_type
+    type: int
+    default: 0
+    description: fixed to 0 in this benchmark
+    required: false
+  - name: group_list_type
+    type: int
+    default: 0
+    description: 0 means cumsum group list
+    required: false
+  inputs:
+  - name: x
+    description: routed activation tokens
+    dtype: [int8]
+  - name: weight
+    description: expert weight tensor
+    dtype: [int8]
+  - name: scale
+    description: per-expert per-channel dequant scale
+    dtype: [float32, bfloat16]
+  - name: groupList
+    description: cumsum token boundary list
+    dtype: [int64]
+  - name: perTokenScale
+    description: per-token activation dequant scale
+    dtype: [float32]
+  outputs:
+  - name: y
+    description: grouped matmul dequantized output
+    dtype: [bfloat16, float16]
+  schema: grouped_matmul(Tensor x, Tensor weight, Tensor scale, Tensor groupList, Tensor perTokenScale, str variant="A8W8O16_pertoken_CV", str y_dtype="bfloat16", int split_item=3, int group_type=0, int group_list_type=0) -> Tensor y
+
+precision:
+  outputs:
+  - name: y
+    dtype: [bfloat16, float16]
+    threshold_rule: output_dtype

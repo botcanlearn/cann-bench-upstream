@@ -1,0 +1,70 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: QuantBatchMatmulV4
+  category: Contraction
+  difficulty: L3
+  formula: out=sum_j(dynamic_dequant_mm(x1_j,x2_j))+bias
+  description: Selected QuantBatchMatmulV4 G-B dynamic per-group V->C->V path.
+  shape_support: 'x1: [M,K] float16/bfloat16
+
+    x2: [K,N] float16/bfloat16
+
+    bias: [N] float32
+
+    out: [M,N] float32'
+  attrs:
+  - name: variant
+    type: string
+    default: GB_DYNAMIC_PERGROUP
+    description: 算子变体标识
+    required: false
+  - name: transpose_x1
+    type: bool
+    default: false
+    description: 是否转置输入 x1
+    required: false
+  - name: transpose_x2
+    type: bool
+    default: false
+    description: 是否转置输入 x2
+    required: false
+  - name: group_size
+    type: ListInt
+    default: [1, 128, 128]
+    description: 分组大小
+    required: false
+  inputs:
+  - name: x1
+    dtype:
+    - float16
+    - bfloat16
+  - name: x2
+    dtype:
+    - float16
+    - bfloat16
+  - name: bias
+    dtype:
+    - float32
+  outputs:
+  - name: out
+    dtype:
+    - float32
+  schema: quant_batch_matmul_v4(Tensor x1, Tensor x2, Tensor bias, str variant="GB_DYNAMIC_PERGROUP",
+    bool transpose_x1=false, bool transpose_x2=false, list[int] group_size=[1,128,128]) -> Tensor out
+precision:
+  outputs:
+  - name: out
+    dtype: float32
+    threshold_rule: input_dtype_inherited
+    threshold_per_input_dtype:
+      bfloat16: 2^-7
+      float16: 2^-10

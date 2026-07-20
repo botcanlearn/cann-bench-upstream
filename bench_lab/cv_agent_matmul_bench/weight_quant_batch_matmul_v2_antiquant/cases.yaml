@@ -1,0 +1,718 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: WeightQuantBatchMatmulV2
+  case_id: 1
+  input_shape:
+  - - 4
+    - 64
+  - - 64
+    - 32
+  - - 32
+  - - 32
+  - - 32
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 0
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: small-smoke-gs0-M4K64N32
+- operator: WeightQuantBatchMatmulV2
+  case_id: 2
+  input_shape:
+  - - 1
+    - 128
+  - - 128
+    - 16
+  - - 16
+  - - 16
+  - - 16
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 0
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: small-edge-gs0-M1K128N16-decode
+- operator: WeightQuantBatchMatmulV2
+  case_id: 3
+  input_shape:
+  - - 8
+    - 128
+  - - 128
+    - 64
+  - - 2
+    - 64
+  - - 2
+    - 64
+  - - 64
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 64
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: small-smoke-gs64-M8K128N64
+- operator: WeightQuantBatchMatmulV2
+  case_id: 4
+  input_shape:
+  - - 16
+    - 96
+  - - 96
+    - 48
+  - - 3
+    - 48
+  - - 3
+    - 48
+  - - 48
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 32
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: small-gs32-M16K96N48
+- operator: WeightQuantBatchMatmulV2
+  case_id: 5
+  input_shape:
+  - - 6
+    - 256
+  - - 256
+    - 32
+  - - 2
+    - 32
+  - - 2
+    - 32
+  - - 32
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: small-gs128-M6K256N32
+- operator: WeightQuantBatchMatmulV2
+  case_id: 6
+  input_shape:
+  - - 2
+    - 192
+  - - 192
+    - 64
+  - - 3
+    - 64
+  - - 3
+    - 64
+  - - 64
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 64
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: small-edge-gs64-M2K192N64
+- operator: WeightQuantBatchMatmulV2
+  case_id: 7
+  input_shape:
+  - - 512
+    - 2048
+  - - 2048
+    - 2048
+  - - 16
+    - 2048
+  - - 16
+    - 2048
+  - - 2048
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs128-M512K2048N2048
+- operator: WeightQuantBatchMatmulV2
+  case_id: 8
+  input_shape:
+  - - 1024
+    - 4096
+  - - 4096
+    - 1024
+  - - 32
+    - 1024
+  - - 32
+    - 1024
+  - - 1024
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs128-M1024K4096N1024
+- operator: WeightQuantBatchMatmulV2
+  case_id: 9
+  input_shape:
+  - - 256
+    - 4096
+  - - 4096
+    - 4096
+  - - 4096
+  - - 4096
+  - - 4096
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 0
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs0-M256K4096N4096
+- operator: WeightQuantBatchMatmulV2
+  case_id: 10
+  input_shape:
+  - - 2048
+    - 2048
+  - - 2048
+    - 2048
+  - - 2048
+  - - 2048
+  - - 2048
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 0
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs0-M2048K2048N2048
+- operator: WeightQuantBatchMatmulV2
+  case_id: 11
+  input_shape:
+  - - 1
+    - 5120
+  - - 5120
+    - 5120
+  - - 40
+    - 5120
+  - - 40
+    - 5120
+  - - 5120
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-decode-gs128-M1K5120N5120-maxKN
+- operator: WeightQuantBatchMatmulV2
+  case_id: 12
+  input_shape:
+  - - 4096
+    - 1024
+  - - 1024
+    - 4096
+  - - 16
+    - 4096
+  - - 16
+    - 4096
+  - - 4096
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 64
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs64-M4096K1024N4096
+- operator: WeightQuantBatchMatmulV2
+  case_id: 13
+  input_shape:
+  - - 512
+    - 5120
+  - - 5120
+    - 1536
+  - - 40
+    - 1536
+  - - 40
+    - 1536
+  - - 1536
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs128-M512K5120N1536
+- operator: WeightQuantBatchMatmulV2
+  case_id: 14
+  input_shape:
+  - - 333
+    - 4096
+  - - 4096
+    - 2048
+  - - 2048
+  - - 2048
+  - - 2048
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 0
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs0-M333K4096N2048-tailM
+- operator: WeightQuantBatchMatmulV2
+  case_id: 15
+  input_shape:
+  - - 2048
+    - 1024
+  - - 1024
+    - 3072
+  - - 8
+    - 3072
+  - - 8
+    - 3072
+  - - 3072
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs128-M2048K1024N3072
+- operator: WeightQuantBatchMatmulV2
+  case_id: 16
+  input_shape:
+  - - 1000
+    - 2048
+  - - 2048
+    - 5120
+  - - 32
+    - 5120
+  - - 32
+    - 5120
+  - - 5120
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 64
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs64-M1000K2048N5120-tailM
+- operator: WeightQuantBatchMatmulV2
+  case_id: 17
+  input_shape:
+  - - 256
+    - 3072
+  - - 3072
+    - 768
+  - - 24
+    - 768
+  - - 24
+    - 768
+  - - 768
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs128-M256K3072N768
+- operator: WeightQuantBatchMatmulV2
+  case_id: 18
+  input_shape:
+  - - 5120
+    - 512
+  - - 512
+    - 512
+  - - 512
+  - - 512
+  - - 512
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 0
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-gs0-M5120K512N512-maxM
+- operator: WeightQuantBatchMatmulV2
+  case_id: 19
+  input_shape:
+  - - 640
+    - 4608
+  - - 4608
+    - 1536
+  - - 36
+    - 1536
+  - - 36
+    - 1536
+  - - 1536
+  dtype:
+  - bfloat16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 128
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-prefill-gs128-M640K4608N1536-nonAlignedK
+- operator: WeightQuantBatchMatmulV2
+  case_id: 20
+  input_shape:
+  - - 512
+    - 512
+  - - 512
+    - 512
+  - - 16
+    - 512
+  - - 16
+    - 512
+  - - 512
+  dtype:
+  - float16
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    transpose_x: false
+    transpose_weight: false
+    antiquant_group_size: 32
+    output_quant: false
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: llm-gs32-M512K512N512

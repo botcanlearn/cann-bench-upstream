@@ -1,0 +1,105 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: GroupedMatmulFinalizeRouting
+  category: Contraction
+  difficulty: L3
+  formula: out[rowIndex] += (x_group @ w_group) * scale * perTokenScale * logit +
+    sharedInput
+  description: Grouped C->V dequant with finalize routing accumulation.
+  shape_support: 'x: [M,K] int8
+
+    w: [E,K,N] int8
+
+    scale: [E,N] float32
+
+    perTokenScale: [M] float32
+
+    groupList: [E] uint64
+
+    logit: [M] float32; rowIndex: [M] uint64
+
+    sharedInput: [output_bs,N] bfloat16; out: [output_bs,N] float32'
+  attrs:
+  - name: group_list_values
+    type: ListInt
+    description: 分组列表值
+    required: true
+  - name: row_index_values
+    type: ListInt
+    description: 行索引值
+    required: true
+  - name: groupListType
+    type: int
+    default: 0
+    description: 分组列表类型
+    required: false
+  - name: output_bs
+    type: int
+    description: 输出 batch size
+    required: true
+  - name: shared_input_weight
+    type: float
+    default: 1.0
+    description: 共享输入权重系数
+    required: false
+  - name: shared_input_offset
+    type: int
+    default: 0
+    description: 共享输入偏移
+    required: false
+  - name: deterministic
+    type: bool
+    default: false
+    description: 是否使用确定性模式
+    required: false
+  inputs:
+  - name: x
+    dtype:
+    - int8
+  - name: w
+    dtype:
+    - int8
+  - name: scale
+    dtype:
+    - float32
+  - name: perTokenScale
+    dtype:
+    - float32
+  - name: groupList
+    dtype:
+    - uint64
+  - name: logit
+    dtype:
+    - float32
+  - name: rowIndex
+    dtype:
+    - uint64
+  - name: sharedInput
+    dtype:
+    - bfloat16
+  outputs:
+  - name: out
+    dtype:
+    - float32
+  schema: grouped_matmul_finalize_routing(Tensor x, Tensor w, Tensor scale, Tensor
+    perTokenScale, Tensor groupList, Tensor logit, Tensor rowIndex, Tensor sharedInput,
+    int output_bs, int groupListType=0, float shared_input_weight=1.0,
+    int shared_input_offset=0, bool deterministic=false) -> Tensor out
+precision:
+  outputs:
+  - name: out
+    dtype: float32
+    threshold_rule: intermediate_dtype_inherited
+    intermediate_dtype: bfloat16
+  small_value_handling:
+    threshold: 1.0e-06
+    absolute_tolerance: 1.0e-05

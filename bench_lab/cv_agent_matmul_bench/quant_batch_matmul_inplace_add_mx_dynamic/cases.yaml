@@ -1,0 +1,530 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 1
+  input_shape:
+  - - 64
+    - 4
+  - - 64
+    - 32
+  - - 4
+    - 32
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M4K64N32-float16-smoke-smallest
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 2
+  input_shape:
+  - - 64
+    - 8
+  - - 64
+    - 64
+  - - 8
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M8K64N64-bfloat16-smoke-square-tile
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 3
+  input_shape:
+  - - 96
+    - 5
+  - - 96
+    - 48
+  - - 5
+    - 48
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M5K96N48-float16-edge-nonpow2-Ktail
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 4
+  input_shape:
+  - - 128
+    - 16
+  - - 128
+    - 256
+  - - 16
+    - 256
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M16K128N256-bfloat16-edge-smallM-wideN
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 5
+  input_shape:
+  - - 64
+    - 1
+  - - 64
+    - 16
+  - - 1
+    - 16
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M1K64N16-float16-edge-singleRowM1
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 6
+  input_shape:
+  - - 128
+    - 2
+  - - 128
+    - 64
+  - - 2
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M2K128N64-bfloat16-edge-tinyM2
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 7
+  input_shape:
+  - - 2048
+    - 32
+  - - 2048
+    - 2048
+  - - 32
+    - 2048
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M32K2048N2048-float16-decode-attnProj-h2048
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 8
+  input_shape:
+  - - 2048
+    - 16
+  - - 2048
+    - 5120
+  - - 16
+    - 5120
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M16K2048N5120-bfloat16-decode-ffnUp-h2048-ffn5120
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 9
+  input_shape:
+  - - 4096
+    - 64
+  - - 4096
+    - 4096
+  - - 64
+    - 4096
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M64K4096N4096-float16-decode-attnProj-h4096
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 10
+  input_shape:
+  - - 4096
+    - 128
+  - - 4096
+    - 1024
+  - - 128
+    - 1024
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M128K4096N1024-bfloat16-decode-attnOut-h4096
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 11
+  input_shape:
+  - - 5120
+    - 256
+  - - 5120
+    - 5120
+  - - 256
+    - 5120
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M256K5120N5120-float16-prefill-attnProj-h5120-maxKN
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 12
+  input_shape:
+  - - 2048
+    - 512
+  - - 2048
+    - 5120
+  - - 512
+    - 5120
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M512K2048N5120-bfloat16-prefill-ffnUp-h2048-ffn5120
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 13
+  input_shape:
+  - - 1536
+    - 1024
+  - - 1536
+    - 4608
+  - - 1024
+    - 4608
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M1024K1536N4608-float16-prefill-ffnUp-h1536-nonpow2
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 14
+  input_shape:
+  - - 1024
+    - 2048
+  - - 1024
+    - 3072
+  - - 2048
+    - 3072
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M2048K1024N3072-bfloat16-prefill-ffnUp-h1024-ffn3072
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 15
+  input_shape:
+  - - 768
+    - 4096
+  - - 768
+    - 2304
+  - - 4096
+    - 2304
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M4096K768N2304-float16-prefill-longSeq-h768-nonpow2
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 16
+  input_shape:
+  - - 2560
+    - 2560
+  - - 2560
+    - 2560
+  - - 2560
+    - 2560
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M2560K2560N2560-bfloat16-prefill-square-h2560
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 17
+  input_shape:
+  - - 5120
+    - 1536
+  - - 5120
+    - 2048
+  - - 1536
+    - 2048
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M1536K5120N2048-float16-prefill-ffnDown-ffn5120-h2048
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 18
+  input_shape:
+  - - 3072
+    - 320
+  - - 3072
+    - 3072
+  - - 320
+    - 3072
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M320K3072N3072-bfloat16-prefill-attnProj-h3072
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 19
+  input_shape:
+  - - 4096
+    - 896
+  - - 4096
+    - 5120
+  - - 896
+    - 5120
+  dtype:
+  - float16
+  - float16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M896K4096N5120-float16-prefill-ffnUp-h4096-ffn5120-maxN
+- operator: QuantBatchMatmulInplaceAdd
+  case_id: 20
+  input_shape:
+  - - 2048
+    - 3072
+  - - 2048
+    - 1536
+  - - 3072
+    - 1536
+  dtype:
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: MX_DYNAMIC
+    transposeX1: true
+    transposeX2: false
+    groupSize: 32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: MX-dynamic-inplace-M3072K2048N1536-bfloat16-prefill-maxM3072-h2048-nonpow2

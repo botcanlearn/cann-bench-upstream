@@ -1,0 +1,83 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: WeightQuantBatchMatmulV2
+  category: Contraction
+  difficulty: L3
+  formula: y = x @ ((weight + antiquantOffset) * antiquantScale) + bias
+  description: Selected V->C weight antiquant batch matmul path without output quantization.
+  shape_support: 'x: [M,K] float16/bfloat16
+
+    weight: [K,N] int8
+
+    antiquantScale/Offset: [N] or [ceil(K/G),N] float32
+
+    bias: [N] float32
+
+    y: [M,N] float32'
+  attrs:
+  - name: transpose_x
+    type: bool
+    default: false
+    description: 是否转置输入 x
+    required: false
+  - name: transpose_weight
+    type: bool
+    default: false
+    description: 是否转置权重
+    required: false
+  - name: antiquant_group_size
+    type: int
+    default: 0
+    description: 反量化分组大小
+    required: false
+  - name: output_quant
+    type: bool
+    default: false
+    description: 是否输出量化
+    required: false
+  - name: y_dtype
+    type: string
+    default: float32
+    description: 输出数据类型
+    required: false
+  inputs:
+  - name: x
+    dtype:
+    - float16
+    - bfloat16
+  - name: weight
+    dtype:
+    - int8
+  - name: antiquantScale
+    dtype:
+    - float32
+  - name: antiquantOffset
+    dtype:
+    - float32
+  - name: bias
+    dtype:
+    - float32
+  outputs:
+  - name: y
+    dtype:
+    - float32
+  schema: weight_quant_batch_matmul_v2(Tensor x, Tensor weight, Tensor antiquantScale,
+    Tensor antiquantOffset, Tensor bias, bool transpose_x=false, bool transpose_weight=false,
+    int antiquant_group_size=0, bool output_quant=false, str y_dtype="float32") -> Tensor y
+precision:
+  outputs:
+  - name: y
+    dtype: float32
+    threshold_rule: input_dtype_inherited
+    threshold_per_input_dtype:
+      bfloat16: 2^-7
+      float16: 2^-10

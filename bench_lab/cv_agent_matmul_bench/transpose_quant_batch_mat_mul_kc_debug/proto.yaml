@@ -1,0 +1,84 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: TransposeQuantBatchMatMul
+  category: Contraction
+  difficulty: L3
+  formula: out = permute((permute(x1) @ permute(x2)) * x1Scale * x2Scale + bias, permY)
+  description: C->V transpose quant batch matmul K-C path.
+  shape_support: 'x1: [B,M,K] or [B,K,M] int8
+
+    x2: [B,K,N] or [B,N,K] int8
+
+    x1Scale: [B,M] float32
+
+    x2Scale/bias: [B,N] float32
+
+    out: [B,M,N] or [B,N,M] float32'
+  attrs:
+  - name: permX1
+    type: ListInt
+    default: [0, 1, 2]
+    description: x1 排列置换
+    required: false
+  - name: permX2
+    type: ListInt
+    default: [0, 1, 2]
+    description: x2 排列置换
+    required: false
+  - name: permY
+    type: ListInt
+    default: [0, 1, 2]
+    description: y 排列置换
+    required: false
+  - name: groupSize
+    type: int
+    default: 0
+    description: 分组大小
+    required: false
+  - name: batchSplitFactor
+    type: int
+    default: 1
+    description: batch 分割因子
+    required: false
+  - name: y_dtype
+    type: string
+    default: float32
+    description: 输出数据类型
+    required: false
+  inputs:
+  - name: x1
+    dtype:
+    - int8
+  - name: x2
+    dtype:
+    - int8
+  - name: x1Scale
+    dtype:
+    - float32
+  - name: x2Scale
+    dtype:
+    - float32
+  - name: bias
+    dtype:
+    - float32
+  outputs:
+  - name: out
+    dtype:
+    - float32
+  schema: transpose_quant_batch_mat_mul(Tensor x1, Tensor x2, Tensor x1Scale, Tensor
+    x2Scale, Tensor bias, list[int] permX1, list[int] permX2, list[int] permY, int
+    groupSize=0, int batchSplitFactor=1, str y_dtype="float32") -> Tensor out
+precision:
+  outputs:
+  - name: out
+    dtype: float32
+    threshold_rule: output_dtype

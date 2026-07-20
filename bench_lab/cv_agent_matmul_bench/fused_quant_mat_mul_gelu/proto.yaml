@@ -1,0 +1,75 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: FusedQuantMatMul
+  category: FusedComposite
+  difficulty: L3
+  formula: out = GELU((x1 @ x2) * x1Scale * x2Scale + bias)
+  description: C->V QuantBatchMatmul fused with GELU post operation.
+  shape_support: 'x1: [M,K] int8
+
+    x2: [K,N] int8
+
+    x1Scale: [M] float32
+
+    x2Scale: [N] float32
+
+    bias/out: [N]/[M,N] float32'
+  attrs:
+  - name: fused_op_type
+    type: string
+    default: gelu_erf
+    description: 融合算子类型
+    required: false
+  - name: transpose_x1
+    type: bool
+    default: false
+    description: 是否转置输入 x1
+    required: false
+  - name: transpose_x2
+    type: bool
+    default: false
+    description: 是否转置输入 x2
+    required: false
+  - name: y_dtype
+    type: string
+    default: float32
+    description: 输出数据类型
+    required: false
+  inputs:
+  - name: x1
+    dtype:
+    - int8
+  - name: x2
+    dtype:
+    - int8
+  - name: x1Scale
+    dtype:
+    - float32
+  - name: x2Scale
+    dtype:
+    - float32
+  - name: bias
+    dtype:
+    - float32
+  outputs:
+  - name: out
+    dtype:
+    - float32
+  schema: fused_quant_mat_mul(Tensor x1, Tensor x2, Tensor x1Scale, Tensor x2Scale,
+    Tensor bias, str fused_op_type="gelu_erf", bool transpose_x1=false, bool transpose_x2=false,
+    str y_dtype="float32") -> Tensor out
+precision:
+  outputs:
+  - name: out
+    dtype: float32
+    threshold_rule: intermediate_dtype_inherited
+    intermediate_dtype: float16

@@ -1,0 +1,65 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: Sparse4to2QuantMatmul
+  category: Contraction
+  difficulty: L3
+  formula: |
+    out = (x.int32 @ weight.int32.T) * xScale[:, None] * sparseWeightScale[None, :] + bias
+    # weight 必须满足 4:2 稀疏 pattern(每连续 4 元素恰好 2 个为 0)
+    # NPU 端通过 aclnnTransSparse4to2Para 自动压缩为 sparseWeight(FRACTAL_NZ) + index(UINT8 4D)
+  description: aclnnSparse4to2QuantMatmulWeightNz selected path. C-side INT8 sparse matmul using sparseWeight + index reconstruction, V-side dequant + optional bf16 bias. C->V kernel flow.
+  shape_support: |
+    x: [M, K] int8, K <= 65535 (per docs); NPU pads K via ceil(K/8)*8 internally
+    weight: [N, K] int8 4:2-sparsified dense form (50% zeros); NPU pads N via ceil(N/16) for FRACTAL_NZ
+    xScale: [M] float32
+    sparseWeightScale: [N] float32
+    bias: [N] bfloat16 (optional)
+    out: [M, N] bfloat16
+  attrs:
+  - name: dtype
+    type: int
+    default: 27
+    description: 输出数据类型枚举值
+    required: false
+  - name: with_bias
+    type: bool
+    default: true
+    description: 是否使用 bias
+    required: false
+  inputs:
+  - name: x
+    description: int8 activation matrix
+    dtype: [int8]
+  - name: weight
+    description: int8 weight matrix in 4:2-sparsified dense form; benchmark driver compresses it via aclnnTransSparse4to2Para before NPU call
+    dtype: [int8]
+  - name: xScale
+    description: per-token activation dequant scale
+    dtype: [float32]
+  - name: sparseWeightScale
+    description: per-channel weight dequant scale
+    dtype: [float32]
+  - name: bias
+    description: optional bfloat16 bias along N
+    dtype: [bfloat16]
+    optional: true
+  outputs:
+  - name: out
+    description: dequantized sparse matmul result
+    dtype: [bfloat16]
+  schema: sparse4to2quant_matmul_dequant(Tensor x, Tensor weight, Tensor xScale, Tensor sparseWeightScale, Tensor? bias, int dtype=27, bool with_bias=true) -> Tensor out
+
+precision:
+  outputs:
+  - name: out
+    dtype: bfloat16
+    threshold_rule: output_dtype

@@ -1,0 +1,63 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: QuantMatmulReduceSum
+  category: Contraction
+  difficulty: L3
+  formula: |
+    out = sum_b((x1[b].int32 @ x2[b].int32) * x1Scale[b, :, None] * x2Scale[None, :])
+  description: aclnnQuantMatmulReduceSumWeightNz selected path. x1 is ND int8 [B,M,K], x2 is NZ int8 [B,ceil(N/32),ceil(K/16),16,32] for logical [B,K,N]. AIV dequantizes cube output and reduces along batch dimension.
+  shape_support: |
+    x1: [B, M, K] int8, ND
+    x2: [B, ceil(N/32), ceil(K/16), 16, 32] int8, NZ for logical [B, K, N]
+    x1Scale: [B, M] float32
+    x2Scale: [N] bfloat16
+    out: [M, N] bfloat16
+  attrs:
+  - name: dims
+    type: ListInt
+    default: [0]
+    description: fixed to [0] in this benchmark
+    required: false
+  - name: keep_dims
+    type: bool
+    default: false
+    description: fixed to false in this benchmark
+    required: false
+  - name: x2_format
+    type: string
+    default: NZ
+    description: fixed to NZ in this benchmark
+    required: false
+  inputs:
+  - name: x1
+    description: quantized activation tensor
+    dtype: [int8]
+  - name: x2
+    description: quantized weight tensor in NZ layout
+    dtype: [int8]
+  - name: x1Scale
+    description: per-token activation dequant scale
+    dtype: [float32]
+  - name: x2Scale
+    description: per-channel weight dequant scale
+    dtype: [bfloat16]
+  outputs:
+  - name: out
+    description: batch-reduced dequantized matmul result
+    dtype: [bfloat16]
+  schema: quant_matmul_reduce_sum(Tensor x1, Tensor x2, Tensor x1Scale, Tensor x2Scale, int[] dims=[0], bool keep_dims=false, str x2_format="NZ") -> Tensor out
+
+precision:
+  outputs:
+  - name: out
+    dtype: bfloat16
+    threshold_rule: output_dtype

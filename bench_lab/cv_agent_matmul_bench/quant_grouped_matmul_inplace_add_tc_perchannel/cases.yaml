@@ -1,0 +1,1005 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 1
+  input_shape:
+  - - 4
+    - 128
+  - - 1
+    - 128
+    - 96
+  - - 1
+    - 1
+  - - 1
+    - 96
+  - - 1
+  - - 4
+    - 96
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 4
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: small-smoke-singleExpert-G1M4K128N96
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 2
+  input_shape:
+  - - 8
+    - 128
+  - - 2
+    - 128
+    - 64
+  - - 2
+    - 1
+  - - 2
+    - 64
+  - - 2
+  - - 8
+    - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 4
+    - 8
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: small-smoke-G2M8K128N64
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 3
+  input_shape:
+  - - 1
+    - 64
+  - - 2
+    - 64
+    - 32
+  - - 2
+    - 1
+  - - 2
+    - 32
+  - - 2
+  - - 1
+    - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 0
+    - 1
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: small-edge-singleToken-emptyFirst-G2M1K64N32
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 4
+  input_shape:
+  - - 12
+    - 64
+  - - 3
+    - 64
+    - 128
+  - - 3
+    - 1
+  - - 3
+    - 128
+  - - 3
+  - - 12
+    - 128
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 0
+    - 6
+    - 12
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: small-edge-emptyMiddle-tailM-G3M12K64N128
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 5
+  input_shape:
+  - - 16
+    - 64
+  - - 16
+    - 64
+    - 64
+  - - 16
+    - 1
+  - - 16
+    - 64
+  - - 16
+  - - 16
+    - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: small-edge-manyExperts-E16-G16M16K64N64
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 6
+  input_shape:
+  - - 8
+    - 64
+  - - 8
+    - 64
+    - 64
+  - - 8
+    - 1
+  - - 8
+    - 64
+  - - 8
+  - - 8
+    - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 0
+    - 1
+    - 1
+    - 3
+    - 5
+    - 5
+    - 7
+    - 8
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: small-edge-multiEmpty-G8M8K64N64
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 7
+  input_shape:
+  - - 1024
+    - 1024
+  - - 4
+    - 1024
+    - 2048
+  - - 4
+    - 1
+  - - 4
+    - 2048
+  - - 4
+  - - 1024
+    - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 256
+    - 512
+    - 768
+    - 1024
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E4-M1024-K1024-N2048
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 8
+  input_shape:
+  - - 2048
+    - 1024
+  - - 4
+    - 1024
+    - 4096
+  - - 4
+    - 1
+  - - 4
+    - 4096
+  - - 4
+  - - 2048
+    - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 512
+    - 1024
+    - 1536
+    - 2048
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E4-M2048-K1024-N4096
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 9
+  input_shape:
+  - - 4096
+    - 2048
+  - - 4
+    - 2048
+    - 2048
+  - - 4
+    - 1
+  - - 4
+    - 2048
+  - - 4
+  - - 4096
+    - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 1024
+    - 2048
+    - 3072
+    - 4096
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E4-M4096-K2048-N2048-bigM
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 10
+  input_shape:
+  - - 2560
+    - 5120
+  - - 2
+    - 5120
+    - 5120
+  - - 2
+    - 1
+  - - 2
+    - 5120
+  - - 2
+  - - 2560
+    - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 1280
+    - 2560
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E2-M2560-K5120-N5120-maxKN
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 11
+  input_shape:
+  - - 5120
+    - 4096
+  - - 2
+    - 4096
+    - 3072
+  - - 2
+    - 1
+  - - 2
+    - 3072
+  - - 2
+  - - 5120
+    - 3072
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 2560
+    - 5120
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E2-M5120-K4096-N3072-maxM
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 12
+  input_shape:
+  - - 3072
+    - 1536
+  - - 8
+    - 1536
+    - 3072
+  - - 8
+    - 1
+  - - 8
+    - 3072
+  - - 8
+  - - 3072
+    - 3072
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 128
+    - 384
+    - 640
+    - 1024
+    - 1536
+    - 2048
+    - 2560
+    - 3072
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E8-M3072-K1536-N3072-ragged
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 13
+  input_shape:
+  - - 1536
+    - 2304
+  - - 8
+    - 2304
+    - 1536
+  - - 8
+    - 1
+  - - 8
+    - 1536
+  - - 8
+  - - 1536
+    - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 47
+    - 111
+    - 192
+    - 480
+    - 800
+    - 1100
+    - 1399
+    - 1536
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E8-M1536-K2304-N1536-raggedNonAligned
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 14
+  input_shape:
+  - - 2048
+    - 3072
+  - - 8
+    - 3072
+    - 1024
+  - - 8
+    - 1
+  - - 8
+    - 1024
+  - - 8
+  - - 2048
+    - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 0
+    - 1
+    - 1
+    - 257
+    - 769
+    - 1281
+    - 1793
+    - 2048
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E8-M2048-K3072-N1024-multiEmpty
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 15
+  input_shape:
+  - - 2000
+    - 1536
+  - - 16
+    - 1536
+    - 1536
+  - - 16
+    - 1
+  - - 16
+    - 1536
+  - - 16
+  - - 2000
+    - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 17
+    - 96
+    - 192
+    - 320
+    - 448
+    - 576
+    - 704
+    - 832
+    - 960
+    - 1088
+    - 1280
+    - 1472
+    - 1600
+    - 1728
+    - 1888
+    - 2000
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E16-M2000-K1536-N1536-manyExpertsNonAligned
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 16
+  input_shape:
+  - - 4096
+    - 2048
+  - - 16
+    - 2048
+    - 2048
+  - - 16
+    - 1
+  - - 16
+    - 2048
+  - - 16
+  - - 4096
+    - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 256
+    - 512
+    - 768
+    - 1024
+    - 1280
+    - 1536
+    - 1792
+    - 2048
+    - 2304
+    - 2560
+    - 2816
+    - 3072
+    - 3328
+    - 3584
+    - 3840
+    - 4096
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E16-M4096-K2048-N2048-manyExperts
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 17
+  input_shape:
+  - - 3500
+    - 768
+  - - 1
+    - 768
+    - 1536
+  - - 1
+    - 1
+  - - 1
+    - 1536
+  - - 1
+  - - 3500
+    - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 3500
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E1-M3500-K768-N1536-denseSingleExpert
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 18
+  input_shape:
+  - - 2304
+    - 768
+  - - 4
+    - 768
+    - 4096
+  - - 4
+    - 1
+  - - 4
+    - 4096
+  - - 4
+  - - 2304
+    - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 333
+    - 777
+    - 1409
+    - 2304
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E4-M2304-K768-N4096-longMNonAligned
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 19
+  input_shape:
+  - - 4097
+    - 1024
+  - - 4
+    - 1024
+    - 1024
+  - - 4
+    - 1
+  - - 4
+    - 1024
+  - - 4
+  - - 4097
+    - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 1024
+    - 2048
+    - 3072
+    - 4097
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E4-M4097-K1024-N1024-oddTailM
+- operator: QuantGroupedMatmulInplaceAdd
+  case_id: 20
+  input_shape:
+  - - 512
+    - 5120
+  - - 2
+    - 5120
+    - 4096
+  - - 2
+    - 1
+  - - 2
+    - 4096
+  - - 2
+  - - 512
+    - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  - float32
+  attrs:
+    group_list_values:
+    - 256
+    - 512
+    groupListType: 0
+    group_size:
+    - 1
+    - 0
+    - 0
+    variant: TC_PERCHANNEL
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-E2-M512-K5120-N4096-smallMbigKN

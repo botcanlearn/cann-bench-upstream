@@ -1,0 +1,670 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: FusedQuantMatMul
+  case_id: 1
+  input_shape:
+  - - 4
+    - 64
+  - - 64
+    - 32
+  - - 4
+  - - 32
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: smoke-gelu_erf-M4K64N32
+- operator: FusedQuantMatMul
+  case_id: 2
+  input_shape:
+  - - 8
+    - 64
+  - - 64
+    - 64
+  - - 8
+  - - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: smoke-gelu_tanh-M8K64N64
+- operator: FusedQuantMatMul
+  case_id: 3
+  input_shape:
+  - - 1
+    - 64
+  - - 64
+    - 16
+  - - 1
+  - - 16
+  - - 16
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: edge-tinyM1-gelu_erf-M1K64N16
+- operator: FusedQuantMatMul
+  case_id: 4
+  input_shape:
+  - - 5
+    - 96
+  - - 96
+    - 48
+  - - 5
+  - - 48
+  - - 48
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: edge-nonAlignedMN-gelu_erf-M5K96N48
+- operator: FusedQuantMatMul
+  case_id: 5
+  input_shape:
+  - - 7
+    - 160
+  - - 160
+    - 80
+  - - 7
+  - - 80
+  - - 80
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: edge-nonAlignedTail-gelu_tanh-M7K160N80
+- operator: FusedQuantMatMul
+  case_id: 6
+  input_shape:
+  - - 3
+    - 130
+  - - 130
+    - 48
+  - - 3
+  - - 48
+  - - 48
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: edge-nonAlignedK130-gelu_tanh-M3K130N48
+- operator: FusedQuantMatMul
+  case_id: 7
+  input_shape:
+  - - 1024
+    - 1024
+  - - 1024
+    - 4096
+  - - 1024
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-mlpUp-gelu_erf-M1024K1024N4096
+- operator: FusedQuantMatMul
+  case_id: 8
+  input_shape:
+  - - 2048
+    - 1024
+  - - 1024
+    - 4096
+  - - 2048
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-mlpUp-gelu_tanh-M2048K1024N4096
+- operator: FusedQuantMatMul
+  case_id: 9
+  input_shape:
+  - - 1536
+    - 1536
+  - - 1536
+    - 1536
+  - - 1536
+  - - 1536
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-qkvProj-gelu_erf-M1536K1536N1536
+- operator: FusedQuantMatMul
+  case_id: 10
+  input_shape:
+  - - 2560
+    - 2048
+  - - 2048
+    - 2048
+  - - 2560
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-attnProj-gelu_tanh-M2560K2048N2048
+- operator: FusedQuantMatMul
+  case_id: 11
+  input_shape:
+  - - 4096
+    - 2048
+  - - 2048
+    - 2048
+  - - 4096
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-prefill-gelu_erf-M4096K2048N2048
+- operator: FusedQuantMatMul
+  case_id: 12
+  input_shape:
+  - - 1024
+    - 4096
+  - - 4096
+    - 4096
+  - - 1024
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-mlpDown-gelu_tanh-M1024K4096N4096
+- operator: FusedQuantMatMul
+  case_id: 13
+  input_shape:
+  - - 512
+    - 5120
+  - - 5120
+    - 5120
+  - - 512
+  - - 5120
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-maxDim5120-gelu_erf-M512K5120N5120
+- operator: FusedQuantMatMul
+  case_id: 14
+  input_shape:
+  - - 3072
+    - 2560
+  - - 2560
+    - 1024
+  - - 3072
+  - - 1024
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-largeM-gelu_tanh-M3072K2560N1024
+- operator: FusedQuantMatMul
+  case_id: 15
+  input_shape:
+  - - 5120
+    - 1024
+  - - 1024
+    - 1024
+  - - 5120
+  - - 1024
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-maxM5120-gelu_erf-M5120K1024N1024
+- operator: FusedQuantMatMul
+  case_id: 16
+  input_shape:
+  - - 2048
+    - 3072
+  - - 3072
+    - 3072
+  - - 2048
+  - - 3072
+  - - 3072
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-mlp-gelu_tanh-M2048K3072N3072
+- operator: FusedQuantMatMul
+  case_id: 17
+  input_shape:
+  - - 1536
+    - 2048
+  - - 2048
+    - 5120
+  - - 1536
+  - - 5120
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-mlpUpWide-gelu_erf-M1536K2048N5120
+- operator: FusedQuantMatMul
+  case_id: 18
+  input_shape:
+  - - 1000
+    - 1536
+  - - 1536
+    - 1536
+  - - 1000
+  - - 1536
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-nonAlignedM1000-gelu_tanh-M1000K1536N1536
+- operator: FusedQuantMatMul
+  case_id: 19
+  input_shape:
+  - - 2049
+    - 2048
+  - - 2048
+    - 2048
+  - - 2049
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_erf
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-nonAlignedM2049-gelu_erf-M2049K2048N2048
+- operator: FusedQuantMatMul
+  case_id: 20
+  input_shape:
+  - - 4096
+    - 4096
+  - - 4096
+    - 5120
+  - - 4096
+  - - 5120
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    fused_op_type: gelu_tanh
+    transpose_x1: false
+    transpose_x2: false
+    y_dtype: float32
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: LLM-largeAll-gelu_tanh-M4096K4096N5120

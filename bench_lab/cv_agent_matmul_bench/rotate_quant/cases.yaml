@@ -1,0 +1,390 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: RotateQuant
+  case_id: 1
+  input_shape:
+  - - 4
+    - 128
+  - - 16
+    - 16
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-smoke-bfloat16-M4xN128xK16-minNK-int8
+- operator: RotateQuant
+  case_id: 2
+  input_shape:
+  - - 4
+    - 128
+  - - 32
+    - 32
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-smoke-float16-M4xN128xK32-int8
+- operator: RotateQuant
+  case_id: 3
+  input_shape:
+  - - 4
+    - 256
+  - - 64
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-smoke-kernelUT-like-M4xN256xK64-int8
+- operator: RotateQuant
+  case_id: 4
+  input_shape:
+  - - 1
+    - 256
+  - - 64
+    - 64
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-edge-float16-M1xN256xK64-singleRow-int8
+- operator: RotateQuant
+  case_id: 5
+  input_shape:
+  - - 3
+    - 256
+  - - 16
+    - 16
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-edge-bfloat16-M3xN256xK16-oddM-manyblocks-int8
+- operator: RotateQuant
+  case_id: 6
+  input_shape:
+  - - 5
+    - 384
+  - - 128
+    - 128
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-edge-bfloat16-M5xN384xK128-oddM-blocks3-int8
+- operator: RotateQuant
+  case_id: 7
+  input_shape:
+  - - 1024
+    - 2048
+  - - 512
+    - 512
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M1024xN2048xK512-blocks4-int8
+- operator: RotateQuant
+  case_id: 8
+  input_shape:
+  - - 2048
+    - 4096
+  - - 1024
+    - 1024
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M2048xN4096xK1024-blocks4-int8
+- operator: RotateQuant
+  case_id: 9
+  input_shape:
+  - - 512
+    - 1024
+  - - 1024
+    - 1024
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M512xN1024xK1024-blocks1-NeqK-int8
+- operator: RotateQuant
+  case_id: 10
+  input_shape:
+  - - 1536
+    - 3072
+  - - 512
+    - 512
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M1536xN3072xK512-blocks6-int8
+- operator: RotateQuant
+  case_id: 11
+  input_shape:
+  - - 2560
+    - 5120
+  - - 1024
+    - 1024
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M2560xN5120xK1024-blocks5-maxDim-int8
+- operator: RotateQuant
+  case_id: 12
+  input_shape:
+  - - 4096
+    - 2048
+  - - 256
+    - 256
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M4096xN2048xK256-blocks8-largeM-int8
+- operator: RotateQuant
+  case_id: 13
+  input_shape:
+  - - 768
+    - 1536
+  - - 768
+    - 768
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M768xN1536xK768-blocks2-Neq2K-int8
+- operator: RotateQuant
+  case_id: 14
+  input_shape:
+  - - 3072
+    - 3072
+  - - 1024
+    - 1024
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M3072xN3072xK1024-blocks3-int8
+- operator: RotateQuant
+  case_id: 15
+  input_shape:
+  - - 5120
+    - 1024
+  - - 1024
+    - 1024
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M5120xN1024xK1024-blocks1-maxM-int8
+- operator: RotateQuant
+  case_id: 16
+  input_shape:
+  - - 1024
+    - 5120
+  - - 640
+    - 640
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M1024xN5120xK640-blocks8-maxN-int8
+- operator: RotateQuant
+  case_id: 17
+  input_shape:
+  - - 2048
+    - 2560
+  - - 512
+    - 512
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M2048xN2560xK512-blocks5-int8
+- operator: RotateQuant
+  case_id: 18
+  input_shape:
+  - - 1000
+    - 4096
+  - - 512
+    - 512
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M1000xN4096xK512-blocks8-nonAlignedM-int8
+- operator: RotateQuant
+  case_id: 19
+  input_shape:
+  - - 1280
+    - 3840
+  - - 768
+    - 768
+  dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-bfloat16-M1280xN3840xK768-blocks5-int8
+- operator: RotateQuant
+  case_id: 20
+  input_shape:
+  - - 513
+    - 4096
+  - - 1024
+    - 1024
+  dtype:
+  - float16
+  - float16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: F2-LLM-float16-M513xN4096xK1024-blocks4-tailM-int8

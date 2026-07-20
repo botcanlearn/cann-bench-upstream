@@ -1,0 +1,530 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: FlatQuant
+  case_id: 1
+  input_shape:
+  - - 1
+    - 4
+    - 16
+  - - 4
+    - 4
+  - - 16
+    - 16
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: small-smoke-K1M4N16-minMN-fp16
+- operator: FlatQuant
+  case_id: 2
+  input_shape:
+  - - 2
+    - 8
+    - 16
+  - - 8
+    - 8
+  - - 16
+    - 16
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: small-smoke-K2M8N16-bf16
+- operator: FlatQuant
+  case_id: 3
+  input_shape:
+  - - 3
+    - 16
+    - 16
+  - - 16
+    - 16
+  - - 16
+    - 16
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 0.75
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: small-square-K3M16N16-clip075-fp16
+- operator: FlatQuant
+  case_id: 4
+  input_shape:
+  - - 4
+    - 32
+    - 64
+  - - 32
+    - 32
+  - - 64
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: small-maxMN-K4M32N64-bf16
+- operator: FlatQuant
+  case_id: 5
+  input_shape:
+  - - 8
+    - 16
+    - 32
+  - - 16
+    - 16
+  - - 32
+    - 32
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: small-edge-K8M16N32-fp16
+- operator: FlatQuant
+  case_id: 6
+  input_shape:
+  - - 16
+    - 32
+    - 64
+  - - 32
+    - 32
+  - - 64
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 0.75
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: small-edge-maxK-K16M32N64-clip075-bf16
+- operator: FlatQuant
+  case_id: 7
+  input_shape:
+  - - 512
+    - 32
+    - 64
+  - - 32
+    - 32
+  - - 64
+    - 64
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Kheavy-K512M32N64-fp16
+- operator: FlatQuant
+  case_id: 8
+  input_shape:
+  - - 1024
+    - 32
+    - 64
+  - - 32
+    - 32
+  - - 64
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Kheavy-K1024M32N64-bf16
+- operator: FlatQuant
+  case_id: 9
+  input_shape:
+  - - 2048
+    - 32
+    - 64
+  - - 32
+    - 32
+  - - 64
+    - 64
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 0.75
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Kheavy-K2048M32N64-clip075-fp16
+- operator: FlatQuant
+  case_id: 10
+  input_shape:
+  - - 4096
+    - 16
+    - 64
+  - - 16
+    - 16
+  - - 64
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Kheavy-K4096M16N64-bf16
+- operator: FlatQuant
+  case_id: 11
+  input_shape:
+  - - 5120
+    - 32
+    - 64
+  - - 32
+    - 32
+  - - 64
+    - 64
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Kheavy-maxK-K5120M32N64-fp16
+- operator: FlatQuant
+  case_id: 12
+  input_shape:
+  - - 3072
+    - 8
+    - 32
+  - - 8
+    - 8
+  - - 32
+    - 32
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 0.75
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Kheavy-K3072M8N32-clip075-bf16
+- operator: FlatQuant
+  case_id: 13
+  input_shape:
+  - - 8
+    - 32
+    - 512
+  - - 32
+    - 32
+  - - 512
+    - 512
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Nheavy-K8M32N512-fp16
+- operator: FlatQuant
+  case_id: 14
+  input_shape:
+  - - 4
+    - 16
+    - 1024
+  - - 16
+    - 16
+  - - 1024
+    - 1024
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Nheavy-K4M16N1024-bf16
+- operator: FlatQuant
+  case_id: 15
+  input_shape:
+  - - 2
+    - 32
+    - 2048
+  - - 32
+    - 32
+  - - 2048
+    - 2048
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 0.75
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Nheavy-K2M32N2048-clip075-fp16
+- operator: FlatQuant
+  case_id: 16
+  input_shape:
+  - - 8
+    - 512
+    - 64
+  - - 512
+    - 512
+  - - 64
+    - 64
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Mheavy-K8M512N64-bf16
+- operator: FlatQuant
+  case_id: 17
+  input_shape:
+  - - 4
+    - 1024
+    - 32
+  - - 1024
+    - 1024
+  - - 32
+    - 32
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Mheavy-K4M1024N32-fp16
+- operator: FlatQuant
+  case_id: 18
+  input_shape:
+  - - 2
+    - 2048
+    - 16
+  - - 2048
+    - 2048
+  - - 16
+    - 16
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 0.75
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-Mheavy-K2M2048N16-clip075-bf16
+- operator: FlatQuant
+  case_id: 19
+  input_shape:
+  - - 4
+    - 512
+    - 512
+  - - 512
+    - 512
+  - - 512
+    - 512
+  dtype:
+  - float16
+  - float16
+  - float16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-square-K4M512N512-fp16
+- operator: FlatQuant
+  case_id: 20
+  input_shape:
+  - - 1
+    - 5120
+    - 5120
+  - - 5120
+    - 5120
+  - - 5120
+    - 5120
+  dtype:
+  - bfloat16
+  - bfloat16
+  - bfloat16
+  attrs:
+    clipRatio: 1.0
+    quant_mode: pertoken
+    out_dtype: int4_logical
+  value_range:
+  - - -1
+    - 1
+  - - -1
+    - 1
+  - - -1
+    - 1
+  note: llm-maxsquare-K1M5120N5120-bf16

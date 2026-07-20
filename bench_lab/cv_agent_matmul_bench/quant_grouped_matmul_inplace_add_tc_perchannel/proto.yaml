@@ -1,0 +1,78 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: QuantGroupedMatmulInplaceAdd
+  category: Contraction
+  difficulty: L3
+  formula: y_i = yRef_i + (x_i @ w_i) * scale1_i * scale2_i
+  description: Grouped C->V quant matmul with inplace add.
+  shape_support: 'x1: [M,K] int8
+
+    x2: [G,K,N] int8
+
+    scale1: [G,1] float32
+
+    scale2: [G,N] float32
+
+    groupList: [G] int64
+
+    yRef/y: [M,N] float32'
+  attrs:
+  - name: group_list_values
+    type: ListInt
+    description: 分组列表值
+    required: true
+  - name: groupListType
+    type: int
+    default: 0
+    description: 分组列表类型
+    required: false
+  - name: group_size
+    type: ListInt
+    default: [1, 0, 0]
+    description: 分组大小
+    required: false
+  - name: variant
+    type: string
+    default: TC_PERCHANNEL
+    description: 算子变体标识
+    required: false
+  inputs:
+  - name: x1
+    dtype:
+    - int8
+  - name: x2
+    dtype:
+    - int8
+  - name: scale1
+    dtype:
+    - float32
+  - name: scale2
+    dtype:
+    - float32
+  - name: groupList
+    dtype:
+    - int64
+  - name: yRef
+    dtype:
+    - float32
+  outputs:
+  - name: y
+    dtype:
+    - float32
+  schema: quant_grouped_matmul_inplace_add(Tensor x1, Tensor x2, Tensor scale1, Tensor
+    scale2, Tensor groupList, Tensor yRef, int groupListType=0, int[] group_size=[1,0,0],
+    str variant="TC_PERCHANNEL") -> Tensor y
+precision:
+  outputs:
+  - name: y
+    dtype: float32
+    threshold_rule: output_dtype

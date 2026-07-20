@@ -1,0 +1,21 @@
+operator,case_id,input_shape,dtype,attrs,value_range,note
+RotateQuant,1,"[[4, 128], [16, 16]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-smoke-bfloat16-M4xN128xK16-minNK-int8
+RotateQuant,2,"[[4, 128], [32, 32]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-smoke-float16-M4xN128xK32-int8
+RotateQuant,3,"[[4, 256], [64, 64]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-smoke-kernelUT-like-M4xN256xK64-int8
+RotateQuant,4,"[[1, 256], [64, 64]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-edge-float16-M1xN256xK64-singleRow-int8
+RotateQuant,5,"[[3, 256], [16, 16]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-edge-bfloat16-M3xN256xK16-oddM-manyblocks-int8
+RotateQuant,6,"[[5, 384], [128, 128]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-edge-bfloat16-M5xN384xK128-oddM-blocks3-int8
+RotateQuant,7,"[[1024, 2048], [512, 512]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M1024xN2048xK512-blocks4-int8
+RotateQuant,8,"[[2048, 4096], [1024, 1024]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M2048xN4096xK1024-blocks4-int8
+RotateQuant,9,"[[512, 1024], [1024, 1024]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M512xN1024xK1024-blocks1-NeqK-int8
+RotateQuant,10,"[[1536, 3072], [512, 512]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M1536xN3072xK512-blocks6-int8
+RotateQuant,11,"[[2560, 5120], [1024, 1024]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M2560xN5120xK1024-blocks5-maxDim-int8
+RotateQuant,12,"[[4096, 2048], [256, 256]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M4096xN2048xK256-blocks8-largeM-int8
+RotateQuant,13,"[[768, 1536], [768, 768]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M768xN1536xK768-blocks2-Neq2K-int8
+RotateQuant,14,"[[3072, 3072], [1024, 1024]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M3072xN3072xK1024-blocks3-int8
+RotateQuant,15,"[[5120, 1024], [1024, 1024]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M5120xN1024xK1024-blocks1-maxM-int8
+RotateQuant,16,"[[1024, 5120], [640, 640]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M1024xN5120xK640-blocks8-maxN-int8
+RotateQuant,17,"[[2048, 2560], [512, 512]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M2048xN2560xK512-blocks5-int8
+RotateQuant,18,"[[1000, 4096], [512, 512]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M1000xN4096xK512-blocks8-nonAlignedM-int8
+RotateQuant,19,"[[1280, 3840], [768, 768]]","[""bfloat16"", ""bfloat16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-bfloat16-M1280xN3840xK768-blocks5-int8
+RotateQuant,20,"[[513, 4096], [1024, 1024]]","[""float16"", ""float16""]","{""alpha"": 0.0, ""y_dtype"": ""int8""}","[[-1, 1], [-1, 1]]",F2-LLM-float16-M513xN4096xK1024-blocks4-tailM-int8

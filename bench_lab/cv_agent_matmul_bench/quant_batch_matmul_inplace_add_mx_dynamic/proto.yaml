@@ -1,0 +1,68 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: QuantBatchMatmulInplaceAdd
+  category: Contraction
+  difficulty: L3
+  formula: y = yRef + sum_blocks(dequant(dynamic_quant(x1_block)) @ dequant(dynamic_quant(x2_block)))
+  description: MX dynamic quant batch matmul with inplace add, V->C->V flow.
+  shape_support: 'x1: [K,M] float16/bfloat16, transposeX1=True -> [M,K]
+
+    x2: [K,N] float16/bfloat16
+
+    yRef/y: [M,N] float32'
+  attrs:
+  - name: variant
+    type: string
+    default: MX_DYNAMIC
+    description: 算子变体标识
+    required: false
+  - name: transposeX1
+    type: bool
+    default: true
+    description: 是否转置输入 x1
+    required: false
+  - name: transposeX2
+    type: bool
+    default: false
+    description: 是否转置输入 x2
+    required: false
+  - name: groupSize
+    type: int
+    default: 32
+    description: 分组大小
+    required: false
+  inputs:
+  - name: x1
+    dtype:
+    - float16
+    - bfloat16
+  - name: x2
+    dtype:
+    - float16
+    - bfloat16
+  - name: yRef
+    dtype:
+    - float32
+  outputs:
+  - name: y
+    dtype:
+    - float32
+  schema: quant_batch_matmul_inplace_add(Tensor x1, Tensor x2, Tensor yRef, str variant="MX_DYNAMIC",
+    bool transposeX1=true, bool transposeX2=false, int groupSize=32) -> Tensor y
+precision:
+  outputs:
+  - name: y
+    dtype: float32
+    threshold_rule: input_dtype_inherited
+    threshold_per_input_dtype:
+      bfloat16: 2^-7
+      float16: 2^-10

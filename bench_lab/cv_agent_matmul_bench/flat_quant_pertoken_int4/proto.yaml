@@ -1,0 +1,82 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: FlatQuant
+  category: Contraction
+  difficulty: L3
+  formula: out = quantize_int4_logical(kroneckerP1 @ x @ kroneckerP2)
+  description: C->V flat quant selected per-token path.
+  shape_support: 'x: [K,M,N] float16/bfloat16
+
+    kroneckerP1: [M,M] same dtype
+
+    kroneckerP2: [N,N] same dtype
+
+    out: [K,M,N] int8 logical int4
+
+    quantScale: [K] float32'
+  attrs:
+  - name: clipRatio
+    type: float
+    default: 1.0
+    description: 量化裁剪比例
+    required: false
+  - name: quant_mode
+    type: string
+    default: pertoken
+    description: 量化模式
+    required: false
+  - name: out_dtype
+    type: string
+    default: int4_logical
+    description: 输出数据类型
+    required: false
+  inputs:
+  - name: x
+    dtype:
+    - float16
+    - bfloat16
+  - name: kroneckerP1
+    dtype:
+    - float16
+    - bfloat16
+  - name: kroneckerP2
+    dtype:
+    - float16
+    - bfloat16
+  outputs:
+  - name: out
+    dtype:
+    - int8
+  - name: quantScale
+    dtype:
+    - float32
+  schema: flat_quant(Tensor x, Tensor kroneckerP1, Tensor kroneckerP2, float clipRatio=1.0,
+    str quant_mode="pertoken", str out_dtype="int4_logical") -> (Tensor out, Tensor
+    quantScale)
+precision:
+  outputs:
+  - name: out
+    dtype: int8
+    threshold_rule: int8_three_tier
+    int8_thresholds:
+      fatal_abs_diff: 2
+      tolerance_abs_diff: 1
+      bit_exact_ratio: 0.995
+  - name: quantScale
+    dtype: float32
+    threshold_rule: input_dtype_inherited
+    threshold_per_input_dtype:
+      bfloat16: 2^-7
+      float16: 2^-10
+  small_value_handling:
+    threshold: 1.0e-06
+    absolute_tolerance: 1.0e-05

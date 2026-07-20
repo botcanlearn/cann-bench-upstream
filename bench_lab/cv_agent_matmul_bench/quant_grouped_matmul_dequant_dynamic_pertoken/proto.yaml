@@ -1,0 +1,80 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: QuantGroupedMatmulDequant
+  category: Contraction
+  difficulty: L3
+  formula: xScale=row_max(abs(x))/127; xq=round(x/xScale); out_i=(xq_i @ wq_i)*weightScale_i*xScale_i
+    + bias_i
+  description: Grouped V->C->V matmul dequant selected dynamic per-token path.
+  shape_support: 'x: [M,K] float16/bfloat16
+
+    quantized_weight: [G,K,N] int8
+
+    weightScale: [G,N] float32
+
+    groupList: [G] int64
+
+    bias: [G,N] float32
+
+    out: [M,N] float32'
+  attrs:
+  - name: group_list_values
+    type: ListInt
+    description: 分组列表值
+    required: true
+  - name: groupListType
+    type: int
+    default: 0
+    description: 分组列表类型
+    required: false
+  - name: quant_mode
+    type: string
+    default: pertoken
+    description: 量化模式
+    required: false
+  - name: transposeWeight
+    type: bool
+    default: false
+    description: 是否转置权重
+    required: false
+  inputs:
+  - name: x
+    dtype:
+    - float16
+    - bfloat16
+  - name: quantized_weight
+    dtype:
+    - int8
+  - name: weightScale
+    dtype:
+    - float32
+  - name: groupList
+    dtype:
+    - int64
+  - name: bias
+    dtype:
+    - float32
+  outputs:
+  - name: out
+    dtype:
+    - float32
+  schema: quant_grouped_matmul_dequant(Tensor x, Tensor quantized_weight, Tensor weightScale,
+    Tensor groupList, Tensor bias, str quant_mode="pertoken", bool transposeWeight=false,
+    int groupListType=0) -> Tensor out
+precision:
+  outputs:
+  - name: out
+    dtype: float32
+    threshold_rule: input_dtype_inherited
+    threshold_per_input_dtype:
+      bfloat16: 2^-7
+      float16: 2^-10

@@ -1,0 +1,594 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: QuantBatchMatmulV3
+  case_id: 1
+  input_shape:
+  - - 16
+    - 64
+  - - 64
+    - 64
+  - - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  attrs:
+    variant: bf16_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-small-bf16_basic-M16xK64xN64
+- operator: QuantBatchMatmulV3
+  case_id: 2
+  input_shape:
+  - - 1
+    - 128
+  - - 128
+    - 64
+  - - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  attrs:
+    variant: bf16_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-small-bf16_basic-singleM-K128xN64
+- operator: QuantBatchMatmulV3
+  case_id: 3
+  input_shape:
+  - - 17
+    - 96
+  - - 96
+    - 160
+  - - 160
+  - - 160
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  attrs:
+    variant: bf16_basic
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-small-bf16_basic-tailM17-fp32out-K96xN160
+- operator: QuantBatchMatmulV3
+  case_id: 4
+  input_shape:
+  - - 16
+    - 64
+  - - 64
+    - 128
+  - - 128
+  - - 128
+  - - 16
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-small-pertoken_basic-M16xK64xN128
+- operator: QuantBatchMatmulV3
+  case_id: 5
+  input_shape:
+  - - 7
+    - 128
+  - - 128
+    - 96
+  - - 96
+  - - 96
+  - - 7
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - float32
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-small-pertoken_basic-tailM7-mixedScaleBias-K128xN96
+- operator: QuantBatchMatmulV3
+  case_id: 6
+  input_shape:
+  - - 1
+    - 96
+  - - 96
+    - 32
+  - - 32
+  - - 32
+  - - 1
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: float16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-small-pertoken_basic-singleM-fp16out-smallN32
+- operator: QuantBatchMatmulV3
+  case_id: 7
+  input_shape:
+  - - 1024
+    - 1024
+  - - 1024
+    - 1024
+  - - 1024
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  attrs:
+    variant: bf16_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-bf16_basic-M1024xK1024xN1024
+- operator: QuantBatchMatmulV3
+  case_id: 8
+  input_shape:
+  - - 2048
+    - 2048
+  - - 2048
+    - 2048
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - float32
+  attrs:
+    variant: bf16_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-bf16_basic-M2048xK2048xN2048
+- operator: QuantBatchMatmulV3
+  case_id: 9
+  input_shape:
+  - - 2048
+    - 4096
+  - - 4096
+    - 1536
+  - - 1536
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  attrs:
+    variant: bf16_basic
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-bf16_basic-fp32out-mlpDown-M2048xK4096xN1536
+- operator: QuantBatchMatmulV3
+  case_id: 10
+  input_shape:
+  - - 1536
+    - 2048
+  - - 2048
+    - 5120
+  - - 5120
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    variant: bf16_basic
+    y_dtype: float16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-bf16_basic-fp16out-mixedScaleBias-N5120
+- operator: QuantBatchMatmulV3
+  case_id: 11
+  input_shape:
+  - - 4096
+    - 4096
+  - - 4096
+    - 4096
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  attrs:
+    variant: bf16_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-bf16_basic-M4096xK4096xN4096
+- operator: QuantBatchMatmulV3
+  case_id: 12
+  input_shape:
+  - - 5120
+    - 2560
+  - - 2560
+    - 3072
+  - - 3072
+  - - 3072
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - float32
+  attrs:
+    variant: bf16_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-bf16_basic-maxM5120xK2560xN3072
+- operator: QuantBatchMatmulV3
+  case_id: 13
+  input_shape:
+  - - 1024
+    - 1024
+  - - 1024
+    - 3072
+  - - 3072
+  - - 3072
+  - - 1024
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-qkvProj-M1024xK1024xN3072
+- operator: QuantBatchMatmulV3
+  case_id: 14
+  input_shape:
+  - - 2048
+    - 2048
+  - - 2048
+    - 2048
+  - - 2048
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-M2048xK2048xN2048
+- operator: QuantBatchMatmulV3
+  case_id: 15
+  input_shape:
+  - - 1536
+    - 5120
+  - - 5120
+    - 1536
+  - - 1536
+  - - 1536
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-fp32out-mlpDown-M1536xK5120xN1536
+- operator: QuantBatchMatmulV3
+  case_id: 16
+  input_shape:
+  - - 2560
+    - 3072
+  - - 3072
+    - 4096
+  - - 4096
+  - - 4096
+  - - 2560
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-mixedScaleBias-M2560xK3072xN4096
+- operator: QuantBatchMatmulV3
+  case_id: 17
+  input_shape:
+  - - 4096
+    - 4096
+  - - 4096
+    - 4096
+  - - 4096
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - float32
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-M4096xK4096xN4096
+- operator: QuantBatchMatmulV3
+  case_id: 18
+  input_shape:
+  - - 5120
+    - 4096
+  - - 4096
+    - 5120
+  - - 5120
+  - - 5120
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - bfloat16
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-maxMxN5120-M5120xK4096xN5120
+- operator: QuantBatchMatmulV3
+  case_id: 19
+  input_shape:
+  - - 3072
+    - 5120
+  - - 5120
+    - 2560
+  - - 2560
+  - - 2560
+  - - 3072
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: float32
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-fp32out-maxK5120-M3072xN2560
+- operator: QuantBatchMatmulV3
+  case_id: 20
+  input_shape:
+  - - 2048
+    - 1536
+  - - 1536
+    - 5120
+  - - 5120
+  - - 5120
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - bfloat16
+  - float32
+  - float32
+  attrs:
+    variant: pertoken_basic
+    y_dtype: bfloat16
+  value_range:
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  - - -2
+    - 2
+  note: F1-LLM-pertoken_basic-mlpUp-M2048xK1536xN5120

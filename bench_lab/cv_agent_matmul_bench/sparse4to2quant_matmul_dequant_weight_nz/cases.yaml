@@ -1,0 +1,723 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+cases:
+- operator: Sparse4to2QuantMatmul
+  case_id: 1
+  input_shape:
+  - - 4
+    - 64
+  - - 32
+    - 64
+  - - 4
+  - - 32
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-smoke-M4xK64xN32-bias-smallest
+- operator: Sparse4to2QuantMatmul
+  case_id: 2
+  input_shape:
+  - - 1
+    - 128
+  - - 32
+    - 128
+  - - 1
+  - - 32
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-smoke-M1xK128xN32-noBias-singleToken
+- operator: Sparse4to2QuantMatmul
+  case_id: 3
+  input_shape:
+  - - 8
+    - 256
+  - - 64
+    - 256
+  - - 8
+  - - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-smoke-M8xK256xN64-bias
+- operator: Sparse4to2QuantMatmul
+  case_id: 4
+  input_shape:
+  - - 3
+    - 64
+  - - 32
+    - 64
+  - - 3
+  - - 32
+  - - 32
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-edge-M3xK64xN32-bias-tailM3
+- operator: Sparse4to2QuantMatmul
+  case_id: 5
+  input_shape:
+  - - 12
+    - 64
+  - - 128
+    - 64
+  - - 12
+  - - 128
+  - - 128
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-edge-M12xK64xN128-bias-smallK
+- operator: Sparse4to2QuantMatmul
+  case_id: 6
+  input_shape:
+  - - 24
+    - 128
+  - - 64
+    - 128
+  - - 24
+  - - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-edge-M24xK128xN64-noBias-nonPowM24
+- operator: Sparse4to2QuantMatmul
+  case_id: 7
+  input_shape:
+  - - 8
+    - 132
+  - - 64
+    - 132
+  - - 8
+  - - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-edge-M8xK132xN64-bias-Knot8aligned
+- operator: Sparse4to2QuantMatmul
+  case_id: 8
+  input_shape:
+  - - 16
+    - 128
+  - - 48
+    - 128
+  - - 16
+  - - 48
+  - - 48
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-edge-M16xK128xN48-noBias-Nnot16-ceil48
+- operator: Sparse4to2QuantMatmul
+  case_id: 9
+  input_shape:
+  - - 33
+    - 100
+  - - 48
+    - 100
+  - - 33
+  - - 48
+  - - 48
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-edge-M33xK100xN48-bias-bothNotAligned
+- operator: Sparse4to2QuantMatmul
+  case_id: 10
+  input_shape:
+  - - 256
+    - 1024
+  - - 2048
+    - 1024
+  - - 256
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M256xK1024xN2048-noBias
+- operator: Sparse4to2QuantMatmul
+  case_id: 11
+  input_shape:
+  - - 512
+    - 1024
+  - - 2048
+    - 1024
+  - - 512
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M512xK1024xN2048-bias
+- operator: Sparse4to2QuantMatmul
+  case_id: 12
+  input_shape:
+  - - 1024
+    - 1024
+  - - 2048
+    - 1024
+  - - 1024
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M1024xK1024xN2048-noBias
+- operator: Sparse4to2QuantMatmul
+  case_id: 13
+  input_shape:
+  - - 2048
+    - 1024
+  - - 2048
+    - 1024
+  - - 2048
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M2048xK1024xN2048-bias-bigM
+- operator: Sparse4to2QuantMatmul
+  case_id: 14
+  input_shape:
+  - - 256
+    - 2048
+  - - 4096
+    - 2048
+  - - 256
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M256xK2048xN4096-bias-wideN
+- operator: Sparse4to2QuantMatmul
+  case_id: 15
+  input_shape:
+  - - 512
+    - 2048
+  - - 4096
+    - 2048
+  - - 512
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M512xK2048xN4096-noBias
+- operator: Sparse4to2QuantMatmul
+  case_id: 16
+  input_shape:
+  - - 256
+    - 4096
+  - - 4096
+    - 4096
+  - - 256
+  - - 4096
+  - - 4096
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M256xK4096xN4096-bias-squareMax
+- operator: Sparse4to2QuantMatmul
+  case_id: 17
+  input_shape:
+  - - 512
+    - 5120
+  - - 2048
+    - 5120
+  - - 512
+  - - 2048
+  - - 2048
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M512xK5120xN2048-noBias-Kmax5120
+- operator: Sparse4to2QuantMatmul
+  case_id: 18
+  input_shape:
+  - - 5120
+    - 768
+  - - 1536
+    - 768
+  - - 5120
+  - - 1536
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-decode-M5120xK768xN1536-bias-Mmax5120
+- operator: Sparse4to2QuantMatmul
+  case_id: 19
+  input_shape:
+  - - 1024
+    - 2048
+  - - 5120
+    - 2048
+  - - 1024
+  - - 5120
+  - - 5120
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M1024xK2048xN5120-noBias-Nmax5120
+- operator: Sparse4to2QuantMatmul
+  case_id: 20
+  input_shape:
+  - - 640
+    - 1152
+  - - 2304
+    - 1152
+  - - 640
+  - - 2304
+  - - 2304
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M640xK1152xN2304-bias-nonAligned
+- operator: Sparse4to2QuantMatmul
+  case_id: 21
+  input_shape:
+  - - 1000
+    - 1536
+  - - 1536
+    - 1536
+  - - 1000
+  - - 1536
+  - - 1536
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M1000xK1536xN1536-noBias-nonAligned
+- operator: Sparse4to2QuantMatmul
+  case_id: 22
+  input_shape:
+  - - 1536
+    - 1536
+  - - 3072
+    - 1536
+  - - 1536
+  - - 3072
+  - - 3072
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: true
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-prefill-M1536xK1536xN3072-bias-ragged
+- operator: Sparse4to2QuantMatmul
+  case_id: 23
+  input_shape:
+  - - 3500
+    - 768
+  - - 1500
+    - 768
+  - - 3500
+  - - 1500
+  - - 1500
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - bfloat16
+  attrs:
+    with_bias: false
+    dtype: 27
+  value_range:
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  - - -8
+    - 8
+  note: F2-int8-LLM-decode-M3500xK768xN1500-noBias-ragged

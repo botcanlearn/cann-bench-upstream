@@ -1,0 +1,62 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
+operator:
+  name: RotateQuant
+  category: Transform
+  difficulty: L2
+  formula: |
+    Y = (x.reshape(M, N//K, K) @ rotation).reshape(M, N)
+    scale_i = max_j(abs(Y[i, j])) / 127
+    y = round(Y / scale[:, None]).clamp(-127, 127).to(int8)
+  description: C->V kernel 路径。AIC 完成分块旋转 matmul 写 workspace，AIV 做逐行 absmax、动态 int8 量化和写回。
+  shape_support: |
+    x: [M, N] float16/bfloat16, N % K == 0, N % 8 == 0, 128 <= N <= 16000
+    rotation: [K, K] same dtype as x, 16 <= K <= 1024
+    yOut: [M, N] int8
+    scaleOut: [M] float32
+  attrs:
+  - name: alpha
+    type: float
+    default: 0.0
+    description: fixed to 0.0 in this benchmark, disables clamp
+    required: false
+  - name: y_dtype
+    type: string
+    default: int8
+    description: selected benchmark output path
+    required: false
+  inputs:
+  - name: x
+    description: activation tensor
+    dtype: [float16, bfloat16]
+  - name: rotation
+    description: square rotation matrix, same dtype as x
+    dtype: [float16, bfloat16]
+  outputs:
+  - name: y
+    description: dynamically quantized output
+    dtype: [int8]
+  - name: scale
+    description: per-row dynamic quantization scale
+    dtype: [float32]
+  schema: rotate_quant(Tensor x, Tensor rotation, float alpha=0.0, str y_dtype="int8") -> (Tensor y, Tensor scale)
+
+precision:
+  outputs:
+  - name: y
+    dtype: int8
+    threshold_rule: int8_three_tier
+    int8_thresholds: {fatal_abs_diff: 2, tolerance_abs_diff: 1, bit_exact_ratio: 0.99}
+  - name: scale
+    dtype: float32
+    threshold_rule: input_dtype_inherited
+    threshold_per_input_dtype: {bfloat16: "2^-7", float16: "2^-10"}
+  small_value_handling: {threshold: 1.0e-6, absolute_tolerance: 1.0e-5}
