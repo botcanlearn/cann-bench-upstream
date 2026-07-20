@@ -67,6 +67,9 @@ def _make_config(args: argparse.Namespace, bench_root: str, *, enable_profiler: 
     cfg.eval_seed = None if args.eval_seed == -1 else args.eval_seed
     if args.source_dir:
         cfg.source_dir = args.source_dir
+    cfg.agent_skill = getattr(args, 'agent_skill', '') or ''
+    cfg.base_model = getattr(args, 'base_model', '') or ''
+    cfg.harness = getattr(args, 'harness', '') or ''
     if args.torch_op_guard_mode:
         cfg.torch_op_guard_mode = args.torch_op_guard_mode
     if args.perf_metric_strategy:
@@ -449,6 +452,9 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--torch-op-guard-mode", choices=["off", "warn", "block"], default=None)
     parser.add_argument("--eval-seed", type=int, default=0)
     parser.add_argument("--no-iterative-compile", action="store_true")
+    parser.add_argument("--agent-skill", default="", help="评测对象 Agent/Skill 标签，写入报告元信息")
+    parser.add_argument("--base-model", default="", help="评测对象 BaseModel 标签，写入报告元信息")
+    parser.add_argument("--harness", default="", help="评测对象 Harness 标签，写入报告元信息")
     return parser
 
 

@@ -34,6 +34,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import asdict
+from html import escape as _escape
 import re
 
 from .report_generator import EvalReport, OperatorReport
@@ -73,19 +74,22 @@ def _render_section2(setup: Dict) -> str:
     md = setup.get('metadata', {})
     env = setup.get('environment', {})
 
-    def _row(k, v):
-        if v is None or v == '':
+    def _row(k, v, allow_empty=False):
+        if v is None or (v == '' and not allow_empty):
             return ''
-        return f'            <tr><td class="kv-k">{k}</td><td>{v}</td></tr>\n'
+        return f'            <tr><td class="kv-k">{k}</td><td>{_escape(str(v))}</td></tr>\n'
 
-    # Metadata rows
+    # Metadata rows；Agent/Skill、Harness、BaseModel 为提交标签行，
+    # 未填写时保留行但置空，不展示任何默认文案
     meta_rows = ''
     for key, label in [
         ('framework', 'Framework'), ('date', 'Date'),
-        ('agent_skill', 'Agent/Skill'), ('base_model', 'BaseModel'),
+        ('agent_skill', 'Agent/Skill'), ('harness', 'Harness'), ('base_model', 'BaseModel'),
         ('benchmark', '评测集'), ('license', 'License'),
     ]:
-        if key in md and md[key]:
+        if key in ('agent_skill', 'harness', 'base_model'):
+            meta_rows += _row(label, md.get(key) or '', allow_empty=True)
+        elif key in md and md[key]:
             meta_rows += _row(label, md[key])
 
     # Environment rows
@@ -393,7 +397,7 @@ SEAL_HTML_TEMPLATE = '''  <!-- =================================================
 
     <div class="seal-cert">
       <p>
-        本评测报告由 CANN-Bench 评测框架自动生成，评测对象为 DeepSeek V4 Pro (CANNBot) 生成的
+        本评测报告由 CANN-Bench 评测框架自动生成，评测对象为 {eval_object} 生成的
         Ascend C 算子代码。
       </p>
       <p>
@@ -447,19 +451,29 @@ def render_html_report(
         setup_info = report.setup_info if hasattr(report, 'setup_info') else {}
     md = setup_info.get('metadata', {})
 
-    # Agent/Skill — 有值则替换，无值则删除
+    # Agent/Skill — 有值则替换，无值则置空（不给默认文案）
     agent = md.get('agent_skill', '')
     if agent:
-        html = re.sub(r'Agent/Skill为[\u4e00-\u9fa5\w-]*', f'Agent/Skill为{agent}', html)
+        agent_esc = _escape(str(agent))
+        html = re.sub(r'Agent/Skill为[一-鿿\w-]*', lambda m: f'Agent/Skill为{agent_esc}', html)
     else:
-        html = re.sub(r'，Agent/Skill为[\u4e00-\u9fa5\w-]*', '', html)
+        html = re.sub(r'Agent/Skill为[一-鿿\w-]*', 'Agent/Skill为', html)
+
+    # Harness — 同上
+    harness = md.get('harness', '')
+    if harness:
+        harness_esc = _escape(str(harness))
+        html = re.sub(r'Harness为[一-鿿\w-]*', lambda m: f'Harness为{harness_esc}', html)
+    else:
+        html = re.sub(r'Harness为[一-鿿\w-]*', 'Harness为', html)
 
     # BaseModel — 同上
     model = md.get('base_model', '')
     if model:
-        html = re.sub(r'BaseModel为[\u4e00-\u9fa5\w\s]*', f'BaseModel为{model}', html)
+        model_esc = _escape(str(model))
+        html = re.sub(r'BaseModel为[一-鿿\w\s]*', lambda m: f'BaseModel为{model_esc}', html)
     else:
-        html = re.sub(r'，BaseModel为[\u4e00-\u9fa5\w\s]*', '', html)
+        html = re.sub(r'BaseModel为[一-鿿\w\s]*', 'BaseModel为', html)
 
     # 通过率 & 得分 — 从 report 获取
     r = report.summary['pass_rate']
@@ -518,6 +532,26 @@ def render_html_report(
     html += '\n' + SEAL_HTML_TEMPLATE.format(
         framework_version=FRAMEWORK_VERSION,
         tasks_version=TASKS_VERSION,
+        eval_object=_eval_object_label(md),
     )
 
     return html
+
+
+def _eval_object_label(md: Dict) -> str:
+    """由提交标签构造认证文本中的评测对象描述。
+
+    组合 MODEL (AGENT / HARNESS)；标签全部未填写时置空，
+    不回落到任何默认名称。
+    """
+    agent = str(md.get('agent_skill') or '').strip()
+    harness = str(md.get('harness') or '').strip()
+    model = str(md.get('base_model') or '').strip()
+    tools = ' / '.join(p for p in (agent, harness) if p)
+    if model and tools:
+        label = f'{model} ({tools})'
+    elif model:
+        label = model
+    else:
+        label = tools
+    return _escape(label)

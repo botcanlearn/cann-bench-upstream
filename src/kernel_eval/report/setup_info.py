@@ -204,6 +204,7 @@ def collect_setup_info(config: Optional[Config] = None) -> Dict:
             "date": now,
             "agent_skill": getattr(config, 'agent_skill', '') or '',
             "base_model": getattr(config, 'base_model', '') or '',
+            "harness": getattr(config, 'harness', '') or '',
             "benchmark": _resolve_benchmark_name(config.tasks_root),
             "license": "CANN Open Software License v2.0",
         },

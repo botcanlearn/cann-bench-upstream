@@ -47,6 +47,7 @@ class Config:
     # AI 模型信息（由用户配置，用于报告摘要；为空时摘要中不体现）
     agent_skill: str = ""
     base_model: str = ""
+    harness: str = ""
 
     # 源码目录（AI生成的算子源码，通过参数传入）
     source_dir: str = ""        # AI生成的算子源码目录
