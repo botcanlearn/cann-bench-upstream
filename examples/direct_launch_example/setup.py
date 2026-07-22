@@ -13,6 +13,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import logging
 from setuptools import setup, find_packages, Distribution, Command
 from wheel.bdist_wheel import bdist_wheel
@@ -98,6 +99,7 @@ class CMakeBuildCommand(Command):
             '-DCMAKE_BUILD_TYPE=Release',
             f'-DTorch_DIR={Torch_DIR}',
             f'-DTORCH_NPU_PATH={TORCH_NPU_PATH}',
+            f'-DPython3_EXECUTABLE={sys.executable}',
             f'-DNPU_ARCH={NPU_ARCH}'
         ])
         subprocess.check_call([
