@@ -470,7 +470,9 @@ class PackageManager:
     def install_whl_package(self, whl_path: str) -> bool:
         """安装whl包（Python包）
 
-        安装策略：先卸载旧版本，再安装新版本（不使用force-reinstall，避免重装依赖）
+        安装策略：强制重装当前提交，但不安装依赖。提交 wheel 通常都使用相同
+        的 ``cann_bench==1.0.0`` 版本；普通 ``pip install`` 会把新提交误判为
+        已安装。``--no-deps`` 保证 force-reinstall 不会重装 torch/torch_npu。
         """
         whl_file = Path(whl_path)
         if not whl_file.exists():
@@ -479,18 +481,17 @@ class PackageManager:
         print(f"[INFO] 安装whl包: {whl_file.name}")
 
         try:
-            # 先卸载旧版本（如果存在）
-            print(f"[INFO] 卸载旧版本 cann_bench")
-            subprocess.run(
-                [sys.executable, "-m", "pip", "uninstall", "cann_bench", "-y"],
-                capture_output=True,
-                timeout=30
-            )
-
-            # 安装新版本（--no-deps 避免重装 torch/torch_npu 等依赖）
-            print(f"[INFO] 安装: pip install --no-deps {whl_path}")
+            print(f"[INFO] 安装: pip install --force-reinstall --no-deps {whl_path}")
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--no-deps", whl_path],
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--force-reinstall",
+                    "--no-deps",
+                    whl_path,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=60
@@ -559,8 +560,10 @@ class PackageManager:
         cann_bench_import_error = None
         try:
             # 重新导入模块（确保使用最新安装的版本）
-            if 'cann_bench' in sys.modules:
-                del sys.modules['cann_bench']
+            for module_name in list(sys.modules):
+                if module_name == "cann_bench" or module_name.startswith("cann_bench."):
+                    del sys.modules[module_name]
+            importlib.invalidate_caches()
 
             import cann_bench
             cann_bench_imported = True

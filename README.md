@@ -72,6 +72,7 @@ cann-bench/
 │   ├── direct_launch_example/   # Direct launch 算子样例
 │   ├── tasks/                    # 评测任务样例（add/sqrt fixture，验证评测流水线）
 │   ├── tilelang_cann_example/   # TileLang → CANN 算子样例
+│   ├── triton_ascend_cann_example/ # Triton-Ascend → CANN 算子样例
 │   └── stanfordbench_example/   # Stanford benchmark 样例
 ├── docs/                   # 规范 / 设计 / 指南文档
 ├── scripts/                # 评测/测试入口脚本
@@ -159,10 +160,11 @@ pip install -r requirements.txt
 
 1. **ACLNN 算子启动示例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
 2. **直调算子启动示例**：[examples/direct_launch_example/](examples/direct_launch_example/)
+3. **Triton-Ascend submission 示例**：[examples/triton_ascend_cann_example/](examples/triton_ascend_cann_example/)
 
 **评测任务样例**（教你"怎么评算子"）：
 
-3. **评测任务 fixture**：[examples/tasks/](examples/tasks/) — 提供 Add/Sqrt 两个轻量算子的评测定义（proto.yaml + golden.py + cases.yaml + metadata/），用于验证评测流水线是否正常工作
+4. **评测任务 fixture**：[examples/tasks/](examples/tasks/) — 提供 Add/Sqrt 两个轻量算子的评测定义（proto.yaml + golden.py + cases.yaml + metadata/），用于验证评测流水线是否正常工作
 
 使用自定义算子：
 

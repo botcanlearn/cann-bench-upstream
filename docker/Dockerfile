@@ -14,8 +14,13 @@
 
 ARG CANN_VERSION=9.0.0
 ARG DEVICE=910b
+ARG TRITON_ASCEND_VERSION=
+ARG TRITON_ASCEND_INDEX_URL=https://triton-ascend.osinfra.cn/pypi/simple
 
 FROM swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:${CANN_VERSION}-${DEVICE}-ubuntu22.04-py3.12
+
+ARG TRITON_ASCEND_VERSION
+ARG TRITON_ASCEND_INDEX_URL
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -43,6 +48,21 @@ RUN uv pip install --system --index-url ${PYPI_INDEX_URL:-https://mirrors.huawei
     pytest pytest-timeout 'ruamel.yaml>=0.18' build setuptools wheel
 RUN uv pip install --system --no-deps --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
 RUN uv pip install --system --no-deps --index-url ${PYPI_INDEX_URL:-https://mirrors.huaweicloud.com/repository/pypi/simple/} torch_npu==2.10.0
+
+# Triton-Ascend is optional because its compiler runtime is large. The wheel
+# owns the top-level `triton` package, so install it and its pinned dependencies
+# together rather than mixing it with a separately installed Triton package.
+RUN if [ -n "${TRITON_ASCEND_VERSION}" ]; then \
+      uv pip install --system \
+        --index-url "${PYPI_INDEX_URL:-https://mirrors.huaweicloud.com/repository/pypi/simple/}" \
+        --extra-index-url "${TRITON_ASCEND_INDEX_URL}" \
+        "triton-ascend==${TRITON_ASCEND_VERSION}" && \
+      uv pip check; \
+    fi
+
+ENV TRITON_ASCEND_VERSION=${TRITON_ASCEND_VERSION}
+ENV TRITON_CACHE_DIR=/tmp/cann-bench-triton-cache
+RUN mkdir -p ${TRITON_CACHE_DIR} && chmod 1777 ${TRITON_CACHE_DIR}
 
 # Pre-populate uid 1001 in /etc/passwd so getpass/getuser resolves in the
 # sandbox runtime (which executes processes as uid 1001); not a privilege drop.

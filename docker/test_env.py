@@ -6,8 +6,9 @@ Verifies in order:
   [2] torch_npu can see at least one NPU device
   [3] npu-smi info works (driver/runtime loaded)
   [4] CANN compiler version.info readable (proves CANN install intact)
+  [5] optional Triton-Ascend backend compiles and runs vector add
 
-Exits 0 with "ALL CHECKS PASSED" only if all four pass.
+Exits 0 with "ALL CHECKS PASSED" only if all required checks pass.
 """
 
 import os
@@ -60,6 +61,51 @@ try:
 except Exception as e:
     print(f"[FAIL] [4] CANN compiler version.info: {e}")
     failed.append(4)
+
+# A non-empty build arg enables a real JIT smoke. This catches wrong Triton
+# packages and compiler/CANN mismatches that import-only checks cannot detect.
+triton_ascend_version = os.environ.get("TRITON_ASCEND_VERSION", "").strip()
+if triton_ascend_version:
+    try:
+        import importlib.metadata
+
+        import triton
+        import triton.language as tl
+        from triton.runtime import driver
+
+        @triton.jit
+        def _vector_add_kernel(
+            x_ptr, y_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr
+        ):
+            offsets = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+            mask = offsets < n_elements
+            x = tl.load(x_ptr + offsets, mask=mask, other=0.0)
+            y = tl.load(y_ptr + offsets, mask=mask, other=0.0)
+            tl.store(output_ptr + offsets, x + y, mask=mask)
+
+        installed_version = importlib.metadata.version("triton-ascend")
+        assert installed_version == triton_ascend_version, (
+            f"triton-ascend {installed_version}, expected {triton_ascend_version}"
+        )
+        target = driver.active.get_current_target()
+        assert target.backend == "npu", f"active Triton backend = {target.backend}"
+
+        x = torch.arange(1024, dtype=torch.float32, device="npu:0")
+        y = torch.full_like(x, 2.0)
+        output = torch.empty_like(x)
+        grid = (triton.cdiv(x.numel(), 256),)
+        _vector_add_kernel[grid](x, y, output, x.numel(), BLOCK_SIZE=256)
+        torch.npu.synchronize()
+        torch.testing.assert_close(output, x + y, rtol=0, atol=0)
+        print(
+            f"[OK]   [5] triton-ascend {installed_version}, "
+            f"target={target.arch}, vector add passed"
+        )
+    except Exception as e:
+        print(f"[FAIL] [5] Triton-Ascend JIT/vector add: {e}")
+        failed.append(5)
+else:
+    print("[SKIP] [5] Triton-Ascend not requested for this image")
 
 if failed:
     sys.exit(f"\nFAILED: {failed}")

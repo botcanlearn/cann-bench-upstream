@@ -2,6 +2,7 @@
 # pyproject.toml 的 [project].dependencies 保持一致。推荐用 uv 管理：
 #   uv sync                     # 核心 + 开发依赖
 #   uv sync --extra vision      # 追加 torchvision（roi_align / nms golden）
+# Triton-Ascend 环境继续安装 requirements-triton.txt。
 
 # torch / torch_npu==2.10.0 仅由华为云镜像提供，默认 PyPI 无此版本；pip 不读取
 # pyproject.toml 的 [[tool.uv.index]] 配置，故在此显式指定同一镜像，令

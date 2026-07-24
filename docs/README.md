@@ -41,6 +41,7 @@
 | [multi_card_parallel_analysis.md](design/multi_card_parallel_analysis.md) | 多卡并行评测分析 |
 | [micro_benchmark_selection.md](design/micro_benchmark_selection.md) | 微基准/算子选型分析 |
 | [benchmark_orchestrator_architecture.md](design/benchmark_orchestrator_architecture.md) | auto_pipeline 设计：core/prompt/generator/converter 边界与数据流 |
+| [triton_ascend_integration_implementation.md](design/triton_ascend_integration_implementation.md)（[HTML 汇报页](design/triton_ascend_integration_implementation.html)） | Triton-Ascend 加载、JIT、缓存、执行与核心源码详解 |
 
 ### 指南类文档 (guide/)
 
@@ -50,6 +51,7 @@
 |------|------|
 | [contributing.md](guide/contributing.md) | 算子贡献指南：如何提交新算子评测任务（含 proto.yaml schema） |
 | [quick_start.md](guide/quick_start.md) | 快速入门：评测流程和命令行使用 |
+| [triton_ascend_quick_start.md](guide/triton_ascend_quick_start.md) | Triton-Ascend 环境、构建和真机验证快速指南 |
 | [submission_rules.md](guide/submission_rules.md) | 算子提交原则与禁止行为：说明哪些实现方式会被视为无效或作弊 |
 | [version_policy.md](guide/version_policy.md) | 版本策略：VERSION / tasks 版本与兼容性 |
 | [custom_benchmark_integration.md](guide/custom_benchmark_integration.md) | 自定义评测集接入指南 |
