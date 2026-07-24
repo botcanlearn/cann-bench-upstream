@@ -27,6 +27,7 @@ import torch
 from kernel_eval.eval.input_pool import (
     InputPool,
     InputPoolConfig,
+    CallInputPool,
     create_input_pool,
 )
 
@@ -282,3 +283,80 @@ class TestInputPoolIntegration:
         assert ptrs[1] == ptrs[4] == ptrs[7]
         # 第 2, 5, 8 次应相同
         assert ptrs[2] == ptrs[5] == ptrs[8]
+
+
+class TestCallInputPool:
+    """CallInputPool（args+kwargs 调用级轮换）测试 —— issue #71 性能阶段防 data_ptr 缓存"""
+
+    def test_size_respects_pool_size(self):
+        pool = CallInputPool((torch.randn(2, 3),), {}, pool_size=4)
+        assert len(pool) == 4
+
+    def test_get_next_returns_clone_values_equal(self):
+        """get_next 返回 clone：值逐位相等，但张量对象/地址不同。"""
+        x = torch.randn(4, 5)
+        pool = CallInputPool((x,), {}, pool_size=2)
+        (a0,), _ = pool.get_next()
+        assert torch.equal(a0, x)          # 值相等
+        assert a0.data_ptr() != x.data_ptr()  # 是 clone，非原张量
+
+    def test_rotation_changes_data_ptr(self):
+        """池大小 >= 2 时，相邻两次调用的张量地址不同（data_ptr 缓存会 miss）。"""
+        pool = CallInputPool((torch.randn(2, 3),), {}, pool_size=2)
+        (a0,), _ = pool.get_next()
+        (a1,), _ = pool.get_next()
+        (a2,), _ = pool.get_next()
+        assert a0.data_ptr() != a1.data_ptr()  # 相邻不同
+        assert a0.data_ptr() == a2.data_ptr()  # 环形复用（0 与 2 同槽）
+
+    def test_kwargs_tensors_cloned_attrs_shared(self):
+        """kwargs 中张量被 clone；非张量 attr 按引用共享、值不变。"""
+        w = torch.randn(3, 3)
+        pool = CallInputPool((), {"weight": w, "dim": -1, "scale": 1.5}, pool_size=2)
+        _, kw = pool.get_next()
+        assert torch.equal(kw["weight"], w)
+        assert kw["weight"].data_ptr() != w.data_ptr()  # 张量 clone
+        assert kw["dim"] == -1 and kw["scale"] == 1.5    # attr 原样
+
+    def test_nested_list_tensors_cloned(self):
+        """嵌套于 list 的张量也被 clone（如 grouped 类算子的张量列表入参）。"""
+        t = torch.randn(2, 2)
+        pool = CallInputPool((), {"tensors": [t]}, pool_size=2)
+        _, kw = pool.get_next()
+        assert torch.equal(kw["tensors"][0], t)
+        assert kw["tensors"][0].data_ptr() != t.data_ptr()
+
+    def test_memory_cap_shrinks_pool(self):
+        """大张量在内存上限下自动收缩池大小（避免 OOM）。"""
+        # 4x1024x1024 float32 ≈ 16MB/份；上限 10MB → 池收缩为 1
+        big = torch.randn(4, 1024, 1024)
+        cfg = InputPoolConfig(max_memory_mb=10)
+        pool = CallInputPool((big,), {}, pool_size=8, config=cfg)
+        assert len(pool) == 1
+
+    def test_clear_then_get_next_raises(self):
+        pool = CallInputPool((torch.randn(2, 3),), {}, pool_size=2)
+        pool.clear()
+        with pytest.raises(RuntimeError):
+            pool.get_next()
+
+    def test_func_call_with_rotated_args_kwargs(self):
+        """模拟 perf 路径：func(*args, **kwargs) 每步喂入不同地址、值一致的输入。"""
+        seen_ptrs = []
+
+        def fake_op(x, *, bias):
+            seen_ptrs.append(x.data_ptr())
+            return x + bias
+
+        x = torch.ones(2, 2)
+        bias = torch.zeros(2, 2)
+        pool = CallInputPool((x,), {"bias": bias}, pool_size=2)
+        outs = []
+        for _ in range(4):
+            a, kw = pool.get_next()
+            outs.append(fake_op(*a, **kw))
+        # 相邻步地址不同 → data_ptr 缓存失效
+        assert seen_ptrs[0] != seen_ptrs[1]
+        # 结果数值与原输入一致
+        for o in outs:
+            assert torch.equal(o, x)

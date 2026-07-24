@@ -137,6 +137,100 @@ class InputPool:
         return self.size()
 
 
+class CallInputPool:
+    """调用级输入池：轮换一次完整调用 (args, kwargs) 的 clone 副本。
+
+    与 InputPool（按位置列表轮换）不同，本类同时覆盖位置参数与关键字参数，
+    用于性能测量阶段对实际算子调用防 data_ptr 缓存攻击：
+
+    - 只 clone 张量（含嵌套于 list / tuple 中的张量）；非张量值（如 attr）按引用共享。
+    - 每次 get_next 返回 (args, kwargs)，池大小 >= 2 时相邻两次的张量地址不同，
+      使按 data_ptr() 命中的缓存在 repeat 各步 cache miss。
+    - clone 值与原输入逐位相等，故性能阶段的精度复检不受影响。
+    - 池大小按 InputPoolConfig 的内存 / 数量上限裁剪，避免大张量 OOM。
+
+    使用方法：
+        pool = CallInputPool(args, kwargs, warmup + repeat)
+        for _ in range(warmup + repeat):
+            a, kw = pool.get_next()
+            output = func(*a, **kw)
+    """
+
+    def __init__(
+        self,
+        args: Any,
+        kwargs: Any,
+        pool_size: int,
+        config: Optional[InputPoolConfig] = None,
+    ):
+        self.config = config or InputPoolConfig()
+        self.idx = 0
+        args = tuple(args or ())
+        kwargs = dict(kwargs or {})
+
+        per_set_bytes = self._estimate_memory(args, kwargs)
+        max_sets_by_memory = max(1, (self.config.max_memory_mb * 1024 * 1024) // per_set_bytes)
+        actual_size = min(pool_size, max_sets_by_memory, self.config.max_pool_size)
+        actual_size = max(1, actual_size)
+
+        self.pool: List[Any] = [
+            (self._clone_seq(args), self._clone_map(kwargs))
+            for _ in range(actual_size)
+        ]
+
+    @staticmethod
+    def _clone_one(value: Any) -> Any:
+        if isinstance(value, torch.Tensor):
+            return value.clone()
+        if isinstance(value, tuple):
+            return tuple(v.clone() if isinstance(v, torch.Tensor) else v for v in value)
+        if isinstance(value, list):
+            return [v.clone() if isinstance(v, torch.Tensor) else v for v in value]
+        return value
+
+    def _clone_seq(self, args):
+        return tuple(self._clone_one(a) for a in args)
+
+    def _clone_map(self, kwargs):
+        return {k: self._clone_one(v) for k, v in kwargs.items()}
+
+    def _estimate_memory(self, args, kwargs) -> int:
+        total = 0
+
+        def _add(v):
+            nonlocal total
+            if isinstance(v, torch.Tensor):
+                total += v.element_size() * v.numel()
+            elif isinstance(v, (list, tuple)):
+                for sub in v:
+                    if isinstance(sub, torch.Tensor):
+                        total += sub.element_size() * sub.numel()
+
+        for a in args:
+            _add(a)
+        for v in kwargs.values():
+            _add(v)
+        return max(total, 1)  # 至少1字节
+
+    def get_next(self):
+        """返回下一组 (args, kwargs)（其中张量为 clone）。"""
+        if not self.pool:
+            raise RuntimeError("调用输入池为空")
+        args, kwargs = self.pool[self.idx % len(self.pool)]
+        self.idx += 1
+        return args, kwargs
+
+    def size(self) -> int:
+        return len(self.pool)
+
+    def clear(self) -> None:
+        self.pool.clear()
+        self.idx = 0
+
+    def __len__(self) -> int:
+        return self.size()
+
+
 def create_input_pool(
     inputs: List[Any],
     warmup: int,

@@ -96,7 +96,10 @@ class OpRunner:
                          and self.perf_evaluator.config.enable_profiler
                          and self.device_manager.is_npu_mode())
             if use_profiler:
-                outputs, perf_result = self.perf_evaluator.run_profiled(case_id, func, **updated_params)
+                # 仅性能阶段启用输入地址轮换（防 data_ptr 缓存作弊）；精度阶段走下方非 profiler 分支，不启用。
+                rotate_inputs = getattr(self.perf_evaluator.config, 'perf_rotate_inputs', True)
+                outputs, perf_result = self.perf_evaluator.run_profiled(
+                    case_id, func, use_input_pool=rotate_inputs, **updated_params)
                 self.perf_evaluator.wait_all()
                 elapsed_us = perf_result.elapsed_us
                 # profiler 路径：异常被 run_profiled 捕获存在 error_msg 中，outputs 为 None

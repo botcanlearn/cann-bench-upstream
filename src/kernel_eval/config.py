@@ -85,6 +85,12 @@ class Config:
     # 启用后每个 case 用新鲜输入再跑一次 golden + AI，两次都通过才记 pass。
     enable_accuracy_retry: bool = False
 
+    # 防作弊：仅在**性能测量阶段**轮换输入地址（对实际调用的 args/kwargs 张量做 clone 池），
+    # 使按 data_ptr() 命中的缓存 / 预设结果在 repeat 各步 cache miss 而失效。
+    # 只作用于 profiler 采集路径（性能阶段）；精度阶段（golden / AI 一次执行）不启用。
+    # 为 True 时 op_runner 以 use_input_pool=True 调 run_profiled。内存占用按 InputPool 上限裁剪。
+    perf_rotate_inputs: bool = True
+
     # 防作弊：监听 AI 算子在执行时是否直接调用了 torch.matmul / conv / softmax
     # 等内置数学 API（=把计算甩给 PyTorch，跳过自己写的 AscendC kernel）。
     # off=不监听；warn=记日志不阻断（便于排查）；block=直接抛错（默认）。

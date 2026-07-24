@@ -40,7 +40,7 @@ _logger = logging.getLogger(__name__)
 
 from ..utils.device_manager import DeviceManager
 from ..config import Config, get_config
-from .input_pool import InputPool
+from .input_pool import InputPool, CallInputPool
 from ..base.result import PerfResult, compute_speedup
 from ..base.perf_strategy import PerfMetricStrategy, ProfFileLocations
 
@@ -589,11 +589,20 @@ class PerfEvaluator:
                         result.metadata.pop(_mk, None)
 
                 pool = None
-                if inputs and use_input_pool:
+                if use_input_pool and inputs:
+                    # 位置参数入池路径（兼容按 *args 位置列表调用的场景）
                     pool = InputPool(inputs, warmup + repeat)
                     def _fn():
                         nonlocal last_outputs
                         last_outputs = func(*pool.get_next())
+                elif use_input_pool and (args or kwargs):
+                    # 防作弊（仅性能阶段）：对实际调用的 args/kwargs 张量做 clone 轮换，
+                    # 每步输入地址不同，使按 data_ptr() 命中的缓存/预设结果在 repeat 各步失效。
+                    pool = CallInputPool(args, kwargs, warmup + repeat)
+                    def _fn():
+                        nonlocal last_outputs
+                        rot_args, rot_kwargs = pool.get_next()
+                        last_outputs = func(*rot_args, **rot_kwargs)
                 else:
                     def _fn():
                         nonlocal last_outputs
