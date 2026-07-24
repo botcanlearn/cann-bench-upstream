@@ -175,6 +175,8 @@ class EvalCaseResult:
                 'speedup': self.get_speedup(),
                 'perf_score': self.get_perf_score(),
                 'op_times': self.perf_result.op_times if self.perf_result else {},
+                'error_msg': self.perf_result.error_msg if self.perf_result else None,
+                'metadata': self.perf_result.metadata if self.perf_result else {},
             } if self.perf_result else None,
             'golden_elapsed_us': self.golden_run_result.elapsed_us if self.golden_run_result else 0,
             'ai_elapsed_us': self.ai_run_result.elapsed_us if self.ai_run_result else 0,
@@ -191,15 +193,15 @@ class EvalCaseResult:
         perf_data = data.get('perf')
         perf_result = None
         if perf_data:
+            perf_metadata = dict(perf_data.get('metadata') or {})
+            perf_metadata.setdefault('case_id', data.get('case_id', ''))
+            perf_metadata.setdefault('baseline_us', perf_data.get('baseline_us', 0))
+            perf_metadata.setdefault('t_hw_us', perf_data.get('t_hw_us', 0))
             perf_result = PerfResult(
                 elapsed_us=perf_data.get('elapsed_us', 0),
                 op_times=perf_data.get('op_times', {}),
                 error_msg=perf_data.get('error_msg'),
-                metadata={
-                    'case_id': data.get('case_id', ''),
-                    'baseline_us': perf_data.get('baseline_us', 0),
-                    't_hw_us': perf_data.get('t_hw_us', 0),
-                }
+                metadata=perf_metadata,
             )
 
         accuracy_data = data.get('accuracy')

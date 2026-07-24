@@ -312,6 +312,29 @@ class TestScoringCalculator:
         assert info.score_error_code is None
         assert info.zeroed_by_no_npu_perf is False
 
+    def test_collection_failure_survives_process_result_roundtrip(self):
+        """子进程 JSON 往返不能丢失采集异常标记并误触发反作弊。"""
+        case = self._make_case(
+            True, 100, 50, 0, perf_collection_failed=True,
+        )
+        case.perf_result.error_msg = "kernel_details.csv not found"
+        roundtrip = EvalCaseResult.from_dict(case.to_dict())
+        op = EvalOperatorResult(
+            rel_path="level1/exp", operator="Exp",
+            total_cases=1, passed_cases=1, failed_cases=0, skipped_cases=0,
+            results=[roundtrip], pass_rate=1.0, avg_speedup=0.0,
+        )
+
+        assert roundtrip.perf_result is not None
+        assert roundtrip.perf_result.error_msg == "kernel_details.csv not found"
+        assert roundtrip.perf_result.metadata["perf_collection_failed"] is True
+        info = ScoringCalculator().calculate_operator_score(op)
+        assert info.score_error_code is None
+        assert info.zeroed_by_no_npu_perf is False
+        assert info.total_score == pytest.approx(
+            (WEIGHT_COMPILATION + WEIGHT_FUNCTION) * 100
+        )
+
     def test_empty_operator_returns_zero(self):
         # F062: 空壳算子（0 声明 + 0 实测）直接 0 分，不适用 max(..., 1) floor
         op = EvalOperatorResult(
