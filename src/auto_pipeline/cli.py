@@ -55,8 +55,17 @@ def _add_run_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", help="runtime output root")
     parser.add_argument("--devices", help="device ids, e.g. 0,1 or 1-7")
     parser.add_argument("--parallel", type=int, help="maximum number of benchmark tasks to run in parallel")
+    parser.add_argument(
+        "--share-device",
+        action="store_true",
+        help="allow multiple parallel tasks to share the same device (no exclusive device locking)",
+    )
     parser.add_argument("--gen-timeout", type=int, help="generation/OpenCode timeout in seconds")
     parser.add_argument("--eval-timeout", type=int, help="kernel eval/verify timeout in seconds")
+    parser.add_argument(
+        "--opencode-json-path",
+        help="path to an opencode.json config file to install into each convert agent's .opencode/ dir",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--foreground", action="store_true", help="run the pipeline in the foreground")
     group.add_argument("--background", action="store_true", help=argparse.SUPPRESS)
@@ -155,10 +164,12 @@ def _runtime_from_args(args: argparse.Namespace, *, run_id: str, command: str = 
             "output": args.output,
             "devices": args.devices,
             "parallel": args.parallel,
+            "share_device": args.share_device if args.share_device else None,
             "gen_timeout": args.gen_timeout,
             "eval_timeout": args.eval_timeout,
             "run_id": run_id,
             "command": command,
+            "opencode_json_path": args.opencode_json_path,
         }.items()
         if value is not None and value != ""
     }
@@ -201,10 +212,12 @@ def _start_background(args: argparse.Namespace, *, run_id: str) -> int:
             "model": args.model or "",
             "devices": args.devices or "",
             "parallel": args.parallel,
+            "share_device": bool(args.share_device),
             "gen_timeout_sec": args.gen_timeout,
             "eval_timeout_sec": args.eval_timeout,
             "command": shlex.join(command),
             "background_log": str(log_file),
+            "opencode_json_path": str(Path(args.opencode_json_path).expanduser().resolve()) if args.opencode_json_path else "",
         },
     )
     if args.no_monitor:
@@ -234,10 +247,14 @@ def _run_args(args: argparse.Namespace, *, run_id: str, output: str, foreground:
         out.extend(["--devices", str(args.devices)])
     if args.parallel is not None:
         out.extend(["--parallel", str(args.parallel)])
+    if args.share_device:
+        out.append("--share-device")
     if args.gen_timeout is not None:
         out.extend(["--gen-timeout", str(args.gen_timeout)])
     if args.eval_timeout is not None:
         out.extend(["--eval-timeout", str(args.eval_timeout)])
+    if getattr(args, "opencode_json_path", None):
+        out.extend(["--opencode-json-path", str(args.opencode_json_path)])
     if foreground:
         out.append("--foreground")
     return out
@@ -385,6 +402,8 @@ def _main_retry(args: argparse.Namespace) -> int:
         "run_id": retry_run_id,
         "command": f"manual retry source_run={run.get('run_id')} task={','.join(task_names)}",
         "reuse_generated": True,
+        "opencode_json_path": run.get("opencode_json_path"),
+        "share_device": run.get("share_device"),
     }
     runtime = {key: value for key, value in runtime.items() if value not in (None, "", [])}
     entries = run_cases_from_mapping(cfg, config_path=Path(str(config_path)), runtime=runtime)

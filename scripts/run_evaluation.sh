@@ -282,53 +282,8 @@ check_python() {
 }
 
 # V3 Anti-Cheat: 检测并安装 cann_bench_utils（强制依赖）
-ensure_cann_bench_utils() {
-    local py="${PYTHON:-python}"
-    if "$py" -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
-        log_info "cann_bench_utils 已安装"
-        return 0
-    fi
-
-    log_info "cann_bench_utils 未安装，开始自动编译安装..."
-
-    local UTILS_DIR="${PROJECT_ROOT}/src/cann_bench_utils"
-    if [[ ! -d "${UTILS_DIR}" ]]; then
-        log_error "cann_bench_utils 源码目录不存在: ${UTILS_DIR}"
-        log_error "V3 Anti-Cheat 需要 cann_bench_utils，请检查代码库完整性"
-        exit 1
-    fi
-
-    # 编译
-    log_info "编译 cann_bench_utils..."
-    cd "${UTILS_DIR}"
-    if ! PYTHON="$py" bash build.sh --clean &> /tmp/cann_bench_utils_build.log; then
-        log_error "cann_bench_utils 编译失败，查看日志: /tmp/cann_bench_utils_build.log"
-        exit 1
-    fi
-
-    # 安装
-    log_info "安装 cann_bench_utils..."
-    local WHEEL=$(ls -t dist/cann_bench_utils-*.whl 2>/dev/null | head -1)
-    if [[ -z "${WHEEL}" ]]; then
-        log_error "未找到编译的 wheel 包"
-        exit 1
-    fi
-
-    if ! "$py" -m pip install "${WHEEL}" --force-reinstall --no-deps &> /tmp/cann_bench_utils_install.log; then
-        log_error "cann_bench_utils 安装失败，查看日志: /tmp/cann_bench_utils_install.log"
-        exit 1
-    fi
-
-    cd "${PROJECT_ROOT}"
-
-    # 验证安装
-    if "$py" -c "from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean" 2>/dev/null; then
-        log_info "cann_bench_utils 安装成功"
-    else
-        log_error "cann_bench_utils 安装验证失败"
-        exit 1
-    fi
-}
+# 实现抽到 scripts/ensure_cann_bench_utils.sh，与 run_auto_pipeline.sh 共享。
+source "${PROJECT_ROOT}/scripts/ensure_cann_bench_utils.sh"
 
 # 卸载已安装的cann_bench包（避免算子重复注册冲突）
 # V3 Anti-Cheat: 排除 cann_bench_utils（强制依赖，不能卸载）
@@ -514,7 +469,7 @@ main() {
     check_python
 
     # V3 Anti-Cheat: 确保 cann_bench_utils 已安装（强制依赖）
-    ensure_cann_bench_utils
+    ensure_cann_bench_utils || exit 1
 
     # 仅在有 source-dir 时卸载 cann_bench（避免与即将编译安装的包冲突）
     # 无 source-dir 时保留已安装的包（golden whl 或 submission whl）

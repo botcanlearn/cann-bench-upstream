@@ -2,7 +2,11 @@
 
 After every class is generated, the orchestrator writes ``<op>.py`` next to the
 class subdirs. The public ``<op>`` function reads each input's (ndim, dtype) and
-forwards to the matching class impl wrapper. No convert-time agent is involved.
+forwards to the matching class entry in ``test_<op>.py``. No convert-time agent
+is involved.
+
+Compared to the PyPTO (non-Pro) dispatcher, this loads ``test_<op>.py`` instead
+of ``<op>_impl.py`` because PyPTO-Pro keeps kernel and test in a single file.
 """
 
 from __future__ import annotations
@@ -43,15 +47,17 @@ def _dtype_name(value):
 def _signature(args):
     sig = []
     for a in args:
-        if hasattr(a, "dim") and hasattr(a, "dtype"):
+        if isinstance(a, (list, tuple)) and a and hasattr(a[0], "dim") and hasattr(a[0], "dtype"):
+            sig.append([int(a[0].dim()), _dtype_name(a[0].dtype)])
+        elif hasattr(a, "dim") and hasattr(a, "dtype"):
             sig.append([int(a.dim()), _dtype_name(a.dtype)])
     return sig
 
 
 def _load(subdir):
     if subdir not in _impl_cache:
-        path = _BASE / subdir / f"{{_OP_NAME}}_impl.py"
-        spec = importlib.util.spec_from_file_location(f"{{_OP_NAME}}_{{subdir}}_impl", path)
+        path = _BASE / subdir / f"test_{{_OP_NAME}}.py"
+        spec = importlib.util.spec_from_file_location(f"{{_OP_NAME}}_{{subdir}}_test", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         fn = next((getattr(module, n) for n in (_OP_NAME, f"{{_OP_NAME}}_wrapper") if callable(getattr(module, n, None))), None)

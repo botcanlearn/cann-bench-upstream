@@ -8,6 +8,7 @@ from auto_pipeline.generator.base import Runner
 from auto_pipeline.generator.akg import AkgAgent
 from auto_pipeline.generator.opencode import OpenCodeAgent
 from auto_pipeline.generator.pypto import PyptoOrchestratorAgent
+from auto_pipeline.generator.pypto_pro import PyptoProOrchestratorAgent
 from auto_pipeline.core import Generator
 
 
@@ -129,6 +130,26 @@ def _create_pypto(cfg: Mapping[str, Any]) -> PyptoOrchestratorAgent:
     )
 
 
+def _create_pypto_pro(cfg: Mapping[str, Any]) -> PyptoProOrchestratorAgent:
+    repo_root = cfg.get("repo_root") or cfg.get("pypto_repo_root")
+    if not repo_root:
+        raise ValueError("pypto-pro generator requires repo_root/pypto_repo_root")
+    return PyptoProOrchestratorAgent(
+        pypto_repo_root=repo_root,
+        workdir_root=str(cfg.get("workdir_root") or "custom"),
+        opencode_bin=str(cfg.get("bin") or cfg.get("opencode_bin") or "opencode"),
+        opencode_model=str(cfg.get("model") or cfg.get("opencode_model") or ""),
+        agent=str(cfg.get("skill") or cfg.get("agent") or cfg.get("name") or "pypto-pro-op-orchestrator"),
+        output_format=str(cfg.get("output_format") or "default"),
+        device_id=_optional_int(cfg.get("device_id")),
+        device_mode=str(cfg.get("device_mode") or "normal"),
+        skip_if_done=_optional_bool(cfg.get("skip_if_done"), True),
+        worktree_root=cfg.get("worktree_root") or cfg.get("isolated_worktree_root"),
+        worktree_ref=str(cfg.get("worktree_ref") or "HEAD"),
+        extra_env=_string_mapping(cfg.get("env")),
+    )
+
+
 def _create_akg(cfg: Mapping[str, Any]) -> AkgAgent:
     repo_root = cfg.get("repo_root") or cfg.get("akg_repo_root")
     if not repo_root:
@@ -152,3 +173,4 @@ def _create_akg(cfg: Mapping[str, Any]) -> AkgAgent:
 register_runner("opencode", _create_opencode)
 register_generator("akg-agent", _create_akg)
 register_generator("pypto", _create_pypto)
+register_generator("pypto-pro", _create_pypto_pro)

@@ -27,7 +27,9 @@
 """
 
 import os
+import shutil
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Any
@@ -120,6 +122,8 @@ class Evaluator:
             operator_loader=self.operator_loader,
         )
         self.failure_synthesizer = FailureSynthesizer(self.case_loader)
+
+        self._pypto_pro_jit_isolation = self._detect_pypto_pro_dispatch()
 
     def load_ai_operator(self, operator_name: str) -> Callable:
         """加载AI生成的算子函数（委托给 OperatorMatcher）"""
@@ -276,8 +280,10 @@ class Evaluator:
             # 6. 执行AI算子（profiler 一次运行同时提供输出和性能数据，避免跑两遍）
             use_profiler = (self.perf_evaluator is not None
                         and self.perf_evaluator.config.enable_profiler)
-            ai_result = self.op_runner.run_ai_op(actual_ai_func, params, case_id_str,
-                                                  input_tensors, enable_perf=use_profiler)
+
+            ai_result = self._run_ai_op_isolated(actual_ai_func, params, case_id_str,
+                                                  input_tensors, enable_perf=use_profiler,
+                                                  operator_name=case.operator)
             if not ai_result.success:
                 self._cleanup_memory()
                 return EvalCaseResult(
@@ -1061,6 +1067,184 @@ class Evaluator:
             # 二次验证基础设施异常不应整体阻断评测；记 warn 并返回第一轮
             print(f"[WARN] enable_accuracy_retry 二次验证基础设施异常 ({case.rel_path}): {e}", flush=True)
             return first_result
+
+    def _run_ai_op_isolated(self, ai_op_func, params, case_id_str, input_tensors,
+                            enable_perf, operator_name):
+        """执行 AI 算子。
+
+        pypto_pro 模式下用独立子进程执行每个 case，确保 pypto_pro runtime
+        的进程内全局状态完全隔离，避免不同 class kernel 连续执行时的
+        AICore 异常（error 507035）。
+
+        非 pypto_pro 模式回退到 op_runner 直接执行。
+        profiler 模式下子进程内启动 torch_npu.profiler，trace 写入 prof_dir，
+        父进程解析 prof 文件构造 PerfResult。
+        """
+        if not self._pypto_pro_jit_isolation:
+            return self.op_runner.run_ai_op(ai_op_func, params, case_id_str,
+                                             input_tensors, enable_perf=enable_perf)
+
+        import json
+        import pickle
+        import subprocess
+
+        work_dir = tempfile.mkdtemp(prefix="pypto_sub_")
+        prof_dir = None
+        try:
+            func_name = getattr(ai_op_func, '__name__', None) or operator_name.lower()
+            with open(os.path.join(work_dir, "input.pkl"), "wb") as f:
+                pickle.dump(input_tensors, f)
+            with open(os.path.join(work_dir, "params.pkl"), "wb") as f:
+                pickle.dump(params, f)
+
+            child_script = os.path.join(os.path.dirname(__file__), "pypto_pro_child.py")
+            env = os.environ.copy()
+            env["ASCEND_RT_VISIBLE_DEVICES"] = str(self.config.device_id)
+            env["PYTHONUNBUFFERED"] = "1"
+
+            # profiler 模式: 创建 prof_dir 并传给子进程
+            warmup = 3
+            repeat = 5
+            if enable_perf and self.perf_evaluator is not None:
+                warmup = self.perf_evaluator.warmup
+                repeat = self.perf_evaluator.repeat
+                rel_path, caseid = self.perf_evaluator._parse_case_id(case_id_str)
+                if self.perf_evaluator.archive_prof:
+                    prof_dir = os.path.join(self.perf_evaluator.prof_data_dir, rel_path, caseid)
+                else:
+                    prof_dir = tempfile.mkdtemp(prefix="cann_prof_")
+                os.makedirs(prof_dir, exist_ok=True)
+                # 清理上次评测遗留的时间戳子目录
+                for entry in os.listdir(prof_dir):
+                    entry_path = os.path.join(prof_dir, entry)
+                    if os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path, ignore_errors=True)
+
+            cmd = [sys.executable, "-u", child_script, work_dir, func_name,
+                   str(self.config.device_id)]
+            if prof_dir:
+                cmd.extend([prof_dir, str(warmup), str(repeat)])
+            else:
+                cmd.extend(["", "", ""])
+
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=env, start_new_session=True,
+            )
+            stdout, stderr = proc.communicate(timeout=600)
+            rc = proc.returncode
+
+            result_path = os.path.join(work_dir, "result.json")
+            if os.path.exists(result_path):
+                with open(result_path) as f:
+                    result = json.load(f)
+            else:
+                result = {
+                    "success": False,
+                    "error": f"子进程退出 code={rc}\n{stderr.decode()[:2000]}",
+                    "traceback": None,
+                }
+
+            device_str = f"npu:{self.config.device_id}"
+            captured = (stdout.decode() + stderr.decode()).strip()
+
+            if result["success"]:
+                with open(os.path.join(work_dir, "output.pkl"), "rb") as f:
+                    outputs = pickle.load(f)
+
+                # profiler 模式: 解析 prof 文件构造 PerfResult
+                perf_result = None
+                elapsed_us = 0.0
+                if prof_dir and self.perf_evaluator is not None:
+                    perf_result = self._parse_prof_result(prof_dir, case_id_str)
+
+                return OpRunResult(
+                    success=True,
+                    outputs=outputs,
+                    elapsed_us=perf_result.elapsed_us if perf_result else 0,
+                    perf_result=perf_result,
+                    device=device_str,
+                    captured_output=captured if captured else None,
+                )
+            else:
+                return OpRunResult(
+                    success=False,
+                    error=result.get("error", "unknown error"),
+                    elapsed_us=0,
+                    device=device_str,
+                    traceback=result.get("traceback"),
+                    captured_output=captured if captured else None,
+                )
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            # 非 archive 模式清理临时 prof_dir
+            if prof_dir and self.perf_evaluator and not self.perf_evaluator.archive_prof:
+                shutil.rmtree(prof_dir, ignore_errors=True)
+
+    def _parse_prof_result(self, prof_dir, case_id_str):
+        """从 prof_dir 解析 profiler 产出文件，构造 PerfResult。
+
+        复用 perf_evaluator 的 _locate_prof_files + perf_metric_strategy.parse。
+        """
+        from ..base.result import PerfResult
+        import logging
+        _logger = logging.getLogger(__name__)
+
+        result = PerfResult(
+            metadata={
+                'case_id': case_id_str,
+                '_repeat': self.perf_evaluator.repeat,
+                'warmup_used': False,
+                'freq_boost': False,
+            }
+        )
+
+        try:
+            prof_files = self.perf_evaluator._locate_prof_files(prof_dir)
+            _logger.info(
+                "pypto_pro_child: case %s — prof_files: csv=%s, trace_view=%s",
+                case_id_str, prof_files.csv_path, prof_files.trace_view_path,
+            )
+            if self.perf_evaluator.perf_metric_strategy:
+                result = self.perf_evaluator.perf_metric_strategy.parse(prof_files, result)
+            else:
+                result.elapsed_us = 0.0
+                result.error_msg = "no perf_metric_strategy configured"
+        except Exception as e:
+            result.error_msg = f"prof 文件解析失败: {e}"
+
+        return result
+
+    def _detect_pypto_pro_dispatch(self) -> bool:
+        """检测 cann_bench 包是否为 pypto_pro 提交。
+
+        pypto_pro 提交的运行时实现文件（test_<op>.py / <op>_impl.py）会
+        ``import pypto_pro``；非 pypto_pro 提交（akg、手写 CANN 等）不会。
+        AICore 507035 崩溃的根因是 pypto_pro JIT kernel 的进程内全局状态，
+        因此直接检测 pypto_pro runtime 依赖最可靠，不依赖 dispatcher 文件名
+        （converter agent 会不可预测地重命名 dispatcher 文件）。
+        """
+        try:
+            import cann_bench
+            pkg_dir = os.path.dirname(cann_bench.__file__)
+            for root, dirs, files in os.walk(pkg_dir):
+                dirs[:] = [d for d in dirs if d != '__pycache__']
+                for name in files:
+                    if not name.endswith('.py'):
+                        continue
+                    try:
+                        with open(os.path.join(root, name), encoding='utf-8') as f:
+                            for line in f:
+                                stripped = line.lstrip()
+                                if stripped.startswith('import pypto_pro') or \
+                                   stripped.startswith('from pypto_pro'):
+                                    return True
+                    except (OSError, UnicodeDecodeError):
+                        continue
+        except (ImportError, OSError, AttributeError):
+            pass
+        return False
 
     def _cleanup_memory(self):
         """清理 NPU cache 并强制 GC 回收

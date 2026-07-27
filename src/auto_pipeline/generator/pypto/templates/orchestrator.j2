@@ -68,9 +68,15 @@ Stage 6 验收必须与 cann-bench kernel_eval 精度判据完全对齐：
 后续格式归一由 auto_pipeline 的独立 convert 阶段负责。
 {% if reference_impl_text %}
 {{ reference_impl_text }}
-本类只需覆盖 `{{ op_dir_rel }}/cases.yaml` 中的用例；可参考首类实现思路, 但产物必须落在本类工作目录。
 {% endif %}
+{% if class_cases_json and class_cases_json != "[]" %}
+本类权威 cases（来自 {{ op_dir_rel }}/cases.yaml，**以本节为准，不要依据下方的旧预览**）:
 
+```json
+{{ class_cases_json }}
+```
+
+{% endif %}
 {{ case_detail_sections }}
 
 {% if bench_name == "cann" %}

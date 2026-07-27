@@ -80,7 +80,15 @@ def _case_signature(case: Mapping[str, Any]) -> tuple[tuple[int, str], ...]:
     dtype_list = dtypes if isinstance(dtypes, Sequence) and not isinstance(dtypes, str) else []
     signature: List[tuple[int, str]] = []
     for index, shape in enumerate(shape_list):
-        ndim = len(shape) if isinstance(shape, Sequence) and not isinstance(shape, str) else 0
+        if shape is None:
+            continue
+        if isinstance(shape, Sequence) and not isinstance(shape, str):
+            if shape and isinstance(shape[0], Sequence) and not isinstance(shape[0], str):
+                ndim = len(shape[0])
+            else:
+                ndim = len(shape)
+        else:
+            ndim = 0
         signature.append((ndim, _dtype_at(dtype_list, index)))
     return tuple(signature)
 

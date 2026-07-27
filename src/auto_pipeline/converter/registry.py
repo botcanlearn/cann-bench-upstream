@@ -8,6 +8,8 @@ from auto_pipeline.generator.akg.converter.to_cann import AkgToCannConverter
 from auto_pipeline.generator.akg.converter.to_stanford import AkgToStanfordConverter
 from auto_pipeline.generator.pypto.converter.to_cann import PyptoToCannConverter
 from auto_pipeline.generator.pypto.converter.to_stanford import PyptoToStanfordConverter
+from auto_pipeline.generator.pypto_pro.converter.to_cann import PyptoProToCannConverter
+from auto_pipeline.generator.pypto_pro.converter.to_stanford import PyptoProToStanfordConverter
 from auto_pipeline.converter.base import Converter
 
 
@@ -72,6 +74,14 @@ def _create_pypto_to_stanford(cfg: Mapping[str, Any]) -> PyptoToStanfordConverte
     return PyptoToStanfordConverter(timeout_sec=_timeout(cfg), env=_env_mapping(cfg.get("env")))
 
 
+def _create_pypto_pro_to_cann(cfg: Mapping[str, Any]) -> PyptoProToCannConverter:
+    return PyptoProToCannConverter(timeout_sec=_timeout(cfg), env=_env_mapping(cfg.get("env")))
+
+
+def _create_pypto_pro_to_stanford(cfg: Mapping[str, Any]) -> PyptoProToStanfordConverter:
+    return PyptoProToStanfordConverter(timeout_sec=_timeout(cfg), env=_env_mapping(cfg.get("env")))
+
+
 def _create_akg_to_cann(cfg: Mapping[str, Any]) -> AkgToCannConverter:
     return AkgToCannConverter(timeout_sec=_timeout(cfg), env=_env_mapping(cfg.get("env")))
 
@@ -82,5 +92,7 @@ def _create_akg_to_stanford(cfg: Mapping[str, Any]) -> AkgToStanfordConverter:
 
 register_converter("pypto", "cann", _create_pypto_to_cann)
 register_converter("pypto", "stanford", _create_pypto_to_stanford)
+register_converter("pypto-pro", "cann", _create_pypto_pro_to_cann)
+register_converter("pypto-pro", "stanford", _create_pypto_pro_to_stanford)
 register_converter("akg-agent", "cann", _create_akg_to_cann)
 register_converter("akg-agent", "stanford", _create_akg_to_stanford)

@@ -1055,6 +1055,7 @@ class BenchmarkPipeline:
         conversion_workdir: Optional[Path] = None,
         device_id: Optional[int] = None,
         extra_eval_args: Optional[Iterable[str]] = None,
+        opencode_json_path: Optional[Path] = None,
     ) -> PipelineRunResult:
         """Resume after a generator has already produced an artifact."""
 
@@ -1069,6 +1070,7 @@ class BenchmarkPipeline:
             conversion_workdir=conversion_workdir,
             device_id=device_id,
             extra_eval_args=extra_eval_args,
+            opencode_json_path=opencode_json_path,
         )
 
     def run_case(
@@ -1088,6 +1090,7 @@ class BenchmarkPipeline:
         extra_eval_args: Optional[Iterable[str]] = None,
         status_callback: Optional[Callable[..., None]] = None,
         reuse_generated: bool = False,
+        opencode_json_path: Optional[Path] = None,
     ) -> PipelineRunResult:
         case = self.client.load_case(self.bench_name, selector)
         if status_callback is not None:
@@ -1143,6 +1146,7 @@ class BenchmarkPipeline:
             extra_eval_args=extra_eval_args,
             generator_prompt_file=generator_prompt_file,
             status_callback=status_callback,
+            opencode_json_path=opencode_json_path,
         )
 
     def _convert_and_eval(
@@ -1159,7 +1163,10 @@ class BenchmarkPipeline:
         extra_eval_args: Optional[Iterable[str]],
         generator_prompt_file: Optional[Path] = None,
         status_callback: Optional[Callable[..., None]] = None,
+        opencode_json_path: Optional[Path] = None,
     ) -> PipelineRunResult:
+        if opencode_json_path is not None and conversion_workdir is not None:
+            _install_opencode_json(opencode_json_path, conversion_workdir)
         if status_callback is not None:
             status_callback(stage="conversion", status="running", operator=case.operator)
         conversion = converter.convert(
@@ -1283,7 +1290,7 @@ def _snapshot_pypto_custom_artifact(
     task_root: Path,
     strict: bool,
 ) -> Artifact:
-    if "pypto_status" not in artifact.metadata:
+    if "pypto_status" not in artifact.metadata and "pypto_pro_status" not in artifact.metadata:
         return artifact
     source_dir = artifact.files.get("source_dir")
     if source_dir is None:
@@ -1495,6 +1502,8 @@ class SimpleConfig:
     config_path: Optional[Path] = None
     launch_command: str = ""
     reuse_generated: bool = False
+    share_device: bool = False
+    opencode_json_path: Optional[Path] = None
 
     @property
     def batch_report_path(self) -> Path:
@@ -1516,9 +1525,9 @@ def run_cases_from_mapping(
 ) -> list:
     spec = _parse_config(cfg, config_path=config_path, runtime=runtime)
     report = Path(report_path).expanduser().resolve() if report_path else spec.batch_report_path
-    if len(set(spec.devices)) != len(spec.devices):
+    if not spec.share_device and len(set(spec.devices)) != len(spec.devices):
         raise ValueError("devices must not contain duplicate device ids")
-    if spec.parallel > 1 and not spec.devices:
+    if spec.parallel > 1 and not spec.devices and not spec.share_device:
         raise ValueError("devices is required when parallel is greater than 1")
 
     _register_run_start(spec)
@@ -1526,7 +1535,10 @@ def run_cases_from_mapping(
         if len(spec.tasks) == 1 or spec.parallel <= 1:
             entries = _run_cases_serial(spec, report_path=report)
         else:
-            max_workers = min(len(spec.tasks), spec.parallel, len(spec.devices) or spec.parallel)
+            if spec.share_device:
+                max_workers = min(len(spec.tasks), spec.parallel)
+            else:
+                max_workers = min(len(spec.tasks), spec.parallel, len(spec.devices) or spec.parallel)
             entries = _run_cases_with_device_pool(spec, max_workers=max_workers, report_path=report)
 
         write_batch_report(entries, report, output=spec.output)
@@ -1590,9 +1602,15 @@ def _run_cases_with_device_pool(spec: SimpleConfig, *, max_workers: int, report_
     active: dict[int, tuple[multiprocessing.Process, Path, int, Optional[int]]] = {}
 
     while pending or active:
-        while pending and available_devices and len(active) < max_workers:
-            index = pending.popleft()
-            device_id = available_devices.popleft()
+        while pending and len(active) < max_workers:
+            if spec.share_device:
+                index = pending.popleft()
+                device_id = spec.devices[index % len(spec.devices)] if spec.devices else None
+            elif available_devices:
+                index = pending.popleft()
+                device_id = available_devices.popleft()
+            else:
+                break
             task = spec.tasks[index]
             entries[index] = _running_entry(task, device_id=device_id)
             _write_task_state(spec, task, entry=entries[index], device_id=device_id)
@@ -1616,7 +1634,8 @@ def _run_cases_with_device_pool(spec: SimpleConfig, *, max_workers: int, report_
             _write_task_state(spec, task, entry=entry, device_id=device_id)
             write_batch_report(entries, report_path, output=spec.output)
             _update_run_from_entries(spec, entries, status="running")
-            available_devices.append(device_id)
+            if not spec.share_device:
+                available_devices.append(device_id)
 
     return entries
 
@@ -1682,8 +1701,13 @@ def _run_task_child(spec: SimpleConfig, task: ConfiguredTask, device_id: Optiona
 
 
 def _run_task(spec: SimpleConfig, task: ConfiguredTask, *, device_id: Optional[int]) -> PipelineRunResult:
-    perf_strategy = "trace_view" if _is_pypto_cann_eval(
-        agent_type=spec.agent_type, bench_name=spec.bench_name) else None
+    agent_l = str(spec.agent_type or "").strip().lower().replace("-", "_")
+    if agent_l == "pypto_pro" and str(spec.bench_name or "").strip().lower() == "cann":
+        perf_strategy = "kernel_details"
+    elif _is_pypto_cann_eval(agent_type=spec.agent_type, bench_name=spec.bench_name):
+        perf_strategy = "trace_view"
+    else:
+        perf_strategy = None
     client = CannBenchClient(
         spec.bench_root,
         python_executable=sys.executable,
@@ -1721,6 +1745,7 @@ def _run_task(spec: SimpleConfig, task: ConfiguredTask, *, device_id: Optional[i
             _default_eval_config(perf_metric_strategy=perf_strategy)),
         status_callback=status_update,
         reuse_generated=spec.reuse_generated,
+        opencode_json_path=spec.opencode_json_path,
     )
     return replace(
         result,
@@ -1735,10 +1760,19 @@ def _run_task(spec: SimpleConfig, task: ConfiguredTask, *, device_id: Optional[i
 
 
 def _conversion_runner(spec: SimpleConfig):
-    if _normalize_name(spec.agent_type) == "pypto":
+    if _normalize_name(spec.agent_type) in ("pypto", "pypto-pro"):
         cfg = {"model": spec.model} if spec.model else {}
         return create_runner("opencode", cfg)
     return None
+
+
+def _install_opencode_json(src: Path, workdir: Path) -> None:
+    src_path = Path(src).expanduser().resolve()
+    if not src_path.is_file():
+        return
+    target = Path(workdir).expanduser().resolve() / ".opencode" / "opencode.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src_path, target)
 
 
 def _generator_config(spec: SimpleConfig, task: ConfiguredTask, *, device_id: Optional[int]) -> dict[str, Any]:
@@ -1751,7 +1785,7 @@ def _generator_config(spec: SimpleConfig, task: ConfiguredTask, *, device_id: Op
         cfg["env"] = env
     if device_id is not None:
         cfg["device_id"] = device_id
-    if _normalize_name(spec.agent_type) == "pypto":
+    if _normalize_name(spec.agent_type) in ("pypto", "pypto-pro"):
         if spec.model:
             cfg["model"] = spec.model
         if device_id is not None:
@@ -2098,9 +2132,12 @@ def _parse_config(
     tasks = _configured_tasks(selectors, output)
     devices = tuple(_int_list(runtime_cfg.get("devices")))
     parallel = _int_or_default(runtime_cfg.get("parallel"), len(devices) if devices else 1)
+    share_device = _optional_bool(runtime_cfg.get("share_device")) is True
     gen_timeout = _int_or_default(runtime_cfg.get("gen_timeout"), DEFAULT_TIMEOUT_SEC)
     eval_timeout = _int_or_default(runtime_cfg.get("eval_timeout"), DEFAULT_TIMEOUT_SEC)
     run_id = str(runtime_cfg.get("run_id") or pipeline_state.new_run_id())
+    opencode_json_path_raw = runtime_cfg.get("opencode_json_path")
+    opencode_json_path = _resolve_path(opencode_json_path_raw) if opencode_json_path_raw else None
     if parallel <= 0:
         raise ValueError("parallel must be positive")
     if gen_timeout <= 0:
@@ -2125,6 +2162,8 @@ def _parse_config(
         config_path=Path(config_path).expanduser().resolve() if config_path is not None else None,
         launch_command=str(runtime_cfg.get("command") or ""),
         reuse_generated=_optional_bool(runtime_cfg.get("reuse_generated")) is True,
+        share_device=share_device,
+        opencode_json_path=opencode_json_path,
     )
 
 
@@ -2167,6 +2206,8 @@ def _runtime_options(runtime: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
             "run_id",
             "command",
             "reuse_generated",
+            "share_device",
+            "opencode_json_path",
         },
         prefix="runtime",
     )
@@ -2269,8 +2310,8 @@ def _normalize_name(name: str) -> str:
 
 
 def _validate_environment(*, agent_type: str) -> None:
-    if _normalize_name(agent_type) == "pypto" and not os.environ.get(TILE_LIB_ENV, "").strip():
-        raise ValueError(f"{TILE_LIB_ENV} must be set in the environment for pypto")
+    if _normalize_name(agent_type) in ("pypto", "pypto-pro") and not os.environ.get(TILE_LIB_ENV, "").strip():
+        raise ValueError(f"{TILE_LIB_ENV} must be set in the environment for {agent_type}")
 
 
 def write_pipeline_report(result: PipelineRunResult, output_path: Path) -> Path:
@@ -2430,7 +2471,7 @@ def _eval_env(
 
 def _is_pypto_cann_eval(*, agent_type: str, bench_name: str) -> bool:
     return (
-        str(agent_type or "").strip().lower().replace("-", "_") == "pypto"
+        str(agent_type or "").strip().lower().replace("-", "_") in ("pypto", "pypto_pro")
         and str(bench_name or "").strip().lower() == "cann"
     )
 

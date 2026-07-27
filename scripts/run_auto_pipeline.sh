@@ -13,8 +13,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/.."
+export PROJECT_ROOT="${PROJECT_DIR}"
 
 export PYTHONPATH="${PROJECT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
+
+# V3 Anti-Cheat: 确保 cann_bench_utils 已编译安装（强制依赖）
+# 与 scripts/run_evaluation.sh 共享同一份 ensure_cann_bench_utils 实现。
+source "${SCRIPT_DIR}/ensure_cann_bench_utils.sh"
+ensure_cann_bench_utils || exit 1
 
 if [[ $# -eq 0 ]]; then
     set -- --help
