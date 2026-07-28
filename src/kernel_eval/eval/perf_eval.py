@@ -404,8 +404,8 @@ class PerfEvaluator:
                 if fn_exc is not None:
                     raise fn_exc
 
-            # ACL 硬件复位等待：保留极小缓冲防调度抖动。
-            time.sleep(0.1)
+            # 等待 profiler async parser 完成 CSV 写入
+            time.sleep(1.0)
 
             # 诊断日志：记录 profiler session 完成后的 PROF_* 目录状态
             post_prof_dirs = [e for e in os.listdir(prof_dir)
@@ -817,12 +817,28 @@ class PerfEvaluator:
                 if f.startswith("op_summary_") and f.endswith(".csv"):
                     msprof_summary_paths.append(os.path.join(root, f))
 
+        # 定位 api_statistic.csv（与 kernel_details.csv 同目录）
+        api_statistic_path = None
+        if ascend_output_dir:
+            api_candidate = os.path.join(ascend_output_dir, "api_statistic.csv")
+            if os.path.isfile(api_candidate):
+                api_statistic_path = api_candidate
+        if not api_statistic_path:
+            for root, dirs, files in os.walk(prof_dir):
+                for f in files:
+                    if f == "api_statistic.csv":
+                        api_statistic_path = os.path.join(root, f)
+                        break
+                if api_statistic_path:
+                    break
+
         return ProfFileLocations(
             ascend_output_dir=ascend_output_dir,
             csv_path=csv_file,
             trace_view_path=trace_view_path,
             prof_dir=prof_dir,
             msprof_summary_paths=sorted(msprof_summary_paths),
+            api_statistic_path=api_statistic_path,
         )
 
     # --- msprof export 方法（MsProfSummaryStrategy 专用）---

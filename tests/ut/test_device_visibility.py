@@ -7,10 +7,12 @@
 关键语义（实机核对 Ascend910_9362 / CANN 9.0.0）：
 - task.device_id 是**相对父进程可见集的逻辑索引**（0..card_count-1），
   因为 card_count 来自 torch.npu.device_count()，已受父进程可见性约束。
-- 子进程 ASCEND_RT_VISIBLE_DEVICES 接受的也是父进程可见空间内的相对索引，
-  而非全局物理卡号。故 _build_env_for_task 直接写 str(task.device_id)。
-- 反例：父进程用 ASCEND_VISIBLE_DEVICES=12,13 收窄时，若子进程写
-  ASCEND_RT_VISIBLE_DEVICES=12 会导致 device_count=0、set_device 失败。
+- 但 benchsite-runner 的父进程 (eval-child) 中 torch_npu 初始化会
+  原地改写 os.environ['ASCEND_RT_VISIBLE_DEVICES']，导致 base_env
+  丢失了原始的物理可见集。此时 task.device_id=0 会被 CANN 解释为
+  "物理 chip 0" 而非 "可见集内第 0 个设备"。
+- 通过 BENCH_DEVICE_VISIBILITY（或 ASCEND_VISIBLE_DEVICES）备份还原
+  物理可见集，再把 task.device_id 映射为正确的物理 chip。
 """
 
 import unittest
@@ -54,11 +56,13 @@ class TestChildDeviceVisibility(unittest.TestCase):
         env1 = coord._build_env_for_task({"PATH": "/usr/bin"}, _make_task(1))
         self.assertEqual(env1["ASCEND_RT_VISIBLE_DEVICES"], "1")
 
-    def test_does_not_map_to_physical_number(self):
-        """即使父进程用物理号收窄，子进程也不应写物理号（回归保护）
+    def test_maps_logical_index_to_physical_chip(self):
+        """父进程用物理号收窄时，子进程应映射到正确的物理 chip
 
         父进程 ASCEND_VISIBLE_DEVICES=12,13（物理卡 12/13 → 逻辑 0/1）时，
-        子进程仍应写相对索引 0/1，而不是 12/13。
+        torch_npu init 会原地覆盖 os.environ['ASCEND_RT_VISIBLE_DEVICES']，
+        导致 base_env 丢失原始可见集。通过 BENCH_DEVICE_VISIBILITY 或
+        ASCEND_VISIBLE_DEVICES 备份还原，把 task.device_id=0 映射为物理 "12"。
         """
         coord = self._coordinator()
         base_env = {
@@ -67,9 +71,20 @@ class TestChildDeviceVisibility(unittest.TestCase):
         }
 
         env = coord._build_env_for_task(base_env, _make_task(0))
-        # 必须是相对索引 "0"，不能是物理号 "12"
+        # 逻辑 0 → 物理 chip 12
+        self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "12")
+
+        env1 = coord._build_env_for_task(base_env, _make_task(1))
+        # 逻辑 1 → 物理 chip 13
+        self.assertEqual(env1["ASCEND_RT_VISIBLE_DEVICES"], "13")
+
+    def test_falls_back_to_relative_index_without_visibility(self):
+        """无 BENCH_DEVICE_VISIBILITY 和 ASCEND_VISIBLE_DEVICES 时回退为相对索引"""
+        coord = self._coordinator()
+        base_env = {"PATH": "/usr/bin"}
+
+        env = coord._build_env_for_task(base_env, _make_task(0))
         self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "0")
-        self.assertNotEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "12")
 
     def test_preserves_base_env(self):
         """base_env 的其他变量应保留，且不修改原 dict"""

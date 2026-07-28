@@ -356,7 +356,7 @@ class TestProcessPoolCoordinator(unittest.TestCase):
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_multi_card_child_visibility_is_narrowed(self, mock_detect):
-        """多卡 child 通过 ASCEND_RT_VISIBLE_DEVICES 收窄到分配的逻辑卡"""
+        """多卡 child 通过 ASCEND_RT_VISIBLE_DEVICES 收窄到分配的物理卡"""
         mock_detect.return_value = 4
         process_config = ProcessConfig(processes_per_card=1, enable_profiler=False)
         with patch.dict(os.environ, {
@@ -375,8 +375,8 @@ class TestProcessPoolCoordinator(unittest.TestCase):
                 device_id=2,
             )
             env = coordinator._build_env_for_task(coordinator._build_env(), task)
-            # ASCEND_RT_VISIBLE_DEVICES 设为逻辑索引（相对父进程可见集）
-            self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "2")
+            # 逻辑索引 2 映射到物理 chip 6（ASCEND_VISIBLE_DEVICES=4,5,6,7）
+            self.assertEqual(env["ASCEND_RT_VISIBLE_DEVICES"], "6")
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_multi_card_child_uses_logical_device_zero(self, mock_detect):
@@ -722,10 +722,24 @@ class TestDevicePool(unittest.TestCase):
 class TestDynamicDispatch(unittest.TestCase):
     """测试设备池动态调度"""
 
+    _CLEAN_ENV_KEYS = (
+        "ASCEND_VISIBLE_DEVICES", "NPU_VISIBLE_DEVICES",
+        "BENCH_DEVICE_VISIBILITY", "ASCEND_RT_VISIBLE_DEVICES",
+    )
+
     def setUp(self):
         self.base_config = Config()
         self.base_config.tasks_root = str(project_root / "tasks")
         self.base_config.device_type = "npu"
+        # 清理宿主机可见设备变量，避免 device_id→物理号映射干扰测试
+        self._saved_env = {}
+        for k in self._CLEAN_ENV_KEYS:
+            if k in os.environ:
+                self._saved_env[k] = os.environ.pop(k)
+
+    def tearDown(self):
+        for k, v in self._saved_env.items():
+            os.environ[k] = v
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def _make_coordinator(self, mock_detect, card_count=2, processes_per_card=1):

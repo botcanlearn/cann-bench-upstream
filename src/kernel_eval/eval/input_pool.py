@@ -32,6 +32,16 @@ from dataclasses import dataclass
 
 import torch
 
+# Try to use the framework copy kernel to avoid depending on
+# aclnnInplaceCopy which may be unavailable due to anti-cheat
+# TBE kernel tree deletion.
+try:
+    from cann_bench_utils import cann_bench_clone as _safe_tensor_clone
+except ImportError:
+    def _safe_tensor_clone(x):
+        return x.clone()
+
+
 
 @dataclass
 class InputPoolConfig:
@@ -103,9 +113,9 @@ class InputPool:
         cloned = []
         for item in inputs:
             if isinstance(item, torch.Tensor):
-                cloned.append(item.clone())
+                cloned.append(_safe_tensor_clone(item))
             elif isinstance(item, (list, tuple)):
-                cloned.append([sub.clone() if isinstance(sub, torch.Tensor) else sub for sub in item])
+                cloned.append([_safe_tensor_clone(sub) if isinstance(sub, torch.Tensor) else sub for sub in item])
             else:
                 cloned.append(item)
         return cloned
@@ -181,11 +191,11 @@ class CallInputPool:
     @staticmethod
     def _clone_one(value: Any) -> Any:
         if isinstance(value, torch.Tensor):
-            return value.clone()
+            return _safe_tensor_clone(value)
         if isinstance(value, tuple):
-            return tuple(v.clone() if isinstance(v, torch.Tensor) else v for v in value)
+            return tuple(_safe_tensor_clone(v) if isinstance(v, torch.Tensor) else v for v in value)
         if isinstance(value, list):
-            return [v.clone() if isinstance(v, torch.Tensor) else v for v in value]
+            return [_safe_tensor_clone(v) if isinstance(v, torch.Tensor) else v for v in value]
         return value
 
     def _clone_seq(self, args):

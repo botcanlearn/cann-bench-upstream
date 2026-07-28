@@ -41,6 +41,9 @@ WEIGHT_PERFORMANCE = 0.5  # w_p
 NO_NPU_PERF_ERROR_CODE = "no_npu_kernel_detected"
 NO_NPU_PERF_ERROR = "未检测到 NPU 算子执行，疑似 CPU fallback，反作弊触发。"
 
+CPU_FALLBACK_ERROR_CODE = "cpu_fallback_detected"
+CPU_FALLBACK_ERROR = "api_statistic.csv 检测到 aclrtMemcpy，疑似将计算外包到 CPU，反作弊触发。"
+
 
 @dataclass
 class OperatorScoreInfo:
@@ -67,6 +70,7 @@ class OperatorScoreInfo:
     score_error_code: Optional[str] = None
     score_error: Optional[str] = None
     zeroed_by_no_npu_perf: bool = False
+    zeroed_by_cpu_fallback: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -87,6 +91,7 @@ class OperatorScoreInfo:
             'score_error_code': self.score_error_code,
             'score_error': self.score_error,
             'zeroed_by_no_npu_perf': self.zeroed_by_no_npu_perf,
+            'zeroed_by_cpu_fallback': self.zeroed_by_cpu_fallback,
         }
 
 
@@ -300,6 +305,7 @@ def aggregate_eq4(
     rel_path: Optional[str] = None,
     n_no_perf_pass: int = 0,
     n_compile_runtime_fail: int = 0,
+    n_cpu_fallback: int = 0,
 ) -> Dict[str, Any]:
     """Eq.4 单算子综合分聚合——单一事实来源。
 
@@ -382,6 +388,27 @@ def aggregate_eq4(
     # 通过的 case 中如果有缺锚点的，打印一次警告，避免性能分被静默"系统性低估"
     if n_perf_missing > 0:
         _warn_perf_anchor_missing(n_func_pass, n_perf_missing, rel_path)
+
+    if compile_passed and n_cpu_fallback > 0:
+        _logger.warning(
+            "aggregate_eq4: %s — %d/%d passed cases have aclrtMemcpy "
+            "indicating CPU fallback; zeroing operator score.",
+            rel_path, n_cpu_fallback, n_func_pass,
+        )
+        return {
+            "compilation_score": 0.0,
+            "function_score": 0.0,
+            "performance_score": 0.0,
+            "total_score": 0.0,
+            "per_case_scores": per_case_scores,
+            "n_func_pass": n_func_pass,
+            "n_no_perf_pass": 0,
+            "n_compile_runtime_fail": n_compile_runtime_fail,
+            "n_cpu_fallback": n_cpu_fallback,
+            "score_error_code": CPU_FALLBACK_ERROR_CODE,
+            "score_error": CPU_FALLBACK_ERROR,
+            "zeroed_by_cpu_fallback": True,
+        }
 
     if compile_passed and n_no_perf_pass > 0:
         _warn_no_npu_perf(n_func_pass, n_no_perf_pass, rel_path)
@@ -473,6 +500,7 @@ class ScoringCalculator:
         n_compile_runtime_fail = 0
         n_collection_failed = 0
         n_func_pass = 0
+        n_cpu_fallback = 0
         for case in result.results:
             if not case.success:
                 if is_compile_runtime_case_failure(case):
@@ -480,6 +508,14 @@ class ScoringCalculator:
                 case_scores.append((case.success, None))
                 continue
             n_func_pass += 1
+            # 检查 cpu_fallback_detected 标记 —— 必须优先于 elapsed_us 判断，
+            # 因为 perf_strategy 检测到 aclrtMemcpy 时会同时设置 elapsed_us=0.0
+            # 和 cpu_fallback_detected=True，若先判断 elapsed_us 则会被错误归类为
+            # "未检测到 NPU 算子执行" 而非 "aclrtMemcpy 疑似 CPU fallback"。
+            if case.perf_result is not None and case.perf_result.metadata.get("cpu_fallback_detected"):
+                n_cpu_fallback += 1
+                case_scores.append((True, None))
+                continue
             if case.perf_result is None or case.perf_result.elapsed_us <= 0:
                 # 区分采集功能异常与 CPU fallback：
                 # - perf_collection_failed=True（或 perf_result=None）：profiler 未产出
@@ -518,6 +554,7 @@ class ScoringCalculator:
             rel_path=result.rel_path,
             n_no_perf_pass=n_no_perf_pass,
             n_compile_runtime_fail=n_compile_runtime_fail,
+            n_cpu_fallback=n_cpu_fallback,
         )
 
         return OperatorScoreInfo(
@@ -537,6 +574,7 @@ class ScoringCalculator:
             score_error_code=agg.get("score_error_code"),
             score_error=agg.get("score_error"),
             zeroed_by_no_npu_perf=bool(agg.get("zeroed_by_no_npu_perf")),
+            zeroed_by_cpu_fallback=bool(agg.get("zeroed_by_cpu_fallback")),
         )
 
     def calculate_overall_score(self, score_infos: List[OperatorScoreInfo]) -> float:

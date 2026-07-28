@@ -126,7 +126,25 @@ class TestKernelDetailsStrategyCollectionFailed:
         assert result.metadata.get("perf_collection_failed") is True
 
     def test_csv_present_no_kernels_marks_not_collection_failed(self, tmp_path):
-        """CSV 已产出但无有效 kernel → perf_collection_failed=False（CPU fallback，触发反作弊）。"""
+        """CSV 有 warmup kernel 但无目标 kernel → perf_collection_failed=False（CPU fallback，触发反作弊）。"""
+        csv_path = tmp_path / "kernel_details.csv"
+        fieldnames = ["Step Id", "Name", "Type", "Duration(us)", "Input Shapes"]
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerow({
+                "Step Id": "0", "Name": "warmup_kernel",
+                "Type": "CannBenchWarmup", "Duration(us)": "10.0",
+                "Input Shapes": "",
+            })
+
+        prof_files = ProfFileLocations(csv_path=str(csv_path))
+        result = KernelDetailsStrategy().parse(prof_files, PerfResult())
+        assert result.elapsed_us == 0.0
+        assert result.metadata.get("perf_collection_failed") is False
+
+    def test_csv_present_no_warmup_marks_collection_failed(self, tmp_path):
+        """CSV 无 warmup kernel → perf_collection_failed=True（async parser 未写完，采集失败）。"""
         csv_path = tmp_path / "kernel_details.csv"
         fieldnames = ["Step Id", "Name", "Type", "Duration(us)", "Input Shapes"]
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -136,7 +154,7 @@ class TestKernelDetailsStrategyCollectionFailed:
         prof_files = ProfFileLocations(csv_path=str(csv_path))
         result = KernelDetailsStrategy().parse(prof_files, PerfResult())
         assert result.elapsed_us == 0.0
-        assert result.metadata.get("perf_collection_failed") is False
+        assert result.metadata.get("perf_collection_failed") is True
 
 
 class TestMsProfSummaryStrategyCollectionFailed:

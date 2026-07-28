@@ -22,6 +22,15 @@ FROM swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:${CANN_VERSION}-${DEVICE}-u
 ARG TRITON_ASCEND_VERSION
 ARG TRITON_ASCEND_INDEX_URL
 
+# 防作弊：永久删除 CANN 内置 kernel 树，阻断 aclnn 内置算子的 NPU 内核访问。
+# kernel/ascend* 删预编译的 .o + config/ascend* 删 JSON 配置；
+# impl/ops_nn/ascendc 删 AscendC 源码防止 JIT 编译回退。
+# overlay whiteout 确保删除在镜像中持久化，不受运行时 mount 操作影响。
+RUN rm -rf /usr/local/Ascend/cann-*/opp/built-in/op_impl/ai_core/tbe/kernel/ascend* \
+           /usr/local/Ascend/cann-*/opp/built-in/op_impl/ai_core/tbe/kernel/config/ascend* \
+           /usr/local/Ascend/cann-*/opp/built-in/op_impl/ai_core/tbe/impl/ops_nn/ascendc \
+    && echo "Anti-cheat: built-in kernel tree removed"
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl git ca-certificates build-essential cmake \

@@ -423,8 +423,25 @@ class ProcessPoolCoordinator:
         """
         env = base_env.copy()
 
-        # 让每个子进程只看到分配给它的那张卡（相对父进程可见集的索引）
-        env['ASCEND_RT_VISIBLE_DEVICES'] = str(task.device_id)
+        # 让每个子进程只看到分配给它的那张卡。
+        # task.device_id 是相对父进程可见集的逻辑索引，本应直接写即可。
+        # 但 benchsite-runner 的父进程 (eval-child) 中 torch_npu 初始化会
+        # 原地改写 os.environ['ASCEND_RT_VISIBLE_DEVICES']，导致 base_env
+        # 丢失了原始的物理可见集。此时 task.device_id=0 会被 CANN 解释为
+        # "物理 chip 0" 而非 "可见集内第 0 个设备"。
+        #
+        # 通过 BENCH_DEVICE_VISIBILITY（benchsite-runner 设置的非 ASCEND_
+        # 前缀安全备份）还原物理可见集，再把 task.device_id 映射为正确的物理 chip。
+        vis = (env.get("BENCH_DEVICE_VISIBILITY", "")
+               or env.get("ASCEND_VISIBLE_DEVICES", ""))
+        if vis:
+            chips = [c.strip() for c in vis.split(",") if c.strip()]
+            if task.device_id < len(chips):
+                env['ASCEND_RT_VISIBLE_DEVICES'] = chips[task.device_id]
+            else:
+                env['ASCEND_RT_VISIBLE_DEVICES'] = str(task.device_id)
+        else:
+            env['ASCEND_RT_VISIBLE_DEVICES'] = str(task.device_id)
 
         return env
 

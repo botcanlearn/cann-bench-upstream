@@ -57,6 +57,7 @@ class ProfFileLocations:
     trace_view_path: Optional[str] = None     # trace_view.json 完整路径
     prof_dir: str = ""                         # profiler 输出根目录
     msprof_summary_paths: List[str] = field(default_factory=list)  # msprof 导出的 op_summary_*.csv
+    api_statistic_path: Optional[str] = None   # api_statistic.csv 完整路径（用于 D2H 检测）
 
 
 # ---------------------------------------------------------------------------
@@ -617,6 +618,34 @@ class KernelDetailsStrategy(PerfMetricStrategy):
         """
         from .result import PerfResult
 
+        # 检查 api_statistic.csv 是否出现过量 aclrtMemcpy
+        # 每个 repeat 轮次最多 1 次 tiling H2D（≤ repeat 次），超出说明
+        # plugin 做了额外的 NPU↔CPU 数据搬运，高度疑似将计算外包到 CPU。
+        if prof_files.api_statistic_path:
+            try:
+                with open(prof_files.api_statistic_path) as _af:
+                    for _row in csv.DictReader(_af):
+                        if str(_row.get("API Name") or "").startswith("aclrtMemcpy"):
+                            memcpy_count = int(_row.get("Count", 0))
+                            if memcpy_count > 5:
+                                result.metadata["cpu_fallback_detected"] = True
+                                result.metadata["cpu_fallback_reason"] = (
+                                    f"api_statistic.csv 检测到 {memcpy_count} 次 aclrtMemcpy "
+                                    f"(阈值 5): "
+                                    f"avg={_row.get('Avg(us)', '?')}us, "
+                                    f"count={memcpy_count}, "
+                                    f"total={_row.get('Time(us)', '?')}us"
+                                )
+                                result.elapsed_us = 0.0
+                                result.error_msg = (
+                                    f"excessive aclrtMemcpy ({memcpy_count} > 5) "
+                                    f"detected in profiled kernel region "
+                                    f"({result.metadata['cpu_fallback_reason']})"
+                                )
+                                return result
+            except Exception:
+                pass
+
         warmup_names = extract_warmup_names_from_csv(prof_files.csv_path)
 
         # kernel_details.csv —— 唯一 elapsed_us 数据源
@@ -658,20 +687,30 @@ class KernelDetailsStrategy(PerfMetricStrategy):
                         )
                 return result
 
-            # CSV 已产出但无有效 NPU kernel —— 疑似 CPU fallback（反作弊场景）
-            result.metadata["perf_collection_failed"] = False
-            result.elapsed_us = 0.0
-            result.error_msg = (
-                f"KernelDetailsStrategy: kernel_details.csv present but no valid "
-                f"NPU kernels — csv_path={prof_files.csv_path}"
-            )
+            # parse_csv_kernels 返回空有两种可能：
+            # 1. CSV 有 warmup kernel 但无目标 kernel → 疑似 CPU fallback（反作弊）
+            # 2. CSV 不完整（async parser 未写完）→ 无 warmup kernel → 采集失败
+            if warmup_names:
+                result.metadata["perf_collection_failed"] = False
+                result.elapsed_us = 0.0
+                result.error_msg = (
+                    f"KernelDetailsStrategy: kernel_details.csv present but no valid "
+                    f"NPU kernels — csv_path={prof_files.csv_path}"
+                )
+            else:
+                result.metadata["perf_collection_failed"] = True
+                result.elapsed_us = 0.0
+                result.error_msg = (
+                    f"KernelDetailsStrategy: kernel_details.csv found but incomplete "
+                    f"(no warmup kernels) — csv_path={prof_files.csv_path}"
+                )
             return result
 
         # CSV 未产出 —— 采集功能异常（不触发反作弊）
         result.metadata["perf_collection_failed"] = True
         result.elapsed_us = 0.0
         result.error_msg = (
-            f"KernelDetailsStrategy: kernel_details.csv not found — "
+            f"KernelDetailsStrategy: kernel_details.csv not found or empty — "
             f"csv_path={prof_files.csv_path}"
         )
         return result
