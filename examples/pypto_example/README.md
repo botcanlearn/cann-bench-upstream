@@ -7,14 +7,28 @@
 ```
 pypto_example/
 ├── cann_bench/                 # Python包
-│   ├── __init__.py             # 导出 swi_glu
-│   ├── swi_glu.py              # 多 class dim/dtype 分发器
-│   └── c1/ ~ c8/               # 每类 (ndim, dtype) 签名的 kernel
-│       └── swi_glu_impl.py     # @pypto.frontend.jit kernel + host wrapper
+│   ├── __init__.py             # 顶层 thin forwarder（聚合所有算子入口）
+│   └── swi_glu/                # 算子子包：SwiGlu (L1)
+│       ├── __init__.py         # from .dispatcher import swi_glu
+│       ├── dispatcher.py       # 多 class (ndim,dtype) 分发器
+│       └── c1/ ~ c8/           # 每类 (ndim, dtype) 签名的 kernel
+│           └── swi_glu_impl.py # @pypto.frontend.jit kernel + host wrapper
 ├── build.sh                    # 构建脚本
 ├── setup.py                    # 打包配置
 └── README.md
 ```
+
+## 多算子隔离约定
+
+每个算子独占一个 `cann_bench/<op>/` 子包，内含：
+- `__init__.py`：从 dispatcher 导出入口函数
+- `dispatcher.py`：多 class 分发器（按 `(ndim, dtype)` 签名路由；单 class 算子可省略，直接在 `__init__.py` 中导出 wrapper）
+- `c{N}/<op>_impl.py`：每个 class 的 `@pypto.frontend.jit` kernel + host wrapper（`c{N}/` 不是 Python 包，通过 `package_data` 打包、由 dispatcher 按文件路径懒加载）
+
+顶层 `cann_bench/__init__.py` 为每个算子写一个 thin forwarder，评测框架通过 `dir(cann_bench)` 扫描到所有算子接口。新增算子时只需：
+1. 新建 `cann_bench/<op>/` 子包（复制上述结构）
+2. 顶层 `__init__.py` 追加一个 forwarder
+3. `setup.py` 的 `packages` 和 `package_data` 追加该子包
 
 ## 算子说明
 
@@ -84,14 +98,15 @@ python -m kernel_eval.cli eval --source-dir examples/pypto_example
 
 ```
 cann_bench/__init__.py
-  → from .swi_glu import swi_glu    # 入口
-  → swi_glu.py  dispatcher           # 按 (ndim, dtype) 签名匹配 c1~c8
-  → c1/swi_glu_impl.py               # 实际 kernel
+  → swi_glu() thin forwarder        # 入口
+  → swi_glu/__init__.py             # from .dispatcher import swi_glu
+  → swi_glu/dispatcher.py           # 按 (ndim, dtype) 签名匹配 c1~c8
+  → swi_glu/c1/swi_glu_impl.py      # 实际 kernel
 ```
 
 ## PyPTO Kernel 结构
 
-每个 `c{1-8}/swi_glu_impl.py` 包含两部分：
+每个 `swi_glu/c{1-8}/swi_glu_impl.py` 包含两部分：
 
 | 部分 | 职责 | 示例 |
 |------|------|------|
@@ -111,7 +126,7 @@ JIT 装饰器参数：
 
 ## 多 Class 分发机制
 
-`cann_bench/swi_glu.py` 中的 `_CLASSES` 表将输入 tensor 的 `(ndim, dtype)` 签名路由到对应 class 的 kernel：
+`cann_bench/swi_glu/dispatcher.py` 中的 `_CLASSES` 表将输入 tensor 的 `(ndim, dtype)` 签名路由到对应 class 的 kernel。dispatcher 通过 `importlib` 按文件路径懒加载对应 class 的 `swi_glu_impl.py`，入口函数查找顺序为 `swi_glu` → `swi_glu_wrapper`：
 
 | Class | ndim | dtype  | 
 |-------|------|--------|
