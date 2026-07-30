@@ -24,7 +24,7 @@ Triton-Ascend 编译器和运行时。完整调用链和源码见
 CANN beta 版本混用。
 
 ```bash
-cd docker
+cd docker/dev
 docker build --network=host \
   --build-arg CANN_VERSION=9.0.0 \
   --build-arg DEVICE=950 \

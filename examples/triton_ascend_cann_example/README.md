@@ -51,7 +51,7 @@ Check the active interpreter before building:
 python -c 'import torch, torch_npu, triton; print(torch.__version__, triton.__version__)'
 ```
 
-An import is not sufficient validation. Run `docker/test_env.py` in a
+An import is not sufficient validation. Run `docker/dev/test_env.py` in a
 Triton-enabled image to compile and execute vector add before evaluating a
 submission. Triton-Ascend bundles an NPU-IR compiler and must match the installed
 CANN version; a beta CANN toolkit may require its matching compiler build.

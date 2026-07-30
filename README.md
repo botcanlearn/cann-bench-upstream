@@ -74,6 +74,10 @@ cann-bench/
 │   ├── tilelang_cann_example/   # TileLang → CANN 算子样例
 │   ├── triton_ascend_cann_example/ # Triton-Ascend → CANN 算子样例
 │   └── stanfordbench_example/   # Stanford benchmark 样例
+├── docker/                 # 镜像
+│   ├── eval/               # 评测镜像：docker run 即评测（harness + tasks 冻结在镜像内）
+│   ├── base/               # toolkit-only 底座（eval 的 FROM）
+│   └── dev/                # AscendHub 全量 CANN 的交互/CI 调试镜像
 ├── docs/                   # 规范 / 设计 / 指南文档
 ├── scripts/                # 评测/测试入口脚本
 │   ├── run_evaluation.sh   # AI 算子评测入口（编译→安装→评测）
@@ -119,7 +123,21 @@ pip install -r requirements.txt
 1. **准备测试用例**
    `tasks/levelN/<op>/` 下已包含 `proto.yaml`、`golden.py`、`cases.yaml`、`cases.csv`、`desc.md`。无需另外生成。
 
-2. **运行评测脚本**
+2. **运行评测** —— 两种方式
+
+   **A. Docker（推荐）**：harness 与 `tasks/` 冻结在镜像里，镜像 tag 即评测集版本，不依赖本机
+   装好的 CANN/torch_npu 环境。只挂提交源码和报告目录：
+
+   ```bash
+   bash docker/eval/build.sh                              # 首次：构建评测镜像
+   bash docker/eval/run.sh generated_project              # 评测
+   bash docker/eval/run.sh generated_project --operator Exp --no-perf
+   ```
+
+   详见 [docker/eval/README.md](docker/eval/README.md)。
+
+   **B. 直接跑脚本**（需本机已备好 CANN 开发环境）：
+
    ```bash
    # 从 AI 生成的源码目录评测（自动扫描、编译、安装、评测）
    ./scripts/run_evaluation.sh --source-dir generated_project

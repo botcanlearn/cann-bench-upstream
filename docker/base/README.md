@@ -1,11 +1,12 @@
-# `cann-bench` docker/minimal -- 最小 toolkit-only 直调基础镜像
+# `cann-bench` docker/base -- 最小 toolkit-only 直调基础镜像
 
-与同目录 `docker/`(dev/CI 参考镜像,基于 AscendHub 完整 CANN,含 ops/nnal)**互补**。本镜像只装
+与 `docker/dev`(AscendHub 完整 CANN,含 ops/nnal 的调试/CI 镜像)**互补**,并且是 `docker/eval`
+(评测镜像)的**底座**。本镜像只装
 CANN **toolkit**(bisheng + AscendC 头 + acl runtime)+ torch(cpu)/torch_npu 胶水,**不装 ops**
 (`libopapi` + kernel blob)/nnal,面向 **直调(direct-launch)风格提交** -- 提交自带 bisheng 编译的
 AscendC/CCE kernel,经 `KNAME<<<grid, nullptr, stream>>>` 直接下发,不走 aclnn,故 ops 是死重。
 
-| | `docker/`(dev / CI) | `docker/minimal` |
+| | `docker/dev`(AscendHub 全量) | `docker/base`(本镜像) |
 |------|------|------|
 | base | AscendHub 完整 CANN(`cann:<ver>-<device>-...`,per-device) | `debian:12-slim`,从 `.run` 自装 toolkit |
 | ops / nnal | 有 | **无(0 ops)** |
@@ -23,7 +24,7 @@ AscendHub per-device 镜像)。
 ## Build
 
 ```bash
-cd docker/minimal/
+cd docker/base/
 docker build -t cann-toolkit-base:9.0.1-py3.13 .
 ```
 
@@ -80,4 +81,4 @@ bash run.sh dev       # 后台 sleep infinity,供 docker exec 调试
 ## 不适用
 
 - **aclnn baseline** 或任何需内置算子的评测:内置 torch_npu 算子在本镜像上 `LazyInitAclops` 失败 ->
-  走 `docker/`(dev)镜像(需 ops)。本镜像专供直调 kernel。
+  走 `docker/dev` 镜像(需 ops),或 `docker/eval --build-arg OPS_MODE=full`。本镜像专供直调 kernel。

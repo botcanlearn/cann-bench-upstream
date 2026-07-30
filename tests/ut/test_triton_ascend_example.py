@@ -96,8 +96,8 @@ def test_triton_ascend_example_has_submit_ready_layout():
 
 
 def test_docker_flavor_runs_a_real_triton_ascend_smoke():
-    dockerfile = REPO_ROOT.joinpath("docker", "Dockerfile").read_text(encoding="utf-8")
-    smoke = REPO_ROOT.joinpath("docker", "test_env.py").read_text(encoding="utf-8")
+    dockerfile = REPO_ROOT.joinpath("docker", "dev", "Dockerfile").read_text(encoding="utf-8")
+    smoke = REPO_ROOT.joinpath("docker", "dev", "test_env.py").read_text(encoding="utf-8")
 
     assert "ARG TRITON_ASCEND_VERSION=" in dockerfile
     assert "TRITON_CACHE_DIR=/tmp/cann-bench-triton-cache" in dockerfile

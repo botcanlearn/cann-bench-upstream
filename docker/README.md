@@ -1,99 +1,31 @@
-# `cann-bench` — 多平台 CI 执行镜像
+# `cann-bench` 镜像
 
-CANN-BENCH 参考执行镜像。torch 2.10.0 + torch\_npu 2.10.0 + 相关科学计算栈。
-通过 `--build-arg` 参数化 CANN 版本和硬件型号，同一 Dockerfile 适配不同设备。
+三个镜像,一条继承链。绝大多数人只需要 **`eval/`**。
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `CANN_VERSION` | `9.0.0` | CANN toolkit 版本 |
-| `DEVICE` | `910b` | 硬件型号（910b / 910c / 950 等，对应 AscendHub 镜像 tag） |
-| `TRITON_ASCEND_VERSION` | 空 | 可选 Triton-Ascend 版本；当前验证版本为 `3.2.1` |
-
-默认 tag `cann-bench:cann9.0.0-910b-latest`。
-
-- `Dockerfile` — 镜像定义（ARG 参数化）
-- `entrypoint.sh` — 容器入口 (source CANN env, 转交 CMD)
-- `run.sh` — host 端 launcher (smoke / shell / dev 三种模式)
-- `test_env.py` — smoke 验证脚本 (版本 / torch\_npu device / npu-smi / CANN)
-
-## 1. Build image
-
-在 NPU HOST 上 build image:
-
-### 910B（默认）
-
-```bash
-cd /path/to/repo/docker/
-docker build --network=host -t cann-bench:cann9.0.0-910b-latest .
+```
+base/  (cann-toolkit-base)          环境底座: CANN toolkit + torch/torch_npu, 0 ops, 自己不评测
+  └── eval/  (cann-bench-eval)      评测器: 烘入 kernel_eval + tasks/, docker run 即跑评测
+dev/   (cann-bench:cann9.0.0-*)     AscendHub 全量 CANN 的交互/CI 调试镜像 (独立血统)
 ```
 
-### 950PR
+| | 干什么 | 什么时候用 |
+|---|---|---|
+| [`eval/`](eval/) | **`docker run <image> [源码目录] [选项]` 直接产出评测报告** | 评一个提交;CI 打分;任何要求"这个分数出自哪个 benchmark 版本"可回答的场景 |
+| [`base/`](base/) | toolkit-only 底座,给 `eval` 继承;也可单独当直调开发环境 | 自己搭环境、调 kernel、给 `eval` 重建底座 |
+| [`dev/`](dev/) | AscendHub 完整 CANN(含 ops/nnal)+ tmux/gh/clangd 等 | 需要内置算子的交互调试、Triton-Ascend smoke、老 CI |
+
+## 为什么有 `eval/`
+
+在此之前,跑一次评测需要一棵"活"的 cann-bench 工作树加一套手工装好的 CANN/torch_npu 环境:
+`scripts/run_evaluation.sh` 从自身位置推 `PROJECT_ROOT`,报告写回仓库 `reports/`。于是评测依赖
+被机器之间搬来搬去的环境和二进制,而且"这个分数出自哪个 benchmark 版本"没有答案。
+
+`eval/` 把 harness(`src/kernel_eval` + `tasks/` + `cann_bench_utils`)冻结进镜像,**镜像 tag 就是
+benchmark 版本**;外部只挂两样东西:提交源码(`/submission`,只读)和报告目录(`/reports`)。
 
 ```bash
-docker build --network=host \
-    --build-arg CANN_VERSION=9.0.0 --build-arg DEVICE=950 \
-    -t cann-bench:cann9.0.0-950-latest .
+bash docker/eval/build.sh
+bash docker/eval/run.sh /path/to/ai_ops --operator Exp
 ```
 
-### Triton-Ascend（910B / 950PR）
-
-```bash
-docker build --network=host \
-    --build-arg CANN_VERSION=9.0.0 \
-    --build-arg DEVICE=950 \
-    --build-arg TRITON_ASCEND_VERSION=3.2.1 \
-    -t cann-bench:cann9.0.0-950-triton3.2.1 .
-```
-
-设置该参数后，镜像 smoke 会实际 JIT 编译并运行 Triton vector add，而不只是检查 import。
-
-也可配置代理:
-```bash
-docker build --network=host \
-    --build-arg HTTP_PROXY --build-arg HTTPS_PROXY \
-    -t cann-bench:cann9.0.0-910b-latest .
-```
-
-也可配置 pypi 镜像源: `--build-arg PYPI_INDEX_URL`。
-
-## 2. Smoke
-
-验证 python / torch / torch\_npu / npu-smi / CANN 全 OK:
-
-```bash
-bash run.sh smoke
-# 或指定 950PR 镜像:
-IMAGE=cann-bench:cann9.0.0-950-latest bash run.sh smoke
-# Triton-Ascend image:
-IMAGE=cann-bench:cann9.0.0-950-triton3.2.1 bash run.sh smoke
-```
-
-期望 `ALL CHECKS PASSED`。
-
-## 3. 启动临时容器
-
-退出即删:
-
-```bash
-bash run.sh shell
-```
-
-## 4. 启动常驻容器
-
-后台 `sleep infinity`, 多次 `docker exec` 进入; `docker/workspace/` 绑到容器内 `/workspace`:
-
-```bash
-bash run.sh dev                          # 起 'cann-bench'
-docker exec -it cann-bench bash
-docker rm -f cann-bench                  # 收尾
-```
-
-Override: `CONTAINER=<name> WORKSPACE=<host-path> bash run.sh dev`。
-
-## Env
-
-| 变量        | 默认                              |
-|-------------|-----------------------------------|
-| `IMAGE`     | `cann-bench:cann9.0.0-910b-latest` |
-| `CONTAINER` | `cann-bench` (仅 dev)             |
-| `WORKSPACE` | `$(pwd)/workspace` (仅 dev)       |
+细节见 [`eval/README.md`](eval/README.md)。
