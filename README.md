@@ -101,19 +101,19 @@ cann-bench/
 
 ## 🚀 Quick Start
 ### 1. 配置环境
-1. **安装依赖**
+1. **克隆项目仓库**
+   ```bash
+   git clone https://gitcode.com/cann/cann-bench.git
+   cd cann-bench
+   ```
+
+2. **安装依赖**
 - 确保已安装CANN开发环境 和TorchNpu扩展
 - 确保已安装Ascend C 算子开发工具链。
 ```bash
 # 安装依赖
 pip install -r requirements.txt
 ```
-
-2. **克隆项目仓库**
-   ```bash
-   git clone https://gitcode.com/cann/cann-bench.git
-   cd cann-bench
-   ```
 ### 2. 生成算子代码
 参考 examples 中的算子工程样例，根据算子规格描述生成 Ascend C 算子代码工程（例如 `generated_project/`）。
 - **ACLNN 算子工程样例**：[examples/aclnn_launch_example/](examples/aclnn_launch_example/)
