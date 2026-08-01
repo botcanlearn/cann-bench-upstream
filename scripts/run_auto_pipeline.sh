@@ -26,4 +26,40 @@ if [[ $# -eq 0 ]]; then
     set -- --help
 fi
 
+# 自动注册 pypto-gym（cannbot-skills 架构）的 agent 到 opencode
+# 从 CLI 参数中自动检测 --workspace，若存在 cannbot-skills 结构则建立
+# .opencode/agents/ + .opencode/skills/ 软链接，无感完成 agent 注册
+_prev=""
+for _i in "$@"; do
+    if [[ "${_prev}" == "--workspace" ]]; then
+        _PTO_WS="${_i}"
+        break
+    fi
+    _prev="${_i}"
+done
+if [[ -n "${_PTO_WS:-}" && -d "${_PTO_WS}/cannbot-skills/plugins-official/pypto-op-orchestrator/agents" ]]; then
+    _PLUGIN="$(realpath "${_PTO_WS}/cannbot-skills/plugins-official/pypto-op-orchestrator" 2>/dev/null || true)"
+    _OPS="$(realpath "${_PTO_WS}/cannbot-skills/ops" 2>/dev/null || true)"
+    if [[ -n "${_PLUGIN}" && -n "${_OPS}" && -f "${_PLUGIN}/AGENTS.md" ]]; then
+        _OC_DIR="$(realpath "${_PTO_WS}" 2>/dev/null || echo "${_PTO_WS}")/.opencode"
+        mkdir -p "${_OC_DIR}/agents" "${_OC_DIR}/skills"
+        ln -sfn "${_PLUGIN}/AGENTS.md" "${_OC_DIR}/agents/pypto-op-orchestrator.md"
+        for _a in "${_PLUGIN}/agents/"*.md; do
+            [[ -f "${_a}" ]] && ln -sfn "$(realpath "${_a}")" "${_OC_DIR}/agents/$(basename "${_a}")"
+        done
+        for _s in "${_OPS}/"*/; do
+            [[ -d "${_s}" ]] && ln -sfn "$(realpath "${_s}")" "${_OC_DIR}/skills/$(basename "${_s}")"
+        done
+        if [[ -d "${_PLUGIN}/hooks/opencode" ]]; then
+            mkdir -p "${_OC_DIR}/plugins"
+            cp -a "${_PLUGIN}/hooks/opencode/." "${_OC_DIR}/plugins/" || true
+        fi
+        if [[ -d "${_PLUGIN}/hooks/pypto-op-lint" ]]; then
+            mkdir -p "${_OC_DIR}/hooks/pypto-op-lint"
+            cp -a "${_PLUGIN}/hooks/pypto-op-lint/." "${_OC_DIR}/hooks/pypto-op-lint/" || true
+        fi
+        echo "[agent] 已注册 .opencode/agents + .opencode/skills"
+    fi
+fi
+
 exec python -m auto_pipeline.cli "$@"
