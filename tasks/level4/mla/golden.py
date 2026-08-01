@@ -85,23 +85,22 @@ def mla(
     # 拼接 K = [K_nope, K_rope]: [B, S_kv, N_kv, d_nope + d_rope]
     k = torch.cat([k_nope, k_rope], dim=-1)
 
-    # GQA 扩展: 每个 KV head 复制 N_q // N_kv 次
+    # GQA: 每个 KV head 被 G = N_q // N_kv 个 Q head 共享。不把 K/V 物化到 N_q 头
+    # (fp64 oracle 下大 batch 用例会物化上百 GiB → OOM)，而是把 group 维折叠进
+    # matmul 的 M 维: Q -> [B, N_kv, G*S, D]，K/V 保持 N_kv 头随 batched matmul 复用。
+    # 数值上与展开完全等价，峰值内存由 scores 决定而非物化后的 K/V。
     G = N_q // N_kv
-    if G > 1:
-        k = k.unsqueeze(3).expand(B, S_kv, N_kv, G, D_qk).reshape(B, S_kv, N_q, D_qk)
-        v = v.unsqueeze(3).expand(B, S_kv, N_kv, G, d_nope).reshape(B, S_kv, N_q, d_nope)
+    q = q.reshape(B, S, N_kv, G, D_qk).permute(0, 2, 3, 1, 4).reshape(B, N_kv, G * S, D_qk)
+    k = k.permute(0, 2, 1, 3)  # [B, N_kv, S_kv, D_qk]
+    v = v.permute(0, 2, 1, 3)  # [B, N_kv, S_kv, d_nope]
 
-    # 转置为 [B, N, S, D]
-    q = q.transpose(1, 2)
-    k = k.transpose(1, 2)
-    v = v.transpose(1, 2)
-
-    # 缩放点积注意力
+    # 缩放点积注意力: scores [B, N_kv, G*S, S_kv]，还原 G/S 两维以便掩码与 softmax
     scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    scores = scores.reshape(B, N_kv, G, S, S_kv)
     if is_causal:
         i = torch.arange(S, device=scores.device).unsqueeze(-1)
         j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
-        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf
+        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf；[S, S_kv] 广播到各 group
         scores = scores.masked_fill(causal_mask, float('-inf'))
     # F217: 全 mask 行 (整行 = -inf) 在 softmax 时得 0/0 = NaN，对齐
     # sparse_flash_attention 加显式保护 → 全 mask 行权重置 0。
@@ -109,10 +108,11 @@ def mla(
     all_masked = torch.isinf(scores_max) & (scores_max < 0)
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
     attn_weights = torch.where(all_masked, torch.zeros_like(attn_weights), attn_weights)
-    out = torch.matmul(attn_weights, v)  # [B, N_q, S, d_nope]
+    attn_weights = attn_weights.reshape(B, N_kv, G * S, S_kv)
+    out = torch.matmul(attn_weights, v)  # [B, N_kv, G*S, d_nope]
 
-    # 转回 BSND: [B, S, N_q, d_nope]
-    out = out.transpose(1, 2)
+    # 还原为 BSND: [B, S, N_q, d_nope]（N_q 头序 = n_kv * G + g，与展开路径一致）
+    out = out.reshape(B, N_kv, G, S, d_nope).permute(0, 3, 1, 2, 4).reshape(B, S, N_q, d_nope)
 
     # 按输入 layout 输出
     if inputLayout == "BNSD":

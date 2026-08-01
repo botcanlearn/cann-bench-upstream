@@ -44,7 +44,7 @@ $$
 
 > 本节为参考建议，**不是算子语义约束**。任何与上文数学公式等价、满足 §4 精度要求的实现均符合 benchmark 要求；本节仅就常见性能陷阱与误读 §5 Golden 代码的风险给出提示。
 
-- §5 Golden 代码中的 `key.unsqueeze(3).expand(...).reshape(...)` 是为绕开 `torch.matmul` 不支持 GQA 广播的**等价验证形式**，仅用于精度对照，不建议直接作为算子实现路径。
+- §5 Golden 代码把分组维 `G = N_q / N_kv` 折叠进 matmul 的 M 维（`Q` 变形为 `[B, N_kv, G*S, D]`），`K`/`V` 保持 `N_kv` 头随 batched matmul 复用、不物化到 `N_q` 头；该写法即下条建议的实现，可直接参考。
 - 建议按头索引 `g(h_q)` 直接复用 N_kv 个 KV head；若在算子内部或调用前将 K/V 在头维度物化复制 G 份扩展到 N_q，会抹掉 GQA 相对 MHA 的 KV cache 内存收益（占用变为 $N_q \cdot S_{kv} \cdot D$ 而非 $N_{kv} \cdot S_{kv} \cdot D$），并引入冗余访存。
 - CANN 原生 GQA 算子（如 `FusedInferAttentionScore`、`npu_fusion_attention`）通过 `num_key_value_heads` 属性告知 kernel 分组比、内部按索引复用 KV，可作为参考实现路径。
 
@@ -165,7 +165,8 @@ def gqa(
         key: 键张量 [B, S_kv, N_kv, D]（已分头）
         value: 值张量 [B, S_kv, N_kv, D]（已分头）
         scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(D)
-        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足 j > i + (S_kv - S) 的位置置 -inf
+        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足
+            j > i + (S_kv - S) 的位置在 softmax 前置为 -inf。要求 S <= S_kv。
 
     Returns:
         输出张量 [B, S, N_q, D]
@@ -177,28 +178,34 @@ def gqa(
     if scaleValue <= 0:
         scaleValue = 1.0 / (D ** 0.5)
 
-    # 扩展 KV heads 以匹配 Q heads
+    # GQA: G = N_q // N_kv 个 Q head 共享一组 KV head。不把 K/V 物化到 N_q 头
+    # (fp64 oracle 下大 batch 用例会物化上百 GiB → OOM)，而是把 group 维折叠进
+    # matmul 的 M 维: Q -> [B, N_kv, G*S, D]，K/V 保持 N_kv 头随 batched matmul 复用。
+    # 数值上与展开完全等价，峰值内存由 scores 决定而非物化后的 K/V。
     G = N_q // N_kv
-    key = key.unsqueeze(3).expand(B, S_kv, N_kv, G, D).reshape(B, S_kv, N_q, D)
-    value = value.unsqueeze(3).expand(B, S_kv, N_kv, G, D).reshape(B, S_kv, N_q, D)
+    q = query.reshape(B, S, N_kv, G, D).permute(0, 2, 3, 1, 4).reshape(B, N_kv, G * S, D)
+    k = key.permute(0, 2, 1, 3)    # [B, N_kv, S_kv, D]
+    v = value.permute(0, 2, 1, 3)  # [B, N_kv, S_kv, D]
 
-    # 转置为 [B, N_q, S, D]
-    q = query.transpose(1, 2)
-    k = key.transpose(1, 2)
-    v = value.transpose(1, 2)
-
-    # 缩放点积注意力
+    # 缩放点积注意力: scores [B, N_kv, G*S, S_kv]，还原 G/S 两维以便掩码与 softmax
     scores = torch.matmul(q, k.transpose(-2, -1)) * scaleValue
+    scores = scores.reshape(B, N_kv, G, S, S_kv)
     if is_causal:
         i = torch.arange(S, device=scores.device).unsqueeze(-1)
         j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
-        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：mask out 对角线以上的位置
+        causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf；[S, S_kv] 广播到各 group
         scores = scores.masked_fill(causal_mask, float('-inf'))
+    # F217: 全 mask 行 (整行 = -inf) 在 softmax 时得 0/0 = NaN，对齐
+    # sparse_flash_attention 加显式保护 → 全 mask 行权重置 0。
+    scores_max = scores.max(dim=-1, keepdim=True).values
+    all_masked = torch.isinf(scores_max) & (scores_max < 0)
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
-    attn_output = torch.matmul(attn_weights, v)
+    attn_weights = torch.where(all_masked, torch.zeros_like(attn_weights), attn_weights)
+    attn_weights = attn_weights.reshape(B, N_kv, G * S, S_kv)
+    attn_output = torch.matmul(attn_weights, v)  # [B, N_kv, G*S, D]
 
-    # 转回 [B, S, N_q, D]
-    return attn_output.transpose(1, 2)
+    # 转回 [B, S, N_q, D]（N_q 头序 = n_kv * G + g，与展开路径一致）
+    return attn_output.reshape(B, N_kv, G, S, D).permute(0, 3, 1, 2, 4).reshape(B, S, N_q, D)
 ```
 
 ## 6. 额外信息
