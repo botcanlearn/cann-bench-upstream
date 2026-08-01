@@ -4,10 +4,50 @@
 # default selection (unless --full / -k / -m) lives in tests/st/conftest.py.
 set -uo pipefail   # not -e: run every case + still emit junit/reports when some fail
 
+# CI keeps this job's stdout and nothing else — no artifact download, no container to re-enter.
+# So every fact needed to localise a failure has to be printed here. Sections are tagged [ST]
+# / [ST-DIAG] to stay greppable inside the pipeline's interleaved, timestamp-prefixed stream.
+banner() { echo ""; echo "[ST] ===== $* ====="; }
+
+# One greppable line per run, so a red/green history can be correlated against WHERE it ran.
+# Host identity only — the card is right above in the full npu-smi table, no point re-parsing it.
+# boot_epoch (wall clock - /proc/uptime, which inside this container is the HOST's) is stable
+# per physical machine across runs; nothing else here is — the pod name is fresh every run.
+fingerprint() {
+  local up boot mem
+  up=$(awk '{printf "%.0f", $1}' /proc/uptime 2>/dev/null)
+  # No uptime -> no boot epoch. Printing `now` here would look like a real (and always
+  # different) host id, which is worse than admitting we don't know.
+  boot=$([ -n "$up" ] && echo $(( $(date +%s) - up )) || echo n/a)
+  mem=$(awk '/^MemTotal/{printf "%.0fG", $2/1048576}' /proc/meminfo 2>/dev/null)
+  echo "[ST] fingerprint host=$(hostname 2>/dev/null) nproc=$(nproc 2>/dev/null || echo n/a)" \
+       "memtotal=${mem:-n/a} uptime_s=${up:-n/a} boot_epoch=${boot}"
+}
+
+banner "run context"
+date -u '+%Y-%m-%dT%H:%M:%SZ  (UTC)'
+echo "host=$(hostname 2>/dev/null)  pwd=$(pwd)  user=$(id -un 2>/dev/null)"
+echo "git=$(git rev-parse --short HEAD 2>/dev/null || echo n/a)  args=$*"
+env | grep -E '^(ASCEND|ATB|ACL|LD_LIBRARY_PATH|PYTHONPATH|ST_|PR_FILELIST)' | sort || true
+
+banner "device"
+npu-smi info
+fingerprint
+
+banner "toolchain / resources"
+# Versions + headroom, not decoration: a golden case can materialise GBs of reference tensors,
+# and a full disk or a stale torch/torch_npu ABI both surface downstream as an opaque rc=1.
+python -c 'import sys; print("python", sys.version.replace("\n", " "), sys.executable)' || true
+python -c 'import torch, torch_npu; print("torch", torch.__version__, "torch_npu", torch_npu.__version__)' 2>&1 | tail -3 || true
+cat "${ASCEND_TOOLKIT_HOME:-/usr/local/Ascend/ascend-toolkit/latest}/version.cfg" 2>/dev/null || echo "CANN version.cfg: n/a"
+df -h . /tmp "${TMPDIR:-/tmp}" 2>/dev/null | sort -u || true
+free -g 2>/dev/null || true
+
 # make sure ST_OUT is clean
 ST_OUT="${ST_OUT:-tests/st/_artifacts}"
 rm -rf "$ST_OUT"
 mkdir -p "$ST_OUT"
+export ST_OUT                 # harness.eval_run writes the kernel_eval cli log here
 export PYTHONUNBUFFERED=1
 
 PYTEST_ARGS=(tests/st/test_golden_npu_mock.py)
@@ -36,12 +76,26 @@ echo ""
 echo "################################  CANN-BENCH ST  ################################"
 python -m pytest "${PYTEST_ARGS[@]}"
 rc=$?
+
+banner "device after run"
+npu-smi info                     # post-run health: a case that took the device down shows here
+df -h . 2>/dev/null || true      # golden references are GB-scale; ENOSPC reads as a bare rc=1
+
 # single-run 集成口径: 整个选中子集只产一份 eval_*.{json,md,html}(含全部算子)。
 # 路径经环境变量传入,不内插进 python -c 字符串 (否则恶意 ST_OUT 可注入任意代码)。
+# stderr 不再丢弃: 收集失败本身就是 ST 出错位置的一部分。
 n=$(PYTHONPATH=tests/st ST_TMP="$ST_OUT/tmp" ST_OUT_DIR="$ST_OUT" python3 -c \
   "import os; from harness.report import collect_artifacts as c; print(c(os.environ['ST_TMP'], os.environ['ST_OUT_DIR']))" \
-  2>/dev/null || echo 0)
+  || { echo "[ST] collect_artifacts 失败 (见上方 traceback)" >&2; echo 0; })
 rm -rf "$ST_OUT/tmp"
+
+# Post-mortem: report + cli log are on disk under $ST_OUT, but CI ships only stdout — print a
+# bounded digest of them. Failure only; a green run stays quiet.
+if [ "$rc" -ne 0 ]; then
+  PYTHONPATH=tests/st python3 -m harness.diagnose "$ST_OUT" \
+    || echo "[ST] diagnose 自身失败 (见上方 traceback)" >&2
+fi
+
 echo "################################################################################"
 if [ "$rc" -eq 0 ]; then
   echo "##  CANN-BENCH ST PASSED (rc=0) -- artifacts: $ST_OUT (${n} report)"

@@ -24,6 +24,12 @@ KERNEL_EVAL_SRC = REPO_ROOT / "src"
 TASKS = REPO_ROOT / "tasks"
 RUN_EVALUATION_SH = REPO_ROOT / "scripts" / "run_evaluation.sh"
 LEVELS = ("level1", "level2", "level3", "level4")
+EVAL_LOG_NAME = "eval_cli.log"
+
+
+def st_out_dir() -> Path:
+    """$ST_OUT (set by run_st.sh) or the default artifacts dir. Must agree with run_st.sh."""
+    return Path(os.environ.get("ST_OUT") or (ST_DIR / "_artifacts"))
 
 
 def has_npu() -> bool:
@@ -197,12 +203,27 @@ def build_eval_cmd(*, source_dir, task_dir, reports_dir, operator=None, case_id=
 
 
 def run_eval_cli(*, source_dir, task_dir, reports_dir, operator=None, case_id=None,
-                 timeout=14400):
-    """Run ONE kernel_eval.cli eval over --task-dir; returns CompletedProcess (capture_output).
+                 timeout=14400, log_path=None):
+    """Run ONE kernel_eval.cli eval over --task-dir; returns CompletedProcess.
     operator=None 跑遍整棵(已修剪的)task 树 → 单一报告。候选包经 PYTHONPATH 暴露(=source_dir)。
-    timeout 默认放宽到 4h:single-run 覆盖整个选中子集(逐 op 子进程串行)。"""
-    return subprocess.run(
-        build_eval_cmd(source_dir=source_dir, task_dir=task_dir, reports_dir=reports_dir,
-                       operator=operator, case_id=case_id),
-        env=kernel_eval_env(source_dir), capture_output=True, text=True, timeout=timeout,
-    )
+    timeout 默认放宽到 4h:single-run 覆盖整个选中子集(逐 op 子进程串行)。
+
+    stdout+stderr are merged into `log_path` ($ST_OUT/eval_cli.log) instead of living only in
+    memory. This file is the ONLY record of what actually crashed: process_pool launches each
+    eval-child with a bare Popen (no pipes), so the child inherits these fds and its traceback
+    lands here — the report only ever carries a synthesized "异常退出 rc=N" with no child output.
+    On disk it also survives a timeout/SIGKILL of this process, which an in-memory capture does not.
+    Merged rather than split because interleaving child stderr with the scheduler's stdout
+    progress lines is what tells you WHICH op/case was running when it died.
+    """
+    log_path = Path(log_path) if log_path else st_out_dir() / EVAL_LOG_NAME
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = build_eval_cmd(source_dir=source_dir, task_dir=task_dir, reports_dir=reports_dir,
+                         operator=operator, case_id=case_id)
+    with log_path.open("w", encoding="utf-8") as fh:
+        fh.write(f"$ {' '.join(cmd)}\n")
+        fh.flush()
+        proc = subprocess.run(cmd, env=kernel_eval_env(source_dir),
+                              stdout=fh, stderr=subprocess.STDOUT, timeout=timeout)
+    merged = log_path.read_text(encoding="utf-8", errors="replace")
+    return subprocess.CompletedProcess(proc.args, proc.returncode, merged, "")

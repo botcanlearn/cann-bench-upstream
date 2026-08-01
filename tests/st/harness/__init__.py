@@ -5,8 +5,9 @@ Split by concern: eval_run (调用 kernel_eval) · golden_mock (golden 候选;�
 `from harness import ...`.
 """
 from .eval_run import (
-    REPO_ROOT, KERNEL_EVAL_SRC, TASKS, RUN_EVALUATION_SH, LEVELS,
+    REPO_ROOT, KERNEL_EVAL_SRC, TASKS, RUN_EVALUATION_SH, LEVELS, EVAL_LOG_NAME,
     has_npu, ensure_cann_bench_utils, kernel_eval_env, build_eval_cmd, run_eval_cli,
+    st_out_dir,
 )
 from .golden_mock import build_golden_candidate
 from .report import (
@@ -18,6 +19,6 @@ from .report import (
     hang_cases, xfail_set, xfail_all_ops, skip_ops,
     build_trimmed_tasktree, collect_artifacts,
 )
-# select_from_changes 作为脚本经 `python -m harness.select_from_changes` 调用(run_st.sh),
+# select_from_changes / diagnose 作为脚本经 `python -m harness.<mod>` 调用(run_st.sh),
 # 不在此 re-export —— 避免 __init__ 导入它后 `-m` 再当 __main__ 跑触发 RuntimeWarning。
-# 需要其逻辑时:from harness.select_from_changes import selector
+# 需要其逻辑时:from harness.select_from_changes import selector / from harness.diagnose import ...

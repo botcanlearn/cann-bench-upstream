@@ -31,6 +31,8 @@ import yaml
 
 from harness import (
     TASKS,
+    EVAL_LOG_NAME,
+    st_out_dir,
     run_eval_cli,
     has_npu,
     ensure_cann_bench_utils,
@@ -50,6 +52,7 @@ from harness import (
     xfail_all_ops,
     skip_ops,
 )
+from harness.diagnose import compact_ranges
 
 _KNOWN = for_target(
     load_known_issues(Path(__file__).resolve().parent / "known_issues.yaml"), "golden"
@@ -94,18 +97,20 @@ def golden_matrix_report(golden_candidate, trimmed_tasks, tmp_path_factory):
     成一份报告。返回 {op_lower: {case_num: case}},供下面每个 per-op test 各取所需(只跑一次)。
     """
     reports = tmp_path_factory.mktemp("reports")
+    log = st_out_dir() / EVAL_LOG_NAME     # cli stdout+stderr, incl. every eval-child traceback
     proc = run_eval_cli(
         source_dir=golden_candidate,
         task_dir=trimmed_tasks,
         reports_dir=reports,
     )
+    print(f"[ST] kernel_eval cli rc={proc.returncode} log={log} "
+          f"({len(proc.stdout.splitlines())} lines)")
     try:
         report = load_report(latest_report_json(reports))
     except FileNotFoundError:
         pytest.fail(
-            f"kernel_eval 未产出报告(rc={proc.returncode})\n"
-            f"--- stdout tail ---\n{proc.stdout[-3000:]}\n"
-            f"--- stderr tail ---\n{proc.stderr[-1500:]}"
+            f"kernel_eval 未产出报告(rc={proc.returncode},完整日志 {log})\n"
+            f"--- cli log tail ---\n{proc.stdout[-4000:]}"
         )
     if has_drift(schema_diff(report)):
         warnings.warn(f"report schema drift: {schema_diff(report)}")
@@ -123,12 +128,42 @@ def golden_matrix_report(golden_candidate, trimmed_tasks, tmp_path_factory):
                 ops_fail.append(f"{op.get('operator')}: {reason}")
         pytest.fail(
             f"kernel_eval 产出报告但无任何 case（rc={proc.returncode}，"
-            f"operators={len(report.get('operators', []))}）。\n"
+            f"operators={len(report.get('operators', []))}，完整日志 {log}）。\n"
             f"--- operator 失败原因 ---\n" + "\n".join(ops_fail or ["(报告无 operator 失败原因字段)"]) + "\n"
-            f"--- stdout tail ---\n{proc.stdout[-2000:]}\n"
-            f"--- stderr tail ---\n{proc.stderr[-3000:]}"
+            f"--- cli log tail ---\n{proc.stdout[-4000:]}"
         )
     return by_op
+
+
+def _missing_reason(case: dict) -> str:
+    """Everything the report knows about why this case has no accuracy verdict."""
+    acc = case.get("accuracy")
+    acc_err = acc.get("error_msg") if isinstance(acc, dict) else None
+    parts = [f"status={case.get('status')}", f"failure_type={case.get('failure_type')}",
+             f"err={case.get('error_msg')}"]
+    if acc_err:
+        parts.append(f"acc_err={acc_err}")
+    return " ".join(parts)
+
+
+def _missing_report(operator: str, total: int, missing: list[tuple[int, str]]) -> str:
+    """Collapse identical causes: N cases killed by one crash is ONE fact, not N lines.
+
+    pytest prints the assertion message twice (FAILURES + short summary), so a naive per-case
+    list spends 2*N lines restating a single synthesized "异常退出 rc=1" and crowds out the
+    actual evidence. The evidence itself is not in the report at all — it is in the cli log,
+    which run_st.sh digests as [ST-DIAG]; point there instead of padding.
+    """
+    by_reason: dict[str, list[int]] = {}
+    for cid, reason in missing:
+        by_reason.setdefault(reason, []).append(cid)
+    lines = [f"{operator}: {len(missing)}/{total} cases 无精度结果 (唯一硬 gate),"
+             f" {len(by_reason)} 种原因:"]
+    for reason, cids in sorted(by_reason.items(), key=lambda kv: -len(kv[1])):
+        lines.append(f"  x{len(cids)} [case {compact_ranges(cids)}] {reason}")
+    lines.append("  ↑ error_msg 是 kernel_eval 合成的,不含子进程输出;"
+                 " 真正的 traceback 见本轮日志里的 [ST-DIAG] 段 ($ST_OUT/eval_cli.log)")
+    return "\n".join(lines)
 
 
 @pytest.mark.npu
@@ -145,7 +180,7 @@ def test_golden_op_produces_results(operator, golden_matrix_report):
     for cid, c in sorted(cases.items()):
         # 唯一硬 gate:每个 case 必须产出精度 verdict(pass/fail 都行)。
         if not acc_op_xf and (key, cid) not in _XFAIL_ACC and not case_has_accuracy(c):
-            missing.append(f"{operator}#{cid}: 无精度结果 (err={c.get('error_msg')})")
+            missing.append((cid, _missing_reason(c)))
         if case_acc_passed(c):
             # perf 只 best-effort、不 gate:kernel_eval 的 profiler 在负载/多算子连跑下偶发
             # 采不到 kernel 时间(elapsed_us=0),是 flaky capture、非算子属性(同一 case
@@ -169,6 +204,4 @@ def test_golden_op_produces_results(operator, golden_matrix_report):
         warnings.warn(
             f"[perf] golden {operator}: {len(perf_missing)}/{len(cases)} cases 精度通过但 profiler 采到 elapsed_us=0 (flaky capture) {perf_missing}"
         )
-    assert not missing, f"{operator}: {len(missing)} 项未达 oracle:\n" + "\n".join(
-        missing
-    )
+    assert not missing, _missing_report(operator, len(cases), missing)
