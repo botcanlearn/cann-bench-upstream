@@ -6,49 +6,82 @@ from ._common import PASS_CONFIGS, torch_dtype_to_tl
 
 _kernel_cache = {}
 
+NUM_CORES = 48
+VEC_NUM = 2
+TILE_ELEMS = 16384
+
 
 @tilelang.jit(out_idx=[1], pass_configs=PASS_CONFIGS)
-def _exp_kernel(M, N, block_M, block_N, dtype="float16"):
-    m_num = T.ceildiv(M, block_M)
-    n_num = T.ceildiv(N, block_N)
-    VEC_NUM = 2
-    sub_block_M = block_M // VEC_NUM
+def _exp_kernel(
+    numel,
+    tile_elems,
+    launch_cores,
+    scale,
+    shift,
+    log_base,
+    dtype="float16",
+):
+    """Persistent linear kernel with affine/base transforms fused in UB."""
+    need_cast = dtype == "bfloat16"
+    compute_dtype = "float32" if need_cast else dtype
+    block_elems = tile_elems * VEC_NUM
+    num_blocks = T.ceildiv(numel, block_elems)
+    num_iters = T.ceildiv(num_blocks, launch_cores)
 
     @T.prim_func
     def main(
-        A: T.Tensor([M, N], dtype),
-        B: T.Tensor([M, N], dtype),
+        A: T.Tensor([numel], dtype),
+        B: T.Tensor([numel], dtype),
     ):
         T.func_attr({"enable_auto_sync": True})
-        with T.Kernel(m_num * n_num, is_npu=True) as (cid, vid):
-            bx = cid // n_num
-            by = cid % n_num
+        with T.Kernel(launch_cores, is_npu=True) as (cid, vid):
+            compute = T.alloc_ub([tile_elems], compute_dtype)
+            raw_in = T.alloc_ub([tile_elems], dtype)
+            raw_out = T.alloc_ub([tile_elems], dtype)
 
-            a = T.alloc_ub([sub_block_M, block_N], dtype)
-            b = T.alloc_ub([sub_block_M, block_N], dtype)
+            for i in T.serial(num_iters):
+                block_id = cid + i * launch_cores
+                if block_id < num_blocks:
+                    offset = (block_id * VEC_NUM + vid) * tile_elems
+                    if offset < numel:
+                        if need_cast:
+                            T.copy(A[offset], raw_in)
+                            T.tile.cast(compute, raw_in, "CAST_NONE", tile_elems)
+                        else:
+                            T.copy(A[offset], compute)
 
-            row_start = bx * block_M + vid * sub_block_M
-            col_start = by * block_N
+                        if scale != 1.0:
+                            T.tile.mul(compute, compute, scale)
+                        if shift != 0.0:
+                            T.tile.add(compute, compute, shift)
+                        if log_base != 1.0:
+                            T.tile.mul(compute, compute, log_base)
 
-            T.copy(
-                A[row_start : row_start + sub_block_M, col_start : col_start + block_N],
-                a,
-            )
-            T.tile.exp(b, a)
-            T.copy(
-                b,
-                B[row_start : row_start + sub_block_M, col_start : col_start + block_N],
-            )
+                        T.tile.exp(compute, compute)
+
+                        if need_cast:
+                            T.tile.cast(raw_out, compute, "CAST_RINT", tile_elems)
+                            T.copy(raw_out, B[offset])
+                        else:
+                            T.copy(compute, B[offset])
 
     return main
 
 
-def _get_kernel(M, N, tl_dtype):
-    key = (M, N, tl_dtype)
+def _get_kernel(numel, tl_dtype, scale, shift, log_base):
+    num_blocks = (numel + TILE_ELEMS * VEC_NUM - 1) // (TILE_ELEMS * VEC_NUM)
+    launch_cores = min(NUM_CORES, num_blocks)
+    key = (numel, tl_dtype, scale, shift, log_base, launch_cores)
     if key not in _kernel_cache:
-        block_M = 128
-        block_N = 128
-        _kernel_cache[key] = _exp_kernel(M, N, block_M, block_N, dtype=tl_dtype)
+        _kernel_cache[key] = _exp_kernel(
+            numel,
+            TILE_ELEMS,
+            launch_cores,
+            scale,
+            shift,
+            log_base,
+            dtype=tl_dtype,
+        )
     return _kernel_cache[key]
 
 
@@ -61,24 +94,16 @@ def exp(
     original_dtype = x.dtype
     original_shape = x.shape
 
-    kernel_dtype = original_dtype
-    if original_dtype == torch.bfloat16:
-        kernel_dtype = torch.float32
-        x = x.to(torch.float32)
+    x_flat = x.contiguous().reshape(-1)
+    numel = x_flat.numel()
+    log_base = math.log(base) if base > 0 else 1.0
 
-    temp = scale * x + shift
-    if base > 0:
-        temp = temp * math.log(base)
-    temp = temp.contiguous()
-
-    temp_flat = temp.reshape(-1, temp.size(-1))
-    M, N = temp_flat.shape
-
-    tl_dtype = torch_dtype_to_tl(kernel_dtype)
-    kernel = _get_kernel(M, N, tl_dtype)
-    out_flat = kernel(temp_flat)
-
-    out = out_flat.reshape(original_shape)
-    if original_dtype == torch.bfloat16:
-        out = out.to(torch.bfloat16)
-    return out
+    tl_dtype = torch_dtype_to_tl(original_dtype)
+    kernel = _get_kernel(
+        numel,
+        tl_dtype,
+        float(scale),
+        float(shift),
+        float(log_base),
+    )
+    return kernel(x_flat).reshape(original_shape)
