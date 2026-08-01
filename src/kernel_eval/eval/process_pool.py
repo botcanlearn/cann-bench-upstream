@@ -432,8 +432,20 @@ class ProcessPoolCoordinator:
         #
         # 通过 BENCH_DEVICE_VISIBILITY（benchsite-runner 设置的非 ASCEND_
         # 前缀安全备份）还原物理可见集，再把 task.device_id 映射为正确的物理 chip。
+        #
+        # 判据是**谁做的收窄**，而不是"有没有可见集变量"：
+        # - ASCEND_RT_VISIBLE_DEVICES 逐进程生效、取值是物理号，子进程重设它时
+        #   必须同样给物理号 —— 故这里要映射。BENCH_DEVICE_VISIBILITY 是它被
+        #   torch_npu 原地覆盖前的备份，优先用。
+        # - ASCEND_VISIBLE_DEVICES 是容器/k8s 设备插件施加的，进容器时设备空间
+        #   **已经**被收窄并重编号，不能再映射一次。k8s 只分物理 1 号卡时父进程
+        #   device_count()==1、可见集是 {0}，把逻辑 0 映射回 "1" 等于在 {0} 里挑
+        #   1 号 —— 挑空，子进程 device_count()==0：
+        #     ChgUserDevIdToDeviceId failed ... userDevId is invalid. Expected value: [0, 0)
+        #     RuntimeError: ... aclInit, error code is 107001
+        #   分到 0 号卡时映射恰好等于相对索引，故此坑只在非 0 号卡上现形。
         vis = (env.get("BENCH_DEVICE_VISIBILITY", "")
-               or env.get("ASCEND_VISIBLE_DEVICES", ""))
+               or env.get("ASCEND_RT_VISIBLE_DEVICES", ""))
         if vis:
             chips = [c.strip() for c in vis.split(",") if c.strip()]
             if task.device_id < len(chips):
