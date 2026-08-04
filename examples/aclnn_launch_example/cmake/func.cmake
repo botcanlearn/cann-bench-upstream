@@ -32,9 +32,15 @@ macro(register_aclnn_op OP_TYPE HOST_SRCS API_SRCS KERNEL_DIR KERNEL_FILE TILING
     set(ALL_HOST_OPS_SRCS ${_TEMP_HOST} CACHE INTERNAL "All host source files")
 
     # 添加API源文件到全局列表
-    set(_TEMP_API ${ALL_API_OPS_SRCS})
-    list(APPEND _TEMP_API ${API_SRCS})
-    set(ALL_API_OPS_SRCS ${_TEMP_API} CACHE INTERNAL "All API source files")
+    if(NOT "${API_SRCS}" STREQUAL "")
+        set(_TEMP_API ${ALL_API_OPS_SRCS})
+        list(APPEND _TEMP_API ${API_SRCS})
+        set(ALL_API_OPS_SRCS ${_TEMP_API} CACHE INTERNAL "All API source files")
+    else()
+        set(_TEMP_AUTO_HOST ${ALL_AUTO_API_HOST_SRCS})
+        list(APPEND _TEMP_AUTO_HOST ${HOST_SRCS})
+        set(ALL_AUTO_API_HOST_SRCS ${_TEMP_AUTO_HOST} CACHE INTERNAL "Host source files for generated APIs")
+    endif()
 
     # 添加kernel信息到全局列表
     set(_KERNEL_INFO "${OP_TYPE}|${KERNEL_DIR}|${KERNEL_FILE}")

@@ -36,6 +36,10 @@ set(ALL_TILING_INCLUDE_DIRS "" CACHE INTERNAL "All tiling include directories")
 set(ALL_API_INCLUDE_DIRS "" CACHE INTERNAL "All API include directories")
 set(ALL_PLUGIN_SRCS "" CACHE INTERNAL "All plugin source files")
 set(ALL_PLUGIN_INCLUDE_DIRS "" CACHE INTERNAL "All plugin include directories")
+set(ALL_GENERATED_API_SRCS "" CACHE INTERNAL "Generated API source files")
+set(ALL_AUTO_API_HOST_SRCS "" CACHE INTERNAL "Host source files for generated APIs")
+set(AUTO_API_AUTOGEN_PATH ${CMAKE_BINARY_DIR}/autogen_aclnn)
+file(MAKE_DIRECTORY ${AUTO_API_AUTOGEN_PATH})
 
 # 添加算子目录，算子自注册到全局列表
 add_subdirectory(csrc/ops)
@@ -49,7 +53,37 @@ message(STATUS "Registered API include dirs: ${ALL_API_INCLUDE_DIRS}")
 
 # ================================== 处理注册的算子 ==================================
 
-# Run autogen
+# Generate ACLNN APIs only for operators that do not provide API sources.
+if(ALL_AUTO_API_HOST_SRCS)
+    npu_op_code_gen(
+        SRC ${ALL_AUTO_API_HOST_SRCS}
+        PACKAGE ${package_name}
+        OUT_DIR ${AUTO_API_AUTOGEN_PATH}
+        COMPILE_OPTIONS
+            -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include
+            -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/asc/include/tiling
+            -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc
+            -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/op_common
+            -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/base
+        OPTIONS
+            OPS_ACLNN_GEN 1
+    )
+
+    # Use the files produced by op_build directly. Its naming convention is
+    # tool-owned and must not be reimplemented here.
+    file(GLOB AUTO_API_SRCS
+        "${AUTO_API_AUTOGEN_PATH}/aclnn_*.cpp"
+    )
+    if(NOT AUTO_API_SRCS)
+        message(FATAL_ERROR
+            "ACLNN API autogen produced no aclnn_*.cpp files in ${AUTO_API_AUTOGEN_PATH}")
+    endif()
+    set(ALL_GENERATED_API_SRCS ${AUTO_API_SRCS}
+        CACHE INTERNAL "Generated API source files" FORCE)
+endif()
+
+# Keep the original codegen path for all operators. It produces proto, tiling
+# and kernel metadata without requiring ACLNN API generation for hand-written APIs.
 npu_op_code_gen(
     SRC ${ALL_HOST_OPS_SRCS}
     PACKAGE ${package_name}
@@ -60,7 +94,25 @@ npu_op_code_gen(
         -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc
         -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/op_common
         -I$ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/pkg_inc/base
+    OPTIONS
+        OPS_ACLNN_GEN 0
 )
+
+file(GLOB MAIN_ACLNN_FILES
+    ${ASCEND_AUTOGEN_PATH}/aclnn_*.cpp
+    ${ASCEND_AUTOGEN_PATH}/aclnn_*.h
+)
+if(MAIN_ACLNN_FILES)
+    file(REMOVE ${MAIN_ACLNN_FILES})
+endif()
+
+if(ALL_AUTO_API_HOST_SRCS)
+    # npu_op_package installs generated headers from the main autogen path.
+    file(GLOB AUTO_API_HEADERS ${AUTO_API_AUTOGEN_PATH}/aclnn_*.h)
+    if(AUTO_API_HEADERS)
+        file(COPY ${AUTO_API_HEADERS} DESTINATION ${ASCEND_AUTOGEN_PATH})
+    endif()
+endif()
 
 # Tiling library
 npu_op_library(cust_optiling TILING ${ALL_HOST_OPS_SRCS})
@@ -74,7 +126,7 @@ target_include_directories(cust_optiling PRIVATE
 )
 
 # ACLNN API library
-npu_op_library(cust_opapi ACLNN ${ALL_API_OPS_SRCS})
+npu_op_library(cust_opapi ACLNN ${ALL_API_OPS_SRCS} ${ALL_GENERATED_API_SRCS})
 target_include_directories(cust_opapi PRIVATE
     ${ALL_API_INCLUDE_DIRS}
     $ENV{ASCEND_HOME_PATH}/${SYSTEM_PREFIX}/include
