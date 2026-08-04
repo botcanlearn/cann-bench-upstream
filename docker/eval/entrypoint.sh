@@ -8,14 +8,14 @@ SUBMISSION_DIR="${SUBMISSION_DIR:-/submission}"
 REPORTS_DIR="${REPORTS_DIR:-/reports}"
 WORK_SRC=/work/src
 
-# The base image's ENTRYPOINT did this; we replaced it, so redo it here. ENV covers PATH, but
-# set_env.sh has side effects (ASCEND_OPP_PATH, ASCEND_AICPU_PATH) the eval and the .run-form
-# custom-op install depend on, and lib64 is missing from set_env's own LD_LIBRARY_PATH.
-source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true
-export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/lib64:${LD_LIBRARY_PATH:-}
-# set_env.sh rewrites PATH; re-assert the venv in front of it. There is no system python in the
-# debian-slim base, so losing /opt/venv/bin means run_evaluation.sh's `command -v python` fails.
-export PATH=/opt/venv/bin:${PATH}
+# The base image's ENTRYPOINT sourced /etc/cann-env.sh; this image replaces that ENTRYPOINT, so redo
+# it. That script is the base's single source of truth for the Ascend environment: set_env.sh (whose
+# ASCEND_OPP_PATH / ASCEND_AICPU_PATH side effects the eval and the .run-form custom-op install depend
+# on), the venv on PATH, and the <arch>-linux/lib64 that set_env.sh itself omits -- with the image's
+# own architecture already baked in. Re-deriving any of it here is what left an aarch64 lib64 path
+# hardcoded in an image that also ships for x86_64. Sourcing is idempotent, so repeating what BASH_ENV
+# already did costs nothing.
+source /etc/cann-env.sh
 
 usage() {
     cat <<EOF

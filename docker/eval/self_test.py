@@ -3,7 +3,9 @@
 
 Required checks (any failure -> non-zero exit):
   [1] python / torch / torch_npu importable
-  [2] torch_npu sees at least one NPU device
+  [2] torch_npu sees a device AND a bare H2D copy works -- the copy half is the real gate on a
+      950-class SoC, where it routes through aclnnInplaceCopy and so needs OPS_MODE=refonly
+      (910B does a plain aclrtMemcpy and is happy with OPS_MODE=none)
   [3] CANN compiler version.info readable
   [4] cann_bench_utils importable -- the V3 anti-cheat warmup/cache-clean provider, a hard
       dependency of every evaluation, baked in at build time
@@ -25,24 +27,35 @@ failed = []
 
 # [1] versions
 try:
+    import platform
+
     import torch
     import torch_npu
 
     py = ".".join(str(v) for v in sys.version_info[:3])
-    print(f"[OK]   [1] python {py}, torch {torch.__version__}, torch_npu {torch_npu.__version__}")
+    print(
+        f"[OK]   [1] python {py}, torch {torch.__version__}, torch_npu {torch_npu.__version__}"
+        f" ({platform.machine()})"
+    )
 except Exception as e:
     print(f"[FAIL] [1] import/version: {e}")
     failed.append(1)
 
-# [2] device visible
+# [2] device visible AND usable
 try:
+    import torch
     import torch_npu
 
     count = torch_npu.npu.device_count()
     assert count > 0, f"device_count = {count}"
-    print(f"[OK]   [2] torch_npu.npu.device_count() = {count}")
+    name = torch.npu.get_device_name(0)
+    got = torch.arange(4, dtype=torch.float32).npu().cpu().tolist()
+    assert got == [0.0, 1.0, 2.0, 3.0], got
+    print(f"[OK]   [2] {count} x {name}; bare H2D copy works")
 except Exception as e:
-    print(f"[FAIL] [2] torch_npu device_count: {e}")
+    print(f"[FAIL] [2] device / H2D copy: {e}")
+    if "ERR01007" in str(e) or "aclnnInplaceCopy" in str(e):
+        print("           ^ this SoC routes the copy through aclnn -- rebuild with OPS_MODE=refonly")
     failed.append(2)
 
 # [3] CANN intact
@@ -82,17 +95,20 @@ except Exception as e:
     failed.append(5)
 
 # [6] builtin availability -- diagnostic only. matmul is the canonical builtin the framework's own
-# warmup used to call before cann_bench_utils replaced it, so it is the right probe.
-ops_mode = os.environ.get("OPS_MODE", "none")
+# warmup used to call before cann_bench_utils replaced it, so it is the right probe. Expect it to FAIL:
+# that is the anti-cheat working. The error differs by posture -- 500001 LazyInitAclops when libopapi
+# is absent (none), 561103 "Parse dynamic kernel config fail" when it is present but the kernel
+# binaries were stripped (refonly).
+posture = f"OPS_MODE={os.environ.get('OPS_MODE', '?')} NPU_ARCH={os.environ.get('NPU_ARCH', '?')}"
 try:
     import torch
 
     a = torch.randn(64, 64, device="npu:0")
     (a @ a).cpu()
-    print(f"[INFO] [6] builtin aclnn ops CAN launch (OPS_MODE={ops_mode}) -- submissions could call them")
+    print(f"[WARN] [6] builtin aclnn ops CAN launch ({posture}) -- submissions could cheat by calling them")
 except Exception as e:
-    print(f"[INFO] [6] builtin aclnn ops cannot launch (OPS_MODE={ops_mode}): {type(e).__name__}")
-    print(f"           ^ expected for a 0-ops/refonly image; submissions must ship their own kernel. ({str(e)[:120]})")
+    print(f"[INFO] [6] builtin aclnn ops blocked ({posture}): {type(e).__name__}")
+    print(f"           ^ expected -- submissions must ship their own kernel. ({str(e)[:120]})")
 
 # [7] optional Triton-Ascend
 triton_ascend_version = os.environ.get("TRITON_ASCEND_VERSION", "").strip()

@@ -27,6 +27,12 @@ ARG UV_PYTHON_INSTALL_MIRROR=
 ARG PYPI_MIRROR=
 ARG TORCH_MIRROR=
 ARG CANN_VERSION=9.0.1
+# CANN_VERSION alone is enough to move versions -- the toolkit .run and its <arch> variants follow one
+# naming scheme on ascend-repo, verified present for 9.1.0 in both architectures. CANN_TOOLKIT_URL is
+# the escape hatch for the releases that do not: some land on the ascend-cann-open bucket instead
+# (ascend-cann-open.obs.cn-north-4...), and some are published as a combined `Ascend-cann_<v>_linux-
+# <arch>.run` rather than `Ascend-cann-toolkit_...`. Empty = derive from CANN_VERSION + ARCH.
+ARG CANN_TOOLKIT_URL=
 
 FROM ${UV_IMAGE} AS uvbin
 FROM ${BASE_OS}
@@ -37,11 +43,19 @@ ARG UV_PYTHON_INSTALL_MIRROR
 ARG PYPI_MIRROR
 ARG TORCH_MIRROR
 ARG CANN_VERSION
+ARG CANN_TOOLKIT_URL
 
-# WHY aarch64 is hardcoded (not an ARG): the image is aarch64-only by construction -- torch/torch_npu
-# wheels, --platform, and every tested path are aarch64 (Ascend hosts are Kunpeng/ARM). A parametric
-# ARCH knob we never build on x86_64 is a false promise (silent FHS-path breakage in the JSON ENTRYPOINT
-# that can't expand build-args); an x86_64 image, if ever needed, is a separate deliberately-tested variant.
+# ARCH selects the CPU architecture of every arch-shaped path: the toolkit .run, the toolkit's
+# <arch>-linux/ tree, and the wheels uv picks. Build it NATIVELY on a host of that architecture --
+# this is not a cross-compile knob, and there is no --platform anywhere.
+#
+# It was hardcoded aarch64 until x86_64 was actually exercised (Ascend hosts are usually Kunpeng/ARM,
+# and the old comment rightly refused a knob nobody built). Both are now validated end to end:
+# aarch64/910B2 and x86_64/950PR each install the toolkit, `uv sync --frozen` off the same lock (it
+# already carries both architectures' wheels, torch_npu included), stub libhccl, build cann_bench_utils,
+# and see their card. The other half of that old objection -- "a JSON ENTRYPOINT can't expand
+# build-args" -- is answered below by baking the arch into a generated env script instead.
+ARG ARCH=aarch64
 
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
@@ -77,24 +91,60 @@ ENV PATH=/opt/venv/bin:${PATH}
 
 # Toolkit ONLY -- the ops/nnal .run the upstream cann-container-image also fetches are omitted.
 RUN cd /tmp \
-    && URL="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-toolkit_${CANN_VERSION}_linux-aarch64.run" \
+    && URL="${CANN_TOOLKIT_URL:-https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-toolkit_${CANN_VERSION}_linux-${ARCH}.run}" \
+    && echo "toolkit: ${URL}" \
     && wget --quiet --header="Referer: https://www.hiascend.com/" -O toolkit.run "${URL}" \
     && chmod +x toolkit.run && ./toolkit.run --quiet --install --install-for-all && rm -f toolkit.run
 
 # WHY stub: torch_npu _C.so has an unconditional DT_NEEDED on libhccl.so but imports 0 symbols from it
 # -- an empty SONAME-only .so satisfies the loader without the real HCCL lib (which ships in ops).
+# Written through the installer's own `latest` symlink rather than the versioned cann-<v>/ directory it
+# points at: same inode, but it does not assume the installer keeps naming that directory after
+# CANN_VERSION, and it is the same path LD_LIBRARY_PATH below resolves.
 RUN printf 'int __hccl_stub;\n' | gcc -shared -fPIC -x c -Wl,-soname,libhccl.so \
-    -o /usr/local/Ascend/cann-${CANN_VERSION}/aarch64-linux/lib64/libhccl.so -
+    -o /usr/local/Ascend/ascend-toolkit/latest/${ARCH}-linux/lib64/libhccl.so -
 
-# Env = set_env.sh + aarch64-linux/lib64 (WHY the extra path: set_env omits it, but libhccl + its
-# siblings live there). ENTRYPOINT applies it for `docker run img <cmd>`; bash.bashrc for `docker exec`.
+# ONE generated env script is the single source of truth for the Ascend environment, and it is where
+# ARCH gets baked in -- a JSON ENTRYPOINT cannot expand a build-arg, but a script it sources can carry
+# one. Three entry paths all funnel through it: ENTRYPOINT (`docker run img <cmd>`), /etc/bash.bashrc
+# (`docker exec`), /etc/profile.d (login shells, e.g. a runner that does `bash -lc`, whose /etc/profile
+# would otherwise reset PATH and drop /opt/venv/bin). The sentinel keeps nested shells from stacking
+# PATH entries. LD_LIBRARY_PATH needs <arch>-linux/lib64 explicitly: set_env.sh omits it, but the
+# stubbed libhccl and its siblings live there.
 ENV ASCEND_HOME_PATH=/usr/local/Ascend/ascend-toolkit/latest
-ENV PATH=/opt/venv/bin:${ASCEND_HOME_PATH}/aarch64-linux/ccec_compiler/bin:${PATH}
+ENV PATH=/opt/venv/bin:${ASCEND_HOME_PATH}/${ARCH}-linux/ccec_compiler/bin:${PATH}
+# Architecture and CANN version are properties of THIS image, so publish them for anything built FROM
+# here (docker/eval needs both to pick the right ops .run). A child that re-declared its own ARG could
+# disagree with the base and silently install the wrong architecture's -- or the wrong release's --
+# ops on top of this toolkit; inheriting makes that impossible.
+ENV CANN_ARCH=${ARCH}
+ENV CANN_VERSION=${CANN_VERSION}
 RUN printf '%s\n' \
-    'source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true' \
-    'export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/lib64:${LD_LIBRARY_PATH}' \
-    >> /etc/bash.bashrc
+    '# Only set_env.sh is guarded: it appends unboundedly, so re-sourcing it in nested shells' \
+    '# would grow the environment without limit. The exported vars it defines survive anyway.' \
+    'if [ -z "${_CANN_ENV_DONE:-}" ]; then' \
+    '  export _CANN_ENV_DONE=1' \
+    '  source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true' \
+    'fi' \
+    '# PATH / LD_LIBRARY_PATH are re-asserted EVERY time, membership-tested rather than' \
+    '# guard-tested. Anything downstream may reset PATH after the guard is already exported --' \
+    "# /etc/profile in a login shell does exactly that -- and a one-shot guard would then skip" \
+    '# the repair, leaving the shell without /opt/venv/bin (python3 disappears). The case test' \
+    '# keeps repeated sourcing from growing them.' \
+    'case ":${PATH}:" in' \
+    '  *":/opt/venv/bin:"*) ;;' \
+    "  *) export PATH=/opt/venv/bin:${ASCEND_HOME_PATH}/${ARCH}-linux/ccec_compiler/bin:\${PATH} ;;" \
+    'esac' \
+    "case \":\${LD_LIBRARY_PATH:-}:\" in" \
+    "  *\":${ASCEND_HOME_PATH}/${ARCH}-linux/lib64:\"*) ;;" \
+    "  *) export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/${ARCH}-linux/lib64:\${LD_LIBRARY_PATH} ;;" \
+    'esac' \
+    > /etc/cann-env.sh \
+ && chmod 0644 /etc/cann-env.sh \
+ && ln -sf /etc/cann-env.sh /etc/profile.d/10-cann.sh \
+ && printf 'source /etc/cann-env.sh\n' >> /etc/bash.bashrc
+ENV BASH_ENV=/etc/cann-env.sh
 
-ENTRYPOINT ["/bin/bash", "-c", "source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null; export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/lib64:${LD_LIBRARY_PATH}; exec \"$@\"", "bash"]
+ENTRYPOINT ["/bin/bash", "-c", "source /etc/cann-env.sh; exec \"$@\"", "bash"]
 WORKDIR /workspace
 CMD ["bash"]

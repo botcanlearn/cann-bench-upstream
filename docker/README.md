@@ -8,6 +8,18 @@ base/  (cann-toolkit-base)          环境底座: CANN toolkit + torch/torch_npu
 dev/   (cann-bench:cann9.0.0-*)     AscendHub 全量 CANN 的交互/CI 调试镜像 (独立血统)
 ```
 
+**base 就是 common。** 它到 toolkit 为止不装 ops,唯一的变量是 CPU 架构(`ARCH`,写进
+`ENV CANN_ARCH` 供下游继承)。**芯片(SoC)的分叉正好从 `ops.run` 开始**,所以整条分叉都在
+`eval/` 里,而且只是三个 ARG 值(`NPU_ARCH` / `OPS_PKG` / `OPS_MODE`)—— a2 与 a5 的镜像**零
+结构差异**,不需要两份 Dockerfile。
+
+| 目标 | 建在哪 | `ARCH` | `NPU_ARCH` | `OPS_MODE` |
+|---|---|---|---|---|
+| A2 (910B2) | aarch64 host | `aarch64` | `ascend910b` | `none` |
+| A5 (950PR) | x86_64 host | `x86_64` | `ascend950` | **`refonly`**(`none` 在 950 上跑不了,见 eval README) |
+
+原生构建,没有交叉编译 —— base 和 eval 必须在目标架构的机器上建,不符会在 build 期直接失败。
+
 | | 干什么 | 什么时候用 |
 |---|---|---|
 | [`eval/`](eval/) | **`docker run <image> [源码目录] [选项]` 直接产出评测报告** | 评一个提交;CI 打分;任何要求"这个分数出自哪个 benchmark 版本"可回答的场景 |

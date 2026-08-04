@@ -22,33 +22,63 @@ FROM ${BASE_IMAGE}
 ARG PYPI_MIRROR=
 ARG TORCH_MIRROR=
 ARG UV_PYTHON_INSTALL_MIRROR=
-ARG CANN_VERSION=9.0.1
-ARG ARCH=aarch64
+
+# This layer is where the per-SoC fork lives; everything architecture-shaped and every version-shaped
+# thing already happened in the base, and arrives as the inherited ENV CANN_ARCH / CANN_VERSION
+# (deliberately NOT re-declared here -- local knobs could disagree with the base and quietly install
+# the wrong architecture's, or the wrong release's, ops on top of its toolkit).
+# NPU_ARCH picks the SoC cann_bench_utils compiles kernels for; OPS_PKG names that SoC's ops .run
+# (spelled differently from the compiler flag: ascend910b <-> 910b, ascend950 <-> 950).
+# docker/eval/build.sh derives NPU_ARCH/OPS_PKG/OPS_MODE for you; set them by hand only for a one-off.
+ARG NPU_ARCH=ascend910b
+ARG OPS_PKG=910b
 
 # WHY this exists at all: a submission "cheats" by CALLING a builtin (aclnn<Op> / torch_npu op), which
-# dispatches into the 4.2G tbe/kernel BINARY tree. The 151M tbe/impl AscendC SOURCE tree is not a cheat
-# -- it is a legitimate reference we may want an agent to read.
-#   none    (default): never install ops. The base is already 0-ops, so this costs nothing and blocks
-#                      every builtin. opp/ still exists (the toolkit ships it, incl. the empty
-#                      opp/vendors that .run-form custom-op submissions install into).
-#   refonly          : install ops, then strip ONLY the kernel binaries IN THE SAME LAYER -> keep the
-#                      impl source as reference, builtins fail to launch. Use this if a run needs opp
-#                      machinery that 0-ops lacks (see README's perf note).
-#   full             : install ops and keep everything. Cheatable; for re-collecting aclnn baselines.
+# dispatches into the multi-GB tbe/kernel BINARY tree (4.2G on 910B, 5.0G on 950). The ~151M tbe/impl
+# AscendC SOURCE tree is not a cheat -- it is a legitimate reference we may want an agent to read.
+#   none     : never install ops -- the base is already ops-less, so this costs nothing. Blocks builtins
+#              because libopapi (the aclnn entry library, shipped in ops) is absent; the toolkit's own
+#              small ~11M kernel tree is not enough to launch one. opp/ still exists, including the empty
+#              opp/vendors that .run-form custom-op submissions install into.
+#   refonly  : install ops, then strip ONLY the kernel binaries IN THE SAME LAYER -> keep the impl source
+#              as reference; libopapi is present but every builtin fails to launch.
+#   full     : install ops and keep everything. Cheatable; for re-collecting aclnn baselines.
+#
+# WHICH ONE: `none` is right on 910B and WRONG on 950. Measured on a 950PR: with no ops at all even a
+# bare `torch.arange(8).npu()` dies -- the H2D copy routes through aclnnInplaceCopy there (ERR01007
+# "OPS feature not supported"), where 910B does a plain aclrtMemcpy and needs nothing. `refonly` fixes
+# that on 950 and still blocks builtins (matmul dies 561103 "Parse dynamic kernel config fail"), so 950
+# keeps the full anti-cheat posture -- it just cannot use `none`. The guard below refuses that combo
+# rather than shipping an image that dies on its first tensor.
 ARG OPS_MODE=none
-ARG CANN_OPS_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-910b-ops_${CANN_VERSION}_linux-${ARCH}.run
+# Empty = derive from the inherited CANN_VERSION + CANN_ARCH below. Set it only to pin an exact .run
+# (the ops naming has held across releases -- 9.1.0 is published for 910b/950 x aarch64/x86_64 under
+# exactly this scheme -- so this is a pin, not a portability crutch).
+ARG CANN_OPS_URL=
 ARG OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp
 
 # The ops tree is GBs and never changes -- keep it as the first (bottom-most) layer so the python /
 # harness layers below rebuild independently of it.
 RUN set -e; \
     case "${OPS_MODE}" in none|refonly|full) ;; *) echo "invalid OPS_MODE=${OPS_MODE}" >&2; exit 1;; esac; \
+    : "${CANN_ARCH:?base image did not set CANN_ARCH -- rebuild docker/base}"; \
+    : "${CANN_VERSION:?base image did not set CANN_VERSION -- rebuild docker/base}"; \
+    if [ "$(uname -m)" != "${CANN_ARCH}" ]; then \
+      echo "base image is ${CANN_ARCH} but this is a $(uname -m) host -- native builds only." >&2; \
+      exit 1; \
+    fi; \
+    if [ "${NPU_ARCH}" = ascend950 ] && [ "${OPS_MODE}" = none ]; then \
+      echo "OPS_MODE=none is not usable on ${NPU_ARCH}: the H2D copy needs aclnnInplaceCopy (ERR01007)." >&2; \
+      echo "Use OPS_MODE=refonly -- it keeps the anti-cheat posture on 950. See the note above." >&2; \
+      exit 1; \
+    fi; \
+    OPS_URL="${CANN_OPS_URL:-https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-${OPS_PKG}-ops_${CANN_VERSION}_linux-${CANN_ARCH}.run}"; \
     if [ "${OPS_MODE}" != none ]; then \
-      wget --quiet --header="Referer: https://www.hiascend.com/" "${CANN_OPS_URL}" -O /tmp/ops.run \
+      wget --quiet --header="Referer: https://www.hiascend.com/" "${OPS_URL}" -O /tmp/ops.run \
       && chmod +x /tmp/ops.run && /tmp/ops.run --quiet --install --install-for-all && rm -f /tmp/ops.run; \
     fi; \
     if [ "${OPS_MODE}" = refonly ]; then rm -rf "${OPP_PATH}/built-in/op_impl/ai_core/tbe/kernel"; fi; \
-    echo "OPS_MODE=${OPS_MODE}"
+    echo "OPS_MODE=${OPS_MODE} NPU_ARCH=${NPU_ARCH} CANN_ARCH=${CANN_ARCH} CANN_VERSION=${CANN_VERSION}"
 ENV OPS_MODE=${OPS_MODE}
 
 # kernel_eval imports more than the direct-launch base needed (pandas / ruamel.yaml / protobuf /
@@ -56,9 +86,17 @@ ENV OPS_MODE=${OPS_MODE}
 # `uv sync` only ADDS -- it reconciles the same /opt/venv without uninstalling the base's torch.
 # Mirror handling is the base's trick: rewrite the lock's canonical URLs in place, same hashes, so
 # --frozen still verifies and mirroring costs no reproducibility.
+#
+# UV_INDEX_URL is needed ON TOP of that rewrite, and only here. `en-dtypes` is the one entry in this
+# lock published as an sdist with no wheel, so uv must BUILD it -- and building means resolving its
+# build-system.requires (setuptools, numpy) from an INDEX, which the URL rewrite does not touch. Left
+# unset that resolution goes to pypi.org and times out in-region ("Failed to fetch
+# https://pypi.org/simple/setuptools/ ... operation timed out"), failing the whole layer after ~4min.
+# docker/base's lock has no sdist-only entry, which is why it never needed this.
 COPY docker/eval/pyproject.toml docker/eval/uv.lock /opt/eval-env/
 RUN L=/opt/eval-env/uv.lock; \
-    if [ -n "${PYPI_MIRROR}" ];  then sed -i "s|https://files.pythonhosted.org/packages/|${PYPI_MIRROR%/}/packages/|g" "$L"; fi; \
+    if [ -n "${PYPI_MIRROR}" ];  then sed -i "s|https://files.pythonhosted.org/packages/|${PYPI_MIRROR%/}/packages/|g" "$L"; \
+                                      export UV_INDEX_URL="${PYPI_MIRROR%/}/simple"; fi; \
     if [ -n "${TORCH_MIRROR}" ]; then sed -i "s|https://download-r2.pytorch.org/whl/cpu/|${TORCH_MIRROR%/}/|g" "$L"; fi; \
     UV_PYTHON_INSTALL_MIRROR="${UV_PYTHON_INSTALL_MIRROR}" uv sync --frozen --project /opt/eval-env
 
@@ -75,8 +113,9 @@ ENV CANN_BENCH_DIR=/opt/cann-bench
 # for the frequency ramp, so run_evaluation.sh's ensure_cann_bench_utils() would try to compile it at
 # RUN time. Compile and install it here instead -- it needs only bisheng, no NPU -- so the container
 # starts straight into evaluating and the wheel is part of the frozen artifact.
-# It embeds SoC-specific kernels, hence NPU_ARCH: this image is per-SoC even though the base is not.
-ARG NPU_ARCH=ascend910b
+# It embeds SoC-specific kernels (NPU_ARCH, declared with the other knobs at the top) -- which is what
+# makes this image per-SoC even though the base is not. Verified to build and run for both ascend910b
+# and ascend950.
 RUN . /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true; \
     cd /opt/cann-bench/src/cann_bench_utils \
     && PYTHON=/opt/venv/bin/python3 bash build.sh --clean --soc=${NPU_ARCH} \

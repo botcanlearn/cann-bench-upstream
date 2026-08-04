@@ -26,13 +26,25 @@ NPU_FLAGS=(
     --device /dev/davinci_manager
     --device /dev/devmm_svm
     --device /dev/hisi_hdc
-    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
-    -v /usr/local/dcmi:/usr/local/dcmi:ro
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro
-    -v /etc/ascend_install.info:/etc/ascend_install.info:ro
     -e LD_LIBRARY_PATH="${DRV}"
     -e ASCEND_RT_VISIBLE_DEVICES="${ASCEND_RT_VISIBLE_DEVICES:-0}"
 )
+# Mount each host path only if it exists AND is the right type: docker CREATES a missing bind-mount
+# source as a root-owned empty DIRECTORY on the host, which litters a shared box and then keeps being
+# mounted forever (a5 already carries such an empty /usr/local/bin/npu-smi, which would put a directory
+# on PATH where an executable belongs). Only the driver tree is universal -- dcmi / npu-smi /
+# ascend_install.info move with the driver install.
+maybe_mount() {   # $1 = required type (d|f), $2 = host path mounted at the same path in-container
+    case "$1" in
+        d) [[ -d "$2" ]] || return 0 ;;
+        f) [[ -f "$2" ]] || return 0 ;;
+    esac
+    NPU_FLAGS+=(-v "$2:$2:ro")
+}
+maybe_mount d /usr/local/Ascend/driver
+maybe_mount d /usr/local/dcmi
+maybe_mount f /usr/local/bin/npu-smi
+maybe_mount f /etc/ascend_install.info
 
 case "$MODE" in
     smoke)

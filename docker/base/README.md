@@ -11,6 +11,7 @@ AscendC/CCE kernel,经 `KNAME<<<grid, nullptr, stream>>>` 直接下发,不走 ac
 | base | AscendHub 完整 CANN(`cann:<ver>-<device>-...`,per-device) | `debian:12-slim`,从 `.run` 自装 toolkit |
 | ops / nnal | 有 | **无(0 ops)** |
 | chip | per-`DEVICE` tag | **chip-agnostic**(chip 只进 mounted driver + bisheng `--soc`) |
+| CPU 架构 | per-tag | `ARCH` build-arg(aarch64 / x86_64),原生构建;写入 `ENV CANN_ARCH` 供下游继承 |
 | py / env | ubuntu22.04 + py3.12 | uv 管理的 py3.13 standalone(`uv.lock` 锁定) |
 | 适用 | 全量评测(含 aclnn baseline + perf 开箱) | 直调提交:精度独立可跑;perf 见下 |
 
@@ -25,10 +26,16 @@ AscendHub per-device 镜像)。
 
 ```bash
 cd docker/base/
-docker build -t cann-toolkit-base:9.0.1-py3.13 .
+docker build --build-arg ARCH=$(uname -m) -t cann-toolkit-base:9.0.1-py3.13 .
 ```
 
-镜像 **aarch64-only**(Ascend host = Kunpeng/ARM;x86_64 若需另开专门测过的变体)。python 依赖由
+镜像架构由 **`ARCH` build-arg** 决定(`aarch64` / `x86_64`,默认 `aarch64`),**必须在目标架构的
+机器上原生构建** —— 没有交叉编译、没有 `--platform`。两种架构都已实测跑通(aarch64/910B2 与
+x86_64/950PR:装 toolkit、同一份 lock `uv sync --frozen`、stub libhccl、编 `cann_bench_utils`、
+认卡)。构建结果会把架构写进 `ENV CANN_ARCH`,`docker/eval` **继承**它来挑对应架构的 ops 包 ——
+所以下游不该、也不需要再声明自己的 `ARCH`。
+
+python 依赖由
 `pyproject.toml` + `uv.lock` 锁定(hash 校验),`uv sync --frozen` 装入 `/opt/venv`。
 
 ### 镜像源(每个都默认走官方/全球源;受限网络用 `--build-arg` 换在区镜像)
@@ -41,7 +48,32 @@ docker build -t cann-toolkit-base:9.0.1-py3.13 .
 | `UV_PYTHON_INSTALL_MIRROR` | (空 = github releases) | `https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone` |
 | `PYPI_MIRROR` | (空 = `files.pythonhosted.org`) | `https://mirrors.huaweicloud.com/repository/pypi` |
 | `TORCH_MIRROR` | (空 = `download.pytorch.org`) | `https://mirror.nju.edu.cn/pytorch/whl/cpu` |
-| `CANN_VERSION` | `9.0.1` | toolkit `.run` 版本(从 OBS 拉取) |
+| `CANN_VERSION` | `9.0.1` | toolkit `.run` 版本(从 OBS 拉取);落到 `ENV CANN_VERSION` 供 `docker/eval` 继承 |
+| `CANN_TOOLKIT_URL` | 空(由 `CANN_VERSION` + `ARCH` 推导) | 只在该版本不按常规命名/不在常规 bucket 时设,见下 |
+| `ARCH` | `aarch64` | `aarch64` / `x86_64`;决定 toolkit `.run`、`<arch>-linux/` 路径,并落到 `ENV CANN_ARCH` |
+
+### 换 CANN 版本
+
+正常只需 `--build-arg CANN_VERSION=<版本>` —— toolkit 和 ops 两个包在
+`ascend-repo.obs.cn-east-2` 上的命名跨版本一致(9.1.0 的 toolkit/ops × aarch64/x86_64 四个包
+均已核实存在),`docker/eval` 会继承 `ENV CANN_VERSION` 去推导同版本的 ops:
+
+```bash
+# base
+docker build --build-arg CANN_VERSION=9.1.0 --build-arg ARCH=$(uname -m) \
+             -t cann-toolkit-base:9.1.0-py3.13 .
+# eval (build.sh 用 CANN_VERSION 只是为了拼 BASE_IMAGE 的 tag)
+CANN_VERSION=9.1.0 NPU_ARCH=ascend950 bash ../eval/build.sh
+```
+
+`CANN_TOOLKIT_URL` 是给例外准备的:部分版本发在 `ascend-cann-open.obs.cn-north-4` 上,
+或以合并包 `Ascend-cann_<版本>_linux-<arch>.run` 的形式发布(而非 `Ascend-cann-toolkit_...`)。
+
+**9.1.0 实测过**(q7 / 910B2 / aarch64):只加 `--build-arg CANN_VERSION=9.1.0`,base + eval
+(`OPS_MODE=refonly`,顺带验了 9.1.0 的 ops 包)全部建成,`--self-test` 全绿、内置算子仍被挡住,
+一次真实三阶段评测 4/4 通过、得分 74.10(9.0.1 同一提交同一算子是 73.00)。安装布局也没变
+(`cann-9.1.0/` + `latest` 符号链接 + `ascend-toolkit/set_env.sh`),`torch_npu 2.10.0.post2`
+虽然官方对表写的是 CANN 9.0.x,在 9.1.0 上导入、认卡、H2D、编译提交都正常。
 
 `PYPI_MIRROR`/`TORCH_MIRROR` 就地改写 `uv.lock` 里的 canonical wheel URL(**同 hash**,`--frozen` 仍校验),
 换源不破坏可复现性。CN 全量示例:
