@@ -749,6 +749,7 @@ cases:
   - &id039
     - - 128
   - *id039
+  - null
   - - 1
     - 6
     - 32
@@ -761,6 +762,7 @@ cases:
   - - float32
   - - float32
   - - float32
+  - null
   - float32
   - float32
   attrs:
@@ -783,6 +785,7 @@ cases:
       - 0.01
   - - - -0.01
       - 0.01
+  - null
   - - -0.1
     - 0.1
   - - -0.1
