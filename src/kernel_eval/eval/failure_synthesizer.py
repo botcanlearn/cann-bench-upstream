@@ -134,12 +134,32 @@ class FailureSynthesizer:
         cli 与 evaluator 两条编译失败处理路径的**单一真源**，避免两处逻辑漂移。
 
         - 能反查到 spec 的算子逐个合成（受 operator_filter 约束）；
+        - 编译日志只有 ``<build>`` 等提交级错误时，若调用方明确指定了目标算子，
+          将错误归到这些真实算子，而不是新增 ``<submission>`` 伪算子；
         - 反查不到的（`<build>` 兜底键 / 未注册 snake 名）打 WARN 跳过；
-        - 仅当**没有任何算子能反查到 spec** 时，合成一条提交级记录，避免空报告
-          静默失败。注意：只在"无法映射"时兜底，**不**在"算子被 operator_filter
-          过滤掉"时兜底——否则会把用户主动过滤误判为无法映射而虚报失败。
+        - 仅当编译日志和显式目标都**无法反查到 spec** 时，合成一条提交级记录，
+          避免空报告静默失败。注意：只在"无法映射"时兜底，**不**在"算子被
+          operator_filter 过滤掉"时兜底——否则会把用户主动过滤误判为无法映射
+          而虚报失败。
         """
         import sys
+
+        requested_specs = []
+        requested_names = set()
+        for requested in operator_filter or []:
+            op_info = operator_matcher.find_operator_info(requested)
+            if op_info is None:
+                op_info = operator_matcher.find_operator_info_by_snake(requested)
+            if op_info is None:
+                print(
+                    f"[WARN] 指定算子 {requested!r} 未在 OperatorMatcher 中找到对应 spec。",
+                    file=sys.stderr, flush=True,
+                )
+                continue
+            if op_info.name in requested_names:
+                continue
+            requested_specs.append(op_info)
+            requested_names.add(op_info.name)
 
         results: List[EvalOperatorResult] = []
         mapped_any = False
@@ -153,7 +173,7 @@ class FailureSynthesizer:
                 )
                 continue
             mapped_any = True
-            if operator_filter and op_info.name not in operator_filter:
+            if operator_filter and op_info.name not in requested_names:
                 continue
             results.append(self.synthesize_compile_failure(
                 op_info, err, case_filter, filter_func,
@@ -163,6 +183,18 @@ class FailureSynthesizer:
             joined = "\n".join(
                 f"[{k}] {v}" for k, v in (package_info.compile_errors or {}).items()
             ) or "build.sh 编译失败（无更多详情）"
+            if requested_specs:
+                print(
+                    "[WARN] 编译失败日志未能映射到具体算子，"
+                    "按调用方指定的目标算子合成编译失败结果。",
+                    file=sys.stderr, flush=True,
+                )
+                return [
+                    self.synthesize_compile_failure(
+                        op_info, joined, case_filter, filter_func,
+                    )
+                    for op_info in requested_specs
+                ]
             print(
                 "[WARN] 编译失败但未能映射到任何已注册算子，"
                 "合成提交级编译失败记录以避免空报告。",

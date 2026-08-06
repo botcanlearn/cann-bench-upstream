@@ -348,7 +348,7 @@ def _write_compile_failure_report(
     from .eval.evaluator import Evaluator
 
     evaluator = Evaluator(cfg, bench_name=args.bench_name)
-    op_filter = [args.operator] if args.operator else None
+    op_filter = _compile_failure_operator_filter(args)
     failures = evaluator.failure_synthesizer.synthesize_all_compile_failures(
         evaluator.operator_matcher,
         package_info,
@@ -356,6 +356,14 @@ def _write_compile_failure_report(
     )
     _save_report(args, cfg, failures, stage="compile_failed", contains_performance=False)
     evaluator.shutdown()
+
+
+def _compile_failure_operator_filter(args: argparse.Namespace) -> Optional[List[str]]:
+    """Return the requested operators that a submission-level build error belongs to."""
+    if args.operator:
+        return [args.operator]
+    selected = getattr(args, "selected_operators", None)
+    return list(selected) if selected else None
 
 
 def _compile(args: argparse.Namespace, bench_root: str) -> int:

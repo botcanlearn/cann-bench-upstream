@@ -1,9 +1,15 @@
 #!/usr/bin/python3
 # coding=utf-8
 
+from argparse import Namespace
+
 from kernel_eval.base.result import AccuracyResult, PerfResult
 from kernel_eval.eval.results import EvalCaseResult, EvalOperatorResult
-from kernel_eval.staged_eval import _case_num_from_value, _merge_results
+from kernel_eval.staged_eval import (
+    _case_num_from_value,
+    _compile_failure_operator_filter,
+    _merge_results,
+)
 
 
 def _case(case_num, *, success, failure_type=None, accuracy_result=None, perf_result=None):
@@ -40,6 +46,14 @@ def test_case_num_parses_full_case_id_suffix():
     assert _case_num_from_value("level2/dynamic_quant_17") == 17
     assert _case_num_from_value(18) == 18
     assert _case_num_from_value(None) == 0
+
+
+def test_compile_failure_filter_uses_selected_operators():
+    args = Namespace(operator=None, selected_operators=["conv_3d_backprop_filter"])
+    assert _compile_failure_operator_filter(args) == ["conv_3d_backprop_filter"]
+
+    args.operator = "Conv3DBackpropFilter"
+    assert _compile_failure_operator_filter(args) == ["Conv3DBackpropFilter"]
 
 
 def test_merge_results_matches_string_case_id_and_recounts_failures():

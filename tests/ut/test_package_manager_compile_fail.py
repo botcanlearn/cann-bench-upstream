@@ -148,6 +148,9 @@ class _FakeMatcher:
     def find_operator_info_by_snake(self, snake):
         return self.mapping.get(snake)
 
+    def find_operator_info(self, name):
+        return next((op for op in self.mapping.values() if op.name == name), None)
+
 
 def _pkg(compile_errors):
     class _P:
@@ -183,6 +186,35 @@ def test_synth_all_build_sentinel_falls_back_to_submission_level():
     res = _synth().synthesize_all_compile_failures(m, _pkg({"<build>": "boom cmake error"}))
     assert len(res) == 1 and res[0].operator == "<submission>"
     assert "boom cmake error" in (res[0].compilation_error or "")
+
+
+def test_synth_all_build_sentinel_uses_selected_real_operator():
+    """Issue #128: 单算子早期编译失败不得新增 <submission> 伪算子。"""
+    op = _FakeOp("Conv3DBackpropFilter", "level3/conv_3d_backprop_filter")
+    m = _FakeMatcher({"conv_3d_backprop_filter": op})
+
+    res = _synth().synthesize_all_compile_failures(
+        m,
+        _pkg({"<build>": "boom cmake error"}),
+        operator_filter=["conv_3d_backprop_filter"],
+    )
+
+    assert [r.operator for r in res] == ["Conv3DBackpropFilter"]
+    assert res[0].rel_path == "level3/conv_3d_backprop_filter"
+    assert "boom cmake error" in (res[0].compilation_error or "")
+
+
+def test_synth_all_operator_filter_accepts_snake_case_for_mapped_error():
+    op = _FakeOp("Conv3DBackpropFilter", "level3/conv_3d_backprop_filter")
+    m = _FakeMatcher({"conv_3d_backprop_filter": op})
+
+    res = _synth().synthesize_all_compile_failures(
+        m,
+        _pkg({"conv_3d_backprop_filter": "compiler error"}),
+        operator_filter=["conv_3d_backprop_filter"],
+    )
+
+    assert [r.operator for r in res] == ["Conv3DBackpropFilter"]
 
 
 def test_synth_all_filtered_out_does_not_trigger_submission_fallback():
