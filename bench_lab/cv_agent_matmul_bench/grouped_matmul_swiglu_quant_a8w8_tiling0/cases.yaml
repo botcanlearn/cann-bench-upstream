@@ -1,50 +1,6 @@
-# ----------------------------------------------------------------------------
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# ----------------------------------------------------------------------------
 cases:
 - operator: GroupedMatmulSwigluQuant
   case_id: 1
-  input_shape:
-  - - 4
-    - 128
-  - - 1
-    - 128
-    - 256
-  - - 1
-    - 256
-  - - 4
-  - - 1
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 4
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-smoke-singleExpert-M4-K128-N256
-- operator: GroupedMatmulSwigluQuant
-  case_id: 2
   input_shape:
   - - 8
     - 128
@@ -68,19 +24,98 @@ cases:
     - 8
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-smoke-E2-M8-K128-N256
+  - -2
+  - 2
+  note: F2-A8W8-tk0-E2-M8xK128xN256
+- operator: GroupedMatmulSwigluQuant
+  case_id: 2
+  input_shape:
+  - - 16
+    - 256
+  - - 4
+    - 256
+    - 512
+  - - 4
+    - 512
+  - - 16
+  - - 4
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 4
+    - 8
+    - 12
+    - 16
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-kernelUT-like-A8W8-tk0-E4-M16xK256xN512
 - operator: GroupedMatmulSwigluQuant
   case_id: 3
+  input_shape:
+  - - 24
+    - 256
+  - - 4
+    - 256
+    - 512
+  - - 4
+    - 512
+  - - 24
+  - - 4
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 6
+    - 10
+    - 18
+    - 24
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-uneven-E4-M24xK256xN512
+- operator: GroupedMatmulSwigluQuant
+  case_id: 4
+  input_shape:
+  - - 4
+    - 128
+  - - 1
+    - 128
+    - 256
+  - - 1
+    - 256
+  - - 4
+  - - 1
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 4
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-singleExpert-M4
+- operator: GroupedMatmulSwigluQuant
+  case_id: 5
   input_shape:
   - - 17
     - 128
@@ -105,19 +140,106 @@ cases:
     - 17
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-smoke-tailM17-E3-K128-N256
+  - -2
+  - 2
+  note: F2-A8W8-tk0-tailM17-E3
 - operator: GroupedMatmulSwigluQuant
-  case_id: 4
+  case_id: 6
+  input_shape:
+  - - 20
+    - 256
+  - - 5
+    - 256
+    - 384
+  - - 5
+    - 384
+  - - 20
+  - - 5
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 2
+    - 7
+    - 11
+    - 15
+    - 20
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-E5-M20xK256xN384
+- operator: GroupedMatmulSwigluQuant
+  case_id: 7
+  input_shape:
+  - - 32
+    - 512
+  - - 4
+    - 512
+    - 256
+  - - 4
+    - 256
+  - - 32
+  - - 4
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 8
+    - 16
+    - 24
+    - 32
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-K512-M32xN256
+- operator: GroupedMatmulSwigluQuant
+  case_id: 8
+  input_shape:
+  - - 40
+    - 128
+  - - 8
+    - 128
+    - 128
+  - - 8
+    - 128
+  - - 40
+  - - 8
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 2
+    - 5
+    - 9
+    - 14
+    - 20
+    - 27
+    - 34
+    - 40
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-E8-smallHidden
+- operator: GroupedMatmulSwigluQuant
+  case_id: 9
   input_shape:
   - - 12
     - 64
@@ -142,19 +264,11 @@ cases:
     - 12
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-edge-emptyFirstExpert-K64-N256
+  - -2
+  - 2
+  note: F2-A8W8-tk0-emptyFirstExpert
 - operator: GroupedMatmulSwigluQuant
-  case_id: 5
+  case_id: 10
   input_shape:
   - - 24
     - 192
@@ -182,19 +296,102 @@ cases:
     - 24
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-edge-emptyMiddleExpert-K192-N384
+  - -2
+  - 2
+  note: F2-A8W8-tk0-emptyMiddleExpert
 - operator: GroupedMatmulSwigluQuant
-  case_id: 6
+  case_id: 11
+  input_shape:
+  - - 1
+    - 256
+  - - 2
+    - 256
+    - 512
+  - - 2
+    - 512
+  - - 1
+  - - 2
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 0
+    - 1
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-singleToken
+- operator: GroupedMatmulSwigluQuant
+  case_id: 12
+  input_shape:
+  - - 48
+    - 320
+  - - 4
+    - 320
+    - 640
+  - - 4
+    - 640
+  - - 48
+  - - 4
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 12
+    - 24
+    - 36
+    - 48
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-wideN640
+- operator: GroupedMatmulSwigluQuant
+  case_id: 13
+  input_shape:
+  - - 31
+    - 160
+  - - 7
+    - 160
+    - 320
+  - - 7
+    - 320
+  - - 31
+  - - 7
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 1
+    - 4
+    - 8
+    - 13
+    - 19
+    - 25
+    - 31
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-primeM31-E7
+- operator: GroupedMatmulSwigluQuant
+  case_id: 14
   input_shape:
   - - 16
     - 64
@@ -232,329 +429,21 @@ cases:
     - 16
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-edge-manyExperts-E16-smallShape
-- operator: GroupedMatmulSwigluQuant
-  case_id: 7
-  input_shape:
-  - - 256
-    - 1024
-  - - 4
-    - 1024
-    - 2048
-  - - 4
-    - 2048
-  - - 256
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 64
-    - 128
-    - 192
-    - 256
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M256-K1024-N2048
-- operator: GroupedMatmulSwigluQuant
-  case_id: 8
-  input_shape:
-  - - 512
-    - 1024
-  - - 4
-    - 1024
-    - 2048
-  - - 4
-    - 2048
-  - - 512
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 128
-    - 256
-    - 384
-    - 512
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M512-K1024-N2048
-- operator: GroupedMatmulSwigluQuant
-  case_id: 9
-  input_shape:
-  - - 1024
-    - 1024
-  - - 4
-    - 1024
-    - 2048
-  - - 4
-    - 2048
-  - - 1024
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 256
-    - 512
-    - 768
-    - 1024
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M1024-K1024-N2048
-- operator: GroupedMatmulSwigluQuant
-  case_id: 10
-  input_shape:
-  - - 2048
-    - 1024
-  - - 4
-    - 1024
-    - 2048
-  - - 4
-    - 2048
-  - - 2048
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 512
-    - 1024
-    - 1536
-    - 2048
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M2048-K1024-N2048
-- operator: GroupedMatmulSwigluQuant
-  case_id: 11
-  input_shape:
-  - - 256
-    - 2048
-  - - 4
-    - 2048
-    - 4096
-  - - 4
-    - 4096
-  - - 256
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 64
-    - 128
-    - 192
-    - 256
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M256-K2048-N4096
-- operator: GroupedMatmulSwigluQuant
-  case_id: 12
-  input_shape:
-  - - 512
-    - 2048
-  - - 4
-    - 2048
-    - 4096
-  - - 4
-    - 4096
-  - - 512
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 128
-    - 256
-    - 384
-    - 512
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M512-K2048-N4096
-- operator: GroupedMatmulSwigluQuant
-  case_id: 13
-  input_shape:
-  - - 256
-    - 4096
-  - - 2
-    - 4096
-    - 4096
-  - - 2
-    - 4096
-  - - 256
-  - - 2
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 128
-    - 256
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E2-M256-K4096-N4096-maxDim
-- operator: GroupedMatmulSwigluQuant
-  case_id: 14
-  input_shape:
-  - - 512
-    - 4096
-  - - 2
-    - 4096
-    - 2048
-  - - 2
-    - 2048
-  - - 512
-  - - 2
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 256
-    - 512
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E2-M512-K4096-N2048
+  - -2
+  - 2
+  note: F2-A8W8-tk0-manyExperts-E16
 - operator: GroupedMatmulSwigluQuant
   case_id: 15
   input_shape:
-  - - 640
-    - 1152
-  - - 8
-    - 1152
-    - 2304
-  - - 8
-    - 2304
-  - - 640
-  - - 8
+  - - 56
+    - 256
+  - - 4
+    - 256
+    - 768
+  - - 4
+    - 768
+  - - 56
+  - - 4
   dtype:
   - int8
   - int8
@@ -564,39 +453,27 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 47
-    - 111
-    - 192
-    - 288
-    - 353
-    - 449
-    - 573
-    - 640
+    - 14
+    - 28
+    - 42
+    - 56
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E8-M640-K1152-N2304-raggedNonAligned
+  - -2
+  - 2
+  note: F2-A8W8-tk0-wideN768-M56
 - operator: GroupedMatmulSwigluQuant
   case_id: 16
   input_shape:
-  - - 1000
-    - 1536
-  - - 16
-    - 1536
-    - 1536
-  - - 16
-    - 1536
-  - - 1000
-  - - 16
+  - - 9
+    - 304
+  - - 3
+    - 304
+    - 64
+  - - 3
+    - 64
+  - - 9
+  - - 3
   dtype:
   - int8
   - int8
@@ -606,46 +483,83 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 17
-    - 64
-    - 96
-    - 128
-    - 192
-    - 256
-    - 320
-    - 384
-    - 448
-    - 512
-    - 576
-    - 640
-    - 704
-    - 768
-    - 896
-    - 1000
+    - 1
+    - 5
+    - 9
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E16-M1000-K1536-N1536-manyExpertsNonAligned
+  - -2
+  - 2
+  note: F2-A8W8-tk0-K304-smallN64
 - operator: GroupedMatmulSwigluQuant
   case_id: 17
   input_shape:
-  - - 640
-    - 2304
+  - - 25
+    - 272
+  - - 5
+    - 272
+    - 32
+  - - 5
+    - 32
+  - - 25
+  - - 5
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 5
+    - 5
+    - 10
+    - 18
+    - 25
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-minN32-emptyExpert
+- operator: GroupedMatmulSwigluQuant
+  case_id: 18
+  input_shape:
+  - - 20
+    - 128
+  - - 1
+    - 128
+    - 512
+  - - 1
+    - 512
+  - - 20
+  - - 1
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - int64
+  attrs:
+    variant: A8W8_tiling_key_0
+    group_list_values:
+    - 20
+    tiling_key: 0
+  value_range:
+  - -2
+  - 2
+  note: F2-A8W8-tk0-singleExpert-M20xN512
+- operator: GroupedMatmulSwigluQuant
+  case_id: 19
+  input_shape:
   - - 8
-    - 2304
-    - 1536
+    - 256
   - - 8
-    - 1536
-  - - 640
+    - 256
+    - 32
+  - - 8
+    - 32
+  - - 8
   - - 8
   dtype:
   - int8
@@ -659,115 +573,27 @@ cases:
     - 0
     - 1
     - 1
-    - 37
-    - 128
-    - 257
-    - 511
-    - 640
+    - 3
+    - 5
+    - 5
+    - 7
+    - 8
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E8-M640-K2304-N1536-multipleEmptyNonAligned
-- operator: GroupedMatmulSwigluQuant
-  case_id: 18
-  input_shape:
-  - - 1536
-    - 1536
-  - - 8
-    - 1536
-    - 3072
-  - - 8
-    - 3072
-  - - 1536
-  - - 8
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 23
-    - 97
-    - 256
-    - 384
-    - 641
-    - 1024
-    - 1280
-    - 1536
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E8-M1536-K1536-N3072-raggedNonAligned
-- operator: GroupedMatmulSwigluQuant
-  case_id: 19
-  input_shape:
-  - - 2304
-    - 768
-  - - 4
-    - 768
-    - 1536
-  - - 4
-    - 1536
-  - - 2304
-  - - 4
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - int64
-  attrs:
-    variant: A8W8_tiling_key_0
-    group_list_values:
-    - 333
-    - 777
-    - 1409
-    - 2304
-    tiling_key: 0
-  value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M2304-K768-N1536-longMNonAligned
+  - -2
+  - 2
+  note: F2-A8W8-tk0-multipleEmptyExperts
 - operator: GroupedMatmulSwigluQuant
   case_id: 20
   input_shape:
-  - - 3500
-    - 768
+  - - 64
+    - 384
   - - 4
-    - 768
-    - 1536
+    - 384
+    - 256
   - - 4
-    - 1536
-  - - 3500
+    - 256
+  - - 64
   - - 4
   dtype:
   - int8
@@ -778,20 +604,12 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 512
-    - 1025
-    - 2049
-    - 3500
+    - 16
+    - 32
+    - 48
+    - 64
     tiling_key: 0
   value_range:
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  - - -2
-    - 2
-  note: F2-LLM-prefill-E4-M3500-K768-N1536-maxMNonAligned
+  - -2
+  - 2
+  note: F2-A8W8-tk0-M64xK384xN256

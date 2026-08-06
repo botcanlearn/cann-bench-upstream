@@ -26,13 +26,7 @@ def weight_quant_batch_matmul_v2(
     output_quant: bool = False,
     y_dtype: str = "float32",
 ) -> torch.Tensor:
-    """Torch golden for weight_quant_batch_matmul_v2 antiquant matmul path.
-
-    同精度参考 (bench b)：int8 权重反量化到输入精度 T=x.dtype（与硬件 A16W8 反量化
-    精度一致，保留 int8→fp16/bf16 的舍入），fp32 累加器做 matmul，输出为输出精度。
-    fp64 数学真值见 ``weight_quant_batch_matmul_v2_oracle``；拆分约定见
-    docs/guide/contributing.md §2.4。
-    """
+    """Torch golden for weight_quant_batch_matmul_v2 antiquant matmul path."""
     if output_quant:
         raise ValueError("This benchmark fixes output_quant=False")
     if transpose_x:
@@ -43,23 +37,58 @@ def weight_quant_batch_matmul_v2(
     k2, n = weight.shape
     if k != k2 or bias.shape != (n,):
         raise ValueError("shape mismatch")
-    T = x.dtype
-    w = weight.to(T)
+
+    # Compute dtype = x dtype (kernel requires antiquantScale/offset & y dtype == x dtype:
+    # docs/aclnnWeightQuantBatchMatmulV2.md scale/offset/y "与x一致").
+    compute_dtype = x.dtype if x.dtype in (torch.float16, torch.bfloat16) else torch.float16
+    # anti_quant.h AntiQuantCalType: xType=half -> compute in fp16; bf16 -> compute in fp32.
+    # (op_kernel/weight_quant_batch_matmul_v2_common.h:84-91,100)
+    antiquant_dtype = torch.float16 if compute_dtype == torch.float16 else torch.float32
+
+    # WeightCopyInAndCast: int8 weight -> half (common.h:714); bf16 also -> fp32 (:722).
+    w = weight.to(antiquant_dtype)
+    # scale/offset participate in antiquant at compute dtype (loaded as xType in common.h:343-344;
+    # bf16 upcast to fp32 in BroadCastAntiquantParams common.h:630/664). Round to x dtype first.
+    scale = antiquantScale.to(compute_dtype).to(antiquant_dtype)
+    offset = antiquantOffset.to(compute_dtype).to(antiquant_dtype)
+
     if antiquant_group_size == 0:
-        if antiquantScale.shape != (n,) or antiquantOffset.shape != (n,):
+        if scale.shape != (n,) or offset.shape != (n,):
             raise ValueError("per-channel antiquant expects [N] scale/offset")
-        w_dq = (w + antiquantOffset.reshape(1, n).to(T)) * antiquantScale.reshape(1, n).to(T)
+        # anti_quant.h AntiQuant: Adds(offset) then Muls(scale) => (w + offset) * scale in compute dtype.
+        w_dq = (w + offset.reshape(1, n)) * scale.reshape(1, n)
     else:
         group_num = (k + antiquant_group_size - 1) // antiquant_group_size
-        if antiquantScale.shape != (group_num, n) or antiquantOffset.shape != (group_num, n):
+        if scale.shape != (group_num, n) or offset.shape != (group_num, n):
             raise ValueError("per-group antiquant expects [ceil(K/group),N] scale/offset")
         chunks = []
         for g, start in enumerate(range(0, k, antiquant_group_size)):
             end = min(start + antiquant_group_size, k)
-            chunks.append((w[start:end, :] + antiquantOffset[g:g + 1, :].to(T)) * antiquantScale[g:g + 1, :].to(T))
+            chunks.append((w[start:end, :] + offset[g:g + 1, :]) * scale[g:g + 1, :])
         w_dq = torch.cat(chunks, dim=0)
-    # fp32 累加器（tensor-core 约定）：T 操作数升 fp32 相乘累加，保留已有的 T 舍入
-    return x.to(torch.float32) @ w_dq.to(torch.float32) + bias.to(torch.float32).reshape(1, n)
+
+    # w_dq is materialized in x dtype before the cube: fp16 kept (common.h:886);
+    # bf16 cast back with CAST_RINT round-to-nearest (common.h:883). This narrow-dtype
+    # rounding is the precision the all-fp32 golden missed.
+    w_dq = w_dq.to(compute_dtype)
+
+    # bias GM dtype tracks the kernel's biasType template param, not always fp32: DTYPE_BIAS
+    # macro in weight_quant_batch_matmul_v2.cpp (:49-54) sets biasType = DTYPE_X (fp16) when
+    # x is fp16, else float32; op_host/weight_quant_batch_matmul_v2_def.cpp pairs the bias
+    # dtype array 1:1 with the x dtype array the same way (fp16 x -> fp16 bias, bf16 x ->
+    # float32 bias, never bf16 bias). biasType is also what selects antiQuantCalType
+    # (common.h:100), so it equals antiquant_dtype here. Round bias through that dtype before
+    # promoting to fp32 for the cube accumulator, matching scale/offset's existing
+    # compute_dtype/antiquant_dtype round-trip -- otherwise fp16-x cases silently keep a
+    # higher-precision bias than the real fp16 bias buffer holds.
+    bias_cast = bias.to(antiquant_dtype).to(torch.float32)
+    # Cube matmul accumulates in fp32; bias added in fp32 (MatmulImpl fp32 accum + SetBias, custom.h:74,305).
+    y = x.to(torch.float32) @ w_dq.to(torch.float32) + bias_cast.reshape(1, n)
+
+    # y dtype == x dtype (docs: y "与x一致"); round to x dtype, then present as requested y_dtype.
+    y = y.to(compute_dtype)
+    out_dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}.get(y_dtype, torch.float32)
+    return y.to(out_dtype)
 
 
 def weight_quant_batch_matmul_v2_oracle(

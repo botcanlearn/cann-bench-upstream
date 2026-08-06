@@ -2,9 +2,6 @@
 
 ## 1. 算子简介
 
-**算子特征**：
-- 难度等级：L4（FusedComposite）
-
 `grouped_matmul_swiglu_quant` 融合 grouped matmul、反量化、SwiGLU 和输出动态 int8 量化。本 benchmark 对齐源码目录 `ops-transformer/gmm/grouped_matmul_swiglu_quant`，选取 `A8W8_tiling_key_0` 路径：AIC 完成 grouped int8 matmul 写 workspace，AIV 执行 `xScale/weightScale` 反量化、SwiGLU、逐 token absmax 和 int8 量化。
 
 该 selected kernel path 是单 kernel C->V 路径。本 benchmark 不覆盖 A8W4 MSD、weight NZ、split workspace 或 v2 跨 workspace 调度路径。
@@ -96,7 +93,7 @@ q = torch.round(q).clamp(-128, 127).to(torch.int8)
 
 ### 本 benchmark case 设计
 
-`cases.yaml` 当前包含 20 个正向 case。case 1-6 是小 shape/边界烟测，覆盖单 expert、多 expert、空 expert、tail M、非均匀 group 和 many experts；case 7-14 是标准档位 LLM prefill baseline，覆盖 `M=256/512/1024/2048`、`K=1024/2048/4096`、`N=2048/4096` 和 `E=2/4`；case 15-20 引入非对齐大 shape，覆盖非 256 对齐的 `M=640/1000/3500`、非标准 `K=768/1152/1536/2304`、非标准 `N=1536/2304/3072`、`E=4/8/16`、ragged group 和 multiple empty experts。所有 case 固定 A8W8 `tiling_key=0`，最大单维限制在 4096，便于本地测试。
+`cases.yaml` 当前包含 20 个正向 case，覆盖单 expert、多 expert、空 expert、单 token、tail M、非均匀 group、`K=64..512`、`N=32..768`、小宽度输出和中等规模宽输出。所有 case 固定 A8W8 `tiling_key=0`。
 
 ## 标准 Golden 代码
 

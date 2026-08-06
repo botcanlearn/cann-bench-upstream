@@ -41,11 +41,18 @@ def quant_matmul_reduce_sum(
         raise ValueError(f"x1Scale expects shape [{b}, {m}], got {list(x1Scale.shape)}")
 
     x2_nd = _nz_weight_to_nd(x2, b, k, n)
-    mm = torch.matmul(x1.to(torch.float32), x2_nd.to(torch.float32))
+    # cType=int32 (kernel .cpp): int8xint8 matmul accumulates exactly in int32.
+    mm = torch.matmul(x1.to(torch.int32), x2_nd.to(torch.int32)).to(torch.float32)
+    # AscendDequant applies bf16 x2Scale FIRST (mixcore.h: x2ScaleGm is bfloat16_t),
+    # then per-token x1Scale (fp32) is multiplied; both stages stay fp32.
+    mm = mm * x2Scale.to(torch.bfloat16).to(torch.float32).reshape(1, 1, n)
     mm = mm * x1Scale.to(torch.float32).reshape(b, m, 1)
-    mm = mm * x2Scale.to(torch.float32).reshape(1, 1, n)
-    out = mm.sum(dim=0)
-    return out.to(torch.bfloat16)
+    # Kernel Casts each batch to bf16 (RoundMode::CAST_RINT) then AtomicAdd<bf16>
+    # into a zero-init bf16 output, so batch reduce accumulates in bfloat16.
+    out = mm[0].to(torch.bfloat16)
+    for bi in range(1, b):
+        out = (out.to(torch.float32) + mm[bi].to(torch.bfloat16).to(torch.float32)).to(torch.bfloat16)
+    return out
 
 
 def _nz_weight_to_nd(x2: torch.Tensor, batch: int, k: int, n: int) -> torch.Tensor:

@@ -1,75 +1,72 @@
-# ----------------------------------------------------------------------------
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# ----------------------------------------------------------------------------
-
 operator:
   name: FusedQuantMatMul
   category: FusedComposite
-  difficulty: L3
-  formula: out = GELU((x1 @ x2) * x1Scale * x2Scale + bias)
-  description: C->V QuantBatchMatmul fused with GELU post operation.
-  shape_support: 'x1: [M,K] int8
+  formula: 'acc = matmul_int8_int8_acc_int32(x1, x2)
 
-    x2: [K,N] int8
+    qbmmout = float32(acc) * x2Scale.reshape(1, N)
 
-    x1Scale: [M] float32
+    qbmmout = qbmmout * x1Scale.reshape(M, 1)
 
-    x2Scale: [N] float32
+    qbmmout = qbmmout + bias.reshape(1, N)
 
-    bias/out: [N]/[M,N] float32'
-  attrs:
-  - name: fused_op_type
-    type: string
-    default: gelu_erf
-    description: 融合算子类型
-    required: false
-  - name: transpose_x1
-    type: bool
-    default: false
-    description: 是否转置输入 x1
-    required: false
-  - name: transpose_x2
-    type: bool
-    default: false
-    description: 是否转置输入 x2
-    required: false
-  - name: y_dtype
-    type: string
-    default: float32
-    description: 输出数据类型
-    required: false
+    out = bfloat16(gelu_erf(qbmmout))
+
+    '
+  description: 'A8W8、x1 per-token、x2 per-channel、BF16 浮点 bias、gelu_erf
+
+    和 BF16 输出融合路径。所有 shape 共用同一接口和通用 Kernel；
+
+    实现必须根据运行时 M/K/N 与硬件资源生成自适应 tiling，不得按
+
+    benchmark case 写死切分参数。
+
+    '
+  shape_support: 'x1: [M,K] int8, ND, no transpose
+
+    x2: [K,N] int8, ND, no transpose
+
+    x1Scale: [M] float32, per-token
+
+    x2Scale: [N] bfloat16, per-channel
+
+    bias: [N] bfloat16
+
+    out: [M,N] bfloat16
+
+    M,K,N must be positive; K <= 65535; N <= 65535
+
+    '
+  attrs: []
   inputs:
   - name: x1
+    description: shape 为 [M,K] 的 INT8 量化激活矩阵。
     dtype:
     - int8
   - name: x2
+    description: shape 为 [K,N] 的 INT8 量化权重矩阵。
     dtype:
     - int8
   - name: x1Scale
+    description: shape 为 [M] 的 FP32 per-token scale。
     dtype:
     - float32
   - name: x2Scale
+    description: shape 为 [N] 的 BF16 per-channel scale。
     dtype:
-    - float32
+    - bfloat16
   - name: bias
+    description: shape 为 [N]、在反量化后相加的 BF16 浮点 bias。
     dtype:
-    - float32
+    - bfloat16
   outputs:
   - name: out
+    description: shape 为 [M,N] 的 BF16 gelu_erf 输出。
     dtype:
-    - float32
-  schema: fused_quant_mat_mul(Tensor x1, Tensor x2, Tensor x1Scale, Tensor x2Scale,
-    Tensor bias, str fused_op_type="gelu_erf", bool transpose_x1=false, bool transpose_x2=false,
-    str y_dtype="float32") -> Tensor out
+    - bfloat16
+  schema: fused_quant_mat_mul(Tensor x1, Tensor x2, Tensor x1Scale, Tensor x2Scale, Tensor bias) -> Tensor out
+  difficulty: L3
 precision:
   outputs:
   - name: out
-    dtype: float32
-    threshold_rule: intermediate_dtype_inherited
-    intermediate_dtype: float16
+    dtype: bfloat16
+    threshold_rule: output_dtype

@@ -41,13 +41,35 @@ def rotate_quant(
     if k < 16 or k > 1024:
         raise ValueError(f"K ({k}) must be in [16, 1024]")
 
+    # AIC computes the rotation matmul with the cube unit's internal fp32
+    # accumulator, but MatmulImpl's C tensor is typed DTYPE_X (see
+    # op_kernel/rotate_quant.cpp: `using cType = MatmulType<..., DTYPE_X>`),
+    # so the rotated result is truncated to x.dtype (fp16/bf16) when written
+    # to the workspace GM buffer. The AIV quant stage then reads it back and
+    # up-casts to fp32 with RoundMode::CAST_NONE (op_kernel/rotate_quant.h
+    # `CopyInVector`). Skipping this fp16/bf16 round-trip overstates the
+    # precision of the rotated activations before quantization.
     x_fp32 = x.to(torch.float32)
     rot_fp32 = rotation.to(torch.float32)
-    y_rot = torch.matmul(x_fp32.reshape(m, n // k, k), rot_fp32).reshape(m, n)
+    y_rot_fp32 = torch.matmul(x_fp32.reshape(m, n // k, k), rot_fp32).reshape(m, n)
+    y_rot = y_rot_fp32.to(x.dtype).to(torch.float32)
 
+    # Per-row symmetric dynamic quant, matching op_kernel/rotate_quant.h AIV stage:
+    #   scaleTmp      = amax_j |Y[i, j]|                       (ComputeReduceMax)
+    #   quantScaleTmp = 127.0 / scaleTmp                        (Div constScale/scaleTmp)
+    #   normalized    = Y * quantScaleTmp                       (Mul, broadcast)
+    #   y             = round-to-nearest-even(normalized)       (Cast CAST_RINT)
+    #   scaleOut      = scaleTmp * (1/127)                      (Mul constInvScale)
+    # The reciprocal-multiply form (not Y / (amax/127)) and the 1/127 constant
+    # are reproduced so fp32 rounding matches the kernel rather than an
+    # algebraically-equal but numerically-different division.
     c_max = 127.0
+    inv_c_max = float(1.0) / c_max
     max_abs = torch.abs(y_rot).amax(dim=-1, keepdim=True)
-    scale = max_abs / c_max
-    normalized = torch.where(scale > 0, y_rot / scale, torch.zeros_like(y_rot))
+    quant_scale = torch.where(max_abs > 0, c_max / max_abs, torch.zeros_like(max_abs))
+    normalized = y_rot * quant_scale
+    # CAST_RINT is round-half-to-even; the symmetric scale keeps values within
+    # [-127, 127] by construction, so the clamp is a defensive no-op.
     y = torch.round(normalized).clamp(-c_max, c_max).to(torch.int8)
-    return y, scale.reshape(m).to(torch.float32)
+    scale = (max_abs * inv_c_max).reshape(m).to(torch.float32)
+    return y, scale

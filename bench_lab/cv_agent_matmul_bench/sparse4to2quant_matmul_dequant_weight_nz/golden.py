@@ -14,21 +14,12 @@
 import torch
 
 
-# CANN dtype 枚举 -> torch dtype（仅覆盖本 benchmark 路径涉及的输出类型）
-_DTYPE_ENUM = {
-    0: torch.float32,
-    1: torch.float16,
-    27: torch.bfloat16,
-}
-
-
 def sparse4to2quant_matmul_dequant(
     x: torch.Tensor,
     weight: torch.Tensor,
     xScale: torch.Tensor,
     sparseWeightScale: torch.Tensor,
     bias: torch.Tensor = None,
-    dtype: int = 27,
     with_bias: bool = True,
 ):
     """Torch golden for aclnnSparse4to2QuantMatmulWeightNz.
@@ -40,9 +31,8 @@ def sparse4to2quant_matmul_dequant(
         uses the dense form directly because zero elements contribute nothing to
         the matmul (mathematically equivalent).
       - This benchmark fixes the BF16 output + FP32 per-token/per-channel scale +
-        optional BF16 bias path; ``dtype`` 驱动输出 dtype（27=BF16）。
+        optional BF16 bias path.
     """
-    out_dtype = _DTYPE_ENUM.get(int(dtype), torch.bfloat16)
     if x.dim() != 2:
         raise ValueError(f"x expects 2D [M, K], got {list(x.shape)}")
     if weight.dim() != 2:
@@ -79,9 +69,19 @@ def sparse4to2quant_matmul_dequant(
             "Check data preparation step."
         )
 
-    out_fp32 = torch.matmul(x.to(torch.float32), weight.t().to(torch.float32))   # [M, N]
-    out_fp32 = out_fp32 * xScale.to(torch.float32).reshape(-1, 1)
+    # Cube accumulates INT8 x INT8 in INT32 bit-exactly (op_kernel/sparse4to2quant_matmul.h:
+    # mmOutGm_ is int32_t, CMatmulType=MatmulType<..., int32_t>, srcLocal=AllocTensor<int32_t>).
+    # An FP32 matmul rounds partial sums once they exceed 2^24, so accumulate in int32 first.
+    out_i32 = torch.matmul(x.to(torch.int32), weight.t().to(torch.int32))   # [M, N] exact int32
+    out_fp32 = out_i32.to(torch.float32)
+    # Dequant ORDER matches kernel: AscendDequant applies sparseWeightScale (per-channel) FIRST,
+    # then PertokenCalculate applies xScale (per-token). FP32 mul is non-associative so order is
+    # precision-relevant. (op_kernel/sparse4to2quant_matmul.h BasicDequantCompute + docs formula:
+    # out = x@sparseWeight * sparseWeightScale * xScale + bias)
     out_fp32 = out_fp32 * sparseWeightScale.to(torch.float32).reshape(1, -1)
+    out_fp32 = out_fp32 * xScale.to(torch.float32).reshape(-1, 1)
     if with_bias:
+        # Kernel casts bf16 bias -> fp32 (Cast CAST_NONE, lossless) then adds in fp32 (CalBiasAdd).
         out_fp32 = out_fp32 + bias.to(torch.float32).reshape(1, -1)
-    return out_fp32.to(out_dtype)
+    # Final fp32 -> bf16 via round-to-nearest-even (kernel Cast RoundMode::CAST_RINT == torch default).
+    return out_fp32.to(torch.bfloat16)

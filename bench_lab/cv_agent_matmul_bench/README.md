@@ -24,6 +24,6 @@
 | `quant_grouped_matmul_inplace_add_tc_perchannel` | 20 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |
 | `quant_matmul_reduce_sum_weight_nz` | 20 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |
 | `rotate_quant` | 20 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |
-| `sparse4to2quant_matmul_dequant_weight_nz` | 23 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |
+| `sparse4to2quant_matmul_dequant_weight_nz` | 20 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |
 | `transpose_quant_batch_mat_mul_kc_debug` | 20 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |
 | `weight_quant_batch_matmul_v2_antiquant` | 20 | `proto.yaml`, `desc.md`, `golden.py`, `cases.yaml`, `cases.csv` |

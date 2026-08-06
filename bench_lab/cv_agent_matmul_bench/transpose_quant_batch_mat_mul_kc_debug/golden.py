@@ -36,7 +36,20 @@ def transpose_quant_batch_mat_mul(
     batch2, k2, n = b.shape
     if batch != batch2 or k != k2:
         raise ValueError("shape mismatch after permute")
+    # int8 matmul accumulates int32 in the cube PE, but the arch35 kernel's
+    # cT = MatmulType<VECIN, ND_ALIGN, l0cDtype=float> (transpose_quant_batch_mat_mul_
+    # asw_kernel_advanced.h) makes GetTensorC(l0cOutUb_, 0, true) in MMCompute() land the
+    # accumulator in UB already cast to float32 (framework fixpipe), before VFDoDequant
+    # ever reads it. That int32->fp32 cast and the plain fp32 matmul below are both
+    # bit-exact here (K=512 => |acc| <= 512*127*127 < 2^24 stays exactly representable
+    # in fp32), so torch.matmul in fp32 reproduces the hardware accumulation regardless
+    # of summation order.
     y = torch.matmul(a, b)
-    y = y * x1Scale.to(torch.float32).reshape(batch, m, 1) * x2Scale.to(torch.float32).reshape(batch, 1, n)
+    # Dequant order MUST be x2Scale (per-channel N) then x1Scale (per-token M):
+    # VFDoDequant in ..._asw_kernel_advanced.h does mul(scale) then mul(perTokenScale);
+    # repo tests/assets golden _kc_matmul does the same. Do NOT pre-combine the scales.
+    y = y * x2Scale.to(torch.float32).reshape(batch, 1, n)
+    y = y * x1Scale.to(torch.float32).reshape(batch, m, 1)
+    # bias added last, after both scales (design.md epilogue: ((mm*x2Scale)*x1Scale)+bias).
     y = y + bias.to(torch.float32).reshape(batch, 1, n)
     return y.permute(*permY)

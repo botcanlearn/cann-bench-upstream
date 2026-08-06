@@ -1,12 +1,3 @@
-# ----------------------------------------------------------------------------
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# ----------------------------------------------------------------------------
 cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 1
@@ -46,16 +37,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M512K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 2
@@ -95,16 +78,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B2M1024K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 3
@@ -144,16 +119,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M768K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 4
@@ -193,16 +160,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B2M2048K512N128-permY021
 - operator: TransposeQuantBatchMatMul
   case_id: 5
@@ -242,16 +201,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B3M1536K512N128-permY021
 - operator: TransposeQuantBatchMatMul
   case_id: 6
@@ -291,16 +242,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M2048K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 7
@@ -340,16 +283,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B4M256K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 8
@@ -389,16 +324,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B2M1024K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 9
@@ -438,16 +365,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M1280K512N128-permY021
 - operator: TransposeQuantBatchMatMul
   case_id: 10
@@ -487,16 +406,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B3M512K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 11
@@ -536,16 +447,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M257K512N128-permY021
 - operator: TransposeQuantBatchMatMul
   case_id: 12
@@ -585,16 +488,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B2M768K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 13
@@ -634,16 +529,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B4M384K512N128-permY021
 - operator: TransposeQuantBatchMatMul
   case_id: 14
@@ -683,16 +570,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M2048K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 15
@@ -732,16 +611,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B2M1536K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 16
@@ -781,16 +652,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B3M15K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 17
@@ -830,16 +693,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M1024K512N128-permY021
 - operator: TransposeQuantBatchMatMul
   case_id: 18
@@ -879,16 +734,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B2M640K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 19
@@ -928,16 +775,8 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B4M896K512N128-permY012
 - operator: TransposeQuantBatchMatMul
   case_id: 20
@@ -977,14 +816,6 @@ cases:
     batchSplitFactor: 1
     y_dtype: float32
   value_range:
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
-  - - -8
-    - 8
+  - -8
+  - 8
   note: KC-transpose-B1M1000K512N128-permY021

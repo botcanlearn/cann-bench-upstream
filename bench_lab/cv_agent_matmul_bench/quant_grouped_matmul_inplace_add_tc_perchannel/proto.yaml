@@ -1,76 +1,65 @@
-# ----------------------------------------------------------------------------
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# ----------------------------------------------------------------------------
-
 operator:
   name: QuantGroupedMatmulInplaceAdd
   category: Contraction
-  difficulty: L3
-  formula: y_i = yRef_i + (x_i @ w_i) * scale1_i * scale2_i
-  description: Grouped C->V quant matmul with inplace add.
-  shape_support: 'x1: [M,K] int8
+  formula: y_i = yRef_i + (x1_i @ x2) * scale2_i * scale1_i
+  description: 对齐主线 aclnnQuantGroupedMatmulInplaceAdd (ops-transformer/gmm/quant_grouped_matmul_inplace_add) 的 T-C 量化场景。x1/x2 用 en_dtypes.hifloat8 真实量化(已安装 en_dtypes 0.0.4,golden 内 numpy round-trip + float matmul 对齐主线 L0C fp32 累加)；yRef 3D (g,M,N) inplace；x2 2D 单权重 (K,N)；scale2(channel)×scale1(tensor) 反量化累加到 yRef。主线 x1/x2=HIFLOAT8、groupSize 恒 0、仅 950。
+  shape_support: 'x1: [M,K] hifloat8(en_dtypes.hifloat8 真实量化, golden numpy round-trip)
 
-    x2: [G,K,N] int8
+    x2: [K,N] hifloat8(en_dtypes.hifloat8, 主线单权重 2D)
 
-    scale1: [G,1] float32
+    scale1: [G,1] float32 (tensor 级)
 
-    scale2: [G,N] float32
+    scale2: [G,N] float32 (channel 级)
 
-    groupList: [G] int64
+    groupList: [G] int64 (cumsum 边界)
 
-    yRef/y: [M,N] float32'
+    yRef/y: [G,M,N] float32 (主线 3D inplace)
+
+    '
   attrs:
   - name: group_list_values
     type: ListInt
-    description: 分组列表值
-    required: true
   - name: groupListType
     type: int
     default: 0
-    description: 分组列表类型
-    required: false
   - name: group_size
-    type: ListInt
-    default: [1, 0, 0]
-    description: 分组大小
-    required: false
+    type: int
+    default: 0
   - name: variant
-    type: string
+    type: str
     default: TC_PERCHANNEL
-    description: 算子变体标识
-    required: false
   inputs:
   - name: x1
+    description: 激活(主线 HIFLOAT8)
     dtype:
-    - int8
+    - float8_e4m3fn
   - name: x2
+    description: 权重(主线 HIFLOAT8 单权重 2D)
     dtype:
-    - int8
+    - float8_e4m3fn
   - name: scale1
+    description: tensor 级左 scale
     dtype:
     - float32
   - name: scale2
+    description: per-channel 右 scale
     dtype:
     - float32
   - name: groupList
+    description: cumsum 分组边界
     dtype:
     - int64
   - name: yRef
+    description: inplace add 初始值(主线 3D)
     dtype:
     - float32
   outputs:
   - name: y
+    description: inplace 累加结果(3D)
     dtype:
     - float32
-  schema: quant_grouped_matmul_inplace_add(Tensor x1, Tensor x2, Tensor scale1, Tensor
-    scale2, Tensor groupList, Tensor yRef, int groupListType=0, int[] group_size=[1,0,0],
-    str variant="TC_PERCHANNEL") -> Tensor y
+  schema: quant_grouped_matmul_inplace_add(Tensor x1, Tensor x2, Tensor scale1, Tensor scale2, Tensor groupList, Tensor yRef, int groupListType=0, int group_size=0, variant, group_list_values) -> Tensor y
+  difficulty: L3
 precision:
   outputs:
   - name: y

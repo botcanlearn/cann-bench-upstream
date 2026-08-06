@@ -1,180 +1,193 @@
-# GroupedMatmul (A8W8O16 per-token, C→V) 算子 API 描述
+# GroupedMatmul A8W8O16 per-token/per-channel 算子描述
 
 ## 1. 算子简介
 
+GroupedMatmul 是面向大语言模型 MoE 推理的分组矩阵乘算子。输入 token 已按 expert 连续排列，算子根据 `groupList` 划分各 expert 的 token 区间，使用对应的 INT8 权重执行矩阵乘，再完成 per-channel 与 per-token 反量化并输出 BF16。
+
+**主要应用场景**：
+
+- MoE routed token 的 expert grouped matmul
+- INT8 激活与 INT8 expert 权重的 A8W8 推理
+- per-token 激活 scale 与 per-channel 权重 scale 的动态反量化
+
 **算子特征**：
-- 难度等级：L3（Contraction）
 
-`grouped_matmul` 按 `groupList` 将 routed token 分配给不同 expert，并对每个 expert 执行独立的矩阵乘（MoE grouped matmul）。本 benchmark 对齐源码目录 `ops-transformer/gmm/grouped_matmul`，固定选取 `A8W8O16_pertoken_CV` 路径：`x` 与 `weight` 为 int8，AIC（Cube）执行 grouped int8 matmul 得到 int32 中间结果，AIV（Vector）完成 per-channel scale × per-token scale 反量化，并按 `y_dtype` 写回 bfloat16/float16。
+- 难度等级：L4（Grouped Contraction + Dequantization）
+- 输入：INT8 `x/weight`、BF16 per-channel `scale`、FP32 `perTokenScale`
+- 计算：按 expert 分组的 INT8 矩阵乘、INT32 累加、FP32 反量化
+- 输出：BF16 `[M,N]`
+- 数据流：CUBE 计算 INT8 x INT8 -> INT32，VECTOR 执行反量化、per-token 缩放和 BF16 Cast
 
-该路径在 `grouped_matmul.cpp` 的 `QUANT_A8W8O16` 分支中进入 `GMM_CV_SPLIT_IMP`，属于 **C→V kernel flow**（cube 产出 int32、vector 反量化）。本 benchmark **不覆盖** A8W8O8/O32 纯 cube 路径，也**不覆盖** A4W4/A8W4/weight-nz/anti-quant 路径。
+本 benchmark 固定对齐 Atlas A3 `aclnnGroupedMatmulV5` 的以下路径：
+
+```text
+aclnnGroupedMatmulV5
+  -> A8W8O16
+  -> x per-token scale [M]
+  -> weight per-channel scale [E,N]
+  -> groupType=0, groupListType=0, splitItem=3
+  -> GMM_QUANT_BF16
+  -> GMM_CV_SPLIT_IMP(GMMQuantMixCoreCompute, GMMProcess, ...)
+```
+
+该路径使用 `ops-transformer/gmm/grouped_matmul/op_kernel` 下的 A3 C->V 实现，不使用 `arch35` 的 RegBase/MicroAPI kernel， 不覆盖 A8W8O8、A8W8O32、A4W4、A8W4、A16W8、weight NZ、转置权重、bias、offset、激活或动态输出量化路径。
 
 ## 2. 算子定义
 
-设 `x` 的形状为 `[M, K]`，`weight` 的形状为 `[E, K, N]`，`scale` 的形状为 `[E, N]`，`perTokenScale` 的形状为 `[M]`。`groupList` 使用 cumsum（累积和）语义，本 benchmark 固定 `groupList[-1] == M`。
+### 数学公式
 
-```text
-start = 0
-for expert i in [0, E):
-    end = groupList[i]
-    if end == start:          # 空 expert：无 token，跳过
-        continue
-    Xi = x[start:end, :]                                          # [m_i, K] int8
-    Yi = (Xi.int32 @ weight[i].int32)                            # [m_i, N] int8*int8 -> int32
-    Yi = Yi * scale[i][None, :]                                  # per-channel (per-N 列)
-    Yi = Yi * perTokenScale[start:end, None]                     # per-token (per-M 行)
-    y[start:end, :] = Yi
-    start = end
-y = y.to(y_dtype)             # bfloat16 或 float16
-```
+设：
 
-允许相邻两个 `groupList` 值相等，此时对应 expert 没有 token，跳过其 matmul 与写回，且不污染输出。
+- `x` 的 shape 为 `[M,K]`；
+- `weight` 的 shape 为 `[E,K,N]`；
+- `scale` 的 shape 为 `[E,N]`；
+- `perTokenScale` 的 shape 为 `[M]`；
+- `groupList` 是长度为 `E` 的 cumsum expert 边界。
+
+令 $g_{-1}=0$，$g_i=groupList[i]$。第 $i$ 个 expert 的输入区间为：
+
+$$
+X_i=x[g_{i-1}:g_i,:]
+$$
+
+第 $i$ 个 expert 的矩阵乘结果为：
+
+$$
+Z_i=X_i \mathbin{@} weight[i,:,:]
+$$
+
+对 $Z_i$ 的每个元素，同时应用对应输出通道的 scale 和对应 token 的 scale：
+
+$$
+y[g_{i-1}+r,n]
+=
+\left(
+\sum_{k=0}^{K-1}
+x[g_{i-1}+r,k]
+\times
+weight[i,k,n]
+\right)
+\times
+scale[i,n]
+\times
+perTokenScale[g_{i-1}+r]
+$$
+
+其中 $0 \le r < g_i-g_{i-1}$，$0 \le n < N$。
+
+### 步骤说明
+
+1. 按 cumsum `groupList` 将 `x` 的 M 轴划分为 E 个连续 expert 区间。
+2. 对每个非空 expert 区间，将其 token 与该 expert 的权重相乘。
+3. 对矩阵乘结果的每个输出通道乘对应的 per-channel scale。
+4. 对结果的每一行乘对应 token 的 per-token scale。
+5. 将各 expert 的结果按原区间写入输出。
+
+相邻两个 `groupList` 值允许相等，表示对应 expert 为空。空 expert 不执行 matmul，也不改变其他 expert 的行区间。本 benchmark 固定 `groupList[-1] == M`，因此输出 `[0,M)` 的每一行均由且仅由一个非空 expert 区间写入。
 
 ## 3. 接口规范
 
-benchmark 抽象接口（与 `golden.py` 一致）：
+### 算子原型
+
+生成算子只需要实现本 benchmark 已经固定的单一路径，逻辑接口为：
 
 ```python
-grouped_matmul(
-    x, weight, scale, groupList, perTokenScale,
-    variant="A8W8O16_pertoken_CV",
-    group_list_values=None,
-    y_dtype="bfloat16",
-    split_item=3, group_type=0, group_list_type=0,
-) -> y
+cann_bench.grouped_matmul(
+    Tensor x,
+    Tensor weight,
+    Tensor scale,
+    Tensor groupList,
+    Tensor perTokenScale,
+) -> Tensor y
 ```
 
-参数说明：
+AscendC 实现直接接收上述 5 个 Tensor，并输出一个 Tensor。本 benchmark 已固定单 Tensor 输入输出、M 轴 cumsum 分组、ND 非转置 weight、无 bias、无 offset、无激活和无 tuning 输入。无需实现通用 `aclnnGroupedMatmulV5` 的 TensorList 分发，也不得为这些固定语义增加运行时参数或分支。
 
-| 参数 | 输入/输出 | dtype | shape | 说明 |
-|------|-----------|-------|-------|------|
-| `x` | 输入 | `INT8` | `[M, K]` | routed token 激活 |
-| `weight` | 输入 | `INT8` | `[E, K, N]` | expert 权重，本 benchmark 固定不转置 |
-| `scale` | 输入 | `FLOAT32`、`BFLOAT16` | `[E, N]` | expert/channel 反量化 scale |
-| `groupList` | 输入 | `INT64` | `[E]` | cumsum token 边界 |
-| `perTokenScale` | 输入 | `FLOAT32` | `[M]` | per-token activation scale |
-| `y` | 输出 | `BFLOAT16`、`FLOAT16` | `[M, N]` | 反量化 grouped matmul 输出 |
+### 输入参数
 
-> 注：`group_list_values`（见 §4 attrs）是 golden 与数据准备共同使用的确定性 cumsum 列表；当其提供时 golden 以它为准，`groupList` 张量本身只承载形状。
+| 参数 | 类型 | Shape | dtype | 描述 |
+|---|---|---|---|---|
+| `x` | Tensor（必选） | `[M,K]` | int8 | 已按 expert 连续排列的 routed token |
+| `weight` | Tensor（必选） | `[E,K,N]` | int8 | E 组 ND expert 权重，本 benchmark 固定不转置 |
+| `scale` | Tensor（必选） | `[E,N]` | bfloat16 | 每个 expert、每个输出 channel 一个反量化因子 |
+| `groupList` | Tensor（必选） | `[E]` | int64 | cumsum expert 分组边界 |
+| `perTokenScale` | Tensor（必选） | `[M]` | float32 | 每个 token 一个激活反量化因子 |
 
-## 4. 约束说明
+### 输出
 
-### 4.1 固定路径与固定参数
+| 参数 | Shape | dtype | 描述 |
+|---|---|---|---|
+| `y` | `[M,N]` | BFLOAT16 | grouped matmul 反量化结果 |
 
-- `variant` 固定为 `"A8W8O16_pertoken_CV"`，golden 对其它 variant 直接报错。
-- `split_item = 3`、`group_type = 0`、`group_list_type = 0`（golden 对其它取值直接报错）。
-- `y_dtype` 由 case 指定，取值为 `"bfloat16"` 或 `"float16"`。
-- `weight` 固定为 `[E, K, N]` 布局，**不覆盖**转置权重。
-- `scale` 固定为 per-channel `[E, N]`，**不覆盖** per-tensor scale。
-- 本 benchmark 固定**无 bias、无 offset、无激活输入输出、无动态输出量化**。
+### 数据类型组合
 
-### 4.2 形状/语义约束（构造数据与实现都必须满足）
+| `x` | `weight` | `scale` | `groupList` | `perTokenScale` | `y` | 量化模式 |
+|---|---|---|---|---|---|---|
+| INT8 | INT8 | BFLOAT16 | INT64 | FLOAT32 | BFLOAT16 | activation per-token / weight per-channel |
 
-- `x` 为 2D `[M, K]`；`weight` 为 3D `[E, K, N]`，且 `weight` 的 `K` 必须等于 `x` 的 `K`。
-- `scale` 形状必须为 `[E, N]`；`perTokenScale` 元素个数必须等于 `M`。
-- `group_list_values` 必须是长度为 `E` 的**非负、单调非递减 cumsum 序列**，且最后一个值 `group_list_values[-1] == M`（它是各 expert token 计数的前缀和）。
-- 允许相邻 `group_list_values` 值相等（空 expert），此时该 expert 区间无 token，跳过 matmul 与写回；评测只统计已有 token 行。
+### 规则与约束
 
-## 5. 实现约束与参考设计
+- `M >= 1`、`K >= 1`、`N >= 1`，且 `1 <= E <= 1024`。
+- `x.shape == [M,K]`。
+- `weight.shape == [E,K,N]`，且不转置。
+- `scale.shape == [E,N]`，固定为 per-channel BF16 scale。
+- `groupList.shape == [E]`，dtype 必须为 INT64。
+- `perTokenScale.shape == [M]`，dtype 必须为 FLOAT32。
+- `y.shape == [M,N]`，dtype 固定为 BFLOAT16。
+- `groupList` 必须非负、单调非递减；本 benchmark 固定最后一个值等于 M。
+- 相邻 cumsum 边界可以相等，表示空 expert。
+- 非转置 ND 场景要求 `K < 65536`、`N < 65536`。
+- `x/weight/y` 均为单 Tensor 场景，不覆盖多 TensorList 输入或输出。
+- 本 benchmark 固定无 bias、无 offset、无激活、无动态输出量化。
 
-> 本节分两层。**§5.1 硬约束**是正确性与合法性底线，必须遵守；**§5.2 参考设计与已知反模式**是非强制指导——给出一条已验证可行的实现路径与避坑提示，**鼓励在守住 §5.1 的前提下自行设计更优方案；当生成算子性能不足时，应主动超越本参考路径，而非照抄。**
+### 支持范围
 
-### 5.1 硬约束（正确性 + 反作弊，必须遵守）
+`cases.yaml` 与 `cases.csv` 一一对应，共包含 20 个 BF16 正向 case：
 
-**目标语义与乘加顺序**
+| 维度 / 参数 | cases 覆盖 | 备注 |
+|---|---:|---|
+| `M` | 1～96 | 覆盖单 token、常规批量、tail M |
+| `K` | 64～1025 | 覆盖对齐 K、`K=257` 和 `K=1025` 尾块 |
+| `N` | 32～1024 | 覆盖窄输出、常规输出和宽输出 |
+| `E` | 1、2、3、4、5、6、7、8、16 | 覆盖单 expert 到多 expert |
+| `groupList` | 均衡、非均衡、空 expert | 包含首 expert 为空、中间 expert 为空和多个空 expert |
+| 输入值域 | `[-2,2]` | 控制 INT32 累加结果规模 |
 
-```text
-for each non-empty expert i (group_list_values[i] > group_list_values[i-1]):
-    acc_int32 = x[start:end] (int8) @ weight[i] (int8)     # AIC/Cube，int8 输入 -> int32 累加
-    v = Cast<float32>(acc_int32)                            # AIV/Vector，int32 -> float32
-    v = v * scale[i][None, :]                               # per-channel (per-N 列；scale 若 bf16 先转 fp32)
-    v = v * perTokenScale[start:end][:, None]               # per-token (per-M 行)
-    y[start:end, :] = Cast<y_dtype>(v)                      # bfloat16 或 float16，写回 GM
-```
+最大 case 为 `M=96, K=1024, N=1024, E=4`，单 case 约包含 1.01 亿次乘加。`case11` 保留为 `M=1, K=64, N=32` 的最小 smoke case；`case3` 和 `case16` 分别使用 `K/N=257/191` 与 `1025/511` 覆盖非对齐尾块。
 
-- **乘加顺序必须与 golden 一致**：`((matmul) * scale[i]) * perTokenScale`。不得把 `scale[i] * perTokenScale` 预合成后再乘，会改变浮点舍入顺序，与 golden 产生精度残差。
-- **dtype / 累加精度**：matmul 为 int8 输入、int32 累加；反量化前 `int32 -> float32`，`scale` 为 bfloat16 时先转 float32；按 `y_dtype` 转换为 bfloat16/float16 写回 GM。必须正确支持 `scale` 的 `float32` 与 `bfloat16` 两种 dtype，以及 `y` 的 `bfloat16` 与 `float16` 两种 dtype。
-- **shape 断言**：`x` 为 2D `[M, K]`、`weight` 为 3D `[E, K, N]` 且 `K` 一致；`scale` 为 `[E, N]`（per-channel `scale[E,N]` 广播到列），`perTokenScale` 为 `[M]`（per-token 广播到行）；`group_list_values` 为长度 `E` 的非负、单调非递减 cumsum 序列，末值 `group_list_values[-1] == M`（见 §4.2）。
-- **算子语义不变量**：`group_list` cumsum 末值必须等于 `M`；空 expert（`groupList[i] == groupList[i-1]`）必须跳过——不发起 matmul，也不污染输出；`scale[E,N]` 按列广播、`perTokenScale[M]` 按行广播的语义不得改变。
+## 4. 精度要求
 
-**真融合，禁退化（反作弊）**
+采用 [CANN 生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)
 
-- 必须生成**真正的 Cube + Vector 融合 AscendC kernel**，**禁止**退化为以下任意一种：纯 AIC、纯 AIV、纯 CPU、torch、aclnn 高层组合算子（包括直接调用 `aclnnGroupedMatmulV*`）、Python fallback。
-- **matmul 必须落 Cube/AIC**：每个非空 expert 的 `x[start:end] @ weight[expert_id]`（`int8 [m_i, K] × int8 [K, N] -> int32 [m_i, N]`）必须由 **AIC/Cube** 用 AscendC Cube / MatMul / MMAD 原语完成；**禁止**在 AIV 侧用逐元素循环模拟矩阵乘，也**禁止**把 int8 提升为 float 后用 vector 累加替代 cube；**禁止** AIC 标量循环模拟矩阵乘。
-- **反量化 / per-channel / per-token scale 必须片上向量化**：`int32 -> float32` 反量化、per-channel `scale[expert_id]` 乘法、per-token `perTokenScale[start:end]` 乘法、转换为 bfloat16/float16 并写回 GM，必须在片上 **AIV/Vector** 完成；**禁止**下沉到 torch / host / CPU / aclnn 高层 / Python fallback 计算输出。
-- **kernel/host 命名含 `custom`**：AscendC 自定义 kernel 的 `__global__` 核函数名和 Host `_do` 入口名必须包含 `custom`（如 `<op_name>_custom` / `<op_name>_custom_<dtype>`）；不得生成不含 `custom` 的 profiling kernel 名。
-- **热路径禁标量循环**：**禁止**在 `model_new_tilelang.py` 与 `model_new_ascendc.py` 中使用 torch 算子做任何实际计算；热路径**禁止**标量逐元素 `GetValue` / `SetValue` 写法（少量边界 / 控制元数据除外），必须使用块级 / 向量化原语（`T.copy`、`T.tile.*`、矩阵/向量原语等）。
+### 浮点输出 `y`
 
-**跨核同步正确性**
+对 BF16 `y` 统计平均相对误差 MERE 和最大相对误差 MARE：
 
-- AIC→AIV 的 int32 中间结果交接必须**正确同步**、保证跨核数据**可见**、**无数据竞争**（否则结果错）；不得用局部 `PipeBarrier` 冒充跨 AIC/AIV 的可见性同步。
-- 按 expert 切换区间时，必须正确处理 M 方向 tail（`m_i` 非 16 对齐）与空 expert 跳过的边界，保证正确性。
+$$
+\operatorname{MERE}
+=
+\operatorname{avg}
+\left(
+\frac{|actual-golden|}{|golden|+10^{-7}}
+\right)
+$$
 
-**精度**
+$$
+\operatorname{MARE}
+=
+\max
+\left(
+\frac{|actual-golden|}{|golden|+10^{-7}}
+\right)
+$$
 
-- 精度遵循 §6 / [`../PRECISION_SPEC.md`](../PRECISION_SPEC.md) 与 `proto.yaml` 的 `precision` 节点。
+`y` 的接口 dtype 固定为 BFLOAT16，精度阈值按输出 dtype 判定：
 
-### 5.2 参考设计与已知反模式（指导，非强制，鼓励超越）
+| 输出 | 判定 dtype | Threshold | 通过条件 |
+|---|---|---:|---|
+| `y` | BFLOAT16 | `2^-7` | `MERE < 2^-7` 且 `MARE < 10 * 2^-7` |
 
-> 以下是一条**已验证可行**的 C→V 实现路径与若干提示，作为起点与避坑参考，**不是必须照抄的配方**。在守住 §5.1 的前提下，鼓励 agent 探索更优实现；**性能不足时优先在此处突破。**
-
-- **参考数据流（C→V）**：AIC（Cube）按 `groupList` 切分 token 区间，对每个非空 expert 把 `int8 [m_i, K] × int8 [K, N] -> int32 [m_i, N]` 的分块 matmul 结果写入 workspace / GM ring 中间缓冲；AIV（Vector）从 workspace 读取 int32 分块结果，完成反量化 + per-channel scale + per-token scale + dtype cast 并写回 GM `y[start:end, :]`。这是一种直接可行的切分；agent 可自行探索更优方案（如把反量化融进 matmul epilogue、不同 tile/buffer 策略、1c2v 分工等）。
-- **参考 workspace 布局**：每 expert 的 int32 中间结果在 workspace / GM ring slot 中摆放，ring slot 复用维护明确的 C2V / V2C 生命周期。具体 workspace 布局由 agent 按性能选择，只要满足 §5.1 的同步正确性即可。
-- **参考同步原语**：AIC↔AIV 的 int32 中间结果交接走 workspace / GM ring slot，可用 TQue（或 ping-pong / queue style tile buffer）管理生产-消费生命周期；AIC 每次 `CrossCoreSetFlag` 前用 `PipeBarrier<PIPE_ALL>` 排空 GM 写以保证中间结果对 AIV 可见，多 AIV lane 按 collective 语义同步（不要只让 lane0 推进全局进度）。具体同步原语（`CrossCoreSetFlag` / `PipeBarrier` / ring-slot 选择）由 agent 按性能选择，只要满足 §5.1 的同步正确性即可。
-- **参考 tiling**：kernel tiling / launch 体现 **AIC + AIV 混合执行**（1c2v：1 个 cube 配 2 个 vector lane），按 expert / 按 M / 按 N 的分块策略与 TQue 切分按 shape 自适应选择；面向 LLM 大 shape（M 最高 5120，K/N 最高 5120/4096，E 取 2/4/8/16）应自适应选择 tile 粒度，避免小 tile 造成核利用率过低。
-- **已知反模式（建议避开）**：epilogue 逐行用标量 `GetValue` 读 per-token scale、且每个向量 op 后用局部 `PipeBarrier` 串行的写法，在大 shape 下被 fence 串行主导；优先**多行整块** `[m_i, N]` 向量处理。
-- 建议在设计文档与 `trace.md` 记录：AIC/AIV 分工、按 expert / 按 M / 按 N 的分块策略、workspace 布局（含每 expert int32 中间结果摆放）、空 expert 跳过逻辑、同步方式，便于性能复盘。
-
-## 6. 精度要求
-
-本算子精度判定遵循 [`../PRECISION_SPEC.md`](../PRECISION_SPEC.md)。通过条件与阈值参数定义在同目录 `proto.yaml` 的 `precision` 节点，以下仅说明本算子特定的取舍。
-
-### 6.1 算子特定说明
-
-- **`y` 阈值归属**：规则 `output_dtype`。`y_dtype` 可变（BF16 / FP16），评测脚本按当前 case 实际输出 dtype 查 SPEC §3 阈值表。
-- **乘加顺序**：精度强约束见 §5.1，`((matmul) * scale) * perTokenScale`（以 golden 为准），不得预合 scale。
-- **空 expert**：`group_list_values` 允许相邻相等（空 expert），此时该 expert 没有 token 区间，golden 与 actual 都不会额外生成输出行；评测只统计已有 token 行。
-
-## 7. 验收约束
-
-1. 所有 `cases.yaml` / `cases.csv` 中的用例**精度必须全部达标**；不得只通过 `basic_case` 或部分 `general_case` 后停止。
-2. 所有用例的**计算速度必须优于 torch 小算子拼接实现**；如任一用例性能未优于该基线，必须继续优化 AscendC tiling、workspace 流水或 vector 反量化路径，直到性能达标或在 `trace.md` 中记录明确阻塞原因。
-
-## 8. 标准 Golden 代码
-
-`golden.py` 使用 PyTorch float32 完成 int8 matmul 与反量化，最后按 `y_dtype` 转换：
-
-```python
-for expert_id, end in enumerate(group_list_values):
-    if end == start:
-        continue
-    xi = x[start:end].float()
-    wi = weight[expert_id].float()
-    yi = torch.matmul(xi, wi)
-    yi = yi * scale[expert_id].float().reshape(1, -1)
-    yi = yi * perTokenScale[start:end].float().reshape(-1, 1)
-    out[start:end] = yi
-    start = end
-y = out.to(y_dtype)   # bfloat16 或 float16
-```
-
-## 9. 额外信息
-
-### 9.1 测试资料对应关系
-
-- `docs/aclnnGroupedMatmulV3.md`：描述 groupType、splitItem、groupList 和 grouped matmul 基础约束。
-- `op_kernel/grouped_matmul.cpp`：`QUANT_A8W8O16` 分支调用 `GMM_CV_SPLIT_IMP`。
-- `op_kernel/grouped_matmul.h`：读取 cumsum `groupList` 并按 expert 切分 token。
-
-### 9.2 本 benchmark case 设计
-
-`cases.yaml` 当前包含 20 个正向 case，遵循「少量小 shape + 大量 LLM shape」标准：
-
-- **6 个 small case**（smoke / edge）：单 expert / 少量 expert、空 first expert、空 middle expert（相邻 group 值相等）、many-experts-small（E16）、tail M，复用并适配原始小用例。
-- **14 个 LLM case**（MoE-prefill）：M 最高 5120、K/N 最高 5120/4096，E 取 2/4/8/16，使用 ragged / 非 16 对齐且求和等于 M 的 `group_list_values`，realistic 维度（768/1024/1152/1536/2048/2304/3072/4096/5120 等）。
-- 覆盖 `bfloat16` / `float16` 输出与 `float32` / `bfloat16` scale 两种 dtype 组合；attrs 结构与原始用例保持一致；`value_range` 沿用算子原始 `[-2, 2]`，`baseline_perf_us = 0.0`、`t_hw_us = 0.0`。
-
-## 标准 Golden 代码
+## 5. 标准 Golden 代码
 
 ```python
 #!/usr/bin/python3
@@ -214,77 +227,146 @@ def get_input(
     return [x, weight, scale, groupList, perTokenScale]
 
 
+# Atlas A3: grouped_matmul.cpp A8W8O16 -> GMM_CV_SPLIT_IMP(GMMQuantMixCoreCompute, GMMProcess).
 def grouped_matmul(
     x: torch.Tensor,
     weight: torch.Tensor,
     scale: torch.Tensor,
     groupList: torch.Tensor,
     perTokenScale: torch.Tensor,
-    variant: str = "A8W8O16_pertoken_CV",
     group_list_values=None,
-    y_dtype: str = "bfloat16",
-    split_item: int = 3,
-    group_type: int = 0,
-    group_list_type: int = 0,
 ) -> torch.Tensor:
-    """Torch golden for selected grouped_matmul A8W8O16 per-token C->V path."""
-    if variant != "A8W8O16_pertoken_CV":
-        raise ValueError(f"Unsupported grouped_matmul variant: {variant}")
-    if split_item != 3 or group_type != 0 or group_list_type != 0:
-        raise ValueError("This benchmark fixes split_item=3, group_type=0, group_list_type=0")
-    if x.dim() != 2:
-        raise ValueError(f"x expects 2D [M,K], got {list(x.shape)}")
-    if weight.dim() != 3:
-        raise ValueError(f"weight expects 3D [E,K,N], got {list(weight.shape)}")
+    """执行 Atlas A3 aclnnGroupedMatmulV5 的 A8W8O16 per-token grouped matmul。
 
-    m, k = x.shape
-    expert_num, wk, n = weight.shape
-    if wk != k:
-        raise ValueError(f"weight K ({wk}) must match x K ({k})")
-    if scale.shape != (expert_num, n):
-        raise ValueError(f"scale expects shape [{expert_num}, {n}], got {list(scale.shape)}")
-    if perTokenScale.numel() != m:
-        raise ValueError(f"perTokenScale length ({perTokenScale.numel()}) must match M ({m})")
+    对齐的官方 kernel 路径：
+        op_kernel/grouped_matmul.cpp
+          -> GMM_QUANT_BF16
+          -> GMM_CV_SPLIT_IMP(GMMQuantMixCoreCompute, GMMProcess, ...)
 
-    groups = _cumsum_group_list(groupList, m, expert_num, group_list_values)
+    计算语义：
+        groupList 使用 cumsum 边界将 x 的 M 轴划分给 E 个 expert。
+        对每个非空 expert 区间 [start, end)：
+            accumulator = x[start:end].int32 @ weight[expert].int32
+            dequantized = accumulator.float32 * scale[expert].float32
+            output = dequantized * perTokenScale[start:end].float32
+        最后将 FP32 中间结果转换为 BF16。
+
+        该顺序对应 GMMQuantMixCoreCompute 中的 INT32 Cube 累加、
+        AscendDequant、per-token FP32 Mul 和最终 Cast。本 benchmark 固定
+        无 bias、无 offset、actType=0，不包含激活或动态输出量化。
+
+    输入：
+        x:
+            shape 为 [M, K]、dtype 为 torch.int8 的 routed token。
+            Atlas A3 路径要求 K < 65536。
+        weight:
+            shape 为 [E, K, N]、dtype 为 torch.int8 的 ND expert 权重；
+            本 benchmark 固定不转置，且 1 <= E <= 1024、N < 65536。
+        scale:
+            shape 为 [E, N]、dtype 为 torch.bfloat16 的 per-expert
+            per-channel 反量化因子。
+        groupList:
+            shape 为 [E]、dtype 为 torch.int64 的非负单调非递减
+            cumsum 边界。官方算子允许最后一个值小于等于 M；本 benchmark
+            固定为 M，以保证输出的每一行都有定义。
+            相邻值可以相等，表示对应 expert 为空。
+        perTokenScale:
+            shape 为 [M]、dtype 为 torch.float32 的 per-token 因子。
+
+    Benchmark 辅助参数：
+        group_list_values:
+            runner 用于构造确定性 groupList 的辅助值，不是 ACLNN 参数。
+            为 None 时直接读取 groupList Tensor。
+
+    固定场景：
+        本函数直接表达单 Tensor 输出、M 轴分组、cumsum groupList 和
+        无激活语义，因此不再暴露只负责选路的 ACLNN 属性。
+
+    输出：
+        shape 为 [M, N]、dtype 为 torch.bfloat16。最终转换与官方
+        ST reference 一致，使用 PyTorch .to(torch.bfloat16) 表达。
+
+    典型 case：
+        - 常规：x=[16,128]，weight=[2,128,64]，groupList=[8,16]。
+        - K/N tail：x=[18,1025]，weight=[4,1025,511]，
+          groupList=[4,9,13,18]。
+
+    完整测试集合见同目录 cases.yaml 和 cases.csv。
+    """
+    m = x.shape[0]
+    n = weight.shape[2]
+    groups = group_list_values
+    if groups is None:
+        groups = groupList.detach().to(device="cpu").tolist()
+
     out = torch.zeros(m, n, dtype=torch.float32, device=x.device)
 
     start = 0
     for expert_id, end in enumerate(groups):
-        if end == start:
-            continue
-        xi = x[start:end].to(torch.float32)
-        wi = weight[expert_id].to(torch.float32)
-        yi = torch.matmul(xi, wi)
-        yi = yi * scale[expert_id].to(torch.float32).reshape(1, n)
-        yi = yi * perTokenScale[start:end].to(torch.float32).reshape(-1, 1)
-        out[start:end] = yi
+        if end > start:
+            accumulator = torch.matmul(
+                x[start:end].to(torch.int32),
+                weight[expert_id].to(torch.int32),
+            )
+            dequantized = accumulator.to(torch.float32) * scale[expert_id]
+            out[start:end] = dequantized * perTokenScale[start:end, None]
         start = end
 
-    return _cast_output(out, y_dtype)
-
-
-def _cumsum_group_list(groupList, total_m: int, group_num: int, group_list_values):
-    if group_list_values is not None:
-        values = torch.tensor(group_list_values, dtype=torch.int64)
-    else:
-        values = groupList.to(torch.int64).flatten()
-    if values.numel() != group_num:
-        raise ValueError(f"groupList length ({values.numel()}) must match expert count ({group_num})")
-    if bool(torch.any(values < 0)):
-        raise ValueError("groupList values must be non-negative")
-    if bool(torch.any(values[1:] < values[:-1])):
-        raise ValueError("groupList must be non-decreasing cumsum")
-    if int(values[-1]) != total_m:
-        raise ValueError(f"groupList last value ({int(values[-1])}) must equal M ({total_m})")
-    return [int(v) for v in values.tolist()]
-
-
-def _cast_output(out: torch.Tensor, y_dtype: str) -> torch.Tensor:
-    name = str(y_dtype).split(".")[-1].lower()
-    if name in ("bf16", "bfloat16"):
-        return out.to(torch.bfloat16)
-    if name in ("fp16", "float16", "half"):
-        return out.to(torch.float16)
-    raise ValueError(f"Unsupported y_dtype: {y_dtype}")
+    return out.to(torch.bfloat16)
 ```
+
+`group_list_values` 仅用于让 benchmark runner 为 `groupList` 注入确定的 cumsum 数值，不是 AscendC kernel 输入；该参数为 `None` 时，Golden 直接读取 `groupList` Tensor。
+
+Golden 保留算子计算语义所需的 dtype 转换：INT8 输入转 INT32 表达硬件累加，累加结果转 FP32 后依次乘 per-channel 和 per-token scale，最后转换为 BF16。
+
+上述顺序不可改写为先合并两个 scale 再乘 INT32 累加结果；虽然实数公式等价，但 FP32 乘法顺序变化可能造成不同的舍入结果。
+
+## 6. 额外信息
+
+### Golden 调用示例
+
+```python
+import torch
+
+from golden import grouped_matmul
+
+M, K, N, E = 16, 128, 64, 2
+groups = [8, 16]
+
+x = torch.randint(-2, 3, (M, K), dtype=torch.int8)
+weight = torch.randint(-2, 3, (E, K, N), dtype=torch.int8)
+scale = torch.rand((E, N), dtype=torch.bfloat16)
+group_list = torch.tensor(groups, dtype=torch.int64)
+per_token_scale = torch.rand((M,), dtype=torch.float32)
+
+y = grouped_matmul(
+    x,
+    weight,
+    scale,
+    group_list,
+    per_token_scale,
+    group_list_values=groups,
+)
+
+assert y.shape == (M, N)
+assert y.dtype == torch.bfloat16
+```
+
+### Case 设计
+
+`cases.csv` 的 20 个 case 分为以下几类：
+
+- 基础与边界：单 token、单 expert、少 expert 和多 expert。
+- 分组分布：均衡、非均衡、首 expert 为空、中间 expert 为空、多个 expert 为空。
+- 对齐覆盖：常见 128/256/512 对齐 K/N，以及 257/191、1025/511 非对齐尾块。
+- 规模覆盖：保留小型 smoke case，同时将最大规模扩展到 `M96 x K1024 x N1024`。
+- 维度扩展：保持 M、E 和 groupList 语义不变，仅扩大 K/N。
+
+### 实现对齐依据
+
+- **aclnnGroupedMatmulV5.md**：A3/A2 A8W8 dtype 组合、动态 K-C scale、groupType 和 groupList 约束
+- **aclnn_grouped_matmul_v5.h**：`aclnnGroupedMatmulV5` ACLNN 参数原型
+- **grouped_matmul.cpp**：A8W8O16 的 `GMM_QUANT_BF16` 与 `GMM_CV_SPLIT_IMP` 分发
+- **grouped_matmul_quant_mixcore.h**：`AscendDequant`、per-token FP32 `Mul` 和最终 BF16 `Cast`
+- **grouped_matmul_tiling.cpp**：static tiling、AIV/AIC 比例、fixed-axis 和 pretiling 的 Host 选路条件
+- **executor_aclnnGroupedMatmulV5_A8W8O16.py**：官方 PyTorch reference 的 INT32 matmul 与 FP32 反量化顺序

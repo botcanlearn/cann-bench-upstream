@@ -35,76 +35,89 @@ def get_input(
     return [x, weight, scale, groupList, perTokenScale]
 
 
+# Atlas A3: grouped_matmul.cpp A8W8O16 -> GMM_CV_SPLIT_IMP(GMMQuantMixCoreCompute, GMMProcess).
 def grouped_matmul(
     x: torch.Tensor,
     weight: torch.Tensor,
     scale: torch.Tensor,
     groupList: torch.Tensor,
     perTokenScale: torch.Tensor,
-    variant: str = "A8W8O16_pertoken_CV",
     group_list_values=None,
-    y_dtype: str = "bfloat16",
-    split_item: int = 3,
-    group_type: int = 0,
-    group_list_type: int = 0,
 ) -> torch.Tensor:
-    """Torch golden for selected grouped_matmul A8W8O16 per-token C->V path."""
-    if variant != "A8W8O16_pertoken_CV":
-        raise ValueError(f"Unsupported grouped_matmul variant: {variant}")
-    if split_item != 3 or group_type != 0 or group_list_type != 0:
-        raise ValueError("This benchmark fixes split_item=3, group_type=0, group_list_type=0")
-    if x.dim() != 2:
-        raise ValueError(f"x expects 2D [M,K], got {list(x.shape)}")
-    if weight.dim() != 3:
-        raise ValueError(f"weight expects 3D [E,K,N], got {list(weight.shape)}")
+    """执行 Atlas A3 aclnnGroupedMatmulV5 的 A8W8O16 per-token grouped matmul。
 
-    m, k = x.shape
-    expert_num, wk, n = weight.shape
-    if wk != k:
-        raise ValueError(f"weight K ({wk}) must match x K ({k})")
-    if scale.shape != (expert_num, n):
-        raise ValueError(f"scale expects shape [{expert_num}, {n}], got {list(scale.shape)}")
-    if perTokenScale.numel() != m:
-        raise ValueError(f"perTokenScale length ({perTokenScale.numel()}) must match M ({m})")
+    对齐的官方 kernel 路径：
+        op_kernel/grouped_matmul.cpp
+          -> GMM_QUANT_BF16
+          -> GMM_CV_SPLIT_IMP(GMMQuantMixCoreCompute, GMMProcess, ...)
 
-    groups = _cumsum_group_list(groupList, m, expert_num, group_list_values)
+    计算语义：
+        groupList 使用 cumsum 边界将 x 的 M 轴划分给 E 个 expert。
+        对每个非空 expert 区间 [start, end)：
+            accumulator = x[start:end].int32 @ weight[expert].int32
+            dequantized = accumulator.float32 * scale[expert].float32
+            output = dequantized * perTokenScale[start:end].float32
+        最后将 FP32 中间结果转换为 BF16。
+
+        该顺序对应 GMMQuantMixCoreCompute 中的 INT32 Cube 累加、
+        AscendDequant、per-token FP32 Mul 和最终 Cast。本 benchmark 固定
+        无 bias、无 offset、actType=0，不包含激活或动态输出量化。
+
+    输入：
+        x:
+            shape 为 [M, K]、dtype 为 torch.int8 的 routed token。
+            Atlas A3 路径要求 K < 65536。
+        weight:
+            shape 为 [E, K, N]、dtype 为 torch.int8 的 ND expert 权重；
+            本 benchmark 固定不转置，且 1 <= E <= 1024、N < 65536。
+        scale:
+            shape 为 [E, N]、dtype 为 torch.bfloat16 的 per-expert
+            per-channel 反量化因子。
+        groupList:
+            shape 为 [E]、dtype 为 torch.int64 的非负单调非递减
+            cumsum 边界。官方算子允许最后一个值小于等于 M；本 benchmark
+            固定为 M，以保证输出的每一行都有定义。
+            相邻值可以相等，表示对应 expert 为空。
+        perTokenScale:
+            shape 为 [M]、dtype 为 torch.float32 的 per-token 因子。
+
+    Benchmark 辅助参数：
+        group_list_values:
+            runner 用于构造确定性 groupList 的辅助值，不是 ACLNN 参数。
+            为 None 时直接读取 groupList Tensor。
+
+    固定场景：
+        本函数直接表达单 Tensor 输出、M 轴分组、cumsum groupList 和
+        无激活语义，因此不再暴露只负责选路的 ACLNN 属性。
+
+    输出：
+        shape 为 [M, N]、dtype 为 torch.bfloat16。最终转换与官方
+        ST reference 一致，使用 PyTorch .to(torch.bfloat16) 表达。
+
+    典型 case：
+        - 常规：x=[16,128]，weight=[2,128,64]，groupList=[8,16]。
+        - K/N tail：x=[18,1025]，weight=[4,1025,511]，
+          groupList=[4,9,13,18]。
+
+    完整测试集合见同目录 cases.yaml 和 cases.csv。
+    """
+    m = x.shape[0]
+    n = weight.shape[2]
+    groups = group_list_values
+    if groups is None:
+        groups = groupList.detach().to(device="cpu").tolist()
+
     out = torch.zeros(m, n, dtype=torch.float32, device=x.device)
 
     start = 0
     for expert_id, end in enumerate(groups):
-        if end == start:
-            continue
-        xi = x[start:end].to(torch.float32)
-        wi = weight[expert_id].to(torch.float32)
-        yi = torch.matmul(xi, wi)
-        yi = yi * scale[expert_id].to(torch.float32).reshape(1, n)
-        yi = yi * perTokenScale[start:end].to(torch.float32).reshape(-1, 1)
-        out[start:end] = yi
+        if end > start:
+            accumulator = torch.matmul(
+                x[start:end].to(torch.int32),
+                weight[expert_id].to(torch.int32),
+            )
+            dequantized = accumulator.to(torch.float32) * scale[expert_id]
+            out[start:end] = dequantized * perTokenScale[start:end, None]
         start = end
 
-    return _cast_output(out, y_dtype)
-
-
-def _cumsum_group_list(groupList, total_m: int, group_num: int, group_list_values):
-    if group_list_values is not None:
-        values = torch.tensor(group_list_values, dtype=torch.int64)
-    else:
-        values = groupList.to(torch.int64).flatten()
-    if values.numel() != group_num:
-        raise ValueError(f"groupList length ({values.numel()}) must match expert count ({group_num})")
-    if bool(torch.any(values < 0)):
-        raise ValueError("groupList values must be non-negative")
-    if bool(torch.any(values[1:] < values[:-1])):
-        raise ValueError("groupList must be non-decreasing cumsum")
-    if int(values[-1]) != total_m:
-        raise ValueError(f"groupList last value ({int(values[-1])}) must equal M ({total_m})")
-    return [int(v) for v in values.tolist()]
-
-
-def _cast_output(out: torch.Tensor, y_dtype: str) -> torch.Tensor:
-    name = str(y_dtype).split(".")[-1].lower()
-    if name in ("bf16", "bfloat16"):
-        return out.to(torch.bfloat16)
-    if name in ("fp16", "float16", "half"):
-        return out.to(torch.float16)
-    raise ValueError(f"Unsupported y_dtype: {y_dtype}")
+    return out.to(torch.bfloat16)

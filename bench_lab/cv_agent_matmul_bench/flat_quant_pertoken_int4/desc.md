@@ -1,221 +1,211 @@
-# FlatQuant (pertoken INT4-logical) 算子 API 描述
-
-> 本文档自洽：合并原 `desc.md` 与算子生成 `prompt.md`，作为 `flat_quant_pertoken_int4`
-> benchmark reference 套件的唯一说明文件。算子语义（§1–§4）、实现契约（§5 强制 C→V
-> 融合路径）、精度要求（§6）、验收约束（§7）具有同等约束力；AscendC 实现与调试前必须先
-> 读取并遵守。本套件刷新为「少量 small + 大量 LLM-shape」用例（见 §9），把 token 维 `K`
-> 与方阵变换维 `M/N` 在 `golden.py` 允许范围内放大到 LLM 规模（最大 5120）。
+# FlatQuant per-token INT4 算子描述
 
 ## 1. 算子简介
 
+FlatQuant 是面向大语言模型量化的融合算子，通过对三维输入依次执行右侧和左侧小矩阵乘法来平坦化输入特征，再按 token 计算缩放因子并将结果量化为 INT4。
+
+**主要应用场景**：
+
+- 大语言模型激活值的 per-token INT4 量化
+- decode / batch-decode 阶段的低比特激活转换
+- prefill 与 MoE token 场景中的融合旋转和量化
+- 为后续低比特矩阵乘或低比特存储准备输入
+
 **算子特征**：
-- 难度等级：L3（Contraction）
 
-`flat_quant` 对齐源码目录 `ops-nn/quant/flat_quant`。该算子先对 `[K, M, N]` 输入做
-**Kronecker 形式的左右小矩阵乘**（`kroneckerP1 @ x @ kroneckerP2`），再执行 **per-token
-动态量化**到逻辑 INT4。本 benchmark 固定 **per-token INT4 逻辑输出路径**：
+- 难度等级：L3（Contraction + Reduction + Quantization）
+- 输入：BFLOAT16，三维 `[K,M,N]`
+- 计算：两次小矩阵乘法、per-token ReduceMax 和 INT4 量化
+- 输出：物理 INT4 `out` 和 FP32 per-token `quantScale`
+- 数据流：CUBE 矩阵乘计算后衔接 VECTOR 归约与量化
 
-- **C 侧（Cube / AIC）** 完成 `kroneckerP1 @ x @ kroneckerP2` 两段 matmul；
-- **V 侧（Vector / AIV）** 执行 ReduceMax(absmax)、scale 计算、归一化、round、clip、INT8 写回；
+本 benchmark 固定 Atlas A2/A3、BF16 输入、per-token INT4 和
+`tiling key=1 / MM_BASE_MODE` 路径，不覆盖 per-group FLOAT4_E2M1
+以及 `MM_DOUBLE_MODE`、`MM_SPLIT_MODE`、`MM_HIGH_MODE`、`MM_ONE_MODE`。
 
-属于 **C→V kernel flow**（Cube 产出中间结果交给 Vector 做量化 epilogue）。
+对应的官方实现路径为：
 
-PyTorch golden 使用 `int8` 承载**逻辑 INT4** 值（值域 `[-7, 7]`），**不做 bit-pack**，
-也不覆盖 FLOAT4_E2M1 pergroup 路径或真实 INT4 pack 布局。
+```text
+aclnnFlatQuant
+  -> FlatQuant
+  -> TILING_KEY_IS(1)
+  -> FlatQuantCube<bfloat16_t, MM_BASE_MODE>
+     + FlatQuantVec<bfloat16_t, MM_BASE_MODE>
+```
 
 ## 2. 算子定义
 
-```text
-# x: [K, M, N], kroneckerP1: [M, M], kroneckerP2: [N, N]
-x1[k]         = kroneckerP1 @ x[k]                       # [M, N]，左乘
-x2[k]         = x1[k] @ kroneckerP2                      # [M, N]，右乘
-quantScale[k] = max(abs(x2[k])) / (7 / clipRatio)       # 标量，per-token
-out[k]        = round(x2[k] / quantScale[k]).clamp(-7, 7)
-```
+### 数学公式
 
-等价 einsum 形式（与 `golden.py` 一致，matmul 在 float32 累加）：
+输入 `x` 先右乘 `kroneckerP2`：
 
-```python
-tmp         = einsum('ab,kbn->kan', kroneckerP1, x)         # [K, M, N]
-transformed = einsum('kmn,nc->kmc', tmp, kroneckerP2)       # [K, M, N]
-max_abs     = transformed.abs().amax(dim=(1, 2), keepdim=True)  # [K, 1, 1]
-denom       = 7.0 / clipRatio
-scale       = max_abs / denom                              # [K, 1, 1] float32
-normalized  = where(scale > 0, transformed / scale, 0)
-out         = normalized.round().clamp(-7, 7).to(int8)     # [K, M, N]
-quantScale  = scale.reshape(K).to(float32)                 # [K]
-```
+$$
+x' = x \mathbin{@} kroneckerP2
+$$
 
-**量化语义关键点（精度强约束，须与 golden 逐位对齐）：**
+再由 `kroneckerP1` 左乘：
 
-- absmax 在每个 token（K 维 slice）上对全部 `M*N` 个元素求绝对值最大；归约范围是
-  `dim=(1, 2)`，即**每 token 一个标量 scale**，不是 per-row / per-channel。
-- `denom = 7 / clipRatio`；`clipRatio` 越小，`denom` 越大，scale 越小，量化越激进。
-- `scale > 0` 才做除法；`scale == 0`（全零 token）时输出 0，`quantScale` 亦为 0（见 §6 全零边界）。
-- `round` 为四舍五入到偶（torch 默认）后 `clamp` 到 `[-7, 7]`，再转 `int8`。
-- matmul 在 **float32** 累加（golden 把 fp16/bf16 输入 `.to(float32)` 后再 einsum）。
+$$
+x'' = kroneckerP1 \mathbin{@} x'
+$$
+
+对每个 `x''[k,:,:]` 独立计算最大绝对值：
+
+$$
+maxAbs[k] = \max\left(\left|x''[k,:,:]\right|\right)
+$$
+
+计算 per-token 量化因子：
+
+$$
+quantScale[k] = \frac{maxAbs[k]}{7 / clipRatio}
+$$
+
+根据量化因子对矩阵乘结果进行归一化：
+
+$$
+normalized[k,:,:] = \frac{x''[k,:,:]}{quantScale[k]}
+$$
+
+最后按照 AscendC `CAST_RINT` 规则舍入，并饱和到 signed INT4 范围：
+
+$$
+out[k,:,:]
+=
+\operatorname{sat}_{[-8,7]}
+\left(
+\operatorname{rint}(normalized[k,:,:])
+\right)
+$$
+
+### 步骤说明
+
+1. **右矩阵乘**：`x1 = x @ kroneckerP2`，输出 shape 保持 `[K,M,N]`。
+2. **左矩阵乘**：`x2 = kroneckerP1 @ x1`，输出 shape 保持 `[K,M,N]`。
+3. **per-token 归约**：保留 `K` 维，对每个 `[M,N]` 切片求最大绝对值。
+4. **scale 计算**：`quantScale = maxAbs / (7 / clipRatio)`，shape 为 `[K]`。
+5. **归一化**：将 `[K]` reshape 为 `[K,1,1]`，计算 `x2 / quantScale`。
+6. **全零处理**：当某个 token 的 `maxAbs=0` 时，该 token 的输出为 0。
+7. **INT4 转换**：模拟 AscendC `Cast(..., RoundMode::CAST_RINT, ...)` 的最近偶数舍入，并按 signed INT4 范围 `[-8,7]` 饱和。
+
+Golden 使用 INT8 Tensor 承载上述逻辑 INT4 数值。**强制约束：AscendC 算子的真实输出必须使用物理 INT4，不得以 INT8、FP16、BF16 或 FP32 输出替代；INT8 仅允许作为 Golden 和精度比较器的逻辑承载类型。**
 
 ## 3. 接口规范
 
+### 算子原型
+
 ```python
-flat_quant(x, kroneckerP1, kroneckerP2,
-           clipRatio=1.0, quant_mode="pertoken", out_dtype="int4_logical")
-    -> (out, quantScale)
+cann_bench.flat_quant(
+    Tensor x,
+    Tensor kroneckerP1,
+    Tensor kroneckerP2,
+    float clipRatio,
+) -> tuple[Tensor out, Tensor quantScale]
 ```
 
-| 参数 | 输入/输出 | dtype | shape | 说明 |
-|------|-----------|-------|-------|------|
-| `x` | 输入 | `FLOAT16 / BFLOAT16` | `[K, M, N]` | 原始输入张量 |
-| `kroneckerP1` | 输入 | 同 `x` | `[M, M]` | **左乘方阵**（行列均为 M） |
-| `kroneckerP2` | 输入 | 同 `x` | `[N, N]` | **右乘方阵**（行列均为 N） |
-| `out` | 输出 | `INT8` | `[K, M, N]` | 逻辑 INT4 量化值，值域 `[-7, 7]` |
-| `quantScale` | 输出 | `FLOAT32` | `[K]` | per-token scale |
+### 输入参数
 
-> **dtype 提醒**：`out_dtype="int4_logical"` 是**输出**逻辑 dtype（用 `int8` 承载），**不是
-> 输入 dtype**。三个输入张量 `x / kroneckerP1 / kroneckerP2` 全部是 `float16` 或 `bfloat16`，
-> 且三者 dtype 必须一致。`quantScale` 始终是 `float32`。
+| 参数 | 类型 | Shape | dtype | 描述 |
+|---|---|---|---|---|
+| `x` | Tensor（必选） | `[K,M,N]` | bfloat16 | 原始输入，`K` 表示 token 数 |
+| `kroneckerP1` | Tensor（必选） | `[M,M]` | bfloat16 | 左乘小矩阵，dtype 必须与 `x` 相同 |
+| `kroneckerP2` | Tensor（必选） | `[N,N]` | bfloat16 | 右乘小矩阵，dtype 必须与 `x` 相同 |
+| `clipRatio` | float（必选） | 标量 | aclnn Host double 语义 | 裁剪比例，取值范围 `(0,1]` |
 
-## 4. 约束说明
+### 输出
 
-### 4.1 形状约束（`golden.py` 实际校验）
+| 参数 | Shape | dtype | 描述 |
+|---|---|---|---|
+| `out` | `[K,M,N]` | INT4 | 真实算子输出，每个元素为 signed INT4 |
+| `quantScale` | `[K]` | FLOAT32 | 每个 token 一个量化因子 |
 
-- `x` 维度必须为 3，形状 `[K, M, N]`（`x.dim() != 3` → 报错）。
-- `kroneckerP1.shape == (M, M)`，`kroneckerP2.shape == (N, N)` —— **两个变换矩阵必须是方阵，
-  且分别绑定 `x` 的 M、N 维**；这是 golden 唯一强校验的 shape 关系（违反即 `ValueError`）。
-- 三个张量 dtype 一致，均为 `float16` 或 `bfloat16`。
+受 PyTorch reference 表达和精度比较方式限制，Golden 将 `out` 表示为 `torch.int8`，但其数值严格限制在 `[-8,7]`。该 INT8 Tensor 只是逻辑比较载体，不改变真实算子的 INT4 输出契约。
 
-### 4.2 原始语义量级（参考，非 golden 强校验）
+### 数据类型组合
 
-原 reference 出于「让 CPU golden 在 agent 调试阶段不至于过慢」的考量，建议把规模控制在：
+| `x` | `kroneckerP1` | `kroneckerP2` | `out` | `quantScale` | 量化模式 |
+|---|---|---|---|---|---|
+| bfloat16 | bfloat16 | bfloat16 | INT4 | FLOAT32 | per-token INT4 |
 
-- `1 <= K <= 16`，`4 <= M <= 32`，`16 <= N <= 64`。
+### 规则与约束
 
-> 这些上界**只是建议量级**，由原 `desc.md` / `prompt.md` 文字给出，**`golden.py` 本身并不强制**
-> （它只要求 `x` 三维 + P1/P2 为对应方阵）。本刷新套件为产出 LLM-shape 用例，在 golden 允许的
-> 范围内把 `K / M / N` 放大到最大 5120（见 §9 与文末「刷新说明」）；放大时严格保持 P1=`[M,M]`、
-> P2=`[N,N]` 的方阵关系，不触发 golden 的 shape 校验。
+- `x` 必须是非空三维 Tensor，shape 为 `[K,M,N]`。
+- `kroneckerP1.shape == [M,M]`。
+- `kroneckerP2.shape == [N,N]`。
+- 三个输入 Tensor 的 dtype 必须完全相同。
+- `1 <= K <= 262144`。
+- `1 <= M <= 256`，`1 <= N <= 256`。
+- `out=INT4` 时，`N` 必须是偶数。
+- **AscendC 算子的 `out` 必须使用物理 INT4；不得将 Golden 的逻辑 INT8 承载方式作为算子输出实现。**
+- `0 < clipRatio <= 1`。
+- 输入和输出格式为 ND。
+- INT4 路径的 `quantScale` 必须为 FLOAT32 `[K]`。
 
-### 4.3 固定参数
+### 支持范围
 
-- `quant_mode = "pertoken"`：仅支持 per-token 路径（其他值 → `ValueError`）。
-- `out_dtype = "int4_logical"`：用 `int8` 承载逻辑 INT4 值，**不做 bit-pack**（其他值 → `ValueError`）。
-- `clipRatio`：浮点属性（默认 `1.0`），决定量化分母 `denom = 7 / clipRatio`；本套件用例覆盖
-  `1.0` 与 `0.75` 两档。
+| 维度 / 参数 | cases 覆盖 | 备注 |
+|---|---:|---|
+| `K` | 1～2048 | decode、prefill、MoE tail、长序列 |
+| `M` | 2～128 | 不包含会进入 `MM_ONE_MODE` 的 `M=1` |
+| `N` | 8～128 | 全部为偶数；包含 `N=10` 非 8/16 对齐尾块 |
+| `M*N` | 16～16384 | 包含 650、1072 以及常见 LLM 隐藏维 |
+| `clipRatio` | 0.5～1.0 | 覆盖无裁剪和不同裁剪强度 |
+| 输入 dtype | BFLOAT16 | benchmark 固定 BF16 |
 
-### 4.4 输出
+令 `mAlign=ceil16(M)`、`nAlign=ceil16(N)`。20 个 case 均满足：
 
-| 名称 | shape | dtype | 说明 |
-|------|-------|-------|------|
-| `out` | `[K, M, N]` | `int8` | 承载逻辑 INT4，值域 `[-7, 7]` |
-| `quantScale` | `[K]` | `float32` | per-token scale |
+- `M != 1`，不会进入 tiling key 5 / `MM_ONE_MODE`；
+- `K>1` 时 `mAlign>64`，不会进入 tiling key 2 / `MM_DOUBLE_MODE`；
+- `mAlign<=128` 且 `nAlign<=128`，不会进入 tiling key 3 / `MM_SPLIT_MODE`；
+- `mAlign^2+nAlign^2+4*mAlign*nAlign` 最大为 98304，小于 key 4 /
+  `MM_HIGH_MODE` 的 262144 阈值。
 
-`golden.py` 返回 **TUPLE `(out, quantScale)`**；下游模型与验证必须按二元组消费。
+因此全部 case 最终落入 tiling key 1。Vector 侧的 `splitRow` 也始终不小于
+`M`，统一执行 `FlatQuantVec::Quant`，不会切换到 `SplitQuant`。
 
-## 5. 实现约束与参考设计（C→V 融合路径）
+## 4. 精度要求
 
-> 本节分两层。**§5.1 硬约束**是正确性与合法性底线，必须遵守；**§5.2 参考设计与已知反模式**是非强制指导——给出一条已验证可行的实现路径与避坑提示，**鼓励在守住 §5.1 的前提下自行设计更优方案；当生成算子性能不足时，应主动超越本参考路径，而非照抄。**
+采用 [CANN 生态算子精度标准](https://gitcode.com/cann/opbase/blob/master/docs/zh/ops_precision_standard/experimental_standard.md)
 
-### 5.1 硬约束（正确性 + 反作弊，必须遵守）
+### 浮点输出 `quantScale`
 
-- **真融合，禁退化**：必须生成真正的 Cube + Vector 融合 AscendC kernel；禁止退化为纯 AIV（在 Vector 侧用逐元素循环模拟矩阵乘）、纯 CPU、torch（`model_new_tilelang.py` / `model_new_ascendc.py` 中**禁止用 torch 算子做任何实际计算**）、aclnn 高层组合算子、Python fallback。
-- **两段 matmul 必须落 Cube**：Kronecker 左右乘 `kroneckerP1[M,M] @ x[k][M,N] -> tmp[k]`、`tmp[k] @ kroneckerP2[N,N] -> transformed[k]` 两段 matmul 必须由 AIC/Cube 用 AscendC Cube / MatMul / MMAD 原语完成（matmul 在 float32 累加，与 §2 / golden 一致）；**禁止在 AIV 侧用逐元素循环模拟矩阵乘**。
-- **per-token 量化必须片上向量化**：absmax（按 K 维对 `transformed[k]` 全部 `M*N` 元素求绝对值最大，即 `dim=(1,2)` 归约，每 token 一个标量）、`scale = absmax / (7/clipRatio)`、`scale>0` 才做除法（否则输出 0、`quantScale=0`）、`round`→`clamp(-7,7)`→`int8` 写回 `out[k]`、`float32 quantScale[k]` 写回，必须在片上 AIV/Vector 完成；**禁止**下沉到 torch / host / CPU / aclnn / Python 计算输出，**禁止**用 AIC 标量循环替代。
-- **量化语义与 golden 一致**：absmax 归约范围、`denom = 7/clipRatio`、`scale>0` guard、`round`（四舍五入到偶）后 `clamp(-7,7)` 转 `int8` 必须与 §2 / golden 逐位对齐；不得为消性能或在容差内改算子数学语义。
-- **输出契约**：返回 **TUPLE `(out:int8[K,M,N], quantScale:float32[K])`**；`out_dtype="int4_logical"` 是**输出**逻辑 dtype（用 `int8` 承载逻辑 INT4，值域 `[-7,7]`，不做 bit-pack），**不是输入 dtype**；必须正确支持 `float16` 与 `bfloat16` 输入（三输入同型），`quantScale` 输出为 `float32`；P1=`[M,M]`、P2=`[N,N]` 方阵与 §4.1 shape / dtype 断言一致。
-- **跨核同步正确性**：AIC→AIV 交接必须正确同步、保证跨核数据可见，不得出现数据竞争（否则结果错）；K 维并行下 AIC 与 AIV 需做 token 级同步，中间缓冲须有明确生命周期。
-- kernel 的 `__global__` 核函数名和 Host `_do` 入口名必须包含 `custom`（如 `flat_quant_custom` / `flat_quant_custom_<dtype>` 等）；不得生成不含 `custom` 的 profiling kernel 名；AscendC 热路径禁止标量逐元素循环写法（少量边界 / 控制元数据除外），须使用块级 / 向量化原语。
-- 精度遵循 §6 / [`../PRECISION_SPEC.md`](../PRECISION_SPEC.md) 与 `proto.yaml` 的 `precision` 节点（`out` 用 `int8_three_tier`，`bit_exact_ratio` 收紧到 `0.995`；`quantScale` 用 `input_dtype_inherited` 并保留全零边界兜底）。
+对 `quantScale` 统计平均相对误差 MERE 和最大相对误差 MARE：
 
-### 5.2 参考设计与已知反模式（指导，非强制，鼓励超越）
+$$
+\operatorname{MERE}
+=
+\operatorname{avg}
+\left(
+\frac{|actual-golden|}{|golden|+10^{-7}}
+\right)
+$$
 
-> 以下是一条**已验证可行**的 C→V 实现路径与若干提示，作为起点与避坑参考，**不是必须照抄的配方**。在守住 §5.1 的前提下，鼓励 agent 探索更优实现；**性能不足时优先在此处突破。**
+$$
+\operatorname{MARE}
+=
+\max
+\left(
+\frac{|actual-golden|}{|golden|+10^{-7}}
+\right)
+$$
 
-- **参考数据流（C→V）**：
+`quantScale` 的接口 dtype 为 FLOAT32，但精度来源受 BF16 输入与矩阵乘路径限制，因此采用 `input_dtype_inherited`：
 
-  ```text
-  AIC (Cube)：第一段 matmul  kroneckerP1[M,M] @ x[k][M,N]      -> tmp[k][M,N]
-  AIC (Cube)：第二段 matmul  tmp[k][M,N]      @ kroneckerP2[N,N] -> transformed[k][M,N]
-     --- C→V 交接：AIC 把 transformed 写入 workspace / 中间缓冲 ---
-  AIV (Vector)：按 K 维对 transformed[k] 全部 M*N 元素求 absmax
-  AIV (Vector)：scale = absmax / (7 / clipRatio)
-  AIV (Vector)：normalized = transformed / scale（scale>0 时），否则 0
-  AIV (Vector)：round -> clamp(-7, 7) -> int8 写回 out[k]
-  AIV (Vector)：float32 quantScale[k] 写回
-  ```
+| 输出 | 继承 dtype | Threshold | 通过条件 |
+|---|---|---:|---|
+| `quantScale` | BFLOAT16 | `2^-7` | `MERE < 2^-7` 且 `MARE < 10 * 2^-7` |
 
-  AIC 把两段 matmul 后的 `transformed` 写入 workspace / GM ring slot，AIV 读取后完成 per-token 量化 epilogue。这是一种直接可行的切分；agent 可自行探索更优方案（如 AIC 内部连续两次 MMAD、中间 `tmp` 在 L1/L0 流转不落 workspace、把量化融进 matmul epilogue、不同 tile/buffer 策略等）。
-- **参考中间张量 / workspace 布局**：`tmp` 与 `transformed` 的存放位置与复用策略由 agent 按性能选择；中间 `tmp` 可在 L1/L0/workspace 中流转，也允许由 AIC 内部连续两次 MMAD 直接产出 `transformed`。
-- **参考同步原语**：AIC 写 GM 后用 `PipeBarrier<PIPE_ALL>` 排空再 `CrossCoreSetFlag` 通知 AIV；ring slot 维护明确 C2V/V2C 生命周期。具体同步原语与 buffer 布局由 agent 按性能选择，只要满足 §5.1 的跨核同步正确性即可。
-- **参考 tiling**：AIC + AIV 混合执行（如 1C2V），按 shape 自适应选核与切分——大 K 走 token 并行、大 M/N 走方阵分块；避免过小 tile 导致核利用率过低（本套件含 K 高达 5120 的 many-token 用例与 M/N 高达 5120 的大方阵变换用例）。
-- **已知反模式（建议避开）**：epilogue 逐行用标量读 per-token scale、且每个向量 op 后插同步 fence 的串行写法，在大 shape 下被 fence 串行主导；优先**多行整块** `[M,N]` 向量处理。
-- 建议在设计文档与 `trace.md` 记录：AIC/AIV 分工（两段 matmul 如何在 cube 侧串联）、workspace 布局（`tmp` 与 `transformed` 存放 / 复用）、同步方式（K 维并行下的 token 级同步），便于性能复盘。
+### 整数输出 `out`
 
-## 6. 精度要求
+逻辑 INT4 输出使用 `int8_three_tier`，不使用相对误差：
 
-本算子精度判定遵循 [`../PRECISION_SPEC.md`](../PRECISION_SPEC.md)。通过条件与阈值参数定义在
-同目录 `proto.yaml` 的 `precision` 节点，以下仅说明本算子特定的取舍。
+| 指标 | 通过条件 |
+|---|---|
+| `abs(actual-golden) >= 2` 的元素数 | 必须为 0 |
+| `abs(actual-golden) <= 1` 的元素比例 | 必须为 100% |
+| `actual == golden` 的元素比例 | 必须不低于 99.5% |
 
-### 6.1 算子特定说明
-
-- **`out` 阈值归属**：规则 `int8_three_tier`，承载**逻辑 INT4** 值（值域 `[-7, 7]`）。
-  **`bit_exact_ratio` 从默认 `0.99` 收紧到 `0.995`**：INT4 值域里 `±1` 相对宽松度约 14%
-  （INT8 仅 0.8%），99% bit-exact + 1% 允许 ±1 在 INT4 下相对宽松度过大，故收紧；
-  `tolerance_abs_diff=1` / `fatal_abs_diff=2` 保持默认（`±1` 仍由 fp16 matmul vs fp32 golden
-  的 round 边界不可避免）。
-- **`quantScale` 阈值归属**：规则 `input_dtype_inherited`，其数值由 FP16/BF16 Kronecker matmul
-  和 ReduceMax 推导，精度上限受输入 dtype 制约（`bfloat16: 2^-7`、`float16: 2^-10`）。
-- **`quantScale` 全零边界**：全零 token 行 ReduceMax=0 → `quantScale=0`；保留显式
-  `small_value_handling`（`threshold=1e-6`、`absolute_tolerance=1e-5`）兜底全零 / 极小尺度，
-  避免自适应默认在 RMS 尺度 `s≈0` 时退化过严。
-- **后续可调**：若发现某些 case 实际 `bit_exact_ratio` 难以稳定达到 `99.5%`（例如 K 较小的
-  Kronecker 路径），可在 SPEC 加 INT4 专项规则或回调到 `0.99`。
-
-## 7. 强制验收约束
-
-1. **正确性是硬门**：所有 `cases.yaml` / `cases.csv` 中的用例**精度必须全部达标**；不得只通过
-   `basic_case` 或部分 `general_case` 后停止。
-2. **性能是软门**：所有用例的**计算速度必须优于 torch 小算子拼接实现**（duration-only 口径）；
-   如任一用例性能未优于该基线，必须继续优化 AscendC tiling、workspace 流水或 vector 量化路径，
-   直到性能达标，或在 `trace.md` 中记录明确阻塞原因（软门不阻塞交付，但必须标注「性能未达标」）。
-3. **不得为消性能或在容差内的问题改算子数学语义**：乘加顺序、absmax 归约范围、`denom = 7/clipRatio`、
-   `clamp(-7,7)`、round 行为必须与 golden 一致。
-4. 遇环境差异（profiling 失败 / runtime 缺失等）按「停下报告」约定处理，不得伪造成 PASS。
-
-## 8. 标准 Golden 代码
-
-`golden.py` 使用 `einsum` 完成左右乘（fp32 累加），再按 K 维每个 slice 做 ReduceMax 和逻辑
-INT4 量化，返回 `(out:int8[K,M,N], quantScale:float32[K])` 二元组。**禁止修改 golden 数学语义。**
-
-### 测试资料对应关系
-
-- `docs/aclnnFlatQuant.md`：Kronecker 左右乘、per-token / per-group 量化公式。
-- `op_kernel/flat_quant_cube.h` 与 `op_kernel/flat_quant_vec.h`：C/V 分段路径参考。
-
-## 9. 本 benchmark case 设计（刷新说明）
-
-`cases.yaml` / `cases.csv` 当前包含 **20 个正向 case**，采用「**少量 small + 大量 LLM-shape**」
-布局，与 `golden.py` 的 shape 契约严格一致（`x:[K,M,N]`、`P1:[M,M]`、`P2:[N,N]` 方阵）：
-
-- **6 个 SMALL（smoke / edge，maxdim < 512）**：贴近原语义量级（`K=1..16`、`M=4..32`、`N=16..64`），
-  覆盖最小 M/N、方阵、最大 K、FP16/BF16 与 `clipRatio ∈ {1.0, 0.75}`，用于冒烟与边界。
-- **14 个 LARGE（LLM-shape，maxdim ≥ 512，最大 5120）**：
-  - **K-heavy（many-token）**：`K ∈ {512, 1024, 2048, 4096, 5120, 3072}`，M/N 保持小（per-token
-    量化的典型「大量 token」形状，cost 随 K 线性增长）。
-  - **N-heavy**：`N ∈ {512, 1024, 2048}`，放大右乘方阵 `P2[N,N]`。
-  - **M-heavy**：`M ∈ {512, 1024, 2048}`，放大左乘方阵 `P1[M,M]`。
-  - **balanced square / max square**：`512×512` 与 `5120×5120` 大方阵变换。
-
-所有 case：`dtype` 为三元同型列表（`float16` 或 `bfloat16`）；`attrs` 结构恒为
-`{clipRatio, quant_mode=pertoken, out_dtype=int4_logical}`，`clipRatio` 在 `1.0 / 0.75` 间变化；
-`value_range = [-1, 1]`（沿用原 op）；`baseline_perf_us = 0.0`、`t_hw_us = 0.0`（占位，待真机回填）。
-
-> **放大边界与 caveat**：dims 仅放大到 golden 数学允许处。`M`、`N` 放大意味着 `P1`、`P2` 是
-> `M×M`、`N×N` 方阵且与 `x` 的对应维严格相等（golden 强校验），故 M、N 的放大必然伴随
-> 二次增长的方阵与中间张量，CPU golden 在 5120×5120 单 token 下约 ~0.9s（仍可跑过 validator）。
-> 原 reference 文字建议的 `K≤16 / M≤32 / N≤64` 仅为调试期 CPU 速度考量，非 golden 强约束，本套件
-> 为 LLM-shape 目标在 golden 允许范围内予以超出，并保持方阵关系不破坏 shape 校验。
-
-## 标准 Golden 代码
+## 5. 标准 Golden 代码
 
 ```python
 #!/usr/bin/python3
@@ -234,28 +224,134 @@ INT4 量化，返回 `(out:int8[K,M,N], quantScale:float32[K])` 二元组。**�
 import torch
 
 
-def flat_quant(
-    x: torch.Tensor,
-    kroneckerP1: torch.Tensor,
-    kroneckerP2: torch.Tensor,
-    clipRatio: float = 1.0,
-    quant_mode: str = "pertoken",
-    out_dtype: str = "int4_logical",
-):
-    """Torch golden for flat_quant per-token logical INT4 path."""
-    if quant_mode != "pertoken" or out_dtype != "int4_logical":
-        raise ValueError("This benchmark fixes pertoken logical INT4 output")
-    if x.dim() != 3:
-        raise ValueError("x must be [K,M,N]")
-    k, m, n = x.shape
-    if kroneckerP1.shape != (m, m) or kroneckerP2.shape != (n, n):
-        raise ValueError("kronecker matrices must be [M,M] and [N,N]")
-    tmp = torch.einsum('ab,kbn->kan', kroneckerP1.to(torch.float32), x.to(torch.float32))
-    transformed = torch.einsum('kmn,nc->kmc', tmp, kroneckerP2.to(torch.float32))
-    max_abs = transformed.abs().amax(dim=(1, 2), keepdim=True)
-    denom = 7.0 / float(clipRatio)
-    scale = max_abs / denom
-    normalized = torch.where(scale > 0, transformed / scale, torch.zeros_like(transformed))
-    out = torch.round(normalized).clamp(-7, 7).to(torch.int8)
-    return out, scale.reshape(k).to(torch.float32)
+def flat_quant(x, p1, p2, clipRatio):
+    """执行 BF16 per-token INT4 FlatQuant。
+
+    计算语义：
+        x1 = x @ p2
+        x2 = p1 @ x1
+        quantScale[k] = max(abs(x2[k, :, :])) / (7 / clipRatio)
+        out = round(x2 / quantScale)，并裁剪到有符号 INT4 范围 [-8, 7]
+
+    输入：
+        x:
+            shape 为 [K, M, N]、dtype 为 torch.bfloat16 的非空 Tensor。
+            K <= 262144，M <= 256，N <= 256；INT4 输出要求 N 为偶数。
+        p1:
+            shape 为 [M, M]、dtype 为 torch.bfloat16 的非空 Tensor。
+        p2:
+            shape 为 [N, N]、dtype 为 torch.bfloat16 的非空 Tensor。
+        clipRatio:
+            范围为 (0, 1] 的浮点数；None 在 Golden 中按 1.0 处理。
+
+    输出：
+        out:
+            逻辑 shape 为 [K, M, N]，数值范围为 [-8, 7]。
+            算子真实输出必须使用有符号 INT4。当前 PyTorch Golden 使用
+            torch.int8 Tensor 承载逻辑 INT4 数值；真实 INT4 的物理存储
+            和解包由算子运行及比较环节处理。
+        quantScale:
+            shape 为 [K]、dtype 为 torch.float32 的 per-token 量化因子。
+
+    典型 case（x、p1、p2 均为 torch.bfloat16）：
+        - Smoke：x=[1, 2, 8]，p1=[2, 2]，p2=[8, 8]，clipRatio=1.0。
+        - decode：x=[1, 64, 64]，p1=[64, 64]，p2=[64, 64]，
+          clipRatio=1.0。
+        - MoE/tail：x=[257, 86, 128]，p1=[86, 86]，
+          p2=[128, 128]，clipRatio=0.5。
+
+    完整测试集合见同目录 cases.csv。
+    """
+    if (clipRatio is None):
+        clipRatio = 1.0
+
+    # 输入 x 先右乘 p2，再由 p1 左乘。
+    x1 = torch.matmul(x, p2)
+    x2 = torch.matmul(p1, x1)
+
+    # per-token 语义：每个 x2[k, :, :] 独立计算最大绝对值。
+    x2_flat = x2.flatten(-2, -1)
+    qscale = torch.abs(x2_flat).max(dim=-1, keepdim=True)[0].to(torch.float32)
+    ratio = torch.ones_like(qscale) * 7 / clipRatio
+    quantScale = torch.flatten(qscale / ratio)
+
+    # 公式：out = x2 / quantScale。
+    # reshape 仅用于将 [K] 的 quantScale 广播到 [K, M, N]。
+    scale = quantScale.reshape(x2.shape[0], 1, 1)
+
+    # 内核在 max_abs 为 0 时输出 0，避免产生 0 / 0。
+    normalized = torch.where(
+        scale > 0,
+        x2 / scale,
+        torch.zeros_like(x2),
+    )
+
+    # AscendC 内核使用 Cast(..., RoundMode::CAST_RINT, ...)：舍入到最近整数；
+    # 当数值恰好位于两个整数的中点时取偶数（ties-to-even）。
+    # 有符号 INT4 的表示范围为 [-8, 7]。
+    # Golden 使用 INT8 承载逻辑 INT4；真实算子输出必须使用物理 INT4。
+    out = torch.round(normalized).clamp(-8, 7).to(torch.int8)
+
+    return out, quantScale
 ```
+
+上述代码描述 benchmark Golden 的精度策略，不是对 AscendC kernel 中间 dtype 的逐指令复刻：
+
+- Golden 保持 BF16 输入，不在两次 `torch.matmul` 前主动升精度；
+- `qscale` 在 ReduceMax 后转换为 FP32，因此 `ratio`、除法和最终 `quantScale` 均为 FP32；
+- `out` 按 AscendC `CAST_RINT` 语义舍入，再模拟 signed INT4 的饱和范围；
+- Golden 使用 INT8 承载逻辑 INT4，精度比较前需要将真实 INT4 输出解包为同 shape 的逻辑整数。
+
+如需进一步贴近已有 AscendC 实现，可以参考其 BF16 kernel 的主要中间路径。CUBE 使用 FP32 累加，第一次右矩阵乘结果转换为 BF16，第二次左矩阵乘结果转换为 FP16 并写入 workspace；VECTOR 从 FP16 结果计算绝对值和最大值，将最大值转换为 FP32 后生成 FP32 `quantScale`，再执行 FP32 缩放、`CAST_RINT` 舍入和物理 INT4 写回。该路径仅用于辅助精度分析和实现设计，不要求 Golden 或生成算子逐指令复现；本 benchmark 以数学语义和输入输出契约为准。
+
+## 6. 额外信息
+
+### Golden 调用示例
+
+```python
+import torch
+
+from golden import flat_quant
+
+# LLM prefill 示例：K=128，M*N=112*128=14336，命中 MM_BASE_MODE
+x = torch.randn((128, 112, 128), dtype=torch.bfloat16)
+p1 = torch.randn((112, 112), dtype=torch.bfloat16)
+p2 = torch.randn((128, 128), dtype=torch.bfloat16)
+
+out, quant_scale = flat_quant(x, p1, p2, 0.95)
+
+# benchmark reference 的逻辑输出
+assert out.shape == (128, 112, 128)
+assert quant_scale.shape == (128,)
+assert out.dtype == torch.int8
+assert quant_scale.dtype == torch.float32
+```
+
+上例中的 INT8 是 Golden/比较器使用的逻辑载体；AscendC 算子的 `out` 接口仍须声明并写出 INT4。
+
+### Case 设计
+
+`cases.yaml` 与 `cases.csv` 一一对应，共包含 20 个 BF16 正向 case：
+
+- 3 个基础与非对齐 tail case；
+- 7 个 `K=1` decode case；
+- 10 个 `K>1` prefill、MoE token tail 或长序列 case；
+- 隐藏维 `M*N` 覆盖 `16/650/1072/4096/5120/7168/8192/11008/12288/14336/16384`；
+- `K` 覆盖 `1/2/3/4/8/9/16/32/64/128/256/257/512`；
+- 所有 `N` 都是偶数，满足 INT4 路径约束，并包含 `N=10` 尾块；
+- 全部 case 固定命中 `TILING_KEY_IS(1)` 的 `MM_BASE_MODE` 模板；
+- 三个输入的值域统一为 `[-1,1]`，覆盖正负值并控制矩阵乘结果的数值规模。
+
+### 实现对齐依据
+
+- **aclnnFlatQuant**：两段式 aclnn 接口
+- **flat_quant_tiling.cpp**：`MM_BASE_MODE` 的 tiling key 选择条件
+- **flat_quant.cpp**：A2/A3 `TILING_KEY_IS(1)` 的 CUBE/VECTOR 分发
+- **flat_quant_cube.h**：`MM_BASE_MODE` 两次小矩阵乘法的 CUBE 路径
+- **flat_quant_vec.h**：`MM_BASE_MODE` per-token ReduceMax、scale 和 INT4 量化路径
+- **executor_aclnnFlatQuant.py**：`quantScale` 精度对比参考
+
+### 参考资料
+
+- [CANN 9.0 aclnnFlatQuant 文档](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/900/API/aolapi/context/ops-nn/aclnnFlatQuant.md)
+- [cann-bench QuantMatmul desc.md 模板](https://gitcode.com/LAIM321/cann-bench/blob/master/tasks/level3/quant_matmul/desc.md)
