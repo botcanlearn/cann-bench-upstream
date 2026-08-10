@@ -101,7 +101,7 @@ def rms_norm_rows_vf(
 # Kernel 函数 (单 Phase, 纯 Vector)
 # ============================================================================
 
-@pl.jit(auto_mutex=True)
+@pl.jit(auto_mutex=True, name="rms_norm_kernel_c7")
 def rms_norm_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     gamma: pl.Tensor[[1, pl.DYNAMIC], pl.DT_FP32],

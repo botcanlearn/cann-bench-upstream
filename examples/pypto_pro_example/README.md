@@ -43,27 +43,71 @@ $$y = \frac{x}{\sqrt{\mathrm{mean}(x^2) + \epsilon}} \cdot \gamma$$
 - attrs：epsilon（float，默认 1e-6）
 - 7 个 class (c1~c7) 覆盖不同 (ndim, dtype) 签名
 
-## 构建方法
+## 快速评测（推荐）
 
 在 cann-bench 仓根目录下执行：
 
 ```bash
-bash examples/pypto_pro_example/build.sh           # 构建 wheel 包到 examples/pypto_pro_example/dist/
+./scripts/run_evaluation.sh examples/pypto_pro_example
 ```
 
-## 评测方法
+最终报告输出到 `reports/`，含 `cann_final_eval_<时间戳>.md` 汇总（编译分 + 精度分 + 性能分）。
+
+> **工作目录**：`--source-dir examples/...` 为相对路径，必须在 **cann-bench 仓根目录**下执行，即先 `cd <path-to>/cann-bench`。
 
 ### 前置条件
 
-1. PyPTO 已安装
+1. PyPTO 已安装（`import pypto_pro.language as pl` 可用）
 2. NPU 设备可用
 
-> **工作目录**：以下所有命令（`PYTHONPATH=src`、`--task-dir tasks/...`、`--source-dir examples/...` 均为相对路径）必须在 **cann-bench 仓根目录**下执行，即先 `cd <path-to>/cann-bench`。
+### 多卡并行
 
-### 评测算子
+脚本默认不传 `--device-id`，走多卡并行模式（每卡 2 进程），自动把 20 个 case 分发到所有可见 NPU。单卡调试可加 `--device-id 0`。
+
+### 报告输出位置
+
+报告保存到 `reports/`（绝对路径，由脚本自动设置），包含：
+- `cann_final_eval_<时间戳>.json` — 完整结构化数据（含 per-case elapsed_us、accuracy、kernel details 指标）
+- `cann_final_eval_<时间戳>.md`   — Markdown 摘要（概览表 + 每算子详情表）
+- `cann_final_eval_<时间戳>.html` — 独立可视化报告
+- `cann_correctness_eval_<时间戳>.*` / `cann_performance_eval_<时间戳>.*` — 各阶段中间报告
+- `cann_compile_failed_eval_<时间戳>.*` — 仅编译失败时产出（成功则无）
+
+### 评测流程
+
+```
+./scripts/run_evaluation.sh examples/pypto_pro_example
+  │  → python -m kernel_eval.staged_eval --source-dir examples/pypto_pro_example ...
+  │
+  ├─ stage1 compile:
+  │    ├─ bash examples/pypto_pro_example/build.sh → cann_bench-1.0.0-py3-none-any.whl
+  │    └─ 记录编译结果
+  │
+  ├─ stage2 correctness (enable_profiler=False):
+  │    ├─ pip install cann_bench-1.0.0-py3-none-any.whl
+  │    ├─ import cann_bench → 扫描接口: rms_norm
+  │    ├─ 匹配 tasks/level2/rms_norm 算子定义
+  │    └─ 逐用例 fork 子进程跑精度（不采性能，耗时显示 N/A 属正常）
+  │
+  ├─ stage3 performance (enable_profiler=True):
+  │    ├─ 只跑 stage2 通过的 case
+  │    ├─ 每用例独立子进程 + ASCEND_RT_VISIBLE_DEVICES 隔离
+  │    ├─ 测量前执行 NPU 升频和初始 L2 清理，每个 active repeat 前再次清 L2
+  │    ├─ 继承 --profiler-level 配置，仅采集 NPU activity
+  │    └─ 采集 kernel_details.csv 性能数据
+  │
+  └─ merge → cann_final_eval_<时间戳>.{json,md,html}
+```
+
+## 手动评测（备选）
+
+如需绕过 staged-eval、直接单步评测（例如单算子调试），可手动两步：
 
 ```bash
-# 评测 RmsNorm (L2)
+# 1. 构建 wheel（staged-eval 会自动做这步，手动模式才需执行）
+bash examples/pypto_pro_example/build.sh
+
+# 2. 单步评测（单卡 device 0，默认采集性能）
 PYTHONPATH=src python -m kernel_eval.cli eval \
   --bench-name cann \
   --task-dir tasks/level2/rms_norm \
@@ -72,34 +116,7 @@ PYTHONPATH=src python -m kernel_eval.cli eval \
   --reports-dir "$PWD/reports"
 ```
 
-> **`--reports-dir` 必须用绝对路径**：PyPTO-Pro 算子在每个用例的独立子进程中执行，子进程会 `chdir` 到临时目录隔离 JIT 编译。若 `--reports-dir` 为相对路径（如默认的 `reports`），profiler 产出的 `kernel_details.csv` 等性能数据会落到 chdir 后的临时目录，父进程在项目根下找不到，导致耗时/加速比显示为 `N/A`、性能得分为 0。用 `"$PWD/reports"` 或绝对路径可避免此问题。
-
-### 报告输出位置
-
-报告保存到 `--reports-dir` 指定的目录（上例为 `<repo_root>/reports/`），包含三种格式：
-- `{eval_code}.json` — 完整结构化数据（含 per-case elapsed_us、accuracy、kernel details 指标）
-- `{eval_code}.md`   — Markdown 摘要（概览表 + 每算子详情表）
-- `{eval_code}.html` — 独立可视化报告
-
-### 评测流程
-
-```
-python -m kernel_eval.cli eval --source-dir examples/pypto_pro_example
-  │
-  ├─ build.sh → cann_bench-1.0.0-py3-none-any.whl
-  ├─ pip install --no-deps cann_bench-1.0.0-py3-none-any.whl
-  ├─ import cann_bench → 扫描接口: rms_norm
-  ├─ 匹配 tasks/levelN/<op> 中的算子定义
-  │
-  └─ 逐用例评测:
-      ├─ 加载 cases.yaml 用例
-      ├─ 生成输入数据
-      ├─ 执行 golden 参考（CPU fp64）
-      ├─ 执行 AI 算子 (NPU + Profiler)
-      ├─ 精度对比（MERE/MARE）
-      ├─ 性能：默认 kernel_details 策略
-      └─ 性能评分（HAP）
-```
+> **`--reports-dir` 必须用绝对路径**：PyPTO-Pro 算子在每个用例的独立子进程中执行，子进程会 `chdir` 到临时目录隔离 JIT 编译。若 `--reports-dir` 为相对路径（如默认的 `reports`），profiler 产出的 `kernel_details.csv` 等性能数据会落到 chdir 后的临时目录，父进程在项目根下找不到，导致耗时/加速比显示为 `N/A`、性能得分为 0。用 `"$PWD/reports"` 或绝对路径可避免此问题。`./scripts/run_evaluation.sh` 已自动用绝对路径，无此问题。
 
 ## 调用链
 

@@ -1105,6 +1105,8 @@ class Evaluator:
             # profiler 模式: 创建 prof_dir 并传给子进程
             warmup = 3
             repeat = 5
+            profiler_level = getattr(self.config, 'profiler_level', 'Level1')
+            freq_boost = getattr(self.config, 'perf_freq_boost', True)
             if enable_perf and self.perf_evaluator is not None:
                 warmup = self.perf_evaluator.warmup
                 repeat = self.perf_evaluator.repeat
@@ -1123,9 +1125,15 @@ class Evaluator:
             cmd = [sys.executable, "-u", child_script, work_dir, func_name,
                    str(self.config.device_id)]
             if prof_dir:
-                cmd.extend([prof_dir, str(warmup), str(repeat)])
+                cmd.extend([
+                    prof_dir,
+                    str(warmup),
+                    str(repeat),
+                    profiler_level,
+                    "1" if freq_boost else "0",
+                ])
             else:
-                cmd.extend(["", "", ""])
+                cmd.extend(["", "", "", profiler_level, "1" if freq_boost else "0"])
 
             proc = subprocess.Popen(
                 cmd,
@@ -1195,8 +1203,8 @@ class Evaluator:
             metadata={
                 'case_id': case_id_str,
                 '_repeat': self.perf_evaluator.repeat,
-                'warmup_used': False,
-                'freq_boost': False,
+                'warmup_used': self.perf_evaluator.freq_boost,
+                'freq_boost': self.perf_evaluator.freq_boost,
             }
         )
 

@@ -107,7 +107,7 @@ def rms_norm_rows_vf(
 # 来源: DESIGN.md §4 伪代码骨架 + c1 已验证实现
 # ============================================================================
 
-@pl.jit(auto_mutex=True)
+@pl.jit(auto_mutex=True, name="rms_norm_kernel_c6")
 def rms_norm_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     gamma: pl.Tensor[[1, pl.DYNAMIC], pl.DT_FP32],

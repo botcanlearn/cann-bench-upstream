@@ -32,14 +32,14 @@ LANES = 64               # fp32 VF 寄存器宽度（元素数）
 MAX_N = 128               # 编译期 tile 宽度（LANES 倍数: 128=64*2）
 TILE_ROWS = 16            # 每 tile 处理的行数
 SLOT_BYTES = TILE_ROWS * MAX_N * 4    # 16 * 128 * 4 = 8192 B
-VEC_BYTES = MAX_N * 4                  # 128 * 4 = 512 B
+LOW_VEC_BYTES = MAX_N * 2
 
 # UB 地址 — 来源: DESIGN.md §3
-VA_IN0 = 0x00000           #       0 B  — in_group slot 0 (ping)
-VA_IN1 = 0x02000           #    8192 B  — in_group slot 1 (pong)
-VA_OUT0 = 0x04000          #   16384 B  — out_group slot 0 (ping)
-VA_OUT1 = 0x06000          #   24576 B  — out_group slot 1 (pong)
-VA_GAMMA = 0x08000         #   32768 B  — gamma slot
+VA_IO_LOW = 0x00000
+VA_IN_FP32 = 0x02000
+VA_OUT_FP32 = VA_IN_FP32 + SLOT_BYTES
+VA_GAMMA_LOW = 0x08000
+VA_GAMMA_FP32 = VA_GAMMA_LOW + LOW_VEC_BYTES
 
 
 # ============================================================================
@@ -102,31 +102,37 @@ def rms_norm_rows_vf(
 # Kernel 函数 (单 Phase, 纯 Vector)
 # ============================================================================
 
-@pl.jit(auto_mutex=True)
+@pl.jit(auto_mutex=True, name="rms_norm_kernel_c5")
 def rms_norm_kernel(
-    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    gamma: pl.Tensor[[1, pl.DYNAMIC], pl.DT_FP32],
+    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    gamma: pl.Tensor[[1, pl.DYNAMIC], pl.DT_FP16],
     eps: pl.DT_FP32,
-    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     """RMSNorm kernel — 单 section_vector, strided 多核切分.
 
-    Tile 布局 (DESIGN.md §3):
-      - in_group:  [TILE_ROWS, MAX_N] fp32, 双缓冲 (VA_IN0/VA_IN1), mutex_ids=[0,1]
-      - out_group: [TILE_ROWS, MAX_N] fp32, 双缓冲 (VA_OUT0/VA_OUT1), mutex_ids=[2,3]
-      - gamma_group: [1, MAX_N] fp32,  单缓冲 (VA_GAMMA),    mutex_ids=[4]
+    Tile 布局:
+      - io_low_group: fp16 输入/输出暂存（同一地址分阶段复用）
+      - in_fp32_group / out_fp32_group: fp32 RMSNorm 计算
+      - gamma_low_group / gamma_fp32_group: gamma 在片上升精度后复用
 
-    Kernel 使用 FP32 签名——pl.load/pl.store 要求 UB tile dtype 与 GM tensor dtype 一致。
-    Host 侧负责 fp16→fp32 升精度传入，fp32→fp16 降精度传出。
+    所有 dtype 转换均由本 PyPTO-Pro kernel 的 ``pl.cast`` 完成；host 热路径
+    不调用 Torch/ACLNN cast 或 copy 算子。
     """
-    tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32,
-                            target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP32,
-                           target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    low_tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP16,
+                                target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    fp32_tile_type = pl.TileType(shape=[TILE_ROWS, MAX_N], dtype=pl.DT_FP32,
+                                 target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    low_vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP16,
+                               target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
+    fp32_vec_type = pl.TileType(shape=[1, MAX_N], dtype=pl.DT_FP32,
+                                target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
 
-    in_group = pl.make_tile_group(type=tile_type, addrs=[VA_IN0, VA_IN1], mutex_ids=[0, 1])
-    out_group = pl.make_tile_group(type=tile_type, addrs=[VA_OUT0, VA_OUT1], mutex_ids=[2, 3])
-    gamma_group = pl.make_tile_group(type=vec_type, addrs=[VA_GAMMA], mutex_ids=[4])
+    io_low_group = pl.make_tile_group(type=low_tile_type, addrs=[VA_IO_LOW], mutex_ids=[0])
+    in_fp32_group = pl.make_tile_group(type=fp32_tile_type, addrs=[VA_IN_FP32], mutex_ids=[1])
+    out_fp32_group = pl.make_tile_group(type=fp32_tile_type, addrs=[VA_OUT_FP32], mutex_ids=[2])
+    gamma_low_group = pl.make_tile_group(type=low_vec_type, addrs=[VA_GAMMA_LOW], mutex_ids=[3])
+    gamma_fp32_group = pl.make_tile_group(type=fp32_vec_type, addrs=[VA_GAMMA_FP32], mutex_ids=[4])
 
     with pl.section_vector():
         rows = x.shape[0]
@@ -135,9 +141,12 @@ def rms_norm_kernel(
         core_id = pl.get_block_idx()
 
         # gamma 每 core 加载一次，所有 row-tile 复用
-        gamma_slot = gamma_group.next()
-        pl.set_validshape(gamma_slot, [1, cols])
-        pl.load(gamma_slot, gamma, [0, 0])
+        gamma_low_slot = gamma_low_group.next()
+        pl.set_validshape(gamma_low_slot, [1, cols])
+        pl.load(gamma_low_slot, gamma, [0, 0])
+        gamma_fp32_slot = gamma_fp32_group.next()
+        pl.set_validshape(gamma_fp32_slot, [1, cols])
+        pl.cast(gamma_fp32_slot, gamma_low_slot, mode=pl.RoundMode.CAST_NONE)
 
         # Ceiling division for row-tile count
         num_tiles = (rows + TILE_ROWS - 1) // TILE_ROWS
@@ -146,15 +155,23 @@ def rms_norm_kernel(
             row_off = tile_id * TILE_ROWS
             valid_rows = pl.min(TILE_ROWS, rows - row_off)
 
-            in_slot = in_group.next()
-            pl.set_validshape(in_slot, [valid_rows, cols])
-            pl.load(in_slot, x, [row_off, 0])
+            io_low_slot = io_low_group.next()
+            pl.set_validshape(io_low_slot, [valid_rows, cols])
+            pl.load(io_low_slot, x, [row_off, 0])
 
-            out_slot = out_group.next()
-            pl.set_validshape(out_slot, [valid_rows, cols])
-            rms_norm_rows_vf(in_slot, out_slot, gamma_slot, valid_rows, cols, eps)
+            in_fp32_slot = in_fp32_group.next()
+            pl.set_validshape(in_fp32_slot, [valid_rows, cols])
+            pl.cast(in_fp32_slot, io_low_slot, mode=pl.RoundMode.CAST_NONE)
 
-            pl.store(y, out_slot, [row_off, 0])
+            out_fp32_slot = out_fp32_group.next()
+            pl.set_validshape(out_fp32_slot, [valid_rows, cols])
+            rms_norm_rows_vf(
+                in_fp32_slot, out_fp32_slot, gamma_fp32_slot,
+                valid_rows, cols, eps,
+            )
+
+            pl.cast(io_low_slot, out_fp32_slot, mode=pl.RoundMode.CAST_ROUND)
+            pl.store(y, io_low_slot, [row_off, 0])
 
     return
 
@@ -204,31 +221,24 @@ def rms_norm_wrapper(x: torch.Tensor, gamma: torch.Tensor, epsilon: float = 1e-6
         y: RMS 归一化输出，shape 与 x 相同，dtype float16
     """
     orig_shape = x.shape
-    out_dtype = x.dtype
 
     # host 适配: reshape 多维 → 2D [S, D]
     D = x.shape[-1]
     x_2d = x.reshape(-1, D)
 
-    # cast fp16 → fp32（kernel 内部全 fp32 计算）
-    x_fp32 = x_2d.to(torch.float32)
-    gamma_fp32 = gamma.to(torch.float32).reshape(1, D)
-
-    # 输出分配（fp32，与 kernel 签名一致）
-    y_fp32 = torch.empty_like(x_fp32)
+    gamma_2d = gamma.reshape(1, D)
+    y = torch.empty_like(x_2d)
 
     # 核数计算
-    S = x_fp32.shape[0]
+    S = x_2d.shape[0]
     num_tiles = (S + TILE_ROWS - 1) // TILE_ROWS
     num_cores = min(32, max(1, num_tiles))
 
     # 单次 kernel launch
-    rms_norm_kernel[None, num_cores](x_fp32, gamma_fp32, float(epsilon), y_fp32)
+    rms_norm_kernel[None, num_cores](x_2d, gamma_2d, float(epsilon), y)
     torch.npu.synchronize()
 
-    # cast fp32 → fp16, reshape 回原 shape
-    y_fp16 = y_fp32.to(out_dtype)
-    return y_fp16.reshape(orig_shape)
+    return y.reshape(orig_shape)
 
 
 # ============================================================================

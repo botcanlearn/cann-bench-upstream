@@ -26,10 +26,73 @@ import torch
 import torch_npu
 
 
-def _run_with_profiler(fn, prof_dir, warmup, repeat):
+class _NpuProfileConditioner:
+    """Stabilize NPU frequency and L2 state for PyPTO-Pro profiling."""
+
+    def __init__(self, device):
+        from cann_bench_utils import cann_bench_cache_clean, cann_bench_warmup
+
+        self._warmup_op = cann_bench_warmup
+        self._cache_clean_op = cann_bench_cache_clean
+        self._mm1 = torch.rand((10240, 10240), dtype=torch.float16).to(device)
+        self._mm2 = torch.rand((10240, 10240), dtype=torch.float16).to(device)
+        self._reduce_input = torch.rand((96, 1024, 1024), dtype=torch.float16).to(device)
+
+    def stabilize(self):
+        """Boost NPU frequency and establish a clean initial L2 state."""
+        self._warmup_op(self._mm1, self._mm2)
+        torch.npu.synchronize(self._mm1.device)
+        self._cache_clean_op(self._reduce_input)
+        torch.npu.synchronize(self._reduce_input.device)
+
+    def clear_cache(self):
+        """Clear L2 immediately before one active profiler repeat."""
+        self._cache_clean_op(self._reduce_input)
+        torch.npu.synchronize(self._reduce_input.device)
+
+
+def _resolve_profiler_level(profiler_level):
+    level_map = {
+        "Level1": torch_npu.profiler.ProfilerLevel.Level1,
+        "Level2": torch_npu.profiler.ProfilerLevel.Level2,
+    }
+    return level_map.get(profiler_level, torch_npu.profiler.ProfilerLevel.Level1)
+
+
+def _profiler_activities():
+    """Match the standard single-device evaluator: collect NPU events only."""
+    return [torch_npu.profiler.ProfilerActivity.NPU]
+
+
+def _run_preflight(fn, conditioner=None):
+    if conditioner is not None:
+        conditioner.stabilize()
+    fn()
+    torch.npu.synchronize()
+
+
+def _run_profile_steps(fn, prof, warmup, repeat, conditioner=None):
+    fn_exc = None
+    for i in range(warmup + repeat):
+        if conditioner is not None and i >= warmup:
+            conditioner.clear_cache()
+        try:
+            fn()
+            torch.npu.synchronize()
+        except BaseException as exc:
+            fn_exc = exc
+            prof.step()
+            break
+        prof.step()
+    return fn_exc
+
+
+def _run_with_profiler(fn, prof_dir, warmup, repeat, profiler_level="Level1",
+                       freq_boost=True, device="npu"):
     """在 torch_npu.profiler 下执行 fn，trace 输出到 prof_dir。
 
-    复刻 perf_eval.py._profile 的核心逻辑（简化版，不含 freq_boost / cache 清理）。
+    与普通单卡评测保持相同的升频、L2 cache 和 profiler 配置；仍保留
+    PyPTO-Pro 每 case 独立子进程及独立 JIT 目录。
     """
     # 抑制 profiler parser 日志
     og_basicConfig = logging.basicConfig
@@ -46,9 +109,10 @@ def _run_with_profiler(fn, prof_dir, warmup, repeat):
     os.environ['ASCEND_SLOG_PRINT_TO_STDOUT'] = '0'
     os.environ['ASCEND_GLOBAL_LOG_LEVEL'] = '3'
 
-    # pre-flight: profiler 启动前先跑一次 fn()
-    fn()
-    torch.npu.synchronize()
+    conditioner = _NpuProfileConditioner(device) if freq_boost else None
+
+    # 先升频并清理初始 L2，再执行不带 profiler 的 pre-flight。
+    _run_preflight(fn, conditioner)
 
     saved_stdout_fd = os.dup(1)
     saved_stderr_fd = os.dup(2)
@@ -63,15 +127,12 @@ def _run_with_profiler(fn, prof_dir, warmup, repeat):
 
         experimental_config = torch_npu.profiler._ExperimentalConfig(
             export_type=[torch_npu.profiler.ExportType.Text],
-            profiler_level=torch_npu.profiler.ProfilerLevel.Level1,
+            profiler_level=_resolve_profiler_level(profiler_level),
             aic_metrics=torch_npu.profiler.AiCMetrics.AiCoreNone,
         )
 
         with torch_npu.profiler.profile(
-            activities=[
-                torch_npu.profiler.ProfilerActivity.CPU,
-                torch_npu.profiler.ProfilerActivity.NPU,
-            ],
+            activities=_profiler_activities(),
             schedule=torch_npu.profiler.schedule(
                 wait=0, warmup=warmup, active=repeat, repeat=1
             ),
@@ -81,16 +142,9 @@ def _run_with_profiler(fn, prof_dir, warmup, repeat):
             with_stack=False,
             experimental_config=experimental_config,
         ) as prof:
-            fn_exc = None
-            for i in range(warmup + repeat):
-                try:
-                    fn()
-                    torch.npu.synchronize()
-                except BaseException as e:
-                    fn_exc = e
-                    prof.step()
-                    break
-                prof.step()
+            fn_exc = _run_profile_steps(
+                fn, prof, warmup, repeat, conditioner=conditioner
+            )
             if fn_exc is not None:
                 raise fn_exc
 
@@ -122,6 +176,8 @@ def main():
     prof_dir = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else ""  # profiler 输出目录
     warmup = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else 3
     repeat = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else 5
+    profiler_level = sys.argv[7] if len(sys.argv) > 7 and sys.argv[7] else "Level1"
+    freq_boost = sys.argv[8].lower() not in ("0", "false", "no") if len(sys.argv) > 8 else True
 
     # 1. 读取输入数据
     with open(os.path.join(work_dir, "input.pkl"), "rb") as f:
@@ -130,6 +186,9 @@ def main():
         params = pickle.load(f)
 
     # 2. 初始化 NPU
+    # 隔离模式下（只可见 1 张卡）一律用 0，与 cli.py cmd_eval_child 保持一致。
+    if torch.npu.device_count() == 1:
+        device_id = 0
     torch_npu.npu.set_device(device_id)
     torch.npu.set_compile_mode(jit_compile=False)
 
@@ -181,7 +240,15 @@ def main():
             def _fn():
                 last_outputs[0] = func(**updated_params)
 
-            _run_with_profiler(_fn, prof_dir, warmup, repeat)
+            _run_with_profiler(
+                _fn,
+                prof_dir,
+                warmup,
+                repeat,
+                profiler_level=profiler_level,
+                freq_boost=freq_boost,
+                device=dev,
+            )
             outputs = last_outputs[0]
         else:
             # --no-perf 模式: 简单执行一次
