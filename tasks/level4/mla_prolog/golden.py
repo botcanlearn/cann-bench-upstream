@@ -124,3 +124,92 @@ def mla_prolog(
         k_rope = k_rope.to(original_dtype)
 
     return query, query_rope, c_kv, k_rope
+
+
+def get_input(
+    token_x: torch.Tensor,
+    w_dq: torch.Tensor,
+    w_uq_qr: torch.Tensor,
+    w_uk: torch.Tensor,
+    w_dkv_kr: torch.Tensor,
+    rmsnorm_gamma_cq: torch.Tensor,
+    rmsnorm_gamma_ckv: torch.Tensor,
+    rope_sin: torch.Tensor,
+    rope_cos: torch.Tensor,
+    n_heads: int = 1,
+    rmsnorm_epsilon_cq: float = 1e-5,
+    rmsnorm_epsilon_ckv: float = 1e-5,
+    **kwargs,
+):
+    """把 rope_sin / rope_cos 重建为同一角度的正弦与余弦，满足 sin^2 + cos^2 = 1。
+
+    与 level2/apply_rotary_pos_emb 同一问题：RoPE 的 sin / cos 是同一组位置角 theta 的
+    正弦与余弦（proto 也写明"已按位置索引"），对应保范数的平面旋转。通用生成器把它们
+    当成两个互相独立的随机张量，(cos, sin) 落在正方形而非单位圆上，不对应任何位置角。
+
+    后果同样有两层：利用该恒等式实现的候选（由 cos 还原 sin、融合复数乘）在真实 RoPE 上
+    正确却会与 golden 分叉；且精度阈值按保范数旋转标定，独立随机下失去参照。
+
+    **与 level2 的关键差异：本算子的 rope_cos / rope_sin 是全宽 Dr，不是半宽。**
+    level2 的 cos 形状为 (S, D/2)，其 golden 内部会 `cos.repeat(1, 1, 1, 2)` 补齐到全宽，
+    因此在输入张量上逐元素取角即可。而本算子的 apply_rope（见本文件 L33-42）拿到的就是
+    全宽 Dr，直接逐元素相乘、**没有内部 repeat**：
+
+        x1, x2 = xf.chunk(2, dim=-1);  rotated = cat([-x2, x1])
+        y = xf * cos + rotated * sin
+
+    展开后（h = Dr/2、j in [0, h)）：
+
+        y[j]   = x[j]   * cos[j]   - x[j+h] * sin[j]
+        y[j+h] = x[j+h] * cos[j+h] + x[j]   * sin[j+h]
+
+    这对 (x[j], x[j+h]) 构成保范数旋转，**当且仅当** cos[j] == cos[j+h] 且
+    sin[j] == sin[j+h] —— 即全宽张量的前后半必须是同一角度的复制，正是 RoPE
+    `emb = cat([freqs, freqs])` 的约定（desc §7 内嵌的 apply_rope 与此一致）。
+
+    所以这里在**半宽 (..., Dr/2) 上取角**，再复制拼接到全宽；若像 level2 那样在全宽上
+    逐元素独立取角，虽然 sin^2+cos^2 = 1 处处成立，整体却不是旋转（实测配对模长比在
+    0.023 ~ 1.996 之间），反而与本 PR 的目标背道而驰。
+
+    t 取固定种子的 U(-pi, pi)。用随机角而非真实频率结构，是为了让数据不可被提交侧预测
+    写死；kernel 对 sin / cos 只做逐元素乘加，频率结构不影响其算术路径。
+    其余 7 个输入原样保留。
+
+    kernel_eval 用输入名 + attrs 作为关键字调用本函数，并用返回值（按 golden 签名的
+    Tensor 顺序）同时替换 golden 与候选的输入，故比较公平。
+
+    Returns:
+        [token_x, w_dq, w_uq_qr, w_uk, w_dkv_kr, rmsnorm_gamma_cq, rmsnorm_gamma_ckv,
+         rope_sin, rope_cos]，顺序与 mla_prolog 签名一致。
+    """
+    unchanged = [token_x, w_dq, w_uq_qr, w_uk, w_dkv_kr, rmsnorm_gamma_cq,
+                 rmsnorm_gamma_ckv, rope_sin, rope_cos]
+    if not isinstance(rope_sin, torch.Tensor) or not isinstance(rope_cos, torch.Tensor):
+        return unchanged
+    if rope_sin.shape != rope_cos.shape:
+        return unchanged
+
+    # 特殊值压力用例原样放行：含 NaN/Inf 或恒为常数（c20 value_range=[0,0]）时，本就
+    # 不是"某个位置角的正弦/余弦"，其用意是特殊值与零值边界覆盖，不应被重建抹掉。
+    if not bool(torch.isfinite(rope_sin).all()) or not bool(torch.isfinite(rope_cos).all()):
+        return unchanged
+    if (bool((rope_sin == rope_sin.reshape(-1)[0]).all())
+            and bool((rope_cos == rope_cos.reshape(-1)[0]).all())):
+        return unchanged
+
+    dr = int(rope_sin.shape[-1])
+    if dr < 2 or dr % 2 != 0:
+        # apply_rope 的 chunk(2, dim=-1) 本就要求 Dr 为偶数；奇数时配对约定不成立，
+        # 不臆测，保持原样
+        return unchanged
+
+    g = torch.Generator().manual_seed(0)  # 固定种子：跨 eval 运行必须可复现
+    half_shape = list(rope_sin.shape[:-1]) + [dr // 2]
+    theta = (torch.rand(half_shape, generator=g, dtype=torch.float64) * 2 - 1) * torch.pi
+    # 前后半复制同一角度：apply_rope 无内部 repeat，靠输入自身满足配对约定
+    sin_full = torch.cat([torch.sin(theta), torch.sin(theta)], dim=-1)
+    cos_full = torch.cat([torch.cos(theta), torch.cos(theta)], dim=-1)
+    new_sin = sin_full.to(dtype=rope_sin.dtype, device=rope_sin.device)
+    new_cos = cos_full.to(dtype=rope_cos.dtype, device=rope_cos.device)
+    return [token_x, w_dq, w_uq_qr, w_uk, w_dkv_kr, rmsnorm_gamma_cq,
+            rmsnorm_gamma_ckv, new_sin, new_cos]

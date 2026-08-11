@@ -157,3 +157,62 @@ def apply_rotary_pos_emb(
     if input_dtype in (torch.float16, torch.bfloat16):
         return query_out.to(input_dtype), key_out.to(input_dtype)
     return query_out, key_out
+
+
+def get_input(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    layout: int = 0,
+    rotaryMode: str = 'half',
+    **kwargs,
+):
+    """把 cos / sin 重建为同一角度的余弦与正弦，满足 cos^2 + sin^2 = 1。
+
+    RoPE 的 cos / sin 不是两个自由张量，而是同一组位置角 theta 的余弦与正弦：
+    cos[i] = cos(theta_i)、sin[i] = sin(theta_i)，逐元素满足 cos^2 + sin^2 = 1，
+    对应的变换是**保范数的平面旋转**。
+
+    而单区间 value_range 只能声明"两个张量各自落在 [-1, 1]"，通用生成器把它们当成
+    两个**互相独立**的均匀随机张量，cos^2 + sin^2 实际散布在 [0, 2] 上，(cos, sin)
+    落在正方形而非单位圆上——这不是任何位置角对应的旋转。后果：
+
+      1. 候选 kernel 若利用该恒等式（只读 cos 用 sqrt(1-cos^2) 还原 sin、或用融合的
+         复数乘 / 旋转指令实现），在真实 RoPE 上完全正确，却会与 golden 分叉——契约
+         站在候选一边，是输入数据不合法。
+      2. 精度阈值是按保范数旋转标定的。独立随机下输出模长可达 sqrt(2)*|x|，误差分布
+         与真实场景不同，阈值的松紧失去意义。
+
+    这里保持 shape / dtype / device 不变，只把数值替换为 (cos t, sin t)：t 取固定种子
+    的 U(-pi, pi)。用随机角而非真实的 theta = pos * base^(-2i/D) 频率结构，是为了让
+    数据不可被提交侧预测写死；kernel 对 cos / sin 只做逐元素乘加，频率结构不影响其
+    算术路径，故对 kernel 等价性没有区别。
+
+    query / key 原样保留（它们的 value_range 是有意的量级压力覆盖）。
+
+    kernel_eval 用输入名 + attrs 作为关键字调用本函数，并用返回值（按 golden 签名的
+    Tensor 顺序）同时替换 golden 与候选的输入，故比较公平。
+
+    Returns:
+        [query, key, cos, sin]，顺序与 apply_rotary_pos_emb 签名一致。
+    """
+    if not isinstance(cos, torch.Tensor) or not isinstance(sin, torch.Tensor):
+        return [query, key, cos, sin]
+    if cos.shape != sin.shape:
+        # 契约要求 sin 与 cos 同形；不同形时不臆测，保持原样
+        return [query, key, cos, sin]
+
+    # 特殊值压力用例原样放行：cos/sin 含 NaN/Inf（c14 value_range=[nan,nan]）或
+    # 恒为常数（c15 全 0）时，本就不是"某个位置角的余弦/正弦"，其用意是 NaN 传播与
+    # 零值边界覆盖，重建成单位圆上的值反而抹掉了这层覆盖。
+    if not bool(torch.isfinite(cos).all()) or not bool(torch.isfinite(sin).all()):
+        return [query, key, cos, sin]
+    if bool((cos == cos.reshape(-1)[0]).all()) and bool((sin == sin.reshape(-1)[0]).all()):
+        return [query, key, cos, sin]
+
+    g = torch.Generator().manual_seed(0)  # 固定种子：跨 eval 运行必须可复现
+    theta = (torch.rand(cos.shape, generator=g, dtype=torch.float64) * 2 - 1) * torch.pi
+    new_cos = torch.cos(theta).to(dtype=cos.dtype, device=cos.device)
+    new_sin = torch.sin(theta).to(dtype=sin.dtype, device=sin.device)
+    return [query, key, new_cos, new_sin]
