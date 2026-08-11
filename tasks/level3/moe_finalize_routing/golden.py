@@ -312,3 +312,72 @@ if __name__ == "__main__":
     print(f"Torch golden output shape: {golden_torch.shape}")
     print(f"Torch golden output dtype: {golden_torch.dtype}")
     print(f"Torch golden output sample: {golden_torch[0, :5]}")
+
+def get_input(
+    expanded_permuted_rows: torch.Tensor,
+    expanded_src_to_dst_row: torch.Tensor,
+    skip1: Optional[torch.Tensor] = None,
+    skip2: Optional[torch.Tensor] = None,
+    bias: Optional[torch.Tensor] = None,
+    scales: Optional[torch.Tensor] = None,
+    expert_for_source_row: Optional[torch.Tensor] = None,
+    drop_pad_mode: int = 0,
+    **kwargs,
+):
+    """把 expanded_src_to_dst_row 重建为满足单射契约的行映射。
+
+    该输入是 MoeInitRouting 产出的"源行 -> 展开缓冲区行"映射：每个源行 (token, k)
+    占据展开缓冲区中**互不相同**的一行。drop_less (mode 0/2) 下它是 [0, NK) 的完整
+    置换；drop_pad (mode 1/3) 下是到 [0, E*C) 的单射，容量溢出的源行取 -1 表示丢弃。
+
+    而单区间 value_range 表达不了"互异"，通用生成器按 randint 独立有放回采样，导致
+    部分展开行被读多次、另一部分从未被读。golden 与真实 MoeFinalizeRoutingV2 都做
+    gather，重复索引下数值仍然可比（现网用例即如此通过），但：
+      1. 访存模式与真实场景不符——真实场景每行恰好读一次，重复采样把它变成随机重复
+         读，L2 命中率虚高，perf 数据不具代表性；
+      2. 任何采用 scatter 方向实现的候选（遍历展开行写回目的行，与 gather 等价当且
+         仅当映射单射）都会与 golden 分叉，而契约本身是站在候选一边的。
+
+    这里按 case 的实际形状推导目的空间大小 num_dst = expanded_permuted_rows 展平成
+    (num_dst, H) 后的行数（drop_less 下等于 NK，drop_pad 下等于 E*C），为非 -1 的位置
+    分配 [0, num_dst) 的互异值。**-1 的位置原样保留**，以维持 drop_pad 用例既有的
+    丢弃覆盖与随种子可复现的行为。
+
+    注：drop_pad 的完整契约还要求目的行落在该源行所属专家的容量块 [e*C, (e+1)*C) 内
+    （e 取自 expert_for_source_row）。golden 不校验这一点，且按专家分配会让丢弃率降到
+    近乎 0（当前用例 E*C 远大于 NK），反而削弱 -1 路径覆盖，故此处只做单射重建；如需
+    专家对齐应由用例设计一并调整容量。
+
+    kernel_eval 用输入名 + attrs 作为关键字调用本函数，并用返回值（按 golden 签名的
+    Tensor 顺序）同时替换 golden 与候选的输入，故比较公平。
+
+    Returns:
+        [expanded_permuted_rows, expanded_src_to_dst_row, skip1, skip2, bias, scales,
+         expert_for_source_row]，顺序与 moe_finalize_routing 签名一致。
+    """
+    unchanged = [expanded_permuted_rows, expanded_src_to_dst_row, skip1, skip2,
+                 bias, scales, expert_for_source_row]
+    esdr = expanded_src_to_dst_row
+    if not isinstance(esdr, torch.Tensor) or esdr.numel() == 0:
+        return unchanged
+
+    H = int(expanded_permuted_rows.shape[-1])
+    num_dst = expanded_permuted_rows.numel() // H
+
+    flat = esdr.reshape(-1)
+    keep = flat != -1
+    n_keep = int(keep.sum())
+    if n_keep > num_dst:
+        # 抽屉原理：单射不存在（当前用例集不会走到这里），保持原样
+        return unchanged
+
+    g = torch.Generator().manual_seed(0)  # 固定种子：跨 eval 运行必须可复现
+    # argsort(rand) 即随机置换；取前 n_keep 项得到 [0, num_dst) 内互异的目的行
+    dst = torch.rand(num_dst, generator=g).argsort()[:n_keep]
+
+    new_flat = flat.clone()
+    new_flat[keep] = dst.to(dtype=flat.dtype, device=flat.device)
+    new_esdr = new_flat.reshape(esdr.shape)
+
+    return [expanded_permuted_rows, new_esdr, skip1, skip2, bias, scales,
+            expert_for_source_row]

@@ -160,6 +160,18 @@ def get_input(
     base_value = A // total_cells
     remainder = A % total_cells
 
+    # proto.yaml 声明 expert_token_num_per_rank 的元素**必须大于 0**。A < N*E 时
+    # base_value 为 0，除最后一格外全是 0 —— 静默产出违反契约的输入，候选 kernel
+    # 在"某张卡的某个专家分到 0 个 token"上的行为是未定义的，且失败会表现为莫名的
+    # 精度不符而非配置错误。当前用例集最小 base_value = 4，不会走到这里；这是为
+    # 后续新增小 A 用例设的护栏，宁可显式报错也不静默失效。
+    if base_value < 1:
+        raise ValueError(
+            f"moe_re_routing get_input: tokens 数 A={A} 少于 expert_token_num_per_rank "
+            f"的格子数 N*E={N}*{E}={total_cells}，无法让每格都 >0（proto 要求元素必须"
+            f"大于 0）。请调整该用例的 shape 使 A >= N*E。"
+        )
+
     # 生成新的 expert_token_num_per_rank
     if isinstance(expert_token_num_per_rank, torch.Tensor):
         new_expert_token_num = torch.full((N, E), base_value, dtype=expert_token_num_per_rank.dtype)
