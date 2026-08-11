@@ -714,6 +714,34 @@ class ProcessPoolCoordinator:
                         return (task, _synthesize_failure_cases(task.cases, "oom_killed",
                             "子进程被 OOM Killer 杀死 (SIGKILL/-9)，内存不足"), should_retry, "oom_killed", task.cases)
                     print(f"[WARN] {task.operator}@Card{task.device_id}: 子进程异常退出 rc={rc}")
+                    partial = _try_recover_partial_results(output_file)
+                    if partial:
+                        completed_ids = {r.case_id for r in partial}
+                        remaining = [
+                            c for c in task.cases
+                            if c.get_case_id_str() not in completed_ids
+                        ]
+                        failed = _synthesize_failure_cases(
+                            remaining,
+                            "subprocess_failure",
+                            f"子进程异常退出 rc={rc}",
+                        )
+                        print(
+                            f"[INFO] {task.operator}: 异常退出后恢复 {len(partial)} 个已完成用例，"
+                            f"合成 {len(failed)} 个子进程失败用例"
+                        )
+                        should_retry = (
+                            self.process_config.retry_on_failure and
+                            task.retry_count < self.process_config.max_retries and
+                            len(remaining) > 0
+                        )
+                        return (
+                            task,
+                            partial + failed,
+                            should_retry,
+                            "subprocess_failure",
+                            remaining,
+                        )
                     should_retry = (
                         self.process_config.retry_on_failure and
                         task.retry_count < self.process_config.max_retries
@@ -949,6 +977,23 @@ class ProcessPoolCoordinator:
                             return (task, partial + failed)
                         return (task, _synthesize_failure_cases(task.cases, "oom_killed",
                             "重试后仍 OOM Kill"))
+                    partial = _try_recover_partial_results(output_file)
+                    if partial:
+                        completed_ids = {r.case_id for r in partial}
+                        remaining = [
+                            c for c in task.cases
+                            if c.get_case_id_str() not in completed_ids
+                        ]
+                        failed = _synthesize_failure_cases(
+                            remaining,
+                            "subprocess_failure",
+                            f"重试后仍异常退出 rc={rc}",
+                        )
+                        print(
+                            f"[INFO] {task.operator}: 重试异常退出后恢复 {len(partial)} 个已完成用例，"
+                            f"合成 {len(failed)} 个子进程失败用例"
+                        )
+                        return (task, partial + failed)
                     return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
                         f"重试后仍异常退出 rc={rc}"))
 

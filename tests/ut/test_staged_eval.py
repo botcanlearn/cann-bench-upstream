@@ -12,7 +12,15 @@ from kernel_eval.staged_eval import (
 )
 
 
-def _case(case_num, *, success, failure_type=None, accuracy_result=None, perf_result=None):
+def _case(
+    case_num,
+    *,
+    success,
+    failure_type=None,
+    accuracy_result=None,
+    perf_result=None,
+    error_msg=None,
+):
     return EvalCaseResult(
         case_id=f"level2/dynamic_quant_{case_num}",
         rel_path="level2/dynamic_quant",
@@ -21,6 +29,7 @@ def _case(case_num, *, success, failure_type=None, accuracy_result=None, perf_re
         success=success,
         accuracy_result=accuracy_result,
         perf_result=perf_result,
+        error_msg=error_msg,
         baseline_perf_us=100.0,
         t_hw_us=10.0,
         failure_type=failure_type,
@@ -151,7 +160,13 @@ def test_merge_tags_perf_unmeasured_without_failing_case():
         _op([_case(1, success=True, accuracy_result=AccuracyResult(passed=True))])
     ]
     performance_ops = [
-        _op([_case(1, success=False, failure_type="timeout", perf_result=None)])
+        _op([_case(
+            1,
+            success=False,
+            failure_type="subprocess_failure",
+            perf_result=None,
+            error_msg="重试后仍异常退出 rc=-11",
+        )])
     ]
 
     merged = _merge_results(correctness_ops, performance_ops)[0]
@@ -161,6 +176,14 @@ def test_merge_tags_perf_unmeasured_without_failing_case():
     assert case.perf_result is None      # 但没有有效性能数据
     assert case.perf_recheck is not None
     assert case.perf_recheck["status"] == "perf_unmeasured"
-    assert case.perf_recheck["perf_failure_type"] == "timeout"
+    assert case.perf_recheck["perf_failure_type"] == "subprocess_failure"
+    assert case.perf_recheck["error_msg"] == "重试后仍异常退出 rc=-11"
+    assert "rc=-11" in case.perf_recheck["note"]
     assert merged.passed_cases == 1
     assert merged.failed_cases == 0
+
+    from src.kernel_eval.report.report_generator import EvalResult
+
+    report_case = EvalResult.from_eval_case_result(case)
+    assert report_case.performance_error_msg == "重试后仍异常退出 rc=-11"
+    assert report_case.perf_recheck == case.perf_recheck

@@ -57,6 +57,7 @@ class EvalResult:
     # "cascade_device"   — 因 NPU 设备损坏级联失败
     # "skipped"          — 因设备不可恢复而跳过
     failure_type: Optional[str] = None
+    perf_recheck: Optional[Dict[str, Any]] = None
 
     def resolve_profiling(self):
         if self._perf_result is not None:
@@ -80,6 +81,13 @@ class EvalResult:
             elif result.failure_type == "skipped":
                 status = "skipped"
 
+        performance_error_msg = None
+        if result.success and result.perf_result is None and result.perf_recheck:
+            performance_error_msg = (
+                result.perf_recheck.get("error_msg")
+                or result.perf_recheck.get("note")
+            )
+
         return cls(
             rel_path=result.rel_path,
             operator=result.operator,
@@ -88,6 +96,7 @@ class EvalResult:
             elapsed_us=result.perf_result.elapsed_us if result.perf_result else None,
             op_times=result.perf_result.op_times if result.perf_result else {},
             error_msg=result.error_msg,
+            performance_error_msg=performance_error_msg,
             accuracy=result.accuracy_result.to_dict() if result.accuracy_result else None,
             speedup=result.get_speedup(),
             baseline_perf_us=result.baseline_perf_us,
@@ -95,6 +104,7 @@ class EvalResult:
             perf_score=result.get_perf_score(),
             timestamp=datetime.now().isoformat(),
             failure_type=result.failure_type,
+            perf_recheck=result.perf_recheck,
         )
 
 

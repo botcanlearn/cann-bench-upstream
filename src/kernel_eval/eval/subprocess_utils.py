@@ -268,7 +268,8 @@ def _try_recover_partial_results(output_file: str) -> List[EvalCaseResult]:
     """尝试从 output_file 读取 eval-child 增量写入的部分结果。
 
     eval-child 子进程通过 incremental_output 增量写入已完成用例结果。
-    OOM Kill 时父进程可从 output_file 恢复已完成的部分结果。
+    OOM Kill、超时或普通异常退出（例如 SIGSEGV）时，父进程可从
+    output_file 恢复已完成的部分结果。
 
     Args:
         output_file: eval-child 的 --output 文件路径

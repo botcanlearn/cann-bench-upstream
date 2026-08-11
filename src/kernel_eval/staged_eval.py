@@ -309,13 +309,18 @@ def _merge_results(
                 # 沿用 correctness 通过判定，仅标注缺失原因，无性能分。
                 case.perf_result = None
                 if perf_case is not None and not perf_case.success:
+                    failure_reason = perf_case.error_msg or (
+                        "performance stage did not produce a valid timing"
+                    )
                     case.perf_recheck = {
                         "status": "perf_unmeasured",
                         "correctness_passed": True,
                         "perf_failure_type": perf_case.failure_type,
+                        "error_msg": failure_reason,
                         "note": (
                             "passed correctness but the performance stage could not "
-                            "produce a valid timing (e.g. timeout / runtime error)."
+                            "produce a valid timing (e.g. timeout / runtime error). "
+                            f"Reason: {failure_reason}"
                         ),
                     }
             cases.append(case)

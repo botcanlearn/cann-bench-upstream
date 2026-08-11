@@ -1135,6 +1135,87 @@ class TestDynamicDispatch(unittest.TestCase):
         # 第一次失败 + 1次重试 = 2 次调用
         self.assertEqual(call_count[0], 2)
 
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def test_sigsegv_recovers_partial_results_and_retries_only_remaining(self, mock_detect):
+        """普通异常退出也恢复增量结果，重试仅覆盖尚未完成的 case。"""
+        mock_detect.return_value = 2
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(
+                processes_per_card=1,
+                enable_profiler=False,
+                retry_on_failure=True,
+                max_retries=1,
+            ),
+        )
+
+        cases = [make_case("Exp", i) for i in range(1, 4)]
+        task_units = [TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=cases,
+            device_id=0,
+        )]
+        case_batches = []
+        call_count = [0]
+
+        def result_payload(case):
+            return {
+                "case_id": case.get_case_id_str(),
+                "rel_path": case.rel_path,
+                "operator": case.operator,
+                "case_num": case.case_num,
+                "success": True,
+            }
+
+        def mock_popen(cmd, **kwargs):
+            del kwargs
+            call_count[0] += 1
+            proc = Mock()
+            proc.pid = 12345 + call_count[0]
+            proc.wait = Mock(return_value=-11)
+            proc.poll = Mock(return_value=-11)
+
+            cases_file = cmd[cmd.index('--cases-file') + 1]
+            submitted = json.loads(Path(cases_file).read_text())
+            case_batches.append([item["case_id"] for item in submitted])
+
+            output_file = cmd[cmd.index('--output') + 1]
+            completed_case = cases[call_count[0] - 1]
+            Path(output_file).write_text(json.dumps({
+                "case_results": [result_payload(completed_case)],
+            }))
+            return proc
+
+        with patch(
+            'src.kernel_eval.eval.process_pool.subprocess.Popen',
+            side_effect=mock_popen,
+        ), patch(
+            'src.kernel_eval.eval.process_pool._is_oom_killed',
+            return_value=False,
+        ), patch(
+            'src.kernel_eval.eval.process_pool._write_oom_score_adj',
+            return_value=True,
+        ):
+            raw_results = coordinator.evaluate_task_units(task_units)
+
+        self.assertEqual(call_count[0], 2)
+        self.assertEqual(case_batches, [
+            [case.get_case_id_str() for case in cases],
+            [case.get_case_id_str() for case in cases[1:]],
+        ])
+
+        aggregated = aggregate_by_operator(raw_results)[0]
+        self.assertEqual(aggregated.total_cases, 3)
+        self.assertEqual(aggregated.passed_cases, 2)
+        by_id = {case.case_id: case for case in aggregated.results}
+        self.assertTrue(by_id[cases[0].get_case_id_str()].success)
+        self.assertTrue(by_id[cases[1].get_case_id_str()].success)
+        final_failure = by_id[cases[2].get_case_id_str()]
+        self.assertFalse(final_failure.success)
+        self.assertEqual(final_failure.failure_type, "subprocess_failure")
+        self.assertIn("rc=-11", final_failure.error_msg)
+
     def test_detect_cards_integrates_idle_filter(self):
         """_detect_cards 端到端整合：健康 + 空闲过滤"""
         import sys
