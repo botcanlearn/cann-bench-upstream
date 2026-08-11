@@ -122,13 +122,27 @@ class DataGenerator:
         if not value_ranges:
             return [None] * num_inputs
 
-        # 判断是单输入 [min, max] 还是多输入 [[min1, max1], ...]
+        # 判断是标量区间 [min, max] 还是逐输入 [[min1, max1], ...]
         first_item = value_ranges[0]
         is_single_range = not isinstance(first_item, list)
 
         if is_single_range:
-            # 单输入算子: value_range 就是 [min, max]
-            return [value_ranges] + [None] * (num_inputs - 1)
+            # 标量区间 [min, max]：广播到**全部**输入。
+            #
+            # 此前写作 `[value_ranges] + [None] * (num_inputs - 1)`，注释标的是
+            # "单输入算子"——该分支只考虑了单输入场景。而 cases.yaml 里
+            # `value_range: [-1, 1]` 是"所有输入同一区间"的简写，7 个多输入算子
+            # （RmsNorm / GroupNorm / MHA / GQA / MLA / MlaProlog /
+            # SparseFlashAttention，共 140 个用例）都用了这种写法，结果除第 1 个
+            # 输入外全部拿不到声明区间，静默落到 _parse_range 的默认值
+            # （float [0,1] / int [0,100]）——注意默认值是**非负**的：
+            #   MHA/GQA  的 key / value 落在 [0,1]，注意力少了抵消项覆盖；
+            #   MLA      5 个输入里 4 个非负；
+            #   MlaProlog 9 个输入里 8 个非负（含 rope_sin/rope_cos 只剩第一象限）；
+            #   RmsNorm/GroupNorm 的 gamma / beta 非负，而用例 note 写的是
+            #   "symmetric-small"（对称小值域）——声明与实际直接矛盾。
+            # 逐输入区间不同的场景仍走下面的 list-of-list 形式，不受影响。
+            return [value_ranges] * num_inputs
         else:
             # 多输入算子: value_ranges 是 [[min1, max1], [min2, max2], ...]
             if len(value_ranges) < num_inputs:
