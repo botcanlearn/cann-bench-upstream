@@ -57,6 +57,7 @@ from .perf_eval import PerfEvaluator, PerfResult
 from .results import EvalCaseResult, EvalOperatorResult, EvalSessionResult
 from .failure_synthesizer import FailureSynthesizer
 from .index_check import validate_index_gather_outputs
+from .subprocess_utils import detect_pypto_pro_submission, _terminate_process_group
 from ..registry.matcher_registry import get_operator_matcher
 
 # 导入 benches 模块，确保 Registry 已注册
@@ -123,7 +124,10 @@ class Evaluator:
         )
         self.failure_synthesizer = FailureSynthesizer(self.case_loader)
 
-        self._pypto_pro_jit_isolation = self._detect_pypto_pro_dispatch()
+        self._pypto_pro_jit_isolation = (
+            not getattr(self.config, "pypto_pro_outer_case_isolation", False)
+            and self._detect_pypto_pro_dispatch()
+        )
 
     def load_ai_operator(self, operator_name: str) -> Callable:
         """加载AI生成的算子函数（委托给 OperatorMatcher）"""
@@ -1140,7 +1144,21 @@ class Evaluator:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 env=env, start_new_session=True,
             )
-            stdout, stderr = proc.communicate(timeout=600)
+            timeout = max(1, getattr(self.config, "timeout_per_operator", 300) - 10)
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _terminate_process_group(proc)
+                stdout, stderr = proc.communicate()
+                captured = (stdout.decode(errors="replace") +
+                            stderr.decode(errors="replace")).strip()
+                return OpRunResult(
+                    success=False,
+                    error=f"PyPTO Pro 子进程超时 ({timeout}s)，已终止进程组",
+                    elapsed_us=0,
+                    device=f"npu:{self.config.device_id}",
+                    captured_output=captured if captured else None,
+                )
             rc = proc.returncode
 
             result_path = os.path.join(work_dir, "result.json")
@@ -1234,25 +1252,9 @@ class Evaluator:
         （converter agent 会不可预测地重命名 dispatcher 文件）。
         """
         try:
-            import cann_bench
-            pkg_dir = os.path.dirname(cann_bench.__file__)
-            for root, dirs, files in os.walk(pkg_dir):
-                dirs[:] = [d for d in dirs if d != '__pycache__']
-                for name in files:
-                    if not name.endswith('.py'):
-                        continue
-                    try:
-                        with open(os.path.join(root, name), encoding='utf-8') as f:
-                            for line in f:
-                                stripped = line.lstrip()
-                                if stripped.startswith('import pypto_pro') or \
-                                   stripped.startswith('from pypto_pro'):
-                                    return True
-                    except (OSError, UnicodeDecodeError):
-                        continue
-        except (ImportError, OSError, AttributeError):
-            pass
-        return False
+            return detect_pypto_pro_submission()
+        except Exception:
+            return False
 
     def _cleanup_memory(self):
         """清理 NPU cache 并强制 GC 回收

@@ -28,6 +28,8 @@
 
 import json
 import os
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -47,6 +49,8 @@ from .subprocess_utils import (
     _is_oom_killed,
     _synthesize_failure_cases,
     _try_recover_partial_results,
+    _signal_process_group,
+    _terminate_process_group,
 )
 from ..config import Config, get_config, get_project_root
 from ..base.models import CaseSpec
@@ -100,6 +104,7 @@ def split_into_chunks(items: list, n: int) -> list:
 def build_task_units(
     cases_by_operator: Dict[str, List[CaseSpec]],
     card_count: int,
+    isolate_each_case: bool = False,
 ) -> List[TaskUnit]:
     """将算子×用例拆分为 TaskUnit，均分到各卡。
 
@@ -115,6 +120,16 @@ def build_task_units(
     card_ids = list(range(card_count))
 
     for operator_name, cases in cases_by_operator.items():
+        if isolate_each_case:
+            for i, case in enumerate(cases):
+                task_units.append(TaskUnit(
+                    operator=operator_name,
+                    rel_path=case.rel_path,
+                    cases=[case],
+                    device_id=card_ids[i % len(card_ids)],
+                ))
+            continue
+
         chunks = split_into_chunks(cases, card_count)
         for i, chunk in enumerate(chunks):
             if chunk:
@@ -484,6 +499,12 @@ class ProcessPoolCoordinator:
 
     def _build_child_cmd(self, task: TaskUnit, cases_file: str, output_file: str) -> List[str]:
         """构建 eval-child 子进程命令"""
+        outer_isolation = bool(getattr(
+            self.base_config, "pypto_pro_outer_case_isolation", False))
+
+        def child_path(path: str) -> str:
+            return str(Path(path).resolve()) if outer_isolation else str(path)
+
         cmd = [sys.executable, "-u", "-m", "kernel_eval.cli", "eval-child",
                "--bench-name", self.base_config.bench_name,
                "--device-id", str(task.device_id),
@@ -495,17 +516,17 @@ class ProcessPoolCoordinator:
 
         reports_dir = getattr(self.base_config, "reports_dir", "") or ""
         if reports_dir:
-            cmd += ["--reports-dir", str(reports_dir)]
+            cmd += ["--reports-dir", child_path(reports_dir)]
 
         # task-dir 透传
         tasks_root = getattr(self.base_config, "tasks_root", "")
         if tasks_root:
-            cmd += ["--task-dir", str(tasks_root)]
+            cmd += ["--task-dir", child_path(tasks_root)]
 
         # source-dir 透传（Stanford bench 等需要在子进程中加载 ai_op.py）
         source_dir = getattr(self.base_config, "source_dir", "") or ""
         if source_dir:
-            cmd += ["--source-dir", str(source_dir)]
+            cmd += ["--source-dir", child_path(source_dir)]
 
         # profiler 配置
         if not self.process_config.enable_profiler:
@@ -531,7 +552,29 @@ class ProcessPoolCoordinator:
         if perf_strategy:
             cmd += ["--perf-metric-strategy", str(perf_strategy)]
 
+        if outer_isolation:
+            cmd.append("--pypto-pro-outer-case-isolation")
+            cmd += ["--timeout-per-operator", str(
+                self.process_config.timeout_per_operator)]
+
         return cmd
+
+    def _terminate_timed_out_process(self, proc: subprocess.Popen) -> None:
+        """按评测模式终止超时 worker。
+
+        PyPTO Pro worker 可能派生 profiler/Runtime 后代，需要清理整个
+        进程组；其他评测保持修改前只终止直接子进程的行为。
+        """
+        if getattr(self.base_config, "pypto_pro_outer_case_isolation", False):
+            _terminate_process_group(proc)
+            return
+
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
     def evaluate_task_units(self, task_units: List[TaskUnit]) -> List[EvalCaseResult]:
         """按 TaskUnit 并行评测
@@ -577,6 +620,8 @@ class ProcessPoolCoordinator:
             # 写 cases JSON 文件
             fd, cases_file = tempfile.mkstemp(suffix=".json", prefix="cases_")
             os.close(fd)
+            child_cwd = None
+            output_file = None
             try:
                 Path(cases_file).write_text(json.dumps([c.to_dict() for c in task.cases], ensure_ascii=False))
 
@@ -588,7 +633,13 @@ class ProcessPoolCoordinator:
                 env = self._build_env_for_task(base_env, task)
                 timeout = len(task.cases) * self.process_config.timeout_per_operator
 
-                proc = subprocess.Popen(cmd, start_new_session=True, env=env)
+                if getattr(self.base_config, "pypto_pro_outer_case_isolation", False):
+                    child_cwd = tempfile.mkdtemp(prefix="pypto_eval_child_")
+
+                popen_kwargs = {"start_new_session": True, "env": env}
+                if child_cwd is not None:
+                    popen_kwargs["cwd"] = child_cwd
+                proc = subprocess.Popen(cmd, **popen_kwargs)
                 self._active_processes.append(proc)
                 oom_ok = _write_oom_score_adj(proc.pid, 1000)
                 # 父进程外部写是双保险，子进程自设（cmd_eval_child）才是主路径
@@ -606,12 +657,7 @@ class ProcessPoolCoordinator:
                         pass
 
                     print(f"[WARN] TaskUnit {task.operator}@Card{task.device_id} 超时 ({timeout}s)")
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait()
+                    self._terminate_timed_out_process(proc)
                     # 超时：尝试恢复部分结果，失败则合成全量 timeout 失败
                     partial = _try_recover_partial_results(output_file)
                     if partial:
@@ -701,10 +747,13 @@ class ProcessPoolCoordinator:
                     os.unlink(cases_file)
                 except OSError:
                     pass
-                try:
-                    os.unlink(output_file)
-                except OSError:
-                    pass
+                if output_file:
+                    try:
+                        os.unlink(output_file)
+                    except OSError:
+                        pass
+                if child_cwd:
+                    shutil.rmtree(child_cwd, ignore_errors=True)
 
         pool = _DevicePool(self._available_cards, self.process_config.processes_per_card)
 
@@ -843,6 +892,8 @@ class ProcessPoolCoordinator:
             idx, task = idx_and_task
             fd, cases_file = tempfile.mkstemp(suffix=".json", prefix="retry_cases_")
             os.close(fd)
+            child_cwd = None
+            output_file = None
             try:
                 Path(cases_file).write_text(json.dumps([c.to_dict() for c in task.cases], ensure_ascii=False))
 
@@ -853,7 +904,13 @@ class ProcessPoolCoordinator:
                 env = self._build_env_for_task(base_env, task)
                 timeout = len(task.cases) * self.process_config.timeout_per_operator
 
-                proc = subprocess.Popen(cmd, start_new_session=True, env=env)
+                if getattr(self.base_config, "pypto_pro_outer_case_isolation", False):
+                    child_cwd = tempfile.mkdtemp(prefix="pypto_eval_child_")
+
+                popen_kwargs = {"start_new_session": True, "env": env}
+                if child_cwd is not None:
+                    popen_kwargs["cwd"] = child_cwd
+                proc = subprocess.Popen(cmd, **popen_kwargs)
                 self._active_processes.append(proc)
                 _write_oom_score_adj(proc.pid, 1000)
 
@@ -865,12 +922,7 @@ class ProcessPoolCoordinator:
                     except ValueError:
                         pass
                     print(f"[WARN] 重试任务 {task.operator}@Card{task.device_id} 仍然超时")
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait()
+                    self._terminate_timed_out_process(proc)
                     partial = _try_recover_partial_results(output_file)
                     if partial:
                         completed_ids = {r.case_id for r in partial}
@@ -913,10 +965,13 @@ class ProcessPoolCoordinator:
                     os.unlink(cases_file)
                 except OSError:
                     pass
-                try:
-                    os.unlink(output_file)
-                except OSError:
-                    pass
+                if output_file:
+                    try:
+                        os.unlink(output_file)
+                    except OSError:
+                        pass
+                if child_cwd:
+                    shutil.rmtree(child_cwd, ignore_errors=True)
 
         pool = _DevicePool(self._available_cards, self.process_config.processes_per_card)
 
@@ -991,15 +1046,20 @@ class ProcessPoolCoordinator:
     def shutdown(self):
         """关闭所有活跃子进程
 
-        SIGTERM 先，10s 宽限后 SIGKILL。
+        PyPTO Pro 清理整个进程组；其他评测保持原有 Popen 终止行为。
         """
         grace_sec = 5
+        outer_isolation = bool(getattr(
+            self.base_config, "pypto_pro_outer_case_isolation", False))
         for proc in self._active_processes:
             if proc.poll() is None:
-                try:
-                    proc.terminate()
-                except Exception:
-                    pass
+                if outer_isolation:
+                    _signal_process_group(proc, signal.SIGTERM)
+                else:
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
 
         if self._active_processes:
             deadline = time.time() + grace_sec
@@ -1014,10 +1074,17 @@ class ProcessPoolCoordinator:
 
         for proc in self._active_processes:
             if proc.poll() is None:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+                if outer_isolation:
+                    _signal_process_group(proc, signal.SIGKILL)
+                    try:
+                        proc.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        pass
+                else:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
         self._active_processes = []
 
     def get_stats(self) -> Dict:

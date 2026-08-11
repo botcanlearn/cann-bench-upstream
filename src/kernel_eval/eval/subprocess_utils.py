@@ -22,7 +22,12 @@
 供 ProcessPoolCoordinator 和 eval-child 共用。
 """
 
+import ast
+import os
+import signal
 import subprocess
+from importlib import metadata
+from pathlib import Path
 from typing import Dict, List
 
 from .results import EvalCaseResult
@@ -31,6 +36,116 @@ from .results import EvalCaseResult
 # ---------------------------------------------------------------------------
 # OOM Killer 保护
 # ---------------------------------------------------------------------------
+
+def _signal_process_group(proc: subprocess.Popen, sig: int) -> None:
+    """向由 ``start_new_session=True`` 启动的子进程组发送信号。
+
+    评测子进程可能继续启动 profiler 或 runtime 子进程。只终止
+    Popen 直接对象会把这些后代留在 NPU 上，因此 POSIX 环境下必须
+    按进程组清理。非 POSIX 或进程组不存在时回退到 Popen API。
+    """
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, sig)
+        return
+    except (AttributeError, ProcessLookupError, PermissionError, OSError):
+        pass
+
+    try:
+        if sig == signal.SIGKILL:
+            proc.kill()
+        else:
+            proc.terminate()
+    except (ProcessLookupError, OSError):
+        pass
+
+
+def _terminate_process_group(proc: subprocess.Popen, grace_sec: float = 10.0) -> None:
+    """终止子进程及其同进程组后代，并回收直接子进程。"""
+    if proc.poll() is not None:
+        return
+
+    _signal_process_group(proc, signal.SIGTERM)
+    try:
+        proc.wait(timeout=grace_sec)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    _signal_process_group(proc, signal.SIGKILL)
+    try:
+        proc.wait(timeout=grace_sec)
+    except subprocess.TimeoutExpired:
+        # 极端情况下再尝试回收直接子进程，不让清理无限阻塞。
+        try:
+            proc.kill()
+        except (ProcessLookupError, OSError):
+            pass
+
+
+def _installed_package_sources(pkg_dir: str) -> List[Path]:
+    """返回当前 wheel 实际拥有的 Python 源文件。
+
+    不直接遍历整个包目录：不同提交都使用 ``cann_bench`` 分发名时，
+    ``pip --force-reinstall`` 可能留下旧 wheel 不再拥有的文件。把这些
+    残留文件纳入检测会将普通 PyPTO 提交误判为 PyPTO Pro。
+    """
+    package_root = Path(pkg_dir).resolve()
+    try:
+        dist = metadata.distribution("cann-bench")
+    except metadata.PackageNotFoundError:
+        return []
+
+    sources = []
+    for installed_file in dist.files or ():
+        if Path(installed_file).suffix != ".py":
+            continue
+        try:
+            source = Path(dist.locate_file(installed_file)).resolve()
+            source.relative_to(package_root)
+        except (OSError, RuntimeError, ValueError):
+            continue
+        sources.append(source)
+    return sources
+
+
+def detect_pypto_pro_submission() -> bool:
+    """通过当前 ``cann_bench`` wheel 拥有的源码检测 PyPTO Pro。"""
+    try:
+        import cann_bench
+        pkg_dir = os.path.dirname(cann_bench.__file__)
+    except (ImportError, OSError, AttributeError, TypeError):
+        return False
+
+    source_files = _installed_package_sources(pkg_dir)
+    if not source_files:
+        # 源码运行或 editable install 可能没有可用的 wheel RECORD。
+        source_files = [
+            Path(root) / name
+            for root, _dirs, files in os.walk(pkg_dir)
+            for name in files
+            if name.endswith('.py') and '__pycache__' not in Path(root).parts
+        ]
+
+    for source_file in source_files:
+        try:
+            tree = ast.parse(source_file.read_text(encoding='utf-8'))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                if any(alias.name == 'pypto_pro' or
+                       alias.name.startswith('pypto_pro.')
+                       for alias in node.names):
+                    return True
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ''
+                if module == 'pypto_pro' or module.startswith('pypto_pro.'):
+                    return True
+    return False
+
 
 def _write_oom_score_adj(pid: int, value: int) -> bool:
     """写入 /proc/<pid>/oom_score_adj，返回是否成功。

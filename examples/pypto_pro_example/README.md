@@ -45,7 +45,24 @@ $$y = \frac{x}{\sqrt{\mathrm{mean}(x^2) + \epsilon}} \cdot \gamma$$
 
 ## 快速评测（推荐）
 
-在 cann-bench 仓根目录下执行：
+### 前置条件
+
+1. Python 3.10+，且已进入配置好 PyPTO-Pro 的 Python/Conda 环境
+2. `import pypto_pro.language as pl` 可用
+3. CANN 环境已初始化，`import torch_npu` 可用且 NPU 设备可见
+
+### 全新检出后执行
+
+首次使用时，在上述同一 Python 环境中安装 CANN Bench 依赖，然后从仓根目录启动评测：
+
+```bash
+git clone https://gitcode.com/cann/cann-bench.git
+cd cann-bench
+python -m pip install -r examples/pypto_pro_example/requirements.txt
+./scripts/run_evaluation.sh examples/pypto_pro_example
+```
+
+如果仓库及其依赖已经准备好，后续只需在 cann-bench 仓根目录执行最后一条命令：
 
 ```bash
 ./scripts/run_evaluation.sh examples/pypto_pro_example
@@ -54,15 +71,12 @@ $$y = \frac{x}{\sqrt{\mathrm{mean}(x^2) + \epsilon}} \cdot \gamma$$
 最终报告输出到 `reports/`，含 `cann_final_eval_<时间戳>.md` 汇总（编译分 + 精度分 + 性能分）。
 
 > **工作目录**：`--source-dir examples/...` 为相对路径，必须在 **cann-bench 仓根目录**下执行，即先 `cd <path-to>/cann-bench`。
-
-### 前置条件
-
-1. PyPTO 已安装（`import pypto_pro.language as pl` 可用）
-2. NPU 设备可用
+>
+> **环境一致性**：依赖必须安装到能够导入 `pypto_pro` 的同一 Python 环境中。示例专用的 `requirements.txt` 只补齐评测框架依赖，不安装或替换 PyPTO-Pro 运行环境中的 `torch`、`torch_npu` 和 CANN；评测脚本会自动构建并安装 `cann_bench_utils`，无需手工准备该组件，也无需手工设置 `PYTHONPATH`。
 
 ### 多卡并行
 
-脚本默认不传 `--device-id`，走多卡并行模式（每卡 2 进程），自动把 20 个 case 分发到所有可见 NPU。单卡调试可加 `--device-id 0`。
+脚本默认不传 `--device-id`，走多卡并行模式，调度参数默认为每卡 2 个 worker。PyPTO-Pro 的每个 case 均由独立的 `eval-child` 执行，自动把 20 个 case 分发到所有可见 NPU；可通过 `--processes-per-card` 调整每卡并发度。性能阶段开启 profiler 时，仍遵循框架原有的 profiler 独占规则，每卡运行 1 个 worker。单卡调试可加 `--device-id 0`。
 
 ### 报告输出位置
 
@@ -87,11 +101,11 @@ $$y = \frac{x}{\sqrt{\mathrm{mean}(x^2) + \epsilon}} \cdot \gamma$$
   │    ├─ pip install cann_bench-1.0.0-py3-none-any.whl
   │    ├─ import cann_bench → 扫描接口: rms_norm
   │    ├─ 匹配 tasks/level2/rms_norm 算子定义
-  │    └─ 逐用例 fork 子进程跑精度（不采性能，耗时显示 N/A 属正常）
+  │    └─ 每个 case 由独立 eval-child 跑精度（不采性能，耗时显示 N/A 属正常）
   │
   ├─ stage3 performance (enable_profiler=True):
   │    ├─ 只跑 stage2 通过的 case
-  │    ├─ 每用例独立子进程 + ASCEND_RT_VISIBLE_DEVICES 隔离
+  │    ├─ 每个 case 由独立 eval-child 执行 + ASCEND_RT_VISIBLE_DEVICES 隔离
   │    ├─ 测量前执行 NPU 升频和初始 L2 清理，每个 active repeat 前再次清 L2
   │    ├─ 继承 --profiler-level 配置，仅采集 NPU activity
   │    └─ 采集 kernel_details.csv 性能数据
@@ -116,7 +130,7 @@ PYTHONPATH=src python -m kernel_eval.cli eval \
   --reports-dir "$PWD/reports"
 ```
 
-> **`--reports-dir` 必须用绝对路径**：PyPTO-Pro 算子在每个用例的独立子进程中执行，子进程会 `chdir` 到临时目录隔离 JIT 编译。若 `--reports-dir` 为相对路径（如默认的 `reports`），profiler 产出的 `kernel_details.csv` 等性能数据会落到 chdir 后的临时目录，父进程在项目根下找不到，导致耗时/加速比显示为 `N/A`、性能得分为 0。用 `"$PWD/reports"` 或绝对路径可避免此问题。`./scripts/run_evaluation.sh` 已自动用绝对路径，无此问题。
+> PyPTO-Pro 的每个用例由独立的 `eval-child` 执行，并在独立临时工作目录中完成 JIT 编译。调度器会先把 `--reports-dir`、`--task-dir` 和 `--source-dir` 转换为绝对路径，因此相对路径也能正确使用；命令中保留 `"$PWD/reports"` 是为了让实际报告位置更直观。
 
 ## 调用链
 

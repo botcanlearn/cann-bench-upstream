@@ -24,11 +24,14 @@
 
 import json
 import os
+import signal
 import subprocess
 import tempfile
+import types
 import unittest
+from importlib import metadata
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, call
 
 import sys
 project_root = Path(__file__).parent.parent.parent
@@ -48,6 +51,8 @@ from src.kernel_eval.eval.subprocess_utils import (
     _is_oom_killed,
     _synthesize_failure_cases,
     _try_recover_partial_results,
+    _terminate_process_group,
+    detect_pypto_pro_submission,
 )
 from src.kernel_eval.eval.results import EvalCaseResult, summarize_case_results, dedup_case_results
 from src.kernel_eval.benches import CannCaseSpec
@@ -151,6 +156,16 @@ class TestTaskUnit(unittest.TestCase):
         sig_units = [u for u in units if u.operator == "Sigmoid"]
         self.assertEqual(len(exp_units), 2)
         self.assertEqual(len(sig_units), 2)
+
+    def test_build_task_units_isolates_every_case(self):
+        """PyPTO Pro 模式下每个 case 都是独立 TaskUnit。"""
+        cases = [make_case("Exp", i) for i in range(5)]
+        units = build_task_units(
+            {"Exp": cases}, card_count=2, isolate_each_case=True)
+
+        self.assertEqual(len(units), 5)
+        self.assertTrue(all(len(unit.cases) == 1 for unit in units))
+        self.assertEqual([unit.device_id for unit in units], [0, 1, 0, 1, 0])
 
 
 class TestAggregateByOperator(unittest.TestCase):
@@ -354,6 +369,116 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         idx = cmd.index("--reports-dir")
         self.assertEqual(cmd[idx + 1], "/tmp/cann-bench-reports")
 
+    def test_non_pypto_child_cmd_keeps_original_arguments(self):
+        """非 PyPTO Pro worker 不接收隔离模式新增参数。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.pypto_pro_outer_case_isolation = False
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(timeout_per_operator=123),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json")
+
+        self.assertNotIn("--pypto-pro-outer-case-isolation", cmd)
+        self.assertNotIn("--timeout-per-operator", cmd)
+
+    def test_non_pypto_timeout_keeps_direct_process_cleanup(self):
+        """非 PyPTO Pro 超时继续使用修改前的 Popen 终止方式。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.pypto_pro_outer_case_isolation = False
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(),
+        )
+        proc = MagicMock()
+        proc.wait.return_value = 0
+
+        with patch(
+            "src.kernel_eval.eval.process_pool._terminate_process_group"
+        ) as terminate_group:
+            coordinator._terminate_timed_out_process(proc)
+
+        proc.terminate.assert_called_once_with()
+        proc.wait.assert_called_once_with(timeout=10)
+        proc.kill.assert_not_called()
+        terminate_group.assert_not_called()
+
+    def test_non_pypto_shutdown_keeps_direct_process_cleanup(self):
+        """非 PyPTO Pro shutdown 不向进程组发送信号。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.pypto_pro_outer_case_isolation = False
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(),
+        )
+        proc = MagicMock()
+        proc.poll.side_effect = [None, 0, 0]
+        coordinator._active_processes = [proc]
+
+        with patch(
+            "src.kernel_eval.eval.process_pool._signal_process_group"
+        ) as signal_group:
+            coordinator.shutdown()
+
+        proc.terminate.assert_called_once_with()
+        proc.kill.assert_not_called()
+        signal_group.assert_not_called()
+        self.assertEqual(coordinator._active_processes, [])
+
+    def test_build_child_cmd_propagates_outer_isolation_and_timeout(self):
+        self.base_config.device_type = "cpu"
+        self.base_config.pypto_pro_outer_case_isolation = True
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(
+                enable_profiler=False, timeout_per_operator=123),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json")
+
+        self.assertIn("--pypto-pro-outer-case-isolation", cmd)
+        idx = cmd.index("--timeout-per-operator")
+        self.assertEqual(cmd[idx + 1], "123")
+
+    def test_outer_isolation_resolves_child_paths(self):
+        self.base_config.device_type = "cpu"
+        self.base_config.pypto_pro_outer_case_isolation = True
+        self.base_config.reports_dir = "relative-reports"
+        self.base_config.source_dir = "relative-source"
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=False),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json")
+
+        reports_idx = cmd.index("--reports-dir")
+        source_idx = cmd.index("--source-dir")
+        self.assertTrue(Path(cmd[reports_idx + 1]).is_absolute())
+        self.assertTrue(Path(cmd[source_idx + 1]).is_absolute())
+
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_multi_card_child_visibility_is_narrowed(self, mock_detect):
         """多卡 child 通过 ASCEND_RT_VISIBLE_DEVICES 收窄到分配的物理卡"""
@@ -519,6 +644,89 @@ class TestSubprocessUtils(unittest.TestCase):
         self.assertFalse(_is_oom_killed(mock_proc, 0))
         self.assertFalse(_is_oom_killed(mock_proc, 1))
 
+    def test_terminate_process_group_escalates_to_sigkill(self):
+        proc = MagicMock()
+        proc.pid = 4321
+        proc.poll.return_value = None
+        proc.wait.side_effect = [subprocess.TimeoutExpired("child", 1), -9]
+
+        with patch(
+            "src.kernel_eval.eval.subprocess_utils.os.killpg", create=True
+        ) as killpg:
+            _terminate_process_group(proc, grace_sec=1)
+
+        self.assertEqual(
+            killpg.call_args_list,
+            [call(4321, signal.SIGTERM), call(4321, signal.SIGKILL)],
+        )
+
+    def test_detect_pypto_pro_submission_from_package_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg_dir = Path(tmp) / "cann_bench"
+            pkg_dir.mkdir()
+            init_file = pkg_dir / "__init__.py"
+            init_file.write_text("", encoding="utf-8")
+            (pkg_dir / "rotary_impl.py").write_text(
+                "from pypto_pro import tile\n", encoding="utf-8")
+            module = types.ModuleType("cann_bench")
+            module.__file__ = str(init_file)
+
+            with patch.dict(sys.modules, {"cann_bench": module}), patch(
+                "src.kernel_eval.eval.subprocess_utils.metadata.distribution",
+                side_effect=metadata.PackageNotFoundError,
+            ):
+                self.assertTrue(detect_pypto_pro_submission())
+
+    def test_detect_pypto_pro_ignores_files_not_owned_by_current_wheel(self):
+        """旧 wheel 残留的 PyPTO Pro 文件不能污染当前提交分类。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg_dir = Path(tmp) / "cann_bench"
+            pkg_dir.mkdir()
+            init_file = pkg_dir / "__init__.py"
+            init_file.write_text("", encoding="utf-8")
+            active_file = pkg_dir / "swi_glu_impl.py"
+            active_file.write_text("import pypto\n", encoding="utf-8")
+            (pkg_dir / "stale_pypto_pro.py").write_text(
+                "import pypto_pro.language as pl\n", encoding="utf-8")
+
+            module = types.ModuleType("cann_bench")
+            module.__file__ = str(init_file)
+            dist = Mock()
+            dist.files = [Path("cann_bench/swi_glu_impl.py")]
+            dist.locate_file.return_value = active_file
+
+            with patch.dict(sys.modules, {"cann_bench": module}), patch(
+                "src.kernel_eval.eval.subprocess_utils.metadata.distribution",
+                return_value=dist,
+            ):
+                self.assertFalse(detect_pypto_pro_submission())
+
+    def test_detect_pypto_pro_requires_a_real_exact_import(self):
+        """文档示例和相似包名不能被误判为 PyPTO Pro。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg_dir = Path(tmp) / "cann_bench"
+            pkg_dir.mkdir()
+            init_file = pkg_dir / "__init__.py"
+            init_file.write_text("", encoding="utf-8")
+            active_file = pkg_dir / "ordinary_impl.py"
+            active_file.write_text(
+                '"""Example only:\nimport pypto_pro.language as pl\n"""\n'
+                "import pypto_project\n",
+                encoding="utf-8",
+            )
+
+            module = types.ModuleType("cann_bench")
+            module.__file__ = str(init_file)
+            dist = Mock()
+            dist.files = [Path("cann_bench/ordinary_impl.py")]
+            dist.locate_file.return_value = active_file
+
+            with patch.dict(sys.modules, {"cann_bench": module}), patch(
+                "src.kernel_eval.eval.subprocess_utils.metadata.distribution",
+                return_value=dist,
+            ):
+                self.assertFalse(detect_pypto_pro_submission())
+
     def test_synthesize_failure_cases_oom(self):
         """OOM 失败结果合成"""
         cases = [make_case("Exp", 1), make_case("Exp", 2)]
@@ -610,6 +818,8 @@ class TestCLI(unittest.TestCase):
             '--warmup', '3',
             '--repeat', '5',
             '--no-perf',
+            '--pypto-pro-outer-case-isolation',
+            '--timeout-per-operator', '123',
         ])
         self.assertEqual(args.command, 'eval-child')
         self.assertEqual(args.device_id, 0)
@@ -617,6 +827,8 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.output, '/tmp/output.json')
         self.assertEqual(args.reports_dir, '/tmp/reports')
         self.assertTrue(args.no_perf)
+        self.assertTrue(args.pypto_pro_outer_case_isolation)
+        self.assertEqual(args.timeout_per_operator, 123)
 
     def test_cli_eval_child_config_uses_reports_dir(self):
         """eval-child 配置使用命令行 reports_dir 而不是默认项目 reports"""
@@ -761,6 +973,7 @@ class TestDynamicDispatch(unittest.TestCase):
 
         def mock_popen(cmd, **kwargs):
             # 从 env 中提取分配的卡
+            self.assertNotIn('cwd', kwargs)
             env = kwargs.get('env', {})
             dev = env.get('ASCEND_RT_VISIBLE_DEVICES', '?')
             assigned_devices.append(dev)
@@ -787,6 +1000,43 @@ class TestDynamicDispatch(unittest.TestCase):
         # 每个分配的设备都在 [0, 1] 范围内
         for dev in assigned_devices:
             self.assertIn(dev, ['0', '1'])
+
+    def test_pypto_task_uses_and_removes_isolated_child_cwd(self):
+        self.base_config.pypto_pro_outer_case_isolation = True
+        coordinator = self._make_coordinator(card_count=1, processes_per_card=1)
+        observed_cwds = []
+
+        def mock_popen(cmd, **kwargs):
+            child_cwd = kwargs.get("cwd")
+            observed_cwds.append(child_cwd)
+            self.assertIsNotNone(child_cwd)
+            self.assertTrue(Path(child_cwd).is_dir())
+            proc = Mock()
+            proc.pid = 12345
+            proc.wait = Mock(return_value=0)
+            proc.poll = Mock(return_value=0)
+            output_file = cmd[cmd.index("--output") + 1]
+            Path(output_file).write_text('{"case_results": []}')
+            return proc
+
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/Exp",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        with patch(
+            'src.kernel_eval.eval.process_pool.subprocess.Popen',
+            side_effect=mock_popen,
+        ), patch(
+            'src.kernel_eval.eval.process_pool._write_oom_score_adj',
+            return_value=True,
+        ):
+            coordinator.evaluate_task_units([task])
+
+        self.assertEqual(len(observed_cwds), 1)
+        self.assertFalse(Path(observed_cwds[0]).exists())
 
     def test_dispatch_card_returned_after_completion(self):
         """任务完成后卡归还池，后续任务可复用"""

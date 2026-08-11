@@ -181,6 +181,10 @@ def _evaluate_cases(
     for case in cases:
         cases_by_operator[str(case.operator)].append(case)
 
+    from .eval.subprocess_utils import detect_pypto_pro_submission
+    pypto_outer_isolation = detect_pypto_pro_submission()
+    cfg.pypto_pro_outer_case_isolation = pypto_outer_isolation
+
     coordinator = ProcessPoolCoordinator(
         base_config=cfg,
         process_config=ProcessConfig(
@@ -191,7 +195,11 @@ def _evaluate_cases(
         device_id=args.device_id,
     )
     try:
-        task_units = build_task_units(cases_by_operator, coordinator.card_count)
+        task_units = build_task_units(
+            cases_by_operator,
+            coordinator.card_count,
+            isolate_each_case=pypto_outer_isolation,
+        )
         return aggregate_by_operator(coordinator.evaluate_task_units(task_units))
     finally:
         coordinator.shutdown()

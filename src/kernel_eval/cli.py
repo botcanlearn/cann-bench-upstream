@@ -213,6 +213,10 @@ def create_parser() -> argparse.ArgumentParser:
     child_parser.add_argument('--perf-metric-strategy', type=str, default=None,
                               choices=['kernel_details', 'trace_view', 'msprof_summary'],
                               help=argparse.SUPPRESS)
+    child_parser.add_argument('--pypto-pro-outer-case-isolation', action='store_true',
+                              help=argparse.SUPPRESS)
+    child_parser.add_argument('--timeout-per-operator', type=int, default=300,
+                              help=argparse.SUPPRESS)
 
     
     return parser
@@ -461,6 +465,16 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
         cases_by_operator[c.operator].append(c)
 
     # ---- 多卡并行调度 ----
+    # PyPTO Pro 需要每 case 一个全新进程来隔离 runtime 全局状态。
+    # 每卡并发度继续遵循 --processes-per-card（默认 2）；独立工作目录
+    # 避免并发 case 共享 JIT 编译产物。
+    from .eval.subprocess_utils import detect_pypto_pro_submission
+    pypto_outer_isolation = detect_pypto_pro_submission()
+    config.pypto_pro_outer_case_isolation = pypto_outer_isolation
+    if pypto_outer_isolation:
+        print("[INFO] PyPTO Pro 提交: 启用单 case worker 隔离"
+              f"（{processes_per_card} 并发/卡）", flush=True)
+
     process_config = ProcessConfig(
         processes_per_card=processes_per_card,
         timeout_per_operator=timeout_per_operator,
@@ -483,7 +497,11 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
         return 1
 
     # 构建 TaskUnit 并分配到各卡
-    task_units = build_task_units(cases_by_operator, coordinator.card_count)
+    task_units = build_task_units(
+        cases_by_operator,
+        coordinator.card_count,
+        isolate_each_case=pypto_outer_isolation,
+    )
 
     rel_paths = list(set(c.rel_path for c in all_cases))
     print(f"\n[INFO] NPU 评测 [{bench_name}]")
@@ -649,6 +667,9 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
 
     eval_seed_raw = getattr(args, 'eval_seed', 0)
     config.eval_seed = None if eval_seed_raw == -1 else eval_seed_raw
+    config.pypto_pro_outer_case_isolation = getattr(
+        args, 'pypto_pro_outer_case_isolation', False)
+    config.timeout_per_operator = getattr(args, 'timeout_per_operator', 300)
 
     torch_op_guard_mode = getattr(args, 'torch_op_guard_mode', None)
     if torch_op_guard_mode:

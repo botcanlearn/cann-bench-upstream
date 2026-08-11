@@ -75,6 +75,11 @@ class Config:
     repeat: int = 5              # 性能评测采集次数
     timeout_per_operator: int = 300  # 单算子超时（秒）
 
+    # PyPTO Pro 评测进程隔离标记。由外层调度器在确认每个
+    # eval-child 只包含一个 case 时设置；子进程据此直接执行 AI op，
+    # 避免再启动一层子进程并序列化大张量。
+    pypto_pro_outer_case_isolation: bool = False
+
     # 多进程并行配置（统一架构）
     processes_per_card: int = 2  # 每卡进程数
 
