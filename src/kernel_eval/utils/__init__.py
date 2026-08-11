@@ -26,7 +26,9 @@
 """
 
 from .device_manager import DeviceManager, DeviceConfig
-from .dtype_mapper import str_to_torch_dtype, torch_dtype_to_str, is_float_dtype, is_int_dtype
+from .dtype_mapper import (
+    str_to_torch_dtype, torch_dtype_to_str, is_float_dtype, is_int_dtype, is_bool_dtype,
+)
 from .param_builder import ParamBuilder
 from .compare import compare_tensors, CompareResult
 from .thresholds import PRECISION_THRESHOLDS
@@ -47,6 +49,7 @@ from .path_resolver import (
 __all__ = [
     "DeviceManager", "DeviceConfig",
     "str_to_torch_dtype", "torch_dtype_to_str", "is_float_dtype", "is_int_dtype",
+    "is_bool_dtype",
     "ParamBuilder",
     "compare_tensors", "CompareResult", "PRECISION_THRESHOLDS",
     "resolve_hardware", "PLATFORM_ALIAS",

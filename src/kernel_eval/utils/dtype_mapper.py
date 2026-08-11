@@ -116,9 +116,18 @@ def is_float_dtype(dtype_str: str) -> bool:
 
 
 def is_int_dtype(dtype_str: str) -> bool:
-    """判断是否为整数类型"""
+    """判断是否为整数类型
+
+    注意：不含 bool。bool 在 torch 里虽是整型家族，但 torch.randint 不接受
+    dtype=torch.bool，需要单独走 is_bool_dtype 分支生成，故此处刻意排除。
+    """
     int_types = ['int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64']
     return dtype_str.lower() in int_types
+
+
+def is_bool_dtype(dtype_str: str) -> bool:
+    """判断是否为布尔类型"""
+    return dtype_str.lower() == 'bool'
 
 
 def get_dtype_size(dtype_str: str) -> int:
