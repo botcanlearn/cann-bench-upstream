@@ -57,7 +57,7 @@ quant_batch_matmul_v3(
 
 ## 5. 精度要求
 
-本算子精度判定遵循 [`../PRECISION_SPEC.md`](../PRECISION_SPEC.md)。通过条件与阈值参数定义在同目录 `proto.yaml` 的 `precision` 节点,以下仅说明本算子特定的取舍。
+本算子精度判定遵循 [`benchmark_spec.md` §4.4](../../../docs/spec/benchmark_spec.md)。通过条件与阈值参数定义在同目录 `proto.yaml` 的 `precision` 节点,以下仅说明本算子特定的取舍。
 
 ### 5.1 算子特定说明
 

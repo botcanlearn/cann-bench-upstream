@@ -2,7 +2,7 @@
 
 ## 算子简介
 
-ResizeNearestNeighborV2Grad 是 [ResizeNearestNeighborV2](../resize_nearest_neighbor_v2/README.md) 的反向传播算子，属于图像处理类（Image）算子，难度等级 L2。它根据最近邻插值的坐标映射关系，将输出空间上的梯度散射回原始输入空间并累加，广泛应用于语义分割、目标检测等需要可学习上/下采样的网络中。
+ResizeNearestNeighborV2Grad 是 ResizeNearestNeighborV2 的反向传播算子，属于图像处理类（Image）算子，难度等级 L2。它根据最近邻插值的坐标映射关系，将输出空间上的梯度散射回原始输入空间并累加，广泛应用于语义分割、目标检测等需要可学习上/下采样的网络中。
 
 - 支持硬件：Ascend 950PR / 950DT
 本评测集仅支持 `align_corners=false`：PyTorch aten 的 `upsample_nearest2d_backward` / `_upsample_nearest_exact2d_backward` 接口本身无 `align_corners` 语义，为避免 golden 与真实 NPU 语义不一致，评测集中不再声明 `align_corners=true` 的支持。
