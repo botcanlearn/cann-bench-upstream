@@ -27,12 +27,51 @@ import torch
 from ..utils.dtype_mapper import str_to_torch_dtype, is_float_dtype, is_int_dtype, is_bool_dtype
 
 
-class DataGenerator:
-    """测试数据生成器"""
+#: 支持的输入数据分布。键为规范名，值为可接受的 CLI 别名。
+INPUT_DISTRIBUTIONS = {
+    "uniform": ("uniform", "u"),
+    "normal": ("normal", "norm", "gaussian", "n"),
+}
 
-    def __init__(self, seed: int = None):
+#: 别名 -> 规范名
+_DIST_ALIASES = {a: canon for canon, aliases in INPUT_DISTRIBUTIONS.items() for a in aliases}
+
+#: argparse choices 的单一来源——由 INPUT_DISTRIBUTIONS 派生，新增分布时无需再改 CLI
+INPUT_DIST_CHOICES = sorted(_DIST_ALIASES)
+
+
+def normalize_input_dist(dist: Any) -> str:
+    """把 CLI/配置传入的分布名规整为规范名，非法值直接报错
+
+    >>> normalize_input_dist("norm")
+    'normal'
+    """
+    if dist is None:
+        return "uniform"
+    key = str(dist).strip().lower()
+    if key not in _DIST_ALIASES:
+        raise ValueError(
+            f"不支持的输入分布: {dist!r}。可选: "
+            + "、".join(f"{c}（别名 {', '.join(a[1:])}）" if len(a) > 1 else c
+                        for c, a in INPUT_DISTRIBUTIONS.items())
+        )
+    return _DIST_ALIASES[key]
+
+
+class DataGenerator:
+    """测试数据生成器
+
+    Args:
+        seed: 全局随机种子（可选）
+        input_dist: 浮点输入的采样分布，"uniform"（默认）或 "normal"（别名 norm /
+            gaussian）。默认值走的是与历史完全相同的代码路径与随机数流，生成结果
+            逐位一致。整数 / bool 输入不受本项影响，始终均匀采样。
+    """
+
+    def __init__(self, seed: int = None, input_dist: str = "uniform"):
         if seed is not None:
             torch.manual_seed(seed)
+        self.input_dist = normalize_input_dist(input_dist)
 
     def generate_input_tensor(self, shape: List[int], dtype: str, value_range: Any = None,
                               generator: Optional[torch.Generator] = None) -> torch.Tensor:
@@ -200,6 +239,11 @@ class DataGenerator:
         min_val = max(min_val, dmin)
         max_val = min(max_val, dmax)
 
+        # 正态分布：仅在显式指定时走这条路。input_dist == "uniform"（默认）时下面的
+        # 均匀路径与历史完全一致——包括随机数消费顺序，故既有评测输入逐位不变。
+        if self.input_dist == "normal" and max_val > min_val:
+            return self._gen_float_normal(shape, dtype, min_val, max_val, generator=generator)
+
         # 统一使用 torch.rand + 缩放 路径，支持 generator 参数
         # 无论 range_val 是否超过 dmax，都通过 float64 中间计算避免溢出
         range_val = max_val - min_val
@@ -207,6 +251,42 @@ class DataGenerator:
         tensor_f64 = rand_f64 * range_val + min_val
         # clamp 确保值严格在 dtype 范围内，避免转换溢出
         tensor_f64 = torch.clamp(tensor_f64, dmin, dmax)
+        return tensor_f64.to(dtype)
+
+    def _gen_float_normal(self, shape: List[int], dtype: torch.dtype,
+                          min_val: float, max_val: float,
+                          generator: Optional[torch.Generator] = None) -> torch.Tensor:
+        """在声明区间内按正态分布生成浮点张量
+
+        真实业务里的激活、权重多接近正态分布，而通用生成器只产出均匀分布——两者的
+        尾部行为、动态范围、异常值密度都不同，kernel 在其上的精度表现也不同。
+
+        分布参数由 cases.yaml 的 value_range 推出，不额外引入配置项：
+            mu    = (min_val + max_val) / 2
+            sigma = (max_val - min_val) / 6      # ±3σ 覆盖声明区间
+        采样后 clamp 回 [min_val, max_val]：value_range 常带语义（索引边界、dtype
+        上界等），不能因为换了分布就突破。代价是约 0.27% 的样本会被截断堆在边界上，
+        这是保边界的必要取舍。
+
+        与均匀路径同样通过 float64 中间量计算，避免 range 超出 dtype 时溢出。
+
+        Args:
+            shape: 张量形状
+            dtype: torch 数据类型
+            min_val: 区间下界（已裁剪到 dtype 可表示范围）
+            max_val: 区间上界（已裁剪到 dtype 可表示范围）
+            generator: torch.Generator 用于确定性随机数生成（可选）
+        """
+        finfo = torch.finfo(dtype)
+        range_val = max_val - min_val
+        mu = min_val + range_val / 2.0
+        sigma = range_val / 6.0
+
+        z = torch.randn(shape, dtype=torch.float64, generator=generator)
+        tensor_f64 = z * sigma + mu
+        # 先夹回声明区间，再夹到 dtype 可表示范围，避免转换溢出
+        tensor_f64 = torch.clamp(tensor_f64, min_val, max_val)
+        tensor_f64 = torch.clamp(tensor_f64, finfo.min, finfo.max)
         return tensor_f64.to(dtype)
 
     def _gen_special(self, shape: List[int], dtype: torch.dtype, min_val: Any, max_val: Any,

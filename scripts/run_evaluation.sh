@@ -50,6 +50,7 @@ REPEAT=5
 NO_PERF=false
 PROFILER_LEVEL="Level1"
 EVAL_SEED=""  # 评测种子（默认: 0 = 确定性，-1 = 纯随机）
+INPUT_DIST=""  # 输入数据分布（空 = 用 CLI 默认值 uniform）
 
 # 报告输出目录（默认在 main() 中根据 BENCH_NAME 动态设置）
 REPORTS_DIR_OVERRIDE=""
@@ -105,6 +106,8 @@ print_help() {
     echo "  --profiler-level <level>  Profiler 级别: Level1, Level2（默认: Level1）"
     echo "  --eval-seed <n>           输入生成确定性种子（默认: 0 = 自动确定性）。"
     echo "                            改变种子可获得不同但可复现的输入。-1 表示纯随机。"
+    echo "  --input-dist <dist>       输入数据分布: uniform（默认）| normal（别名 norm）。"
+    echo "                            normal 按正态分布生成浮点输入，参数由 value_range 推出。"
     echo "  --single-pass             使用旧的一体化 eval 流程（默认使用编译/精度/性能三阶段）"
     echo ""
     echo "其他选项:"
@@ -236,6 +239,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --eval-seed)
             EVAL_SEED="$2"
+            shift 2
+            ;;
+        --input-dist)
+            INPUT_DIST="$2"
             shift 2
             ;;
         --single-pass)
@@ -379,6 +386,11 @@ build_cmd_args() {
             # 评测种子（确保可复现）
             if [[ -n "${EVAL_SEED}" ]]; then
                 CMD_ARGS="${CMD_ARGS} --eval-seed ${EVAL_SEED}"
+            fi
+
+            # 输入分布（非默认值才透传，保持默认命令行不变）
+            if [[ -n "${INPUT_DIST}" ]]; then
+                CMD_ARGS="${CMD_ARGS} --input-dist ${INPUT_DIST}"
             fi
 
             if [[ "${NO_PERF}" == true ]]; then

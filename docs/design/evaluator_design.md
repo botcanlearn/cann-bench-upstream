@@ -533,6 +533,7 @@ if hasattr(torch.ops, 'cann_bench'):
 | `--profiler-level <level>` | Profiler 级别 | `Level1` | ✓ |
 | `--no-freq-boost` | 关闭升频预热（部分卡防挂死） | False | ✗ |
 | `--eval-seed <n>` | 确定性种子（0=自动hash, -1=纯随机, N=偏移） | 0 | ✗ |
+| `--input-dist <dist>` | 输入数据分布（uniform / normal，别名 u/norm/gaussian/n） | `uniform` | ✗ |
 | `--torch-op-guard-mode <mode>` | Torch 算子守卫模式（off/warn/block） | `block` | ✗ |
 | `--perf-metric-strategy <name>` | 性能策略覆盖 | None | ✗ |
 
@@ -580,6 +581,12 @@ python -m kernel_eval.cli eval --bench-name stanford
 
 # 设置确定性种子（确保可复现）
 python -m kernel_eval.cli eval --operator Exp --eval-seed 42
+
+# 用正态分布输入评测（默认 uniform，与历史行为逐位一致）
+python -m kernel_eval.cli eval --input-dist norm
+
+# 分布是全局开关，评测范围仍由 --operator / --task-dir / --case-id 控制
+python -m kernel_eval.cli eval --operator Softmax --case-id 3 --input-dist normal
 
 # Torch 算子守卫 block 模式（默认：检测到 torch.matmul 等直接抛错）
 python -m kernel_eval.cli eval --operator Exp --torch-op-guard-mode block

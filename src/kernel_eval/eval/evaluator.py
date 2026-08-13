@@ -111,7 +111,9 @@ class Evaluator:
             bench_root=self.config.tasks_root,
         )
         self.operator_loader = get_task_loader(self.bench_name, tasks_root=self.config.tasks_root)
-        self.data_generator = DataGenerator()
+        self.data_generator = DataGenerator(
+            input_dist=getattr(self.config, "input_dist", "uniform")
+        )
         self.param_builder = ParamBuilder(self.golden_loader)
 
         # 初始化包管理器

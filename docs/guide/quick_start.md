@@ -121,7 +121,7 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 | `--no-perf` | 关闭性能采集（仅精度验证） | False |
 | `--profiler-level <level>` | Profiler 级别 (Level1/Level2) | Level1 |
 
-> shell 暴露的是最常用子集。若需要 `--op-timeout-sec` / `--no-iterative-compile` / `--eval-code` / `--eval-seed` 等更精细控制，请直调 cli：
+> shell 暴露的是最常用子集。若需要 `--op-timeout-sec` / `--no-iterative-compile` / `--eval-code` / `--eval-seed` / `--input-dist` 等更精细控制，请直调 cli：
 > ```bash
 > PYTHONPATH=src python -m kernel_eval.cli eval --source-dir /path/to/ai_ops \
 >     --op-timeout-sec 480

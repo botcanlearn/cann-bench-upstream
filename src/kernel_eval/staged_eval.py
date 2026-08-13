@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from .config import Config, get_project_root, set_config
+from .data.data_generator import INPUT_DIST_CHOICES
 
 
 CaseKey = Tuple[str, int]
@@ -65,6 +66,7 @@ def _make_config(args: argparse.Namespace, bench_root: str, *, enable_profiler: 
     cfg.reports_dir = args.reports_dir
     cfg.processes_per_card = args.processes_per_card
     cfg.eval_seed = None if args.eval_seed == -1 else args.eval_seed
+    cfg.input_dist = getattr(args, "input_dist", "uniform")
     if args.source_dir:
         cfg.source_dir = args.source_dir
     cfg.agent_skill = getattr(args, 'agent_skill', '') or ''
@@ -472,6 +474,11 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--perf-metric-strategy", default=None)
     parser.add_argument("--torch-op-guard-mode", choices=["off", "warn", "block"], default=None)
     parser.add_argument("--eval-seed", type=int, default=0)
+    parser.add_argument("--input-dist", type=str, default="uniform",
+                        choices=INPUT_DIST_CHOICES,
+                        metavar="DIST",
+                        help="输入数据分布（默认: uniform）。normal 走正态分布，"
+                             "参数由 value_range 推出。仅作用于浮点输入。")
     parser.add_argument("--no-iterative-compile", action="store_true")
     parser.add_argument("--agent-skill", default="", help="评测对象 Agent/Skill 标签，写入报告元信息")
     parser.add_argument("--base-model", default="", help="评测对象 BaseModel 标签，写入报告元信息")

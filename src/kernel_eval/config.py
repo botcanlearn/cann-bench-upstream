@@ -123,6 +123,15 @@ class Config:
     # None: 纯随机模式（不推荐，会导致 flaky 测试）。CLI中通过 --eval-seed -1 启用。
     eval_seed: Optional[int] = 0
 
+    # 输入数据分布（本次评测全局生效；评测哪些用例由 --task-dir / --operator /
+    # --case-id 决定，与本项正交）
+    # "uniform"（默认）: 在 value_range 内均匀采样 —— 与历史行为逐位一致
+    # "normal": 正态分布，参数由 value_range 推出，mu=(min+max)/2、sigma=(max-min)/6
+    #           （即 ±3σ 覆盖声明区间），采样后 clamp 回 [min, max]
+    # 仅作用于浮点输入；整数 / bool 始终均匀（其取值分布常带语义约束，如索引需
+    # 覆盖整个维度）。CLI 通过 --input-dist 设置。
+    input_dist: str = "uniform"
+
 # 性能指标策略覆盖
     # None（默认）: 使用 BenchConfig 中注册的策略（通常为 kernel_details）
     # "trace_view": PYPTO 口径 — tilefwk/PYPTO aicore_e2e（由 CLI --perf-metric-strategy 设置）

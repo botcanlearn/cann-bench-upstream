@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .config import Config, get_config, get_project_root, set_config
+from .data.data_generator import INPUT_DIST_CHOICES
 from .benches.cann import CannTaskLoader, CannCaseLoader
 from .eval.evaluator import Evaluator
 from .eval.results import EvalOperatorResult
@@ -142,6 +143,17 @@ def create_parser() -> argparse.ArgumentParser:
                                   '改变 seed 可获得不同但可复现的输入。'
                                   '设为 -1 表示纯随机模式（不推荐，会导致 flaky 测试）。')
 
+    eval_parser.add_argument('--input-dist', type=str, default='uniform',
+                             choices=INPUT_DIST_CHOICES,
+                             metavar='DIST',
+                             help='输入数据分布（默认: uniform）。uniform = 在 value_range 内'
+                                  '均匀采样（与历史行为逐位一致）；normal = 正态分布，'
+                                  'mu=(min+max)/2、sigma=(max-min)/6，采样后 clamp 回 value_range。'
+                                  '别名: u / norm / gaussian / n。仅作用于浮点输入，'
+                                  '整数与 bool 始终均匀（索引类输入需覆盖整个维度）。'
+                                  '本项对整场评测生效，评测范围仍由 --task-dir/--operator/'
+                                  '--case-id 控制。')
+
     # 内部开关：跳过编译安装，使用 PYTHONPATH 上的 cann_bench（ST harness 使用）
     eval_parser.add_argument('--skip-install', action='store_true',
                              help=argparse.SUPPRESS)
@@ -210,6 +222,7 @@ def create_parser() -> argparse.ArgumentParser:
     child_parser.add_argument('--torch-op-guard-mode', type=str, default=None,
                               choices=['off', 'warn', 'block'])
     child_parser.add_argument('--eval-seed', type=int, default=0)
+    child_parser.add_argument('--input-dist', type=str, default='uniform')
     child_parser.add_argument('--perf-metric-strategy', type=str, default=None,
                               choices=['kernel_details', 'trace_view', 'msprof_summary'],
                               help=argparse.SUPPRESS)
@@ -307,6 +320,7 @@ def _create_config_from_args(args, bench_root: str) -> Config:
     # 评测种子：-1 表示纯随机（转换为 None），其他值为确定性种子
     eval_seed_raw = getattr(args, 'eval_seed', 0)
     config.eval_seed = None if eval_seed_raw == -1 else eval_seed_raw
+    config.input_dist = getattr(args, 'input_dist', 'uniform')
 
 # 性能指标策略覆盖：CLI --perf-metric-strategy 设置时覆盖 BenchConfig 默认值
     perf_metric_strategy = getattr(args, 'perf_metric_strategy', None)
@@ -670,6 +684,7 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
     config.pypto_pro_outer_case_isolation = getattr(
         args, 'pypto_pro_outer_case_isolation', False)
     config.timeout_per_operator = getattr(args, 'timeout_per_operator', 300)
+    config.input_dist = getattr(args, 'input_dist', 'uniform')
 
     torch_op_guard_mode = getattr(args, 'torch_op_guard_mode', None)
     if torch_op_guard_mode:

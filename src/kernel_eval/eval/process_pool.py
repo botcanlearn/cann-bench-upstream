@@ -547,6 +547,11 @@ class ProcessPoolCoordinator:
         if eval_seed is not None:
             cmd += ["--eval-seed", str(eval_seed)]
 
+        # 输入分布：非默认值才透传，保持默认命令行不变
+        input_dist = getattr(self.base_config, "input_dist", "uniform") or "uniform"
+        if input_dist != "uniform":
+            cmd += ["--input-dist", str(input_dist)]
+
         # perf-metric-strategy (trace_view / kernel_details / msprof_summary)
         perf_strategy = getattr(self.base_config, "perf_metric_strategy_override", None)
         if perf_strategy:
