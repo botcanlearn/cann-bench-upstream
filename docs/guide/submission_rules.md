@@ -62,6 +62,17 @@ def permute_output(x):
 
 如果算法需要类似 transpose / permute / cast / slice 的数据变换，应在提交 kernel 内用 Ascend C API、数据搬运和索引逻辑实现，而不是在包装层调用现成 tensor 算子。
 
+上面第二个反例如果连 `.contiguous()` 都省掉、直接 `return y.permute(0, 2, 1)`, 则由框架**自动拦截**: 精度比对前会校验候选输出 `is_contiguous()`, 非连续输出直接判失败(记为结构性失败, 不是精度不达标)。极端情形是完全不算、直接返回输入的某个视图 -- shape 与数值都能对上, 但 stride 会暴露它。
+
+```python
+def fake_by_view(x):
+    # 反例: 转置视图数值可能与 golden 完全一致, 但没有任何计算发生;
+    # is_contiguous() 校验会直接判失败。
+    return x.t()
+```
+
+补 `.contiguous()` 把数据真复制一遍不在这条自动校验的范围内, 仍属人工审查判定的无效实现。
+
 ### 2.3 路由到 CANN 内置同名算子
 
 提交工程不应只是把任务转发给评测环境中已有的 CANN 内置同名算子。无论目标环境是否提供同名内置实现，候选提交都应包含自己的 kernel 实现。

@@ -33,6 +33,7 @@ from ..base.result import (
     AccuracyResult,
     register_output_result,
 )
+from ..utils.tensor_utils import non_contiguous_reason
 
 
 @dataclass
@@ -83,8 +84,13 @@ class AllCloseOutputResult(OutputResult):
         rtol = self.metadata.get('rtol', 0)
         if self.passed:
             return f"{dtype_str}: ✅ (allclose passed, atol={atol}, rtol={rtol})"
-        else:
-            return f"{dtype_str}: ❌ (allclose failed, atol={atol}, rtol={rtol})"
+        # 结构性失败(形状不匹配 / 布局非连续)在 error_msg 里, 这里必须带出来:
+        # evaluator 用 format_all_outputs() 拼 case 错误, 摘要不带的话诊断就丢了。
+        # 且这类失败不能沿用 "allclose failed" —— 它们在 allclose 之前就 continue 了,
+        # 数值可能完全正确(布局失败尤其如此), 说 allclose 失败是把人往数值上引。
+        if self.error_msg:
+            return f"{dtype_str}: ❌ {self.error_msg}"
+        return f"{dtype_str}: ❌ (allclose failed, atol={atol}, rtol={rtol})"
 
 
 class AllCloseChecker(CorrectnessChecker):
@@ -157,18 +163,18 @@ class AllCloseChecker(CorrectnessChecker):
                 ))
                 continue
 
-            # 确保 tensor 在 CPU 上进行对比
-            ai_cpu = self._ensure_cpu(ai)
-            golden_cpu = self._ensure_cpu(golden)
-
-            # 形状不匹配直接判失败，避免 torch.allclose 抛异常
-            if ai_cpu.shape != golden_cpu.shape:
+            # 判定顺序 shape -> 布局 -> 落 CPU, 与 compare.py 的 _compare_single_tensor
+            # 一致。形状与布局同时不对时优先报形状(更具体的诊断)。
+            #
+            # 形状不匹配直接判失败，避免 torch.allclose 抛异常。比 shape 不碰数据,
+            # 不必先落 CPU。
+            if ai.shape != golden.shape:
                 results.append(AllCloseOutputResult(
                     index=i,
                     name=f"output_{i}",
                     dtype=dtype,
                     passed=False,
-                    error_msg=f"形状不匹配: ai={ai_cpu.shape}, golden={golden_cpu.shape}",
+                    error_msg=f"形状不匹配: ai={ai.shape}, golden={golden.shape}",
                     metadata={
                         'atol': atol,
                         'rtol': rtol,
@@ -178,6 +184,30 @@ class AllCloseChecker(CorrectnessChecker):
                 all_passed = False
                 structural_failure = True
                 continue
+
+            # 检查候选输出的内存布局 (issue #146)。必须在 _ensure_cpu 之前做 --
+            # 跨设备拷贝会归一化部分非连续张量的 stride, 检查放到之后就漏了。
+            layout_error = non_contiguous_reason(ai)
+            if layout_error is not None:
+                results.append(AllCloseOutputResult(
+                    index=i,
+                    name=f"output_{i}",
+                    dtype=dtype,
+                    passed=False,
+                    error_msg=layout_error,
+                    metadata={
+                        'atol': atol,
+                        'rtol': rtol,
+                        'failure_type': FAILURE_TYPE_COMPILE_RUNTIME_ERROR,
+                    },
+                ))
+                all_passed = False
+                structural_failure = True
+                continue
+
+            # 确保 tensor 在 CPU 上进行对比
+            ai_cpu = self._ensure_cpu(ai)
+            golden_cpu = self._ensure_cpu(golden)
 
             # 使用 allclose
             passed = torch.allclose(ai_cpu, golden_cpu, rtol=rtol, atol=atol)

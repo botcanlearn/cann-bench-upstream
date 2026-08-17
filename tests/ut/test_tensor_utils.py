@@ -20,16 +20,19 @@
 2. tensors_to_cpu - 批量张量 CPU 迁移
 3. tensors_to_fp64_cpu - 批量张量 FP64 CPU 转换
 4. tensors_to_device - 批量张量设备迁移
+5. non_contiguous_reason - 候选输出内存布局契约校验
 """
 
 import pytest
 import torch
 
+from kernel_eval.base.result import STRUCTURAL_FAILURE_MARKERS
 from kernel_eval.utils.tensor_utils import (
     tensor_to_fp64_cpu,
     tensors_to_cpu,
     tensors_to_fp64_cpu,
     tensors_to_device,
+    non_contiguous_reason,
 )
 
 
@@ -251,6 +254,44 @@ class TestTensorsToDevice:
         assert result[0].device.type == "cpu"
         assert result[1] == 42
         assert result[2] == "string"
+
+
+class TestNonContiguousReason:
+    """non_contiguous_reason 函数测试(issue #146)"""
+
+    def test_contiguous_returns_none(self):
+        """连续张量返回 None"""
+        assert non_contiguous_reason(torch.randn(3, 4)) is None
+
+    def test_scalar_and_empty_return_none(self):
+        """0 维 / 空张量天然连续"""
+        assert non_contiguous_reason(torch.tensor(1.0)) is None
+        assert non_contiguous_reason(torch.tensor([])) is None
+
+    def test_reshape_returns_none(self):
+        """reshape 得到的仍是连续视图"""
+        assert non_contiguous_reason(torch.arange(6).reshape(2, 3)) is None
+
+    def test_transposed_reports_shape_and_stride(self):
+        """转置视图返回原因, 且带上 shape / stride 便于定位"""
+        reason = non_contiguous_reason(torch.randn(3, 4).t())
+        assert reason is not None
+        assert "内存布局非连续" in reason
+        assert "shape=(4, 3)" in reason
+        assert "stride=(1, 4)" in reason
+
+    def test_expanded_reports_reason(self):
+        """expand 广播视图(stride=0)返回原因"""
+        assert non_contiguous_reason(torch.zeros(1, 4).expand(3, 4)) is not None
+
+    def test_sliced_reports_reason(self):
+        """步长切片返回原因"""
+        assert non_contiguous_reason(torch.arange(12)[::2]) is not None
+
+    def test_marker_registered_as_structural(self):
+        """原因串里的标记须登记在 STRUCTURAL_FAILURE_MARKERS, 否则会被误判成精度问题"""
+        reason = non_contiguous_reason(torch.randn(3, 4).t())
+        assert any(marker in reason for marker in STRUCTURAL_FAILURE_MARKERS)
 
 
 class TestTensorUtilsIntegration:

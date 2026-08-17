@@ -54,6 +54,8 @@ STRUCTURAL_FAILURE_MARKERS = (
     "同精度输出数量不匹配",
     "形状不匹配",
     "shape mismatch",
+    # 输出契约违例 (issue #146), 不是数值误差, 故归结构性失败
+    "内存布局非连续",
     "is None",
     "AI算子执行失败",
     "TypeError:",

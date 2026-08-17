@@ -31,6 +31,7 @@ from kernel_eval.registry.checker_registry import (
     CheckerRegistry,
 )
 from kernel_eval.base.checker import CorrectnessChecker
+from kernel_eval.base.result import FAILURE_TYPE_COMPILE_RUNTIME_ERROR
 
 
 class TestRegistry:
@@ -169,6 +170,19 @@ class TestRelativeErrorChecker:
         assert 'mere' in metadata
         assert 'mare' in metadata
 
+    def test_non_contiguous_output_is_structural_failure(self):
+        """非连续输出判失败, 且归类为结构性失败而非精度不达标(issue #146)
+
+        数值完全正确(对称矩阵转置), 只有 stride 变了。
+        """
+        checker = RelativeErrorChecker()
+        golden = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float64)
+        ai = golden.to(torch.float32).t()
+        result = checker.check(ai, golden, dtype="float32", threshold=0.001)
+        assert not result.is_passed()
+        assert result.get_metadata()['failure_type'] == FAILURE_TYPE_COMPILE_RUNTIME_ERROR
+        assert "内存布局非连续" in result.get_output_results()[0].get_error_msg()
+
 
 class TestAllCloseChecker:
     """AllClose判断器测试"""
@@ -209,6 +223,71 @@ class TestAllCloseChecker:
         golden = torch.tensor([1.0, 2.0], dtype=torch.float32)
         result = checker.check(ai, golden, dtype="float32", threshold=0.001)
         assert not result.is_passed()
+
+    def test_non_contiguous_output_fail(self):
+        """非连续输出判失败(issue #146); allclose 路径与相对误差路径同一标准"""
+        checker = AllCloseChecker()
+        golden = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float32)
+        ai = golden.clone().t()
+        assert torch.allclose(ai, golden)  # allclose 本身是过的
+
+        result = checker.check(ai, golden, dtype="float32", threshold=0.001)
+        assert not result.is_passed()
+        assert result.get_metadata()['failure_type'] == FAILURE_TYPE_COMPILE_RUNTIME_ERROR
+        assert "内存布局非连续" in result.get_output_results()[0].get_error_msg()
+
+    def test_layout_failure_surfaces_in_standard_summary(self):
+        """布局失败必须出现在**摘要**路径上, 不只是存进 error_msg 字段。
+
+        Why: evaluator 用 format_all_outputs() 拼 case 错误串, 只断言 error_msg
+        字段的话, 摘要分支把它吞掉也照样绿 -- 提交者看到的仍是没有 stride 的空话。
+        且这里绝不能说 "allclose failed": 该张量数值与 golden 完全一致, allclose
+        本身是过的, 根本没跑到。
+        """
+        checker = AllCloseChecker()
+        golden = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float32)
+        ai = golden.clone().t()
+        assert torch.allclose(ai, golden)
+
+        summary = checker.check(ai, golden, dtype="float32", threshold=0.001).format_all_outputs()
+        assert "内存布局非连续" in summary
+        assert "stride=(1, 2)" in summary
+        assert "allclose failed" not in summary
+
+    def test_shape_mismatch_surfaces_in_standard_summary(self):
+        """形状不匹配同样要出现在摘要里(该分支早于 issue #146 就被摘要吞掉了)"""
+        checker = AllCloseChecker()
+        ai = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
+        golden = torch.tensor([1.0, 2.0], dtype=torch.float32)
+
+        summary = checker.check(ai, golden, dtype="float32", threshold=0.001).format_all_outputs()
+        assert "形状不匹配" in summary
+        assert "allclose failed" not in summary
+
+    def test_shape_mismatch_takes_precedence_over_layout(self):
+        """形状与布局同时不对时报形状; 与相对误差路径的优先级保持一致"""
+        golden = torch.zeros(2, 3, dtype=torch.float32)
+        ai = torch.arange(12, dtype=torch.float32).reshape(4, 3).t()  # 3x4 且非连续
+        assert ai.shape != golden.shape and not ai.is_contiguous()
+
+        allclose_msg = AllCloseChecker().check(
+            ai, golden, dtype="float32", threshold=0.001
+        ).get_output_results()[0].get_error_msg()
+        relative_msg = RelativeErrorChecker().check(
+            [ai], [golden], "float32", 0.001
+        ).get_output_results()[0].get_error_msg()
+
+        for msg in (allclose_msg, relative_msg):
+            assert "形状不匹配" in msg
+            assert "内存布局非连续" not in msg
+
+    def test_contiguous_output_still_passes(self):
+        """连续输出不受影响"""
+        checker = AllCloseChecker()
+        golden = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float32)
+        ai = golden.clone().t().contiguous()
+        result = checker.check(ai, golden, dtype="float32", threshold=0.001)
+        assert result.is_passed()
 
 
 class TestAccuracyResult:

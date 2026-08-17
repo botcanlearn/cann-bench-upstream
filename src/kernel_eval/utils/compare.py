@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 
 import torch
 
+from .tensor_utils import non_contiguous_reason
 from .thresholds import (
     get_threshold,
     get_small_value_threshold,
@@ -216,14 +217,7 @@ def _compare_single_tensor(
         native_output: 同精度参考输出（可选）
                        如果不提供，使用 golden 截断到目标精度作为参考
     """
-    # Golden runs on CPU while the AI op runs on NPU.
-    # Normalize both sides to CPU so subtract/equal don't trip on mixed devices.
-    if output.is_cuda or output.device.type == "npu":
-        output = output.cpu()
-    if golden.is_cuda or golden.device.type == "npu":
-        golden = golden.cpu()
-
-    # 检查形状
+    # 检查形状 (比 shape 不碰数据, 无需先落 CPU)
     if output.shape != golden.shape:
         return CompareResult(
             passed=False,
@@ -231,6 +225,24 @@ def _compare_single_tensor(
             threshold=threshold,
             error_msg=f"形状不匹配: output={output.shape}, golden={golden.shape}"
         )
+
+    # 检查候选输出的内存布局 (issue #146)。必须在下面的 .cpu() 之前做 --
+    # 跨设备拷贝会归一化部分非连续张量的 stride, 检查放到之后就漏了。
+    layout_error = non_contiguous_reason(output)
+    if layout_error is not None:
+        return CompareResult(
+            passed=False,
+            dtype=dtype,
+            threshold=threshold,
+            error_msg=layout_error,
+        )
+
+    # Golden runs on CPU while the AI op runs on NPU.
+    # Normalize both sides to CPU so subtract/equal don't trip on mixed devices.
+    if output.is_cuda or output.device.type == "npu":
+        output = output.cpu()
+    if golden.is_cuda or golden.device.type == "npu":
+        golden = golden.cpu()
 
     # Bit-exact 浮点路径: 当 threshold == 0 且为浮点 dtype 时, 通过 .view(int dtype)
     # 做字节级比较, 这样 +0.0 / -0.0 不会被 IEEE 754 相等性当作同值放过, NaN payload

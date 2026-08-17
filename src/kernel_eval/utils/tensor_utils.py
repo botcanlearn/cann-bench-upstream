@@ -18,13 +18,42 @@
 1. 张量精度转换（FP64）
 2. 张量设备迁移（CPU/NPU）
 3. 批量张量处理
+4. 候选输出的内存布局契约校验
 
 统一实现，消除 op_runner.py, accuracy_eval.py, evaluator.py 中的重复代码。
 """
 
-from typing import List, Any, Union
+from typing import List, Any, Optional, Union
 
 import torch
+
+
+def non_contiguous_reason(tensor: torch.Tensor) -> Optional[str]:
+    """候选输出内存布局非连续时返回失败原因, 连续则返回 None。
+
+    Why: 只比 shape + 数值的话, 算子可以用 view / transpose / expand 这类纯元数据
+    操作包装输入直接返回 -- 数值与 golden 一致, 但没有真正算过。要求候选输出是
+    contiguous 才能堵掉这条路。
+
+    调用方须在张量落 CPU **之前**调用: Tensor.to(device) 只对 non-overlapping-
+    and-dense 的张量保留 stride, 切片这类稀疏步长会在跨设备拷贝时被悄悄归一化成
+    连续布局, 检查放在 .cpu() 之后就漏了。
+
+    Args:
+        tensor: 候选 (被测算子) 输出张量
+
+    Returns:
+        非连续时返回带 "内存布局非连续" 标记的原因字符串, 连续时返回 None。
+        该标记同时登记在 base/result.py 的 STRUCTURAL_FAILURE_MARKERS 中,
+        使其被归类为结构性失败而非精度不达标。
+    """
+    if tensor.is_contiguous():
+        return None
+    return (
+        f"输出内存布局非连续 (non-contiguous): shape={tuple(tensor.shape)}, "
+        f"stride={tuple(tensor.stride())}, 算子须返回 contiguous 张量, "
+        f"不能用 view / transpose / expand 等元数据操作包装输入返回"
+    )
 
 
 def tensor_to_fp64_cpu(tensor: torch.Tensor) -> torch.Tensor:

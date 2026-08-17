@@ -621,6 +621,8 @@ CANN Bench 评测的是提交者实现 Ascend C / NPU kernel 的能力。候选�
 
 提交 kernel 内可以使用 Ascend C 原生 API 和 intrinsic，例如 `AscendC::Add`、`AscendC::Mul`、`AscendC::Exp`、`AscendC::Mmad` 等；这类调用会编译进提交者自己的 kernel，不属于转发现成内置算子。
 
+**输出内存布局校验(issue #146)**: 精度比对前先校验候选输出 `is_contiguous()`, 非连续输出直接判失败, 并归为结构性失败(`compile_runtime_error`)而非精度不达标。这条把上表第二行中"直接返回输入的 transpose / expand / slice 视图"这一支变成框架自动约束 -- 此类输出的 shape 和数值可以与 golden 完全一致, 却只是元数据操作, 没有真正计算。校验只作用于候选输出, golden 侧不受约束 -- golden 只负责给出参考数值, 布局是它自己的事。包装层补 `.contiguous()` 把数据复制回来的情形不在此校验范围内, 仍由人工审查判定。
+
 面向提交者的原则说明和反例代码片段见 [submission_rules.md](../guide/submission_rules.md)。
 
 ## 5. 应用层规范

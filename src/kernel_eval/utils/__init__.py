@@ -39,6 +39,7 @@ from .naming import camel_to_snake, snake_case_candidates
 from .tensor_utils import (
     tensor_to_fp64_cpu, tensors_to_cpu,
     tensors_to_fp64_cpu, tensors_to_device,
+    non_contiguous_reason,
 )
 from .path_resolver import (
     resolve_task_dir,
@@ -55,6 +56,6 @@ __all__ = [
     "resolve_hardware", "PLATFORM_ALIAS",
     "camel_to_snake", "snake_case_candidates",
     "tensor_to_fp64_cpu", "tensors_to_cpu",
-    "tensors_to_fp64_cpu", "tensors_to_device",
+    "tensors_to_fp64_cpu", "tensors_to_device", "non_contiguous_reason",
     "resolve_task_dir", "is_operator_directory", "find_bench_root",
 ]

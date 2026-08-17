@@ -207,6 +207,118 @@ class TestCompareTensors:
         assert result.passed is True
 
 
+class TestContiguousLayout:
+    """输出内存布局校验(issue #146)
+
+    只比 shape + 数值的话, 算子可以用 view / transpose / expand 这类纯元数据
+    操作包装输入直接返回, 数值与 golden 一致却没有真正算过。下面的用例都构造成
+    "数值完全正确", 所以没有布局校验时它们全部会通过。
+    """
+
+    def test_transposed_view_of_symmetric_matrix_fails(self):
+        """对称矩阵转置后数值不变, 仍须判失败"""
+        golden = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float64)
+        output = golden.clone().t()
+        assert output.is_contiguous() is False
+        assert torch.equal(output, golden)  # 数值一模一样, 只有 stride 不同
+
+        result = compare_tensors(output, golden, "float32")
+        assert result.passed is False
+        assert "内存布局非连续" in result.output_results[0].error_msg
+
+    def test_expanded_view_fails(self):
+        """expand 出来的广播视图(stride=0)同样判失败"""
+        golden = torch.full((3, 4), 2.0, dtype=torch.float64)
+        output = torch.tensor([[2.0]], dtype=torch.float64).expand(3, 4)
+        assert output.is_contiguous() is False
+        assert torch.equal(output, golden)
+
+        result = compare_tensors(output, golden, "float32")
+        assert result.passed is False
+        assert "内存布局非连续" in result.output_results[0].error_msg
+
+    def test_sliced_view_fails(self):
+        """按步长切片得到的稀疏视图判失败"""
+        base = torch.arange(12, dtype=torch.float64)
+        golden = base[::2].clone()
+        output = base[::2]
+        assert output.is_contiguous() is False
+        assert torch.equal(output, golden)
+
+        result = compare_tensors(output, golden, "float32")
+        assert result.passed is False
+
+    def test_int_output_layout_checked_too(self):
+        """整数路径(torch.equal 精确比较)同样受约束"""
+        golden = torch.tensor([[1, 2], [2, 4]], dtype=torch.int64)
+        output = golden.clone().t()
+        assert torch.equal(output, golden)
+
+        result = compare_tensors(output, golden, "int32")
+        assert result.passed is False
+        assert "内存布局非连续" in result.output_results[0].error_msg
+
+    def test_contiguous_view_passes(self):
+        """reshape / view 得到的仍是连续布局, 不受影响"""
+        base = torch.arange(6, dtype=torch.float64)
+        golden = base.reshape(2, 3)
+        output = base.clone().reshape(2, 3)
+        assert output.is_contiguous() is True
+
+        result = compare_tensors(output, golden, "float32")
+        assert result.passed is True
+
+    def test_non_contiguous_golden_still_passes(self):
+        """只约束候选输出: golden 自身非连续不影响判定
+
+        golden 只负责给出参考数值, 布局是它自己的事。误伤 golden 侧会把
+        transpose / attention 这类天然以 permute 收尾的参考实现整个判死。
+        """
+        base = torch.tensor([[1.0, 2.0], [3.0, 4.0]], dtype=torch.float64)
+        golden = base.t()
+        output = base.t().contiguous()
+        assert golden.is_contiguous() is False
+        assert output.is_contiguous() is True
+
+        result = compare_tensors(output, golden, "float32")
+        assert result.passed is True
+
+    def test_multi_output_reports_offending_index(self):
+        """多输出时定位到出问题的那一路, 其余仍判通过"""
+        gold0 = torch.tensor([1.0, 2.0], dtype=torch.float64)
+        gold1 = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float64)
+        output = [gold0.clone(), gold1.clone().t()]
+
+        result = compare_tensors(output, [gold0, gold1], "float32")
+        assert result.passed is False
+        assert result.output_results[0].passed is True
+        assert result.output_results[1].passed is False
+        assert "内存布局非连续" in result.output_results[1].error_msg
+
+    def test_ignored_output_skips_layout_check(self):
+        """被 ignore_output_indices 跳过的输出不做布局校验"""
+        golden = torch.tensor([[1.0, 2.0], [2.0, 4.0]], dtype=torch.float64)
+        output = golden.clone().t()
+        result = compare_tensors(output, golden, "float32", ignore_output_indices=[0])
+        assert result.passed is True
+
+    def test_shape_mismatch_takes_precedence(self):
+        """同时形状不符 + 非连续时报形状不匹配(更具体的诊断优先)"""
+        golden = torch.zeros(2, 3, dtype=torch.float64)
+        output = torch.zeros(3, 4, dtype=torch.float64).t()
+        assert output.is_contiguous() is False
+        result = compare_tensors(output, golden, "float32")
+        assert result.passed is False
+        assert "形状不匹配" in result.output_results[0].error_msg
+
+    def test_scalar_and_empty_are_contiguous(self):
+        """0 维 / 空张量天然连续, 不会被误伤"""
+        for golden in (torch.tensor(3.0, dtype=torch.float64),
+                       torch.tensor([], dtype=torch.float64)):
+            result = compare_tensors(golden.clone(), golden, "float32")
+            assert result.passed is True
+
+
 class TestSmallValueFallback:
     """小值域兜底判定测试
 
