@@ -126,7 +126,19 @@ def foreach_addcdiv_scalar(
         输出张量列表
     """
 
-    y = [x1_i + (x2_i / x3_i) * scalar for x1_i, x2_i, x3_i in zip(x1, x2, x3)]
+    # FP16/BF16 输入为保证精度会先提升到 FP32 计算
+    input_dtype = x1[0].dtype if x1 else torch.float32
+    compute_dtype = torch.float32 if input_dtype in (torch.float16, torch.bfloat16) else input_dtype
+
+    x1_compute = [t.to(compute_dtype) for t in x1]
+    x2_compute = [t.to(compute_dtype) for t in x2]
+    x3_compute = [t.to(compute_dtype) for t in x3]
+
+    y = [x1_i + (x2_i / x3_i) * scalar for x1_i, x2_i, x3_i in zip(x1_compute, x2_compute, x3_compute)]
+
+    # 计算完成后恢复到输入 dtype
+    if input_dtype in (torch.float16, torch.bfloat16):
+        return [t.to(input_dtype) for t in y]
     return y
 ```
 
