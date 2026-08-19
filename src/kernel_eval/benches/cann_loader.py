@@ -193,6 +193,8 @@ class CannTaskLoader(OperatorDirMixin, TaskLoader):
             difficulty = DifficultyLevel.L3
         elif difficulty_str in ('L4', 'l4'):
             difficulty = DifficultyLevel.L4
+        elif difficulty_str in ('L5', 'l5'):
+            difficulty = DifficultyLevel.L5
 
         return CannTaskSpec(
             task_id=rel_path,

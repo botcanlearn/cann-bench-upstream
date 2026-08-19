@@ -161,7 +161,7 @@ class TaskSpec:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def get_level_id(self) -> int:
-        mapping = {"L1": 1, "L2": 2, "L3": 3, "L4": 4}
+        mapping = {"L1": 1, "L2": 2, "L3": 3, "L4": 4, "L5": 5}
         return mapping.get(self.difficulty.value, 1)
 
     def get_input_names(self) -> List[str]:

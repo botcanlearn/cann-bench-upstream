@@ -38,6 +38,7 @@ def pytest_configure(config):
     for line in (
         "npu: 需要 Ascend NPU 才能跑的集成测试",
         "level1: L1 算子", "level2: L2 算子", "level3: L3 算子", "level4: L4 算子",
+        "level5: L5 算子",
     ):
         config.addinivalue_line("markers", line)
 

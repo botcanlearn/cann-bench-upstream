@@ -35,7 +35,7 @@
 operator:
   name: Conv2D                          # 算子名：PascalCase，与目录名语义对应
   category: Contraction                 # 算子类别（见 1.2）
-  difficulty: L3                        # 难度等级：L1 ~ L4
+  difficulty: L3                        # 难度等级：L1 ~ L5
   formula: y = CONV(x, filter) + bias   # 数学公式（单行）
   # formula: |                           # 多行公式用 YAML 多行字符串
   #   m_t = beta1 * m_{t-1} + (1 - beta1) * grad
@@ -68,7 +68,7 @@ operator:
 |------|------|------|------|
 | `name` | string | 是 | 算子名称，使用 PascalCase（如 `Conv2D`、`ApplyAdamW`） |
 | `category` | string | 是 | 算子类别 |
-| `difficulty` | string | 是 | 难度等级，取值 `L1` / `L2` / `L3` / `L4`，须与所在 `levelN/` 目录一致 |
+| `difficulty` | string | 是 | 难度等级，取值 `L1` / `L2` / `L3` / `L4` / `L5`，须与所在 `levelN/` 目录一致 |
 | `formula` | string | 是 | 数学公式，单行直接写字符串；多行使用 YAML `|` 块标量 |
 | `description` | string | 是 | 一句话中文描述 |
 | `shape_support` | string | 是 | 输入/输出 shape 的格式约束说明 |

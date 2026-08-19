@@ -62,7 +62,7 @@ _XFAIL_PERF = xfail_set(_KNOWN, "xfail-perf")
 _XFAIL_ACC_OPS = xfail_all_ops(_KNOWN, "xfail-accuracy")  # op 级: 整算子放宽
 _XFAIL_PERF_OPS = xfail_all_ops(_KNOWN, "xfail-perf")
 _SKIP_OPS = skip_ops(_KNOWN)  # op 级 skip: 整算子跳过
-_LEVELS = ("level1", "level2", "level3", "level4")
+_LEVELS = ("level1", "level2", "level3", "level4", "level5")
 
 
 def _all_ops():
@@ -70,6 +70,8 @@ def _all_ops():
     params = []
     for lvl in _LEVELS:
         base = TASKS / lvl
+        if not base.is_dir():  # e.g. level5 尚未进入 tasks/ 主集合时跳过
+            continue
         for op_dir in sorted(p for p in base.iterdir() if p.is_dir()):
             name = yaml.safe_load((op_dir / "proto.yaml").read_text(encoding="utf-8"))[
                 "operator"
