@@ -531,6 +531,10 @@ class ProcessPoolCoordinator:
         # profiler 配置
         if not self.process_config.enable_profiler:
             cmd.append("--no-perf")
+        if getattr(self.base_config, "perf_batch_cases", True):
+            cmd.append("--perf-batch-cases")
+        else:
+            cmd.append("--no-perf-batch-cases")
         profiler_level = getattr(self.base_config, "profiler_level", None)
         if profiler_level:
             cmd += ["--profiler-level", str(profiler_level)]

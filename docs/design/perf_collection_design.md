@@ -441,6 +441,7 @@ def _parse_case_id(case_id):
 | `freq_boost` | PerfEvaluator 初始化 | True | 是否升频清 Cache |
 | `archive_prof` | PerfEvaluator 初始化 | True | 是否归档 Trace 数据 |
 | `use_input_pool` | run_profiled 参数 | False | 是否启用 InputPool |
+| `perf_batch_cases` | Config / CLI `--perf-batch-cases` / `--no-perf-batch-cases` | True | 同一 TaskUnit 复用一次 Profiler；解析或反作弊归属不确定时逐 case 回退 |
 | `profiler_level` | Config / CLI `--profiler-level` | `Level1` | Profiler 级别，可选 `Level1` / `Level2` |
 
 > CLI 完整参数与默认值，见 [evaluator_design.md §3.3](./evaluator_design.md#33-命令行参数)。
@@ -539,6 +540,8 @@ profiler 相关配置见 §10；CLI 完整参数表（多卡 / 子进程隔离 /
 - `--warmup <n>`：预热次数（默认 3）
 - `--repeat <n>`：采集次数（默认 5）
 - `--no-perf`：关闭性能采集
+- `--perf-batch-cases`：合并同一 TaskUnit 的 case 到一个 Profiler 会话（默认开启）
+- `--no-perf-batch-cases`：关闭批量 case，恢复逐 case Profiler 会话
 - `--profiler-level Level1|Level2`：Profiler 级别（默认 Level1）
 
 **源码评测**：

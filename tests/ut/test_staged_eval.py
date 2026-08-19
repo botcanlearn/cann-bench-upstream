@@ -9,6 +9,7 @@ from kernel_eval.staged_eval import (
     _case_num_from_value,
     _compile_failure_operator_filter,
     _merge_results,
+    create_parser,
 )
 
 
@@ -63,6 +64,13 @@ def test_compile_failure_filter_uses_selected_operators():
 
     args.operator = "Conv3DBackpropFilter"
     assert _compile_failure_operator_filter(args) == ["Conv3DBackpropFilter"]
+
+
+def test_perf_batch_cases_defaults_on_and_can_be_disabled():
+    parser = create_parser()
+
+    assert parser.parse_args([]).perf_batch_cases is True
+    assert parser.parse_args(["--no-perf-batch-cases"]).perf_batch_cases is False
 
 
 def test_merge_results_matches_string_case_id_and_recounts_failures():

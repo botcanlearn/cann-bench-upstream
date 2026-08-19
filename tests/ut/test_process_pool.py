@@ -369,6 +369,48 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         idx = cmd.index("--reports-dir")
         self.assertEqual(cmd[idx + 1], "/tmp/cann-bench-reports")
 
+    def test_build_child_cmd_propagates_perf_batch_flag(self):
+        """默认开启时父进程显式向 eval-child 传递批量模式。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.perf_batch_cases = True
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json",
+        )
+
+        self.assertIn("--perf-batch-cases", cmd)
+
+    def test_build_child_cmd_propagates_disabled_perf_batch_flag(self):
+        """父进程显式关闭时，eval-child 不得回落到默认开启。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.perf_batch_cases = False
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json",
+        )
+
+        self.assertIn("--no-perf-batch-cases", cmd)
+
     def test_non_pypto_child_cmd_keeps_original_arguments(self):
         """非 PyPTO Pro worker 不接收隔离模式新增参数。"""
         self.base_config.device_type = "cpu"
@@ -827,8 +869,26 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.output, '/tmp/output.json')
         self.assertEqual(args.reports_dir, '/tmp/reports')
         self.assertTrue(args.no_perf)
+        self.assertTrue(args.perf_batch_cases)
         self.assertTrue(args.pypto_pro_outer_case_isolation)
         self.assertEqual(args.timeout_per_operator, 123)
+
+    def test_cli_perf_batch_cases_can_be_disabled(self):
+        """eval 与 eval-child 都支持显式恢复逐 case profiler。"""
+        from src.kernel_eval.cli import create_parser
+        parser = create_parser()
+
+        eval_args = parser.parse_args(['eval', '--no-perf-batch-cases'])
+        self.assertFalse(eval_args.perf_batch_cases)
+
+        child_args = parser.parse_args([
+            'eval-child',
+            '--device-id', '0',
+            '--cases-file', '/tmp/cases.json',
+            '--output', '/tmp/output.json',
+            '--no-perf-batch-cases',
+        ])
+        self.assertFalse(child_args.perf_batch_cases)
 
     def test_cli_eval_child_config_uses_reports_dir(self):
         """eval-child 配置使用命令行 reports_dir 而不是默认项目 reports"""

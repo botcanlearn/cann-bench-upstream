@@ -474,6 +474,120 @@ def parse_csv_kernels(csv_path: str,
     }
 
 
+def parse_csv_kernel_batches(csv_path: str, n_cases: int,
+                             warmup: int, repeat: int,
+                             warmup_names: Set[str] = None
+                             ) -> List[Dict[str, Any]]:
+    """Split one profiler CSV into per-case NPU-kernel measurements.
+
+    ``kernel_details.csv`` has no reliable framework Step Id for this batch
+    schedule. The harness launches the reserved CannBenchCacheClean kernel
+    before every step; those rows are therefore deterministic boundaries in
+    device execution order.
+
+    Structural assumptions are checked instead of guessed. A violation raises
+    ValueError so the caller can fall back to the established one-session-
+    per-case path without publishing a potentially wrong score.
+    """
+    if n_cases <= 0:
+        return []
+    if warmup < 0 or repeat <= 0:
+        raise ValueError(
+            f"invalid batch schedule: warmup={warmup}, repeat={repeat}"
+        )
+    if not csv_path or not os.path.isfile(csv_path):
+        raise ValueError(f"kernel_details.csv not found: {csv_path}")
+
+    warmup_names = warmup_names or set()
+    rows: List[Dict[str, str]] = []
+    try:
+        with open(csv_path, 'r', encoding='utf-8-sig') as f:
+            rows = list(csv.DictReader(f))
+    except Exception as exc:
+        raise ValueError(f"failed to read kernel_details.csv: {exc}") from exc
+    if not rows:
+        raise ValueError("kernel_details.csv is empty")
+
+    # The parser relies on CSV row order matching device execution order.
+    previous_ts: Optional[float] = None
+    for row in rows:
+        raw_ts = row.get('Start Time(us)')
+        if raw_ts in (None, ''):
+            continue
+        try:
+            timestamp = float(str(raw_ts).strip())
+        except (TypeError, ValueError):
+            continue
+        if previous_ts is not None and timestamp < previous_ts:
+            raise ValueError(
+                "kernel_details.csv Start Time(us) is not monotonic"
+            )
+        previous_ts = timestamp
+
+    delimiter_indices = [
+        idx for idx, row in enumerate(rows)
+        if 'CannBenchCacheClean' in str(row.get('Type') or '')
+    ]
+    steps_per_case = warmup + repeat
+    expected_delimiters = n_cases * steps_per_case
+    if len(delimiter_indices) != expected_delimiters:
+        raise ValueError(
+            f"cache-clean delimiter count {len(delimiter_indices)} != "
+            f"expected {expected_delimiters} "
+            f"({n_cases} cases x {steps_per_case} steps)"
+        )
+
+    batches: List[Dict[str, Any]] = []
+    for case_idx in range(n_cases):
+        per_kernel: Dict[str, List[float]] = {}
+        measured_steps = 0
+        for step_idx in range(warmup, steps_per_case):
+            global_step = case_idx * steps_per_case + step_idx
+            lo = delimiter_indices[global_step] + 1
+            hi = (
+                delimiter_indices[global_step + 1]
+                if global_step + 1 < len(delimiter_indices)
+                else len(rows)
+            )
+            step_totals: Dict[str, float] = {}
+            for row in rows[lo:hi]:
+                op_type = str(row.get('Type') or '').strip()
+                input_shapes = str(row.get('Input Shapes') or '').strip()
+                name = str(row.get('Name') or op_type).strip()
+                if not name or name in warmup_names:
+                    continue
+                if _is_warmup_kernel(op_type, input_shapes):
+                    continue
+                try:
+                    duration = float(
+                        str(row.get('Duration(us)') or '0').strip()
+                    )
+                except (TypeError, ValueError):
+                    continue
+                if duration <= 0:
+                    continue
+                step_totals[name] = step_totals.get(name, 0.0) + duration
+            for name, total in step_totals.items():
+                per_kernel.setdefault(name, []).append(total)
+            measured_steps += 1
+
+        if measured_steps != repeat:
+            raise ValueError(
+                f"case {case_idx} measured step count {measured_steps} != "
+                f"repeat {repeat}"
+            )
+        device_kernels = {
+            name: round(_median(times), 2)
+            for name, times in per_kernel.items()
+        }
+        batches.append({
+            'device_kernels': device_kernels,
+            'total_kernel_us': round(sum(device_kernels.values()), 2),
+        })
+
+    return batches
+
+
 def _median(values: List[float]) -> float:
     """计算中位数"""
     if not values:

@@ -119,6 +119,8 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 | `--warmup <n>` | 预热次数 | 3 |
 | `--repeat <n>` | 采集次数 | 5 |
 | `--no-perf` | 关闭性能采集（仅精度验证） | False |
+| `--perf-batch-cases` | 同一 TaskUnit 的 case 共用一次 Profiler；归属不确定时自动逐 case 回退 | True |
+| `--no-perf-batch-cases` | 关闭批量 case，恢复逐 case Profiler | False |
 | `--profiler-level <level>` | Profiler 级别 (Level1/Level2) | Level1 |
 
 > shell 暴露的是最常用子集。若需要 `--op-timeout-sec` / `--no-iterative-compile` / `--eval-code` / `--eval-seed` / `--input-dist` 等更精细控制，请直调 cli：

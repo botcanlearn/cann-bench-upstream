@@ -61,6 +61,9 @@ def _make_config(args: argparse.Namespace, bench_root: str, *, enable_profiler: 
     cfg.warmup = args.warmup
     cfg.repeat = args.repeat
     cfg.enable_profiler = enable_profiler
+    cfg.perf_batch_cases = bool(
+        getattr(args, 'perf_batch_cases', cfg.perf_batch_cases)
+    )
     cfg.profiler_level = args.profiler_level
     cfg.timeout_per_operator = args.timeout_per_operator
     cfg.reports_dir = args.reports_dir
@@ -470,6 +473,13 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reports-dir", default="reports")
     parser.add_argument("--eval-code", default=None)
     parser.add_argument("--no-perf", action="store_true")
+    parser.add_argument("--perf-batch-cases", dest="perf_batch_cases",
+                        action="store_true",
+                        help="同一 TaskUnit 的 case 共用一次 profiler（默认开启）")
+    parser.add_argument("--no-perf-batch-cases", dest="perf_batch_cases",
+                        action="store_false",
+                        help="关闭批量 case 性能采集，恢复逐 case profiler")
+    parser.set_defaults(perf_batch_cases=True)
     parser.add_argument("--profiler-level", choices=["Level1", "Level2"], default="Level1")
     parser.add_argument("--perf-metric-strategy", default=None)
     parser.add_argument("--torch-op-guard-mode", choices=["off", "warn", "block"], default=None)

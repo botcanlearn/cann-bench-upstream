@@ -121,6 +121,13 @@ def create_parser() -> argparse.ArgumentParser:
                                   '不再隔离/补救失败算子，也不修改用户源码（为支持并行化评测）。')
     eval_parser.add_argument('--no-perf', action='store_true',
                              help='关闭性能采集，仅做精度验证')
+    eval_parser.add_argument('--perf-batch-cases', dest='perf_batch_cases',
+                             action='store_true',
+                             help='将同一 TaskUnit 的多个 case 合并到一次 NPU profiler 会话（默认开启）')
+    eval_parser.add_argument('--no-perf-batch-cases', dest='perf_batch_cases',
+                             action='store_false',
+                             help='关闭批量 case 性能采集，恢复逐 case profiler 会话')
+    eval_parser.set_defaults(perf_batch_cases=True)
     eval_parser.add_argument('--profiler-level', type=str, default='Level1',
                              choices=['Level1', 'Level2'],
                              help='Profiler 级别（默认: Level1）。Level1 产出 47 列 CSV，'
@@ -215,6 +222,11 @@ def create_parser() -> argparse.ArgumentParser:
     child_parser.add_argument('--repeat', type=int, default=5)
     child_parser.add_argument('--no-perf', action='store_true',
                               help='关闭性能采集')
+    child_parser.add_argument('--perf-batch-cases', dest='perf_batch_cases',
+                              action='store_true', help=argparse.SUPPRESS)
+    child_parser.add_argument('--no-perf-batch-cases', dest='perf_batch_cases',
+                              action='store_false', help=argparse.SUPPRESS)
+    child_parser.set_defaults(perf_batch_cases=True)
     child_parser.add_argument('--profiler-level', type=str, default='Level1',
                               choices=['Level1', 'Level2'])
     child_parser.add_argument('--no-freq-boost', action='store_true',
@@ -309,6 +321,9 @@ def _create_config_from_args(args, bench_root: str) -> Config:
         config.timeout_per_operator = args.timeout_per_operator
     if getattr(args, 'no_perf', False):
         config.enable_profiler = False
+    config.perf_batch_cases = bool(
+        getattr(args, 'perf_batch_cases', config.perf_batch_cases)
+    )
     if hasattr(args, 'profiler_level'):
         config.profiler_level = args.profiler_level
     if getattr(args, 'no_freq_boost', False):
@@ -668,6 +683,9 @@ def _create_config_from_args_for_child(args, bench_root: str) -> Config:
     config.warmup = args.warmup
     config.repeat = args.repeat
     config.enable_profiler = not args.no_perf
+    config.perf_batch_cases = bool(
+        getattr(args, 'perf_batch_cases', config.perf_batch_cases)
+    )
     config.profiler_level = args.profiler_level
     config.perf_freq_boost = not getattr(args, 'no_freq_boost', False)
     config.bench_name = bench_name
