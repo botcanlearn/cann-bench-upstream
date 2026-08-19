@@ -3,7 +3,7 @@
     "description": "CANN baseline 性能数据（950PR 平台，经验证）",
     "hardware": "950pr",
     "source": "950pr1.json + verify_run1/2_dev3.json (verified mean)",
-    "note": "t_hw_us 为 hardware-anchored 性能下界，应用既有 1us 下限；baseline_perf_us 保持 !153 验证均值不变。",
+    "note": "t_hw_us 为 hardware-anchored 性能下界，亚微秒结果按 1us 取下限；baseline_perf_us 优先采用 950PR 实测均值，缺失项按 max(t_hw_us × 10, 10us) 回退。",
     "t_hw_source": "hardware-anchored 性能下界 (roofline)"
   },
   "level1": {
