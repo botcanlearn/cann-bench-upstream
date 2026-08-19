@@ -112,12 +112,36 @@ def yaml_to_csv(input_file: str, output_file: Optional[str] = None) -> bool:
         # 读取YAML文件
         with open(input_file, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
+
+        if data is None:
+            print(f"错误：YAML 文件 {input_file} 为空", file=sys.stderr)
+            return False
+        if not isinstance(data, dict):
+            print(
+                f"错误：YAML 文件 {input_file} 顶层结构应为字典，实际为 {type(data).__name__}",
+                file=sys.stderr,
+            )
+            return False
         
         # 检查是否包含cases字段
         cases = data.get('cases', [])
+        if not isinstance(cases, list):
+            print(
+                f"错误：YAML 文件 {input_file} 的 cases 字段应为列表，实际为 {type(cases).__name__}",
+                file=sys.stderr,
+            )
+            return False
         if not cases:
             print(f"警告：YAML文件 {input_file} 中没有找到cases字段", file=sys.stderr)
             return False
+        for index, case in enumerate(cases, start=1):
+            if not isinstance(case, dict):
+                print(
+                    f"错误：YAML 文件 {input_file} 的 cases 第 {index} 个元素应为字典，"
+                    f"实际为 {type(case).__name__}",
+                    file=sys.stderr,
+                )
+                return False
         
         # 确定输出文件路径
         if output_file is None:
