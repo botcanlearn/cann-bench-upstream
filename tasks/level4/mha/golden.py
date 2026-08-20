@@ -68,5 +68,5 @@ def mha(
     attn_weights = torch.where(all_masked, torch.zeros_like(attn_weights), attn_weights)
     attn_output = torch.matmul(attn_weights, v)
 
-    # 转回 [B, S, N, D]
-    return attn_output.transpose(1, 2)
+    # 转回 [B, S, N, D]；transpose 只改 stride, 而输出契约要求 contiguous (issue #146)
+    return attn_output.transpose(1, 2).contiguous()

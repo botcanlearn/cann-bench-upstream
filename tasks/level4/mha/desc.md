@@ -147,7 +147,8 @@ def mha(
         key: 键张量 [B, S_kv, N, D]（已分头）
         value: 值张量 [B, S_kv, N, D]（已分头）
         scaleValue: 缩放因子，<=0 时自动使用 1/sqrt(D)
-        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足 j > i + (S_kv - S) 的位置置 -inf
+        is_causal: 是否启用因果掩码（右下角对齐），True 时 scores[..., i, j] 满足
+            j > i + (S_kv - S) 的位置在 softmax 前置为 -inf。要求 S <= S_kv。
 
     Returns:
         输出张量 [B, S, N, D]
@@ -170,11 +171,16 @@ def mha(
         j = torch.arange(S_kv, device=scores.device).unsqueeze(0)
         causal_mask = j > (i + (S_kv - S))  # 右下角对齐：上三角置 -inf
         scores = scores.masked_fill(causal_mask, float('-inf'))
+    # F217: 全 mask 行 (整行 = -inf) 在 softmax 时得 0/0 = NaN，对齐
+    # sparse_flash_attention 加显式保护 → 全 mask 行权重置 0。
+    scores_max = scores.max(dim=-1, keepdim=True).values
+    all_masked = torch.isinf(scores_max) & (scores_max < 0)
     attn_weights = torch.nn.functional.softmax(scores, dim=-1)
+    attn_weights = torch.where(all_masked, torch.zeros_like(attn_weights), attn_weights)
     attn_output = torch.matmul(attn_weights, v)
 
-    # 转回 [B, S, N, D]
-    return attn_output.transpose(1, 2)
+    # 转回 [B, S, N, D]；transpose 只改 stride, 而输出契约要求 contiguous (issue #146)
+    return attn_output.transpose(1, 2).contiguous()
 ```
 
 ## 6. 额外信息
