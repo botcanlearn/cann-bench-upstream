@@ -35,5 +35,6 @@ def transpose(
         输出张量，转置后的结果
     """
 
-    y = torch.permute(x, perm)
+    # permute 只改 stride, 而输出契约要求 contiguous, 这里把数据真正搬一次 (issue #146)
+    y = torch.permute(x, perm).contiguous()
     return y
