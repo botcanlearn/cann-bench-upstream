@@ -118,4 +118,5 @@ def mla(
     if inputLayout == "BNSD":
         out = out.permute(0, 2, 1, 3)
 
-    return out
+    # 上面的 reshape/permute 链留下的是 view, 而输出契约要求 contiguous (issue #146)
+    return out.contiguous()
