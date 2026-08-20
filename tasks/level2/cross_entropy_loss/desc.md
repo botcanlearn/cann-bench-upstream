@@ -187,11 +187,12 @@ def cross_entropy_loss(
         >>> target = torch.randint(0, C, (N,))
         >>> loss = cross_entropy_loss(input, target)
     """
-    # 直接调用 PyTorch 标准 CrossEntropyLoss 实现
-    # torch.nn.functional.cross_entropy 内部会自动应用 log_softmax
+    # CANN 支持 int32 / int64 硬标签，而 CPU PyTorch 要求硬标签为 Long。
+    # 仅转换 Golden 使用的整型视图；浮点软标签保持原 dtype。
+    golden_target = target.long() if not target.is_floating_point() else target
     loss = torch.nn.functional.cross_entropy(
         input=input,
-        target=target,
+        target=golden_target,
         reduction=reduction,
         ignore_index=ignore_index
     )
