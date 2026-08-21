@@ -22,6 +22,7 @@
 |------|------|
 | [benchmark_spec.md](spec/benchmark_spec.md) | 评测基准规范：算子定义、用例设计、精度标准、评分规则 |
 | [cases_yaml_spec.md](spec/cases_yaml_spec.md) | cases.yaml 字段与顺序约定（占位/空值规则） |
+| [submission_spec.md](spec/submission_spec.md) | 评测输入与接口规范：解包后的源码、构建产物、接口发现和 auto-pipeline 规则编号 |
 
 > proto.yaml 的 schema 说明见 [contributing.md §1](guide/contributing.md)（暂无独立 `api_spec.md`）。
 
@@ -52,7 +53,7 @@
 | [contributing.md](guide/contributing.md) | 算子贡献指南：如何提交新算子评测任务（含 proto.yaml schema） |
 | [quick_start.md](guide/quick_start.md) | 快速入门：评测流程和命令行使用 |
 | [triton_ascend_quick_start.md](guide/triton_ascend_quick_start.md) | Triton-Ascend 环境、构建和真机验证快速指南 |
-| [submission_rules.md](guide/submission_rules.md) | 算子提交原则与禁止行为：说明哪些实现方式会被视为无效或作弊 |
+| [submission_rules.md](guide/submission_rules.md) | 算子提交行为与禁止规则：说明哪些实现方式会被视为无效或作弊 |
 | [version_policy.md](guide/version_policy.md) | 版本策略：VERSION / tasks 版本与兼容性 |
 | [custom_benchmark_integration.md](guide/custom_benchmark_integration.md) | 自定义评测集接入指南 |
 | [auto_pipeline_usage.md](guide/auto_pipeline_usage.md) | auto_pipeline 使用指南：CLI、配置、环境变量、输出目录 |
@@ -66,7 +67,9 @@
 
 ## 快速导航
 
-**我是算子贡献者** → [contributing.md](guide/contributing.md) + [submission_rules.md](guide/submission_rules.md) + [benchmark_spec.md](spec/benchmark_spec.md)
+**我是评测提交实现者** → [submission_spec.md](spec/submission_spec.md) + [submission_rules.md](guide/submission_rules.md) + [quick_start.md](guide/quick_start.md)
+
+**我是算子贡献者** → [contributing.md](guide/contributing.md) + [benchmark_spec.md](spec/benchmark_spec.md)
 
 **我是评测器开发者** → [evaluator_design.md](design/evaluator_design.md) + [benchmark_orchestrator_architecture.md](design/benchmark_orchestrator_architecture.md) + [auto_pipeline_agent_integration.md](guide/auto_pipeline_agent_integration.md)
 

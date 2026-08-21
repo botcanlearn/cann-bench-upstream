@@ -1,6 +1,8 @@
-# 算子提交原则与禁止行为
+# 算子提交行为与禁止规则
 
 本文档说明 CANN Bench 对提交算子的基本要求，以及哪些实现方式会被视为无效或作弊。这里的代码片段只展示行为类型，不对应任何具体提交。
+
+解包后的源码目录、构建产物和接口格式见[评测输入与接口规范](../spec/submission_spec.md)。本页只定义代码执行行为边界，规则编号与格式规范保持独立；通过 `cannbench.com` 网站提交时还需满足网站自身的 ZIP 上传约束。
 
 ## 1. 算子编写原则
 
@@ -17,7 +19,7 @@ CANN Bench 评测的是提交者实现 Ascend C / NPU kernel 的能力。候选�
 
 ## 2. 禁止行为分类
 
-### 2.1 调用 PyTorch / torch_npu 内置计算 API 代算
+### 2.1 [SUB-BEH-001] 调用 PyTorch / torch_npu 内置计算 API 代算
 
 候选算子的执行路径中，不应直接调用 PyTorch / torch_npu 内置计算 API 来完成目标算子。即使只把部分计算交给现成 API，也属于无效实现。包装层可以做参数整理，但不能把核心计算交给 matmul、conv、softmax、attention、activation、normalization 等现成实现。
 
@@ -38,7 +40,7 @@ def grouped_matmul(x, weight):
 
 同一类绕过写法也不允许，例如改用 `torch.ops.aten.matmul`、`x.matmul(y)`、`torch.mm`、`torch.nn.functional.conv2d` 等。
 
-### 2.2 使用 PyTorch / torch_npu 处理输入输出 tensor
+### 2.2 [SUB-BEH-002] 使用 PyTorch / torch_npu 处理输入输出 tensor
 
 输入预处理、输出后处理和中间 tensor 变换也是目标算子实现的一部分。不能用 PyTorch / torch_npu 的 tensor API 先完成 transpose、permute、contiguous、reshape-copy、cast、slice、gather、scatter 等实质性数据搬运或布局变换，再把处理后的 tensor 交给提交 kernel。
 
@@ -73,7 +75,7 @@ def fake_by_view(x):
 
 补 `.contiguous()` 把数据真复制一遍不在这条自动校验的范围内, 仍属人工审查判定的无效实现。
 
-### 2.3 路由到 CANN 内置同名算子
+### 2.3 [SUB-BEH-003] 路由到 CANN 内置同名算子
 
 提交工程不应只是把任务转发给评测环境中已有的 CANN 内置同名算子。无论目标环境是否提供同名内置实现，候选提交都应包含自己的 kernel 实现。
 
@@ -97,7 +99,7 @@ ADD_TO_LAUNCHER_LIST_AICORE(Softmax);
 AscendC::Exp(dstLocal, srcLocal, elementCount);
 ```
 
-### 2.4 CPU fallback 或没有执行提交 NPU kernel
+### 2.4 [SUB-BEH-004] CPU fallback 或没有执行提交 NPU kernel
 
 候选算子不能把输入搬回 CPU 计算，再把结果搬回 NPU。即使结果数值正确，只要核心计算不是由提交的 NPU kernel 完成，也属于无效实现。
 
@@ -117,7 +119,7 @@ def add(x, y):
     return (x.cpu() + y.cpu()).npu()
 ```
 
-### 2.5 缓存输出、固定输出或按输入地址命中
+### 2.5 [SUB-BEH-005] 缓存输出、固定输出或按输入地址命中
 
 实现不能缓存某次执行结果，然后在后续 case 或 repeat 中直接返回。实现也不应依赖固定输入地址、固定 shape、固定 dtype、固定 attrs 或公开 case 特征来返回预设结果。
 
@@ -150,7 +152,7 @@ def relu(x):
 
 同样不允许根据公开 case 的固定 shape、dtype 或属性直接返回常量结果。
 
-### 2.6 篡改 profiler 或 timing API
+### 2.6 [SUB-BEH-006] 篡改 profiler 或 timing API
 
 提交代码不应 monkey-patch、替换或删除评测环境的计时、同步、性能采集或运行时 API。任何让评测结果不再反映真实 kernel 执行时间的环境篡改都属于作弊行为。
 
@@ -166,7 +168,7 @@ torch_npu.profiler.profile = fake_profile
 
 这类行为会让评测结果不可信，应视为无效提交。
 
-### 2.7 返回 FakeTensor、懒求值包装器或伪 Tensor 对象
+### 2.7 [SUB-BEH-007] 返回 FakeTensor、懒求值包装器或伪 Tensor 对象
 
 候选算子必须返回真实 `torch.Tensor`。用对象包装真实计算、延迟到比较阶段再求值，或返回 Tensor 子类伪装结果，都会破坏评测边界。
 

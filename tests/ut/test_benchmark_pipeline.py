@@ -955,7 +955,7 @@ def test_opencode_exporter_exports_sqlite_child_sessions(monkeypatch, tmp_path):
     assert exported_json["children"][0]["info"]["id"] == "ses_child"
 
 
-def test_pypto_adapter_requires_standard_stanford_submission_or_converter(tmp_path):
+def test_pypto_adapter_reports_invalid_stanford_submission_details(tmp_path):
     source_dir = tmp_path / "artifact"
     source_dir.mkdir()
     source_dir.joinpath("ReLU_impl.py").write_text(
@@ -981,8 +981,13 @@ def test_pypto_adapter_requires_standard_stanford_submission_or_converter(tmp_pa
     )
     output = Artifact(status=AGENT_SUCCESS, workdir=source_dir, files={"source_dir": source_dir})
 
-    with pytest.raises(FileNotFoundError, match="converter agent"):
+    with pytest.raises(ValueError) as exc_info:
         _build_submission(PyptoToStanfordConverter(), case, output, output_dir=tmp_path / "submission")
+
+    message = str(exc_info.value)
+    assert "[AUTO-STANFORD-001]" in message
+    assert "ai_op.py" in message
+    assert "docs/spec/submission_spec.md" in message
 
 
 def test_pypto_adapter_accepts_explicit_stanford_ai_op_from_converter(tmp_path):

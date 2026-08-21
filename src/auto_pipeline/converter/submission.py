@@ -6,82 +6,242 @@ import ast
 import importlib.util
 import inspect
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
-from auto_pipeline.core import CannBenchCase
+if TYPE_CHECKING:
+    from auto_pipeline.core import CannBenchCase
+
+
+SUBMISSION_RULES_DOC = "docs/spec/submission_spec.md"
+SUBMISSION_RULE_IDS = (
+    "AUTO-SUB-001",
+    "AUTO-CANN-001",
+    "AUTO-CANN-002",
+    "AUTO-STANFORD-001",
+    "AUTO-STANFORD-002",
+    "AUTO-STANFORD-003",
+    "AUTO-STANFORD-004",
+    "AUTO-STANFORD-005",
+    "AUTO-STANFORD-006",
+    "AUTO-STANFORD-007",
+    "AUTO-STANFORD-008",
+    "AUTO-STANFORD-009",
+    "AUTO-STANFORD-010",
+    "AUTO-STANFORD-011",
+    "AUTO-STANFORD-012",
+)
+
+
+@dataclass(frozen=True)
+class SubmissionIssue:
+    """One actionable violation of the documented submission contract."""
+
+    rule_id: str
+    summary: str
+    path: Path
+    expected: str
+    actual: str
+    remediation: str
+
+    def render(self) -> str:
+        return (
+            f"[{self.rule_id}] {self.summary}\n"
+            f"  path: {self.path}\n"
+            f"  expected: {self.expected}\n"
+            f"  actual: {self.actual}\n"
+            f"  fix: {self.remediation}"
+        )
 
 
 def prepare_submission(target_benchmark: str, case: CannBenchCase, source_dir: Path) -> None:
     if _normalize_name(target_benchmark) == "stanford":
-        _prepare_stanford_submission(case, source_dir)
+        issues = _prepare_stanford_submission(case, Path(source_dir))
+        if issues:
+            raise ValueError(_format_submission_issues("Stanford", target_benchmark, source_dir, issues))
 
 
 def is_submission_dir(target_benchmark: str, source_dir: Path) -> bool:
-    key = _normalize_name(target_benchmark)
-    if key == "stanford":
-        return _is_stanford_source_dir(source_dir)
-    return _is_cannbench_source_dir(source_dir)
+    return not collect_submission_issues(target_benchmark, source_dir)
 
 
 def validate_submission(target_benchmark: str, case: CannBenchCase, source_dir: Path, *, label: str) -> None:
+    issues = collect_submission_issues(target_benchmark, source_dir)
+    if issues:
+        raise ValueError(_format_submission_issues(label, target_benchmark, source_dir, issues))
     prepare_submission(target_benchmark, case, source_dir)
-    if not is_submission_dir(target_benchmark, source_dir):
-        raise ValueError(f"{label} submission is not valid for benchmark {target_benchmark}")
+
+
+def collect_submission_issues(target_benchmark: str, source_dir: Path) -> list[SubmissionIssue]:
+    """Return all format issues that can be determined without executing a submission."""
+
+    path = Path(source_dir)
+    if not path.is_dir():
+        return [
+            SubmissionIssue(
+                "AUTO-SUB-001",
+                "submission source_dir is not a directory",
+                path,
+                "an existing directory containing the benchmark submission",
+                "path is missing or is not a directory",
+                "pass the extracted submission root directory",
+            )
+        ]
+    if _normalize_name(target_benchmark) == "stanford":
+        return _stanford_source_issues(path)
+    return _cannbench_source_issues(path)
 
 
 def _normalize_name(name: str) -> str:
     return str(name).strip().lower().replace("_", "-")
 
 
-def _is_cannbench_source_dir(path: Path) -> bool:
-    has_build = (path / "build.sh").is_file()
-    has_package = (path / "cann_bench").is_dir()
-    has_dist = any((path / "dist").glob("cann_bench*.whl")) if (path / "dist").is_dir() else False
-    return has_build and (has_package or has_dist)
+def _cannbench_source_issues(path: Path) -> list[SubmissionIssue]:
+    issues = []
+    build_script = path / "build.sh"
+    if not build_script.is_file():
+        issues.append(
+            SubmissionIssue(
+                "AUTO-CANN-001",
+                "CANN submission is missing build.sh",
+                build_script,
+                "a regular file executed as `bash build.sh`",
+                "missing or not a regular file",
+                "add build.sh at the submission root",
+            )
+        )
+
+    package_dir = path / "cann_bench"
+    dist_dir = path / "dist"
+    wheels = sorted(dist_dir.glob("cann_bench*.whl")) if dist_dir.is_dir() else []
+    if not package_dir.is_dir() and not wheels:
+        issues.append(
+            SubmissionIssue(
+                "AUTO-CANN-002",
+                "CANN submission has neither package sources nor a prebuilt wheel",
+                path,
+                "cann_bench/ directory or dist/cann_bench*.whl",
+                f"root entries: {_submission_root_entries(path)}",
+                "add the cann_bench package directory or a matching wheel under dist/",
+            )
+        )
+    return issues
 
 
-def _is_stanford_source_dir(path: Path) -> bool:
-    return (path / "ai_op.py").is_file()
+def _stanford_source_issues(path: Path) -> list[SubmissionIssue]:
+    ai_op_path = path / "ai_op.py"
+    if ai_op_path.is_file():
+        return []
+    return [
+        SubmissionIssue(
+            "AUTO-STANFORD-001",
+            "Stanford submission is missing ai_op.py",
+            ai_op_path,
+            "a regular Python file defining ModelNew",
+            "missing or not a regular file",
+            "convert the raw agent artifact into a standard ai_op.py submission",
+        )
+    ]
 
 
-def _prepare_stanford_submission(case: CannBenchCase, source_dir: Path) -> None:
+def _prepare_stanford_submission(case: CannBenchCase, source_dir: Path) -> list[SubmissionIssue]:
     ai_op_path = source_dir / "ai_op.py"
     if not ai_op_path.is_file():
-        raise FileNotFoundError(
-            "Stanford submission must include standard ai_op.py; "
-            "run a separate converter agent for raw outputs"
-        )
+        return _stanford_source_issues(source_dir)
+    source_issues = _stanford_python_source_issues(ai_op_path)
+    if source_issues:
+        return source_issues
     _ensure_stanford_ai_op_prelude(ai_op_path)
-    _validate_stanford_model_contract(case, source_dir)
+    return _stanford_model_contract_issues(case, source_dir)
 
 
-def _validate_no_relative_imports(path: Path) -> None:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+def _stanford_python_source_issues(path: Path) -> list[SubmissionIssue]:
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, UnicodeError, SyntaxError) as exc:
+        return [
+            SubmissionIssue(
+                "AUTO-STANFORD-002",
+                "Stanford ai_op.py is not valid UTF-8 Python source",
+                path,
+                "UTF-8 encoded, syntactically valid Python",
+                f"{type(exc).__name__}: {exc}",
+                "fix the file encoding or Python syntax before conversion",
+            )
+        ]
+
+    issues = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.level:
             module = "." * node.level + (node.module or "")
-            raise ValueError(
-                "Stanford ai_op.py must use flat/local absolute imports, "
-                f"not relative import {module!r}"
+            issues.append(
+                SubmissionIssue(
+                    "AUTO-STANFORD-003",
+                    "Stanford ai_op.py uses a relative import",
+                    path,
+                    "flat/local absolute imports resolvable from source_dir",
+                    f"relative import {module!r} at line {node.lineno}",
+                    "replace the relative import with a local absolute import",
+                )
             )
+    return issues
 
 
-def _validate_stanford_model_contract(case: CannBenchCase, source_dir: Path) -> None:
+def _stanford_model_contract_issues(case: CannBenchCase, source_dir: Path) -> list[SubmissionIssue]:
     task_path = case.files.get("task")
     if task_path is None or not Path(task_path).is_file():
-        return
+        return []
 
-    task_module = _load_module_from_path("stanford_task_contract", Path(task_path))
-    ai_module = _load_module_from_path("stanford_ai_contract", source_dir / "ai_op.py", prepend_paths=[source_dir])
+    try:
+        task_module = _load_module_from_path("stanford_task_contract", Path(task_path))
+    except Exception as exc:
+        return [
+            SubmissionIssue(
+                "AUTO-STANFORD-004",
+                "Stanford task contract cannot be imported",
+                Path(task_path),
+                "an importable task module defining Model",
+                f"{type(exc).__name__}: {exc}",
+                "fix the task module or its declared dependencies",
+            )
+        ]
+    try:
+        ai_module = _load_module_from_path(
+            "stanford_ai_contract", source_dir / "ai_op.py", prepend_paths=[source_dir]
+        )
+    except Exception as exc:
+        return [
+            SubmissionIssue(
+                "AUTO-STANFORD-005",
+                "Stanford ai_op.py cannot be imported",
+                source_dir / "ai_op.py",
+                "an importable module using files contained in source_dir",
+                f"{type(exc).__name__}: {exc}",
+                "include required local modules and remove import-time failures",
+            )
+        ]
+
     task_model = getattr(task_module, "Model", None)
     ai_model = getattr(ai_module, "ModelNew", None)
     if task_model is None or ai_model is None:
-        raise ValueError("Stanford submission must define ModelNew and task must define Model")
+        return [
+            SubmissionIssue(
+                "AUTO-STANFORD-006",
+                "Stanford model classes are incomplete",
+                source_dir / "ai_op.py",
+                "task.Model and ai_op.ModelNew",
+                f"task.Model={task_model is not None}, ai_op.ModelNew={ai_model is not None}",
+                "define ModelNew in ai_op.py with the same public contract as task.Model",
+            )
+        ]
 
-    _compare_method_signature(task_model, ai_model, "__init__")
-    _compare_method_signature(task_model, ai_model, "forward")
-    _compare_state_dict_contract(task_module, task_model, ai_model)
+    issues = []
+    issues.extend(_method_signature_issues(task_model, ai_model, "__init__", source_dir / "ai_op.py"))
+    issues.extend(_method_signature_issues(task_model, ai_model, "forward", source_dir / "ai_op.py"))
+    issues.extend(_state_dict_contract_issues(task_module, task_model, ai_model, source_dir / "ai_op.py"))
+    return issues
 
 
 def _load_module_from_path(name: str, path: Path, *, prepend_paths: Iterable[Path] = ()):
@@ -101,14 +261,36 @@ def _load_module_from_path(name: str, path: Path, *, prepend_paths: Iterable[Pat
         sys.path[:] = old_path
 
 
-def _compare_method_signature(task_model: object, ai_model: object, method_name: str) -> None:
-    task_signature = _normalized_signature(getattr(task_model, method_name))
-    ai_signature = _normalized_signature(getattr(ai_model, method_name))
+def _method_signature_issues(
+    task_model: object, ai_model: object, method_name: str, path: Path
+) -> list[SubmissionIssue]:
+    rule_id = "AUTO-STANFORD-007" if method_name == "__init__" else "AUTO-STANFORD-008"
+    try:
+        task_signature = _normalized_signature(getattr(task_model, method_name))
+        ai_signature = _normalized_signature(getattr(ai_model, method_name))
+    except (AttributeError, TypeError, ValueError) as exc:
+        return [
+            SubmissionIssue(
+                rule_id,
+                f"Stanford ModelNew.{method_name} signature cannot be inspected",
+                path,
+                f"a callable {method_name} matching task.Model.{method_name}",
+                f"{type(exc).__name__}: {exc}",
+                f"define ModelNew.{method_name} with an inspectable Python signature",
+            )
+        ]
     if task_signature != ai_signature:
-        raise ValueError(
-            f"Stanford ModelNew.{method_name} signature must match task Model.{method_name}; "
-            f"expected={task_signature}, actual={ai_signature}"
-        )
+        return [
+            SubmissionIssue(
+                rule_id,
+                f"Stanford ModelNew.{method_name} signature does not match task.Model.{method_name}",
+                path,
+                repr(task_signature),
+                repr(ai_signature),
+                f"copy the parameter order, kinds and defaults from task.Model.{method_name}",
+            )
+        ]
+    return []
 
 
 def _normalized_signature(method: object) -> list[tuple[str, str, bool, str]]:
@@ -121,33 +303,69 @@ def _normalized_signature(method: object) -> list[tuple[str, str, bool, str]]:
     return normalized
 
 
-def _compare_state_dict_contract(task_module: object, task_model_cls: object, ai_model_cls: object) -> None:
-    get_init_inputs = getattr(task_module, "get_init_inputs", None)
-    init_inputs = list(get_init_inputs() if callable(get_init_inputs) else [])
-    task_model = task_model_cls(*init_inputs)
-    ai_model = ai_model_cls(*init_inputs)
-    task_state = task_model.state_dict()
-    ai_state = ai_model.state_dict()
+def _state_dict_contract_issues(
+    task_module: object, task_model_cls: object, ai_model_cls: object, path: Path
+) -> list[SubmissionIssue]:
+    try:
+        get_init_inputs = getattr(task_module, "get_init_inputs", None)
+        init_inputs = list(get_init_inputs() if callable(get_init_inputs) else [])
+        task_model = task_model_cls(*init_inputs)
+        ai_model = ai_model_cls(*init_inputs)
+        task_state = task_model.state_dict()
+        ai_state = ai_model.state_dict()
+    except Exception as exc:
+        return [
+            SubmissionIssue(
+                "AUTO-STANFORD-009",
+                "Stanford models cannot be constructed for state_dict validation",
+                path,
+                "Model and ModelNew constructible from get_init_inputs() with state_dict() support",
+                f"{type(exc).__name__}: {exc}",
+                "align constructors and ensure both model classes expose state_dict()",
+            )
+        ]
+
+    issues = []
     task_keys = list(task_state.keys())
     ai_keys = list(ai_state.keys())
     if task_keys != ai_keys:
-        raise ValueError(
-            "Stanford ModelNew state_dict keys must match task Model; "
-            f"expected={task_keys}, actual={ai_keys}"
+        issues.append(
+            SubmissionIssue(
+                "AUTO-STANFORD-010",
+                "Stanford ModelNew state_dict keys do not match task.Model",
+                path,
+                repr(task_keys),
+                repr(ai_keys),
+                "register the same parameters and buffers in the same order",
+            )
         )
-    for key in task_keys:
+
+    for key in [item for item in task_keys if item in ai_state]:
         task_tensor = task_state[key]
         ai_tensor = ai_state[key]
         if tuple(task_tensor.shape) != tuple(ai_tensor.shape):
-            raise ValueError(
-                "Stanford ModelNew state_dict tensor shapes must match task Model; "
-                f"key={key}, expected={tuple(task_tensor.shape)}, actual={tuple(ai_tensor.shape)}"
+            issues.append(
+                SubmissionIssue(
+                    "AUTO-STANFORD-011",
+                    f"Stanford state_dict shape mismatch for {key}",
+                    path,
+                    repr(tuple(task_tensor.shape)),
+                    repr(tuple(ai_tensor.shape)),
+                    "create the parameter or buffer with the task model shape",
+                )
             )
         if task_tensor.dtype != ai_tensor.dtype:
-            raise ValueError(
-                "Stanford ModelNew state_dict tensor dtypes must match task Model; "
-                f"key={key}, expected={task_tensor.dtype}, actual={ai_tensor.dtype}"
+            issues.append(
+                SubmissionIssue(
+                    "AUTO-STANFORD-012",
+                    f"Stanford state_dict dtype mismatch for {key}",
+                    path,
+                    str(task_tensor.dtype),
+                    str(ai_tensor.dtype),
+                    "create the parameter or buffer with the task model dtype",
+                )
             )
+    return issues
 
 
 def _render_stanford_ai_op(source: str) -> str:
@@ -166,7 +384,28 @@ def _render_stanford_ai_op(source: str) -> str:
 def _ensure_stanford_ai_op_prelude(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     if "_sys.path.insert(0, _op_dir)" in source:
-        _validate_no_relative_imports(path)
         return
     path.write_text(_render_stanford_ai_op(source), encoding="utf-8")
-    _validate_no_relative_imports(path)
+
+
+def _submission_root_entries(path: Path) -> str:
+    if not path.is_dir():
+        return "<not a directory>"
+    entries = [child.name + ("/" if child.is_dir() else "") for child in path.iterdir()]
+    return ", ".join(sorted(entries)) or "<empty>"
+
+
+def _format_submission_issues(
+    label: str,
+    target_benchmark: str,
+    source_dir: Path,
+    issues: Iterable[SubmissionIssue],
+) -> str:
+    rendered = "\n".join(f"- {issue.render()}" for issue in issues)
+    return (
+        f"{label} submission is not valid for benchmark {target_benchmark}.\n"
+        f"Submission root: {Path(source_dir)}\n"
+        f"Root entries: {_submission_root_entries(Path(source_dir))}\n"
+        f"Violations:\n{rendered}\n"
+        f"Rules: {SUBMISSION_RULES_DOC}"
+    )

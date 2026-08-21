@@ -100,6 +100,9 @@ cann-bench/
 - 910B / 910_93 / 950 开发环境
 
 ## 🚀 Quick Start
+
+> **评测前必读**：[评测输入与接口规范](docs/spec/submission_spec.md)公开了解包后源码目录、构建产物、接口发现和 auto-pipeline 校验规则；[算子提交行为与禁止规则](docs/guide/submission_rules.md)说明运行时无效实现和反作弊边界。`cannbench.com` 网站提交还需满足网站自身的 ZIP 上传限制。
+
 ### 1. 配置环境
 1. **克隆项目仓库**
    ```bash
