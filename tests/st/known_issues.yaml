@@ -31,3 +31,28 @@
 # (注:旧 torch_npu 上 L=1 投影曾能跑,现已同样崩 → 两个都需 skip。)
 - {op: LSTM, case: 19, action: skip-hang, target: golden, reason: "LSTMP L=1:torch_npu 投影 NPU 崩(DynamicRNN inner error)+ 手写 matmul 被 guard 拦,无法作为候选评测"}
 - {op: LSTM, case: 20, action: skip-hang, target: golden, reason: "LSTMP L=2:torch_npu 投影 NPU aclnnCat 崩(161002)+ 手写被 guard 拦"}
+
+# SparseFlashAttention:精度评测的「同精度参考」(golden 按 case dtype 在 CPU 上重跑,用于小值域/
+# 相消/正常值域的兜底判定)在 eval-child 内落入 fp16 GEMM 慢路径 —— 单 case 48-113s,20 个 case
+# 合计 938s,占整条 ST 墙钟的 93%,使本算子单独就要 20 分钟、压不进 CI 的 30 分钟预算。
+#
+# 这**不是**算子属性,也不是候选侧跑不了:这 20 个 case 在 q7/910B2 上数值全部正确(20/20 精度
+# 达标)。慢的是 golden 里 `torch.einsum('bngsk,bnkd->bngsd', scores, v)` 这一行 —— 同一次调用内
+# 前一个 einsum 跑 86 GFLOPS,它只有 0.3 GFLOPS;同一行在 fp64 下只要 0.13s。已排除:内存
+# (MemAvailable 全程 >786GB)、线程(192)、数据分布、形状、denormal/NaN、反作弊守卫、
+# torch_npu/device 初始化、perf 批量采集。隔离复现不了(同形状同数据 0.1s)。根因见 #157;
+# 那里有完整的定位数据、已排除项清单、以及四种试过无效的修法。根因解决后这 10 条应当撤掉。
+#
+# 故仅在 ST 中跳过最慢的 10 个 case(合计 860s),ST 落到约 5 分钟;**真实评测不受影响**。
+# 保留的 10 个仍覆盖 BSND/BNSD 两种布局、fp16/bf16 两种精度、GQA/MLA 两族;其中 case 1/2/8/19
+# 正是本算子布局修复(#146/#260 的 contiguous 契约)所影响的 BSND 分支,回归仍能被 ST 抓到。
+- {op: SparseFlashAttention, case: 4,  action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(84.5s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 5,  action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(57.7s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 9,  action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(103.8s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 10, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(94.7s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 12, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(113.2s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 13, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(111.9s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 14, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(52.2s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 16, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(48.0s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 17, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(105.8s);数值正确,仅为 ST 预算跳过"}
+- {op: SparseFlashAttention, case: 20, action: skip-hang, target: golden, reason: "同精度 CPU 参考落入 fp16 GEMM 慢路径(88.5s);数值正确,仅为 ST 预算跳过"}
