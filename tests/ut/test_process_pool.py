@@ -167,6 +167,34 @@ class TestTaskUnit(unittest.TestCase):
         self.assertTrue(all(len(unit.cases) == 1 for unit in units))
         self.assertEqual([unit.device_id for unit in units], [0, 1, 0, 1, 0])
 
+    def test_build_task_units_caps_single_card_worker_lifetime(self):
+        """单卡大量 case 按上限轮换 eval-child，不改变调度并发度。"""
+        cases = [make_case("Exp", i) for i in range(150)]
+
+        units = build_task_units(
+            {"Exp": cases}, card_count=1, max_cases_per_task_unit=64)
+
+        self.assertEqual([len(unit.cases) for unit in units], [64, 64, 22])
+        self.assertEqual([unit.device_id for unit in units], [0, 0, 0])
+
+    def test_build_task_units_caps_each_card_chunk(self):
+        """多卡先均分，再分别按上限拆分，保持卡间初始均衡。"""
+        cases = [make_case("Exp", i) for i in range(260)]
+
+        units = build_task_units(
+            {"Exp": cases}, card_count=2, max_cases_per_task_unit=64)
+
+        self.assertEqual([len(unit.cases) for unit in units], [64, 64, 2, 64, 64, 2])
+        self.assertEqual([unit.device_id for unit in units], [0, 0, 0, 1, 1, 1])
+
+    def test_build_task_units_rejects_non_positive_cap(self):
+        with self.assertRaisesRegex(ValueError, "must be positive"):
+            build_task_units(
+                {"Exp": [make_case("Exp", 1)]},
+                card_count=1,
+                max_cases_per_task_unit=0,
+            )
+
 
 class TestAggregateByOperator(unittest.TestCase):
     """测试 aggregate_by_operator 结果聚合"""
@@ -890,6 +918,21 @@ class TestCLI(unittest.TestCase):
         ])
         self.assertFalse(child_args.perf_batch_cases)
 
+    def test_cli_eval_max_cases_per_task_unit(self):
+        from src.kernel_eval.cli import create_parser
+        parser = create_parser()
+
+        self.assertEqual(
+            parser.parse_args(['eval']).max_cases_per_task_unit,
+            64,
+        )
+        self.assertEqual(
+            parser.parse_args([
+                'eval', '--max-cases-per-task-unit', '32',
+            ]).max_cases_per_task_unit,
+            32,
+        )
+
     def test_cli_eval_child_config_uses_reports_dir(self):
         """eval-child 配置使用命令行 reports_dir 而不是默认项目 reports"""
         from src.kernel_eval.cli import create_parser, _create_config_from_args_for_child
@@ -939,6 +982,32 @@ class TestCLI(unittest.TestCase):
             self.fail("eval-process 不应被 parser 接受")
         except SystemExit:
             pass
+
+
+class TestIncrementalOutput(unittest.TestCase):
+    def test_incremental_output_replaces_file_atomically(self):
+        from src.kernel_eval.eval.evaluator import Evaluator
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir) / "partial.json"
+            output_path.write_text("old", encoding="utf-8")
+            evaluator = Evaluator.__new__(Evaluator)
+            evaluator.incremental_output_path = str(output_path)
+            result = Mock()
+            result.to_dict.return_value = {"case_id": "Exp_1", "success": True}
+
+            with patch(
+                "src.kernel_eval.eval.evaluator.os.replace",
+                wraps=os.replace,
+            ) as replace:
+                evaluator._write_incremental_output("Exp", "level1/Exp", [result], 1)
+
+            self.assertEqual(
+                json.loads(output_path.read_text(encoding="utf-8")),
+                {"case_results": [{"case_id": "Exp_1", "success": True}]},
+            )
+            replace.assert_called_once()
+            self.assertEqual(list(Path(tmp_dir).glob(".partial.json.*.tmp")), [])
 
 
 class TestDevicePool(unittest.TestCase):

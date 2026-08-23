@@ -34,7 +34,7 @@ from typing import Dict, List, Optional
 from .config import Config, get_config, get_project_root, set_config
 from .data.data_generator import INPUT_DIST_CHOICES
 from .benches.cann import CannTaskLoader, CannCaseLoader
-from .eval.evaluator import Evaluator
+from .eval.evaluator import Evaluator, _write_json_atomic
 from .eval.results import EvalOperatorResult
 from .report.report_generator import ReportGenerator
 from .utils.path_resolver import resolve_task_dir
@@ -99,6 +99,9 @@ def create_parser() -> argparse.ArgumentParser:
                              help='设备类型（默认: npu）')
     eval_parser.add_argument('--processes-per-card', type=int, default=2,
                              help='每卡进程数（多卡并行模式，默认: 2）')
+    eval_parser.add_argument('--max-cases-per-task-unit', type=int, default=64,
+                             help='单个 eval-child 最多处理的 case 数（默认: 64）。'
+                                  '通过轮换子进程限制 host 内存累积，不降低并发度')
     eval_parser.add_argument('--timeout-per-operator', type=int, default=300,
                              help='单算子超时（秒，默认: 300）。进程总超时 = 算子数 × timeout_per_operator')
     eval_parser.add_argument('--warmup', type=int, default=3,
@@ -319,6 +322,8 @@ def _create_config_from_args(args, bench_root: str) -> Config:
         config.repeat = args.repeat
     if hasattr(args, 'timeout_per_operator'):
         config.timeout_per_operator = args.timeout_per_operator
+    if hasattr(args, 'max_cases_per_task_unit'):
+        config.max_cases_per_task_unit = args.max_cases_per_task_unit
     if getattr(args, 'no_perf', False):
         config.enable_profiler = False
     config.perf_batch_cases = bool(
@@ -361,6 +366,7 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
     bench_name = getattr(args, 'bench_name', 'cann')
     device_id = getattr(args, 'device_id', None)
     processes_per_card = getattr(args, 'processes_per_card', 2)
+    max_cases_per_task_unit = getattr(args, 'max_cases_per_task_unit', 64)
     timeout_per_operator = getattr(args, 'timeout_per_operator', 300)
     skip_install = getattr(args, 'skip_install', False)
 
@@ -530,6 +536,7 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
         cases_by_operator,
         coordinator.card_count,
         isolate_each_case=pypto_outer_isolation,
+        max_cases_per_task_unit=max_cases_per_task_unit,
     )
 
     rel_paths = list(set(c.rel_path for c in all_cases))
@@ -540,6 +547,7 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
     print(f"[INFO] 卡数: {coordinator.card_count}, 并发: {coordinator.total_processes}")
     print(f"[INFO] 算子数: {len(rel_paths)}, 用例数: {len(all_cases)}")
     print(f"[INFO] TaskUnit数: {len(task_units)}")
+    print(f"[INFO] 单 TaskUnit case 上限: {max_cases_per_task_unit}")
     if args.source_dir:
         print(f"[INFO] 源码目录: {args.source_dir}（已编译安装）")
     print(f"[INFO] Warmup/Repeat: {args.warmup}/{args.repeat}")
@@ -662,7 +670,7 @@ def cmd_eval_child(args):
 
     # 写出 case 结果 JSON
     payload = {"case_results": [r.to_dict() for r in case_results]}
-    Path(args.output).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+    _write_json_atomic(args.output, payload)
 
     passed = sum(1 for r in case_results if r.success)
     print(f"[eval-child] Card {args.device_id}: 完成 {passed}/{len(cases)} 通过")

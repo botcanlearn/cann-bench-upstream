@@ -105,16 +105,20 @@ def build_task_units(
     cases_by_operator: Dict[str, List[CaseSpec]],
     card_count: int,
     isolate_each_case: bool = False,
+    max_cases_per_task_unit: int = 64,
 ) -> List[TaskUnit]:
     """将算子×用例拆分为 TaskUnit，均分到各卡。
 
     每个算子的用例按卡数分组，形成 TaskUnit 列表。
     多算子场景：算子A的用例分到卡0-7，算子B的用例也分到卡0-7 → 自然负载均衡。
     单算子场景：用例分到卡0-7 → 单算子多卡并行。
-    单卡场景：只有一个 chunk → 退化串行。
+    单卡场景：按 max_cases_per_task_unit 继续拆分，以限制单个子进程
+    持续执行大量 case 时 native host 内存池的累积。
     """
     if card_count <= 0:
         return []
+    if max_cases_per_task_unit <= 0:
+        raise ValueError("max_cases_per_task_unit must be positive")
 
     task_units: List[TaskUnit] = []
     card_ids = list(range(card_count))
@@ -130,14 +134,15 @@ def build_task_units(
                 ))
             continue
 
-        chunks = split_into_chunks(cases, card_count)
-        for i, chunk in enumerate(chunks):
-            if chunk:
+        card_chunks = split_into_chunks(cases, card_count)
+        for card_index, card_chunk in enumerate(card_chunks):
+            for offset in range(0, len(card_chunk), max_cases_per_task_unit):
+                chunk = card_chunk[offset:offset + max_cases_per_task_unit]
                 task_units.append(TaskUnit(
                     operator=operator_name,
                     rel_path=chunk[0].rel_path,
                     cases=chunk,
-                    device_id=card_ids[i % len(card_ids)],
+                    device_id=card_ids[card_index],
                 ))
 
     return task_units

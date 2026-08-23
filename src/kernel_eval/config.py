@@ -82,6 +82,9 @@ class Config:
 
     # 多进程并行配置（统一架构）
     processes_per_card: int = 2  # 每卡进程数
+    # 单个 eval-child 最多处理的 case 数。通过缩短子进程生命周期限制
+    # torch_npu/ACL/JIT 等 native host 内存池的累积，同时不降低并发度。
+    max_cases_per_task_unit: int = 64
 
     # 防作弊：用新鲜输入二次验证（Evaluator._retry_with_fresh_inputs，
     # 见 eval/evaluator.py；accuracy_eval.evaluate_with_retry 是早期独立 API，

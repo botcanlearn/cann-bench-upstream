@@ -73,6 +73,15 @@ def test_perf_batch_cases_defaults_on_and_can_be_disabled():
     assert parser.parse_args(["--no-perf-batch-cases"]).perf_batch_cases is False
 
 
+def test_max_cases_per_task_unit_defaults_and_can_be_overridden():
+    parser = create_parser()
+
+    assert parser.parse_args([]).max_cases_per_task_unit == 64
+    assert parser.parse_args([
+        "--max-cases-per-task-unit", "32",
+    ]).max_cases_per_task_unit == 32
+
+
 def test_merge_results_matches_string_case_id_and_recounts_failures():
     correctness_ops = [
         _op([

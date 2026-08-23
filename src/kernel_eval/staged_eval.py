@@ -68,6 +68,7 @@ def _make_config(args: argparse.Namespace, bench_root: str, *, enable_profiler: 
     cfg.timeout_per_operator = args.timeout_per_operator
     cfg.reports_dir = args.reports_dir
     cfg.processes_per_card = args.processes_per_card
+    cfg.max_cases_per_task_unit = getattr(args, "max_cases_per_task_unit", 64)
     cfg.eval_seed = None if args.eval_seed == -1 else args.eval_seed
     cfg.input_dist = getattr(args, "input_dist", "uniform")
     if args.source_dir:
@@ -204,6 +205,7 @@ def _evaluate_cases(
             cases_by_operator,
             coordinator.card_count,
             isolate_each_case=pypto_outer_isolation,
+            max_cases_per_task_unit=getattr(args, "max_cases_per_task_unit", 64),
         )
         return aggregate_by_operator(coordinator.evaluate_task_units(task_units))
     finally:
@@ -467,6 +469,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=["npu"], default="npu")
     parser.add_argument("--device-id", type=int, default=None)
     parser.add_argument("--processes-per-card", type=int, default=2)
+    parser.add_argument("--max-cases-per-task-unit", type=int, default=64,
+                        help="单个 eval-child 最多处理的 case 数（默认: 64）")
     parser.add_argument("--timeout-per-operator", type=int, default=300)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeat", type=int, default=5)

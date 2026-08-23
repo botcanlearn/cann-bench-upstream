@@ -26,6 +26,7 @@
 - 算子匹配移至 operator_matcher.py
 """
 
+import json
 import os
 import shutil
 import sys
@@ -62,6 +63,27 @@ from ..registry.matcher_registry import get_operator_matcher
 
 # 导入 benches 模块，确保 Registry 已注册
 from .. import benches as _benches
+
+
+def _write_json_atomic(path: str, payload: dict) -> None:
+    """Write JSON without exposing a truncated destination to the parent."""
+    output_path = Path(path)
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+        dir=str(output_path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output_file:
+            json.dump(payload, output_file, ensure_ascii=False, indent=2)
+            output_file.flush()
+            os.fsync(output_file.fileno())
+        os.replace(temp_path, output_path)
+    finally:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
 
 
 class Evaluator:
@@ -721,11 +743,8 @@ class Evaluator:
         if not self.incremental_output_path:
             return
 
-        import json
         payload = {"case_results": [r.to_dict() for r in results]}
-        Path(self.incremental_output_path).write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2)
-        )
+        _write_json_atomic(self.incremental_output_path, payload)
 
     def evaluate_from_source(
         self,
