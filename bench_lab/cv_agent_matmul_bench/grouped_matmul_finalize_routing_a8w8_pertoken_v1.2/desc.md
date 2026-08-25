@@ -468,5 +468,5 @@ if __name__ == "__main__":
 
 ### 参考资料
 
-- [CANN aclnnGroupedMatmulFinalizeRoutingWeightNzV2 文档](../../ops-transformer/gmm/grouped_matmul_finalize_routing/docs/aclnnGroupedMatmulFinalizeRoutingWeightNzV2.md)
+- [CANN aclnnGroupedMatmulFinalizeRoutingWeightNzV2 文档](https://gitcode.com/cann/ops-transformer/blob/master/gmm/grouped_matmul_finalize_routing/docs/aclnnGroupedMatmulFinalizeRoutingWeightNzV2.md)
 - [FlatQuant benchmark desc.md 结构参考](../flat_quant_pertoken_int4/desc.md)
