@@ -30,7 +30,7 @@ harness 冻结在镜像里(`src/kernel_eval` + `tasks/` + `cann_bench_utils` 全
 这是原生构建,不是交叉编译):
 
 ```bash
-cd docker/base && docker build --build-arg ARCH=$(uname -m) -t cann-toolkit-base:9.0.1-py3.13 .
+cd docker/base && docker build --build-arg ARCH=$(uname -m) -t cann-toolkit-base:9.1.0-py3.13 .
 ```
 
 然后(**build context 必须是仓库根**,`build.sh` 已经处理好):
@@ -162,8 +162,6 @@ docker run ... -v "$PWD:/opt/cann-bench" cann-bench-eval:... /submission --opera
 
 ## 已知取舍
 
-- 底座的 `torch_npu==2.10.0.post2` 与仓库 `pyproject.toml` 钉的 `2.10.0` 不是同一串号(同属 2.10
-  系)。沿用底座的 post2,避免为了对齐版本号把整个 torch 栈重装一遍。
 - `tasks/` 烘进镜像,所以镜像 tag 即 benchmark 版本;开发期用上面的 `-v` 覆盖回工作树。
 - `cann_bench_utils` 在 build 期就编好装好(只要 bisheng,不需要 NPU),容器起来直接开跑,
   `ensure_cann_bench_utils()` 短路返回。它含 SoC 相关 kernel,所以本镜像 per-SoC。

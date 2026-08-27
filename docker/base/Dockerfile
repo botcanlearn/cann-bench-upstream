@@ -3,7 +3,10 @@
 # WHY toolkit-only (no ops/nnal): direct-launch (bisheng-compiled AscendC/CCE kernels launched
 # via `<<<>>>`) never calls aclnn, so ops (libopapi + kernel binaries) and nnal (ATB/SiP) are dead
 # weight. Verified on 910b: torch_npu imports + npu memcpy works with libopapi absent.
-# Pairing (Ascend/pytorch compat table): torch_npu 2.10.0.post2 <-> torch 2.10 <-> CANN 9.0.x, py3.13 cp313.
+# Pairing (Ascend/pytorch COMPATIBILITY.md): torch_npu 2.10.0.post4 <-> torch 2.10.0 <-> CANN 9.1.0, py3.13.
+# The torch_npu 2.10 line pairs ONLY with 9.1.0 -- that table has no 9.0.1 row at all, and the
+# 2.10.0.post2 this image used to pin appears under no CANN version. Move the two together or you
+# land off-table again.
 
 # ----------------------------------------------------------------------------------------------------------
 # Mirror / version knobs -- every one DEFAULTS to the official/global source; pass --build-arg to swap to an
@@ -26,7 +29,7 @@ ARG APT_MIRROR=
 ARG UV_PYTHON_INSTALL_MIRROR=
 ARG PYPI_MIRROR=
 ARG TORCH_MIRROR=
-ARG CANN_VERSION=9.0.1
+ARG CANN_VERSION=9.1.0
 # CANN_VERSION alone is enough to move versions -- the toolkit .run and its <arch> variants follow one
 # naming scheme on ascend-repo, verified present for 9.1.0 in both architectures. CANN_TOOLKIT_URL is
 # the escape hatch for the releases that do not: some land on the ascend-cann-open bucket instead

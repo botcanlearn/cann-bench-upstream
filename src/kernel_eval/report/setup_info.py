@@ -135,10 +135,40 @@ def _get_os_info() -> str:
         return "unknown"
 
 
+def _in_container() -> bool:
+    """是否跑在容器里。/.dockerenv 覆盖 docker，cgroup 里的 docker/containerd/kubepods
+    覆盖 k8s（CI 的评测 pod 就是这一支）。两者都读不到就当作裸机。"""
+    if os.path.exists("/.dockerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup") as f:
+            blob = f.read()
+        return any(k in blob for k in ("docker", "containerd", "kubepods"))
+    except Exception:
+        return False
+
+
 def _detect_docker() -> Optional[str]:
-    """检测是否运行在 Docker 容器中 (硬编码占位，后续改为软编码)"""
-    # TODO: 后续改为从环境变量或 Dockerfile 注入
-    return "cake-ci / CANN 9.0.0"
+    """报告里的 "docker" 字段：镜像标识 + 其 CANN 版本。
+
+    Why not 硬编码: 这里原本写死 "cake-ci / CANN 9.0.0"。镜像早已换代、CANN 也升到
+    9.1.0 之后，那行字仍原样出现在每一份报告里 —— 同一份报告的 environment.cann 显示
+    9.1.0、docker 显示 9.0.0，自相矛盾，且读报告的人无从知道哪个可信。
+
+    取值顺序：
+      1. CANN_BENCH_IMAGE —— 镜像自己注入的标识（docker/eval 会写成 <name>:<tag>），
+         最准确，因为只有构建镜像的人知道它叫什么。
+      2. 容器内但没注入 —— 回退成 "container"，至少不谎报具体镜像。
+      3. 不在容器里 —— None（报告里显示为空），而不是编一个。
+    CANN 版本一律取实际探测到的那个，与 environment.cann 同源，不会再对不上。
+    """
+    image = (os.environ.get("CANN_BENCH_IMAGE") or "").strip()
+    if not image:
+        if not _in_container():
+            return None
+        image = "container"
+    cann = _get_cann_version()
+    return f"{image} / CANN {cann}" if cann else image
 
 
 # ---------------------------------------------------------------------------

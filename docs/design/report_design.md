@@ -166,7 +166,7 @@ eval_YYYYMMDD_HHMMSS.html    ← 完整 HTML 报告
       "torchvision": "0.22.1+cpu",
       "python": "3.12.9",
       "os": "Linux-6.6.0-132.0.0.111.oe2403sp3.x86_64",
-      "docker": "cake-ci / CANN 9.0.0"
+      "docker": "cann-bench-eval:1.0.0-ascend910b-aarch64-opsnone / CANN 9.1.0"
     }
   },
   "operators": [
@@ -214,12 +214,12 @@ eval_YYYYMMDD_HHMMSS.html    ← 完整 HTML 报告
 ├─────────────────────────────────────────┤
 │                                         │
 │  metadata:                              │
-│    framework  ← "CANN-Bench V0.1.0"    │
+│    framework  ← "CANN-Bench V0.1.0"     │
 │    date       ← datetime.now()          │
 │    agent_skill← config.agent_skill      │
 │    base_model ← config.base_model       │
 │    benchmark  ← "CANN-Bench tasks"      │
-│    license    ← 固定                     │
+│    license    ← 固定                    │
 │                                         │
 │  environment:                           │
 │    npu        ← torch_npu.get_device_   │
@@ -233,8 +233,8 @@ eval_YYYYMMDD_HHMMSS.html    ← 完整 HTML 报告
 │    torchvision← torchvision.__version__ │
 │    python     ← sys.version             │
 │    os         ← platform.platform()     │
-│    docker     ← "cake-ci / CANN 9.0.0"  │
-│                 (硬编码，后续改软编码)    │
+│    docker     ← $CANN_BENCH_IMAGE       │
+│                  + 实测 CANN 版本       │
 └─────────────────────────────────────────┘
 ```
 

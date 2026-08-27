@@ -7,7 +7,7 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true
 
 if [[ $# -eq 0 ]]; then
     cat <<EOF
-Usage: docker run --rm cann-bench:cann9.0.0-* <command> [args...]
+Usage: docker run --rm cann-bench:cann9.1.0-* <command> [args...]
   python3 /test_env.py            # post-build smoke
   bash                            # interactive shell
 EOF

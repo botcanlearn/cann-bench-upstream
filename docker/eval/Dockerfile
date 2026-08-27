@@ -15,7 +15,7 @@
 # Knobs. Every mirror arg defaults to the official/global source, exactly like docker/base; pass
 # --build-arg to swap to an in-region mirror on network-restricted hosts (see README).
 # ----------------------------------------------------------------------------------------------------------
-ARG BASE_IMAGE=cann-toolkit-base:9.0.1-py3.13
+ARG BASE_IMAGE=cann-toolkit-base:9.1.0-py3.13
 
 FROM ${BASE_IMAGE}
 
@@ -122,6 +122,13 @@ RUN . /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true; \
     && /opt/venv/bin/python3 -m pip install --no-deps --force-reinstall dist/cann_bench_utils-*.whl \
     && /opt/venv/bin/python3 -c 'from cann_bench_utils import cann_bench_warmup, cann_bench_cache_clean'
 ENV NPU_ARCH=${NPU_ARCH}
+
+# Which image produced a report. docker/eval/build.sh passes its own tag here and setup_info reads it
+# for the report's "docker" field -- that field used to be the hardcoded string "cake-ci / CANN 9.0.0",
+# which kept appearing long after both the image and the CANN version had moved on. Empty on a
+# hand-rolled `docker build`; setup_info then says "container" rather than inventing a name.
+ARG CANN_BENCH_IMAGE=
+ENV CANN_BENCH_IMAGE=${CANN_BENCH_IMAGE}
 
 # Optional Triton-Ascend runtime (large); same semantics as the dev image's build-arg.
 ARG TRITON_ASCEND_VERSION=

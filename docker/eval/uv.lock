@@ -92,7 +92,7 @@ requires-dist = [
     { name = "setuptools" },
     { name = "sympy" },
     { name = "torch", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torch-npu", specifier = "==2.10.0.post2" },
+    { name = "torch-npu", specifier = "==2.10.0.post4" },
     { name = "torchvision", index = "https://download.pytorch.org/whl/cpu" },
     { name = "tornado" },
     { name = "typing-extensions" },
@@ -419,14 +419,14 @@ wheels = [
 
 [[package]]
 name = "torch-npu"
-version = "2.10.0.post2"
+version = "2.10.0.post4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "torch" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9c/67/438d901072bb339c8c732e3635c49dcc8489d695aa59c78945001b057aa2/torch_npu-2.10.0.post2-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:157c2c7b59497dd70846b5e8038e142bcea6fd13a9072159732e3b8004593d48", size = 32522503, upload-time = "2026-07-02T02:24:00.506Z" },
-    { url = "https://files.pythonhosted.org/packages/92/ff/80eb5e6b8788dd8e5d0c9c75b780a176f1a32e49e4ba90889584877c3446/torch_npu-2.10.0.post2-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:8f6eac66b9db2d956b5136f5e072d5fb7c0524bcaa90d6a3ac71a044705d475b", size = 35881624, upload-time = "2026-07-02T02:24:17.603Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/8a/525206571e3a0f9a36363ae55a424b34bac790c8ce10129051e7e8336be6/torch_npu-2.10.0.post4-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:2d88ce46c69cfa562453925865805ca8c358cea31176ff9b284e7851eda213d0", size = 36258846, upload-time = "2026-07-27T07:30:49.174Z" },
+    { url = "https://files.pythonhosted.org/packages/48/a5/c7c2fc0139c55393d9ff3116b0c6ec62bf5ea6257f1a64515927e31dcd27/torch_npu-2.10.0.post4-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:e6ac70748c9d03312afb1fc5cf84b69d1b955a59555116e286cf7a10a302be9e", size = 39987520, upload-time = "2026-07-27T07:31:25.567Z" },
 ]
 
 [[package]]

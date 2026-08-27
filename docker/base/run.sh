@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-IMAGE="${IMAGE:-cann-toolkit-base:9.0.1-py3.13}"
+IMAGE="${IMAGE:-cann-toolkit-base:9.1.0-py3.13}"
 MODE="${1:-smoke}"
 
 DRV=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64

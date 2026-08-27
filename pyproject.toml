@@ -21,7 +21,7 @@ dependencies = [
     "expecttest",
     "protobuf",
     "ruamel.yaml>=0.18",
-    "torch_npu==2.10.0",
+    "torch_npu==2.10.0.post4",
 ]
 
 [project.optional-dependencies]

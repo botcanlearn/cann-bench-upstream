@@ -4,12 +4,12 @@
 #   bash run.sh shell    # one-shot interactive shell with NPU bound in
 #   bash run.sh dev      # detached sleep infinity for docker exec debugging
 #
-# 指定镜像:  IMAGE=cann-bench:cann9.0.0-950-latest bash run.sh smoke
+# 指定镜像:  IMAGE=cann-bench:cann9.1.0-950-latest bash run.sh smoke
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
-IMAGE="${IMAGE:-cann-bench:cann9.0.0-910b-latest}"
+IMAGE="${IMAGE:-cann-bench:cann9.1.0-910b-latest}"
 MODE="${1:-smoke}"
 
 NPU_FLAGS=(

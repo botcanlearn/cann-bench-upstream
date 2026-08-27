@@ -973,7 +973,7 @@ setup = collect_setup_info(config)
 #         "pytorch_npu": "2.1.0.post3",
 #         "python": "3.10.12",
 #         "os": "Linux-5.10.0...",
-#         "docker": "cake-ci / CANN 9.0.0",
+#         "docker": "cann-bench-eval:1.0.0-ascend910b-aarch64-opsnone / CANN 9.1.0",
 #     },
 # }
 ```

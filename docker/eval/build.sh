@@ -25,7 +25,7 @@ case "${ARCH}" in
     *) echo "unsupported ARCH=${ARCH} (expected aarch64 | x86_64)" >&2; exit 1 ;;
 esac
 NPU_ARCH="${NPU_ARCH:-ascend910b}"
-CANN_VERSION="${CANN_VERSION:-9.0.1}"
+CANN_VERSION="${CANN_VERSION:-9.1.0}"
 BASE_IMAGE="${BASE_IMAGE:-cann-toolkit-base:${CANN_VERSION}-py3.13}"
 TRITON_ASCEND_VERSION="${TRITON_ASCEND_VERSION:-}"
 
@@ -52,6 +52,9 @@ ARGS=(
     --build-arg "OPS_PKG=${OPS_PKG}"
     --build-arg "NPU_ARCH=${NPU_ARCH}"
     --build-arg "TRITON_ASCEND_VERSION=${TRITON_ASCEND_VERSION}"
+    # The tag is the only thing that knows which image a report came from; hand it to the image so
+    # setup_info prints it instead of the hardcoded string the report used to carry.
+    --build-arg "CANN_BENCH_IMAGE=${IMAGE}"
 )
 
 # One switch for the whole in-region mirror set, rather than five build-args at every call site.

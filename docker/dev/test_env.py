@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Post-build smoke for cann-bench:cann9.0.0-* execution image.
+"""Post-build smoke for cann-bench:cann9.1.0-* execution image.
 
 Verifies in order:
-  [1] python / torch / torch_npu importable, log versions
+  [1] python / torch / torch_npu importable, and the installed torch stack
+      matches the CANN-matched pins the image was built with
   [2] torch_npu can see at least one NPU device
   [3] npu-smi info works (driver/runtime loaded)
   [4] CANN compiler version.info readable (proves CANN install intact)
@@ -17,12 +18,26 @@ import sys
 
 failed = []
 
-# [1] python/torch/torch_npu versions
+# [1] python/torch/torch_npu versions. The Dockerfile pins torch and torch_npu
+# to the row the base CANN version occupies in the official compatibility table
+# and echoes those pins into CANN_BENCH_TORCH*_VERSION. Comparing the installed
+# distributions against them catches a build that silently resolved to a
+# different build number — the ABI mismatch that table exists to prevent. The
+# distribution version is what the pin acts on, so read it rather than
+# __version__; its local label ("+cpu") is not part of the pairing.
 try:
+    import importlib.metadata
+
     import torch
     import torch_npu
 
     py = ".".join(str(v) for v in sys.version_info[:3])
+    for dist, want in (
+        ("torch", os.environ.get("CANN_BENCH_TORCH_VERSION", "")),
+        ("torch-npu", os.environ.get("CANN_BENCH_TORCH_NPU_VERSION", "")),
+    ):
+        installed = importlib.metadata.version(dist).split("+")[0]
+        assert not want or installed == want, f"{dist} {installed}, image pins {want}"
     print(f"[OK]   [1] python {py}, torch {torch.__version__}, torch_npu {torch_npu.__version__}")
 except Exception as e:
     print(f"[FAIL] [1] import/version: {e}")

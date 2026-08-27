@@ -20,7 +20,7 @@ requires-python = "==3.13.*"
 dependencies = [
     # ---- identical to docker/base/pyproject.toml ----
     "torch==2.10.0",
-    "torch-npu==2.10.0.post2",
+    "torch-npu==2.10.0.post4",
     "numpy", "pyyaml", "decorator", "attrs", "scipy", "cloudpickle", "ml-dtypes", "psutil",
     "filelock", "typing-extensions", "sympy", "networkx", "jinja2", "fsspec", "mpmath", "markupsafe",
     "pip", "setuptools", "wheel", "build",
