@@ -34,6 +34,7 @@ import pytest
 from kernel_eval.base.enums import DifficultyLevel
 from kernel_eval.benches.cann_loader import CannTaskLoader, GoldenLoader
 from kernel_eval.config import get_project_root
+from scripts.utils.build_golden_wheel import _available_level_choices, scan_golden_operators
 
 
 _MINIMAL_PROTO = """\
@@ -72,6 +73,7 @@ def _write_op(root: Path, level: str, difficulty: str) -> str:
     op_dir = root / level / "dummy_op"
     op_dir.mkdir(parents=True)
     (op_dir / "proto.yaml").write_text(_MINIMAL_PROTO.format(difficulty=difficulty), encoding="utf-8")
+    (op_dir / "cases.yaml").write_text("cases: []\n", encoding="utf-8")
     (op_dir / "golden.py").write_text("def dummy_op(x):\n    return x\n", encoding="utf-8")
     return f"{level}/dummy_op"
 
@@ -152,3 +154,109 @@ class TestStCollectorIncludesLevel5:
         text = st_file.read_text(encoding="utf-8")
         assert '"level5"' in text.split("def _all_ops", 1)[0], \
             "tests/st/test_golden_npu_mock.py 的 _LEVELS 应包含 level5，否则 pytest -m level5 为空集合"
+
+
+class TestGoldenWheelLevelFilter:
+
+    def test_available_levels_are_derived_from_task_root(self, tmp_path):
+        for level in (4, 5, 10):
+            (tmp_path / f"level{level}").mkdir()
+        (tmp_path / "level_future").mkdir()
+        (tmp_path / "level6").write_text("not a directory", encoding="utf-8")
+
+        assert _available_level_choices(tmp_path) == (4, 5, 10)
+
+    @pytest.mark.parametrize("selected_level,expected_level", [(4, "level4"), (5, "level5")])
+    def test_level_filter_selects_only_requested_level(self, selected_level, expected_level):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _write_op(root, "level4", "L4")
+            _write_op(root, "level5", "L5")
+
+            operators = scan_golden_operators(root, level_filter=selected_level)
+
+            assert [op["rel_path"] for op in operators] == [f"{expected_level}/dummy_op"]
+
+    def test_level_filter_does_not_match_a_prefix_of_another_level(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _write_op(root, "level1", "L1")
+            _write_op(root, "level10", "L1")
+
+            operators = scan_golden_operators(root, level_filter=1)
+
+            assert [op["rel_path"] for op in operators] == ["level1/dummy_op"]
+
+
+class TestKernelEvalLevelFilter:
+
+    def test_cpu_eval_does_not_fail_open_when_level_has_no_operator(self, monkeypatch, tmp_path):
+        pytest.importorskip("torch")
+        import kernel_eval.cli as cli
+
+        args = cli.create_parser().parse_args([
+            "eval", "--device", "cpu", "--task-dir", str(tmp_path), "--level", "5",
+        ])
+        monkeypatch.setattr(cli, "get_project_root", lambda: tmp_path)
+        monkeypatch.setattr(cli, "resolve_task_dir", lambda task_dir, project_root: (str(tmp_path), ""))
+        monkeypatch.setattr(cli, "_operator_names_for_level", lambda *unused: [])
+        class DummyConfig:
+            reports_dir = tmp_path
+
+        monkeypatch.setattr(cli, "_create_config_from_args", lambda *unused: DummyConfig())
+
+        class DummyReportGenerator:
+            def __init__(self, **unused):
+                pass
+
+        monkeypatch.setattr(cli, "ReportGenerator", DummyReportGenerator)
+        called = False
+
+        def fail_if_called(*unused, **unused_kwargs):
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr("kernel_eval.simulation.simulate", fail_if_called)
+
+        assert cli.cmd_eval(args) == 0
+        assert called is False
+
+    def test_cli_accepts_level_five_for_all_selection_commands(self):
+        pytest.importorskip("torch")
+        from kernel_eval.cli import create_parser
+
+        parser = create_parser()
+        for command in ("eval", "list", "info"):
+            argv = [command, "--level", "5"]
+            if command == "info":
+                argv.extend(["--operator", "Mamba2Ssd"])
+            assert parser.parse_args(argv).level == 5
+
+    def test_list_command_filters_operators_by_level(self, tmp_path, capsys):
+        pytest.importorskip("torch")
+        from kernel_eval.cli import cmd_list, create_parser
+
+        _write_op(tmp_path, "level4", "L4")
+        _write_op(tmp_path, "level5", "L5")
+        parser = create_parser()
+        args = parser.parse_args(["list", "--task-dir", str(tmp_path), "--level", "5"])
+
+        assert cmd_list(args) == 0
+        output = capsys.readouterr().out
+        assert "共 1 个算子" in output
+        assert "L5" in output
+        assert "L4" not in output
+
+    @pytest.mark.parametrize(
+        "rel_path,selected,expected",
+        [
+            ("level5/mamba2_ssd", 5, True),
+            ("level4/exp", 5, False),
+            ("level50/future", 5, False),
+        ],
+    )
+    def test_level_filter_matches_a_complete_level_component(self, rel_path, selected, expected):
+        pytest.importorskip("torch")
+        from kernel_eval.cli import _matches_level
+
+        assert _matches_level(rel_path, selected) is expected

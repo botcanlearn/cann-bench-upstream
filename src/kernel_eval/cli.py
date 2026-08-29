@@ -33,6 +33,7 @@ from typing import Dict, List, Optional
 
 from .config import Config, get_config, get_project_root, set_config
 from .data.data_generator import INPUT_DIST_CHOICES
+from .base.enums import DifficultyLevel
 from .benches.cann import CannTaskLoader, CannCaseLoader
 from .eval.evaluator import Evaluator, _write_json_atomic
 from .eval.results import EvalOperatorResult
@@ -41,6 +42,22 @@ from .utils.path_resolver import resolve_task_dir
 
 # 导入 benches 模块，触发所有评测集组件注册（使用相对导入）
 from .benches import cann as _cann_bench
+
+
+LEVEL_CHOICES = tuple(int(level.value[1:]) for level in DifficultyLevel)
+
+
+def _matches_level(rel_path: str, level: int) -> bool:
+    """Return whether a task/case path belongs to the requested level."""
+    return rel_path.split("/", 1)[0] == f"level{level}"
+
+
+def _operator_names_for_level(bench_name: str, tasks_root: str, level: int) -> List[str]:
+    """Return operator names in one difficulty level for CPU evaluation."""
+    from .registry import get_task_loader
+
+    loader = get_task_loader(bench_name, tasks_root=tasks_root)
+    return [op.name for op in loader.list_tasks() if op.get_level_id() == level]
 
 
 # 尝试导入 cann_bench（用户提交的算子包），触发 torch.ops.cann_bench 注册
@@ -88,8 +105,8 @@ def create_parser() -> argparse.ArgumentParser:
                                   '支持: tasks, tasks/level1, tasks/level1/exp 等')
     eval_parser.add_argument('--operator', type=str, default=None,
                              help='算子名称（如 Exp, Softmax）')
-    eval_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
-                             help='难度级别筛选（已废弃，建议使用 --task-dir）')
+    eval_parser.add_argument('--level', type=int, default=None, choices=LEVEL_CHOICES,
+                             help='难度级别筛选（可选 1-5）')
     eval_parser.add_argument('--case-id', type=int, default=None,
                              help='用例编号筛选')
     eval_parser.add_argument('--device-id', type=int, default=None,
@@ -172,8 +189,8 @@ def create_parser() -> argparse.ArgumentParser:
     list_parser = subparsers.add_parser('list', help='列出算子/用例')
     list_parser.add_argument('--bench-name', type=str, default='cann',
                              help='评测集名称（默认: cann）')
-    list_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
-                             help='按级别筛选')
+    list_parser.add_argument('--level', type=int, default=None, choices=LEVEL_CHOICES,
+                             help='按级别筛选（可选 1-5）')
     list_parser.add_argument('--operator', type=str, default=None,
                              help='按算子筛选')
     list_parser.add_argument('--cases', action='store_true', help='列出用例而非算子')
@@ -186,8 +203,8 @@ def create_parser() -> argparse.ArgumentParser:
                              help='评测集名称（默认: cann）')
     info_parser.add_argument('--operator', type=str, required=True,
                              help='算子名称')
-    info_parser.add_argument('--level', type=int, default=None, choices=[1, 2, 3, 4],
-                             help='难度级别')
+    info_parser.add_argument('--level', type=int, default=None, choices=LEVEL_CHOICES,
+                             help='难度级别（可选 1-5）')
     info_parser.add_argument('--task-dir', type=str, default=None,
                              help='评测目录（默认使用配置的 tasks_root）')
 
@@ -479,6 +496,9 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
             if c.rel_path.startswith(filter_prefix + '/') or c.rel_path == filter_prefix
         ]
 
+    if args.level is not None:
+        all_cases = [c for c in all_cases if _matches_level(c.rel_path, args.level)]
+
     if args.operator:
         all_cases = [c for c in all_cases if c.operator.lower() == args.operator.lower()]
 
@@ -769,6 +789,15 @@ def cmd_eval(args):
     # 构建筛选条件
     operator_filter = [args.operator] if args.operator else None
     case_filter = {'case_id': args.case_id} if args.case_id else None
+    if args.level is not None and args.device == 'cpu':
+        level_operators = set(_operator_names_for_level(bench_name, bench_root, args.level))
+        if operator_filter:
+            operator_filter = [name for name in operator_filter if name in level_operators]
+        else:
+            operator_filter = sorted(level_operators)
+        if not operator_filter:
+            print(f"[WARN] level{args.level} 下无匹配算子")
+            return 0
 
     # 执行评测：CPU 调用仿真模块，NPU 统一走多卡并行
     # 注：simulate / _cmd_eval_npu 的返回值不作为退出码——真正的退出码由下方
@@ -811,6 +840,8 @@ def cmd_list(args):
             cases = case_loader.scan_by_operator(args.operator)
         else:
             cases = case_loader.scan_all()
+        if args.level is not None:
+            cases = [case for case in cases if _matches_level(case.rel_path, args.level)]
 
         print(f"\n[{bench_name}] 共 {len(cases)} 个用例:")
         for case in cases[:50]:  # 限制显示数量
@@ -822,6 +853,8 @@ def cmd_list(args):
         # 列出算子
         task_loader = get_task_loader(bench_name, tasks_root=bench_root)
         operators = task_loader.list_tasks()
+        if args.level is not None:
+            operators = [op for op in operators if op.get_level_id() == args.level]
 
         print(f"\n[{bench_name}] 共 {len(operators)} 个算子:")
         for op in operators[:50]:
@@ -848,6 +881,9 @@ def cmd_info(args):
     op_info = task_loader.get_task_by_name(args.operator)
     if op_info is None:
         print(f"[ERROR] 算子 {args.operator} 不存在")
+        return 1
+    if args.level is not None and op_info.get_level_id() != args.level:
+        print(f"[ERROR] 算子 {args.operator} 不属于 level{args.level}")
         return 1
 
     print(f"\n[{bench_name}] 算子信息:")

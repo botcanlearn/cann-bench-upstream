@@ -41,6 +41,16 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def _available_level_choices(tasks_root: Path) -> tuple[int, ...]:
+    """Return the level directories available below one task root."""
+    levels = []
+    for path in tasks_root.glob("level*"):
+        if not path.is_dir() or not path.name[5:].isdigit():
+            continue
+        levels.append(int(path.name[5:]))
+    return tuple(sorted(levels))
+
+
 def scan_golden_operators(tasks_root: Path, operator_filter: list = None, level_filter: int = None):
     """扫描 tasks/ 目录，收集每个算子的信息
 
@@ -72,7 +82,7 @@ def scan_golden_operators(tasks_root: Path, operator_filter: list = None, level_
         # Level 筛选
         if level_filter is not None:
             level_str = f"level{level_filter}"
-            if not rel_path.startswith(level_str):
+            if rel_path.split("/", 1)[0] != level_str:
                 continue
 
         # Operator 名称筛选
@@ -265,8 +275,8 @@ def main():
                         help="指定 tasks 目录（默认: 项目根目录下的 tasks）")
     parser.add_argument("--operator", type=str, nargs="*", default=None,
                         help="只打包指定算子（如 Mish Sigmoid），可指定多个")
-    parser.add_argument("--level", type=int, choices=[1, 2, 3, 4], default=None,
-                        help="只打包指定级别")
+    parser.add_argument("--level", type=int, default=None,
+                        help="只打包指定级别（按 --task-dir 下的 level<N> 目录校验）")
     parser.add_argument("--output-dir", type=str, default=None,
                         help="输出目录（默认: 项目根目录下 dist/golden_wheel）")
     parser.add_argument("--install", action="store_true",
@@ -284,6 +294,12 @@ def main():
     if not tasks_root.exists():
         print(f"[ERROR] tasks 目录不存在: {tasks_root}")
         sys.exit(1)
+
+    if args.level is not None:
+        available_levels = _available_level_choices(tasks_root)
+        if args.level not in available_levels:
+            choices = ", ".join(str(level) for level in available_levels) or "无"
+            parser.error(f"--level {args.level} 在 {tasks_root} 下没有对应目录；可选级别: {choices}")
 
     output_dir = Path(args.output_dir) if args.output_dir else project_root / "dist" / "golden_wheel"
     build_dir = output_dir / "_build_tmp"
