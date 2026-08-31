@@ -353,7 +353,7 @@ python scripts/utils/yaml_block_to_flow.py cases.yaml -s smart
 
 | 参数 | 说明 |
 |------|------|
-| `--task-dir <path>` | 指定评测目录（替代原来的 `--level`） |
+| `--task-dir <path>` | 指定评测目录. 按级别评测写 `tasks/levelN` (本脚本没有 `--level`, 见下方说明) |
 | `--device-id <id>` | 单卡模式：指定设备；不指定则多卡并行 |
 | `--processes-per-card <n>` | 多卡并行时每卡进程数 |
 | `--warmup <n>` | 预热次数 |
@@ -361,6 +361,11 @@ python scripts/utils/yaml_block_to_flow.py cases.yaml -s smart
 | `--no-perf` | 关闭性能采集，仅精度验证 |
 | `--operator <name>` | 按算子名称筛选 |
 | `--profiler-level <level>` | Profiler 级别（Level1/Level2） |
+
+**关于 `--level`**: `kernel_eval` 的 `eval` / `list` / `info` 三个子命令有 `--level`, 但
+`run_evaluation.sh` **没有** -- NPU + cann 这一默认组合下它分发到 `kernel_eval.staged_eval`,
+而后者的参数表里不含 `--level`. 经本脚本按级别评测请用 `--task-dir tasks/levelN`; 需要
+`--level` 时直接调 `python -m kernel_eval.cli eval --level N`.
 
 ---
 

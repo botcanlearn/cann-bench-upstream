@@ -141,13 +141,9 @@ class TestBenchLabNewOps:
             assert not _calls_hardcoded_cast(fn), f"{fn_name} 中存在硬编码 .float()/.double()"
 
 
-class TestStCollectorIncludesLevel5:
-
-    def test_golden_npu_mock_levels_include_level5(self):
-        st_file = get_project_root() / "tests" / "st" / "test_golden_npu_mock.py"
-        text = st_file.read_text(encoding="utf-8")
-        assert '"level5"' in text.split("def _all_ops", 1)[0], \
-            "tests/st/test_golden_npu_mock.py 的 _LEVELS 应包含 level5，否则 pytest -m level5 为空集合"
+# ST 收集器不再自带级别清单 -- 它复用 harness.eval_run.LEVELS, 后者由 tasks/ 目录派生,
+# 所以 level5 进入 tasks/ 当天会被自动收集, 无需再断言文件里出现 "level5" 字面量.
+# 单一真源的契约见 tests/ut/test_level_selection_consistency.py
 
 
 class TestGoldenWheelLevelFilter:
@@ -184,36 +180,9 @@ class TestGoldenWheelLevelFilter:
 
 class TestKernelEvalLevelFilter:
 
-    def test_cpu_eval_does_not_fail_open_when_level_has_no_operator(self, monkeypatch, tmp_path):
-        pytest.importorskip("torch")
-        import kernel_eval.cli as cli
-
-        args = cli.create_parser().parse_args([
-            "eval", "--device", "cpu", "--task-dir", str(tmp_path), "--level", "5",
-        ])
-        monkeypatch.setattr(cli, "get_project_root", lambda: tmp_path)
-        monkeypatch.setattr(cli, "resolve_task_dir", lambda task_dir, project_root: (str(tmp_path), ""))
-        monkeypatch.setattr(cli, "_operator_names_for_level", lambda *unused: [])
-        class DummyConfig:
-            reports_dir = tmp_path
-
-        monkeypatch.setattr(cli, "_create_config_from_args", lambda *unused: DummyConfig())
-
-        class DummyReportGenerator:
-            def __init__(self, **unused):
-                pass
-
-        monkeypatch.setattr(cli, "ReportGenerator", DummyReportGenerator)
-        called = False
-
-        def fail_if_called(*unused, **unused_kwargs):
-            nonlocal called
-            called = True
-
-        monkeypatch.setattr("kernel_eval.simulation.simulate", fail_if_called)
-
-        assert cli.cmd_eval(args) == 0
-        assert called is False
+    # "级别筛不到算子时不得跑全量" 的契约已并入
+    # tests/ut/test_level_selection_consistency.py::TestEmptySelectionStillReports --
+    # 那里同时钉住了另一半: 不评测, 但照常出报告 (与 NPU 路径对齐).
 
     def test_cli_accepts_level_five_for_all_selection_commands(self):
         pytest.importorskip("torch")

@@ -52,7 +52,7 @@ Golden whl 打包脚本
 
 选项:
   --operator <name>       只打包指定算子（如 Mish, Sigmoid），可多次指定
-  --level <1-5>           只打包指定级别
+  --level <N>             只打包指定级别 (取值取决于 --task-dir 下实际存在的 levelN 目录)
   --task-dir <path>       指定 tasks 目录（默认: 项目根目录下的 tasks）
   --output-dir <path>     输出目录（默认: dist/golden_wheel）
   --install               构建后自动安装（卸载旧版本再安装）

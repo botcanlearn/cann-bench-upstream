@@ -771,6 +771,7 @@ def cmd_eval(args):
     # 构建筛选条件
     operator_filter = [args.operator] if args.operator else None
     case_filter = {'case_id': args.case_id} if args.case_id else None
+    level_selected_nothing = False
     if args.level is not None and args.device == 'cpu':
         level_operators = set(_operator_names_for_level(bench_name, bench_root, args.level))
         if operator_filter:
@@ -778,17 +779,20 @@ def cmd_eval(args):
         else:
             operator_filter = sorted(level_operators)
         if not operator_filter:
+            # 不评测, 但照常往下走到报告生成 -- 与 NPU 路径的 "无匹配用例" 对齐
+            # (见 _cmd_eval_npu): 两条路径都退出码 0, 且下游总能拿到 reports/*.md
             print(f"[WARN] level{args.level} 下无匹配算子")
-            return 0
+            level_selected_nothing = True
 
     # 执行评测：CPU 调用仿真模块，NPU 统一走多卡并行
     # 注：simulate / _cmd_eval_npu 的返回值不作为退出码——真正的退出码由下方
     # _compute_exit_code(report) 依据报告统一推导（含编译失败维度），故此处不接收返回值。
     if args.device == 'cpu':
-        from .simulation import simulate
-        simulate(config, bench_name=bench_name,
-                 operator_filter=operator_filter, case_filter=case_filter,
-                 report_generator=report_generator)
+        if not level_selected_nothing:
+            from .simulation import simulate
+            simulate(config, bench_name=bench_name,
+                     operator_filter=operator_filter, case_filter=case_filter,
+                     report_generator=report_generator)
     else:
         _cmd_eval_npu(args, bench_root, filter_prefix, config, report_generator)
 

@@ -21,10 +21,11 @@ from pathlib import Path
 
 import yaml
 
-from .eval_run import TASKS
+from .eval_run import TASKS, LEVELS
 
 # search(非 match):兼容裸路径与 git --name-status 的 "M\ttasks/..." 前缀。
-_TASK_RE = re.compile(r"tasks/(level[1-4])/([^/]+)/")
+# 级别取自 LEVELS (由 tasks/ 目录派生), 免得这里写死的区间与实际级别漂开.
+_TASK_RE = re.compile(rf"tasks/({'|'.join(re.escape(lvl) for lvl in LEVELS)})/([^/]+)/")
 # 默认冒烟组 —— 须与 conftest.py 无参时的默认选择一致(目前是 Cummin)。改默认组时两处同步。
 DEFAULT_GROUP = "level2:Cummin"
 

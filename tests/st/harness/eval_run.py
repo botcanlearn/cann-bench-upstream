@@ -23,8 +23,21 @@ REPO_ROOT = ST_DIR.parent.parent                     # cann-bench (holds src/, t
 KERNEL_EVAL_SRC = REPO_ROOT / "src"
 TASKS = REPO_ROOT / "tasks"
 RUN_EVALUATION_SH = REPO_ROOT / "scripts" / "run_evaluation.sh"
-LEVELS = ("level1", "level2", "level3", "level4")
 EVAL_LOG_NAME = "eval_cli.log"
+
+
+def _discover_levels(root) -> tuple:
+    """tasks/ 下实际存在的 level<N> 目录, 按数值序.
+
+    Why 不写死: 这份清单原先在三处各抄了一遍(本模块 / test_golden_npu_mock._LEVELS /
+    select_from_changes._TASK_RE), 且已经漂开. 从目录派生之后, L5 转正进 tasks/ 当天
+    三处一起跟上, 不存在"忘了同步"的可能.
+    """
+    names = [p.name for p in root.glob("level*") if p.is_dir() and p.name[5:].isdigit()]
+    return tuple(sorted(names, key=lambda n: int(n[5:])))
+
+
+LEVELS = _discover_levels(TASKS)
 
 
 def st_out_dir() -> Path:

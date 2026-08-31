@@ -46,6 +46,10 @@ def build_golden_candidate(dest, tasks_dir=TASKS) -> Path:
     reexports, names = [], []
     for lvl in LEVELS:
         base = Path(tasks_dir) / lvl
+        if not base.is_dir():
+            # LEVELS 来自 TASKS, 而 tasks_dir 可以是别的树(如裁剪过的子集);
+            # 缺哪一级就跳过, 不要拿 FileNotFoundError 打断整次构建.
+            continue
         for op_dir in sorted(p for p in base.iterdir() if p.is_dir()):
             op_id = op_dir.name
             golden_py = op_dir / "golden.py"
