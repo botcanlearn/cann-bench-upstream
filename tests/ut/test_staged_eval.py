@@ -1,13 +1,20 @@
 #!/usr/bin/python3
 # coding=utf-8
 
+import json
+import os
 from argparse import Namespace
+from pathlib import Path
+from unittest import mock
 
 from kernel_eval.base.result import AccuracyResult, PerfResult
 from kernel_eval.eval.results import EvalCaseResult, EvalOperatorResult
 from kernel_eval.staged_eval import (
     _case_num_from_value,
+    _cann_home_dirname,
+    _check_build_cann_consistency,
     _compile_failure_operator_filter,
+    _detect_build_cann_dirname,
     _merge_results,
     create_parser,
 )
@@ -197,3 +204,83 @@ def test_merge_tags_perf_unmeasured_without_failing_case():
     report_case = EvalResult.from_eval_case_result(case)
     assert report_case.performance_error_msg == "重试后仍异常退出 rc=-11"
     assert report_case.perf_recheck == case.perf_recheck
+
+
+class TestCannHomeDirname:
+    def test_plain_cann_dir(self):
+        assert _cann_home_dirname("/usr/local/Ascend/cann-9.1.0") == "cann-9.1.0"
+
+    def test_latest_symlink_resolved(self, tmp_path):
+        real = tmp_path / "cann-9.1.0-beta.1"
+        real.mkdir()
+        latest = tmp_path / "latest"
+        latest.symlink_to(real)
+        assert _cann_home_dirname(str(latest)) == "cann-9.1.0-beta.1"
+
+    def test_non_cann_path_returns_none(self):
+        assert _cann_home_dirname("/usr/local/Ascend/ascend-toolkit") is None
+        assert _cann_home_dirname("") is None
+
+
+class TestDetectBuildCannDirname:
+    def _write_compile_commands(self, source_dir: Path, commands):
+        build = source_dir / "build"
+        build.mkdir(parents=True, exist_ok=True)
+        (build / "compile_commands.json").write_text(
+            json.dumps([{"command": c} for c in commands]))
+
+    def test_from_compile_commands_kernel_line(self, tmp_path):
+        self._write_compile_commands(tmp_path, [
+            "/usr/local/Ascend/cann-9.1.0-beta.1/x86_64-linux/ccec_compiler/bin/bisheng "
+            "-I/usr/local/Ascend/cann-9.1.0-beta.1/include -c kernel.cpp",
+            "gcc -I/usr/local/Ascend/cann-9.1.0/include -c host.cpp",
+        ])
+        # kernel (bisheng) 行优先于普通 gcc 行
+        assert _detect_build_cann_dirname(tmp_path) == "cann-9.1.0-beta.1"
+
+    def test_from_compile_commands_host_only(self, tmp_path):
+        self._write_compile_commands(tmp_path, [
+            "gcc -I/usr/local/Ascend/cann-9.1.0/include -c host.cpp",
+        ])
+        assert _detect_build_cann_dirname(tmp_path) == "cann-9.1.0"
+
+    def test_from_compile_log_majority(self, tmp_path):
+        (tmp_path / "_compile.log").write_text(
+            "/usr/local/Ascend/cann-9.1.0-beta.1/include\n"
+            "/usr/local/Ascend/cann-9.1.0-beta.1/include\n"
+            "/usr/local/Ascend/cann-9.1.0/include\n")
+        assert _detect_build_cann_dirname(tmp_path) == "cann-9.1.0-beta.1"
+
+    def test_no_evidence_returns_none(self, tmp_path):
+        assert _detect_build_cann_dirname(tmp_path) is None
+
+
+class TestCheckBuildCannConsistency:
+    def _args(self, source_dir: Path) -> Namespace:
+        return Namespace(source_dir=str(source_dir))
+
+    def test_mismatch_detected(self, tmp_path):
+        (tmp_path / "_compile.log").write_text("/usr/local/Ascend/cann-9.1.0-beta.1/include\n")
+        with mock.patch.dict(os.environ, {"ASCEND_HOME_PATH": "/usr/local/Ascend/cann-9.1.0"}):
+            msg = _check_build_cann_consistency(self._args(tmp_path))
+        assert msg is not None
+        assert "cann-9.1.0-beta.1" in msg
+        assert "cann-9.1.0" in msg
+
+    def test_consistent_passes(self, tmp_path):
+        (tmp_path / "_compile.log").write_text("/usr/local/Ascend/cann-9.1.0/include\n")
+        with mock.patch.dict(os.environ, {"ASCEND_HOME_PATH": "/usr/local/Ascend/cann-9.1.0"}):
+            assert _check_build_cann_consistency(self._args(tmp_path)) is None
+
+    def test_undetectable_passes(self, tmp_path):
+        with mock.patch.dict(os.environ, {"ASCEND_HOME_PATH": "/usr/local/Ascend/cann-9.1.0"}):
+            assert _check_build_cann_consistency(self._args(tmp_path)) is None
+
+    def test_missing_run_env_passes(self, tmp_path):
+        (tmp_path / "_compile.log").write_text("/usr/local/Ascend/cann-9.1.0-beta.1/include\n")
+        with mock.patch.dict(os.environ, {}, clear=True):
+            assert _check_build_cann_consistency(self._args(tmp_path)) is None
+
+    def test_no_source_dir_passes(self):
+        with mock.patch.dict(os.environ, {"ASCEND_HOME_PATH": "/usr/local/Ascend/cann-9.1.0"}):
+            assert _check_build_cann_consistency(Namespace(source_dir=None)) is None

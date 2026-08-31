@@ -1181,14 +1181,17 @@ class TestDynamicDispatch(unittest.TestCase):
             proc = Mock()
             proc.pid = 12345
             proc.poll = Mock(return_value=0)
+            proc.communicate = Mock(return_value=("", ""))
             output_file = cmd[cmd.index('--output') + 1]
             if call_count[0] == 1:
                 # 第一次：失败，触发重试
                 proc.wait = Mock(return_value=1)
+                proc.returncode = 1
                 Path(output_file).write_text('{"case_results": []}')
             else:
                 # 后续：成功
                 proc.wait = Mock(return_value=0)
+                proc.returncode = 0
                 Path(output_file).write_text('{"case_results": []}')
             return proc
 
@@ -1244,6 +1247,8 @@ class TestDynamicDispatch(unittest.TestCase):
             proc.pid = 12345 + call_count[0]
             proc.wait = Mock(return_value=-11)
             proc.poll = Mock(return_value=-11)
+            proc.communicate = Mock(return_value=("", ""))
+            proc.returncode = -11
 
             cases_file = cmd[cmd.index('--cases-file') + 1]
             submitted = json.loads(Path(cases_file).read_text())
@@ -1329,6 +1334,80 @@ class TestDynamicDispatch(unittest.TestCase):
 
             self.assertEqual(coordinator.card_count, 2)
             self.assertEqual(coordinator._available_cards, [0, 1])
+
+
+class TestCrashDiagnostics(unittest.TestCase):
+    """子进程崩溃诊断（信号名 + stderr 摘要）"""
+
+    def test_extract_crash_diag_sigsegv_with_stderr(self):
+        """SIGSEGV (rc=-11) + stderr 尾行 → 诊断含信号名和 stderr 摘要"""
+        from src.kernel_eval.eval.process_pool import _extract_crash_diag
+        diag = _extract_crash_diag(-11, "", "line1\nFatal: segfault\n")
+        self.assertIn("SIGSEGV", diag)
+        self.assertIn("segfault", diag)
+
+    def test_extract_crash_diag_sigabrt_no_stderr(self):
+        """SIGABRT (rc=-6) + 无 stderr → 诊断含信号名，无 stderr_tail"""
+        from src.kernel_eval.eval.process_pool import _extract_crash_diag
+        diag = _extract_crash_diag(-6, "", "")
+        self.assertIn("SIGABRT", diag)
+        self.assertNotIn("stderr_tail", diag)
+
+    def test_extract_crash_diag_normal_rc(self):
+        """正常退出 (rc=1) + 无输出 → 空诊断"""
+        from src.kernel_eval.eval.process_pool import _extract_crash_diag
+        self.assertEqual(_extract_crash_diag(1, "", ""), "")
+
+    def test_extract_crash_diag_stdout_fallback(self):
+        """stderr 为空时 fallback 到 stdout"""
+        from src.kernel_eval.eval.process_pool import _extract_crash_diag
+        diag = _extract_crash_diag(-11, "some error on stdout\n", "")
+        self.assertIn("SIGSEGV", diag)
+        self.assertIn("some error on stdout", diag)
+
+    def test_extract_crash_diag_tail_limit(self):
+        """stderr 超过 5 行时只取最后 5 行"""
+        from src.kernel_eval.eval.process_pool import _extract_crash_diag
+        stderr = "\n".join(f"line{i}" for i in range(20))
+        diag = _extract_crash_diag(-11, "", stderr)
+        self.assertIn("line19", diag)
+        self.assertNotIn("line13", diag)
+
+    def test_extract_crash_diag_unknown_signal(self):
+        """未知信号 → 使用 signal N 形式"""
+        from src.kernel_eval.eval.process_pool import _extract_crash_diag
+        diag = _extract_crash_diag(-12, "", "boom\n")
+        self.assertIn("signal 12(-12)", diag)
+
+
+class TestForwardChildOutput(unittest.TestCase):
+    """子进程输出透传：staged.log 不得丢失用例级细节"""
+
+    def test_forwards_stdout_and_stderr(self):
+        from src.kernel_eval.eval.process_pool import _forward_child_output
+        from io import StringIO
+        captured_out, captured_err = StringIO(), StringIO()
+        old_out, old_err = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = captured_out, captured_err
+        try:
+            _forward_child_output("[1/20] case ok\n", "warn line\n")
+        finally:
+            sys.stdout, sys.stderr = old_out, old_err
+        self.assertIn("[1/20] case ok", captured_out.getvalue())
+        self.assertIn("warn line", captured_err.getvalue())
+
+    def test_empty_output_prints_nothing(self):
+        from src.kernel_eval.eval.process_pool import _forward_child_output
+        from io import StringIO
+        captured_out, captured_err = StringIO(), StringIO()
+        old_out, old_err = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = captured_out, captured_err
+        try:
+            _forward_child_output("", "  \n")
+        finally:
+            sys.stdout, sys.stderr = old_out, old_err
+        self.assertEqual(captured_out.getvalue(), "")
+        self.assertEqual(captured_err.getvalue(), "")
 
 
 if __name__ == '__main__':

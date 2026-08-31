@@ -57,6 +57,52 @@ from ..base.models import CaseSpec
 
 
 # ---------------------------------------------------------------------------
+# 子进程崩溃诊断
+# ---------------------------------------------------------------------------
+
+_SIGNAL_NAMES = {
+    -11: "SIGSEGV", -6: "SIGABRT", -7: "SIGBUS", -9: "SIGKILL",
+    -15: "SIGTERM", -4: "SIGILL", -8: "SIGFPE",
+}
+
+
+def _extract_crash_diag(rc: int, stdout: str, stderr: str) -> str:
+    """构建子进程崩溃诊断字符串，附加到 error_msg 尾部。
+
+    rc < 0 时为信号死亡（如 SIGSEGV=-11），提取 stderr 末尾行帮助定位。
+    返回的字符串以 " | " 前导，可直接拼接到 error_msg 后；无诊断时返回空串。
+    """
+    parts: List[str] = []
+    if rc < 0:
+        sig_name = _SIGNAL_NAMES.get(rc, f"signal {-rc}")
+        parts.append(f"signal={sig_name}({rc})")
+    tail_lines = (stderr or "").strip().splitlines()
+    if not tail_lines:
+        tail_lines = (stdout or "").strip().splitlines()
+    # 取最后 5 行非空行作为诊断摘要
+    tail = [ln.strip() for ln in tail_lines if ln.strip()][-5:]
+    if tail:
+        parts.append("stderr_tail=" + " | ".join(tail))
+    if not parts:
+        return ""
+    return " | " + " | ".join(parts)
+
+
+def _forward_child_output(stdout: str, stderr: str) -> None:
+    """把捕获的子进程输出透传到主进程日志。
+
+    子进程 stdout/stderr 经 PIPE 捕获后若只用于崩溃诊断，staged.log 会丢失
+    全部用例级细节（如 [i/n] 用例进度），与历史上管道直连的行为不一致。
+    子进程退出后按原内容整体透传，恢复可观测性；不同 TaskUnit 的输出因此
+    按任务整块呈现，不再逐行交叠。
+    """
+    if stdout and stdout.strip():
+        print(stdout.rstrip(), flush=True)
+    if stderr and stderr.strip():
+        print(stderr.rstrip(), file=sys.stderr, flush=True)
+
+
+# ---------------------------------------------------------------------------
 # 数据类
 # ---------------------------------------------------------------------------
 
@@ -646,7 +692,9 @@ class ProcessPoolCoordinator:
                 if getattr(self.base_config, "pypto_pro_outer_case_isolation", False):
                     child_cwd = tempfile.mkdtemp(prefix="pypto_eval_child_")
 
-                popen_kwargs = {"start_new_session": True, "env": env}
+                popen_kwargs = {"start_new_session": True, "env": env,
+                                "stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
+                                "text": True}
                 if child_cwd is not None:
                     popen_kwargs["cwd"] = child_cwd
                 proc = subprocess.Popen(cmd, **popen_kwargs)
@@ -658,7 +706,8 @@ class ProcessPoolCoordinator:
                           f"（OOM Kill 时主进程也可能被杀）", flush=True)
 
                 try:
-                    rc = proc.wait(timeout=timeout)
+                    child_stdout, child_stderr = proc.communicate(timeout=timeout)
+                    rc = proc.returncode
                 except subprocess.TimeoutExpired:
                     # 从活跃列表移除已完成的子进程
                     try:
@@ -666,8 +715,15 @@ class ProcessPoolCoordinator:
                     except ValueError:
                         pass
 
+                    # 终止前读取已有输出用于诊断
+                    try:
+                        child_stdout, child_stderr = proc.communicate(timeout=5)
+                    except Exception:
+                        child_stdout, child_stderr = "", ""
+
                     print(f"[WARN] TaskUnit {task.operator}@Card{task.device_id} 超时 ({timeout}s)")
                     self._terminate_timed_out_process(proc)
+                    _forward_child_output(child_stdout, child_stderr)
                     # 超时：尝试恢复部分结果，失败则合成全量 timeout 失败
                     partial = _try_recover_partial_results(output_file)
                     if partial:
@@ -697,7 +753,13 @@ class ProcessPoolCoordinator:
                 except ValueError:
                     pass
 
+                # 透传子进程输出（含成功路径），恢复 staged.log 的用例级细节
+                _forward_child_output(child_stdout, child_stderr)
+
                 if rc != 0:
+                    crash_diag = _extract_crash_diag(rc, child_stdout, child_stderr)
+                    if crash_diag:
+                        print(f"[WARN] {task.operator}@Card{task.device_id}:{crash_diag}", flush=True)
                     if _is_oom_killed(proc, rc):
                         # OOM Kill：尝试恢复部分结果 + 合成剩余用例的 oom_killed 失败
                         partial = _try_recover_partial_results(output_file)
@@ -734,7 +796,7 @@ class ProcessPoolCoordinator:
                         failed = _synthesize_failure_cases(
                             remaining,
                             "subprocess_failure",
-                            f"子进程异常退出 rc={rc}",
+                            f"子进程异常退出 rc={rc}{crash_diag}",
                         )
                         print(
                             f"[INFO] {task.operator}: 异常退出后恢复 {len(partial)} 个已完成用例，"
@@ -757,7 +819,7 @@ class ProcessPoolCoordinator:
                         task.retry_count < self.process_config.max_retries
                     )
                     return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
-                        f"子进程异常退出 rc={rc}"), should_retry, "subprocess_failure", task.cases)
+                        f"子进程异常退出 rc={rc}{crash_diag}"), should_retry, "subprocess_failure", task.cases)
 
                 # 正常退出：读取完整结果
                 # 从活跃列表移除已完成的子进程
@@ -945,7 +1007,9 @@ class ProcessPoolCoordinator:
                 if getattr(self.base_config, "pypto_pro_outer_case_isolation", False):
                     child_cwd = tempfile.mkdtemp(prefix="pypto_eval_child_")
 
-                popen_kwargs = {"start_new_session": True, "env": env}
+                popen_kwargs = {"start_new_session": True, "env": env,
+                                "stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
+                                "text": True}
                 if child_cwd is not None:
                     popen_kwargs["cwd"] = child_cwd
                 proc = subprocess.Popen(cmd, **popen_kwargs)
@@ -953,14 +1017,20 @@ class ProcessPoolCoordinator:
                 _write_oom_score_adj(proc.pid, 1000)
 
                 try:
-                    rc = proc.wait(timeout=timeout)
+                    child_stdout, child_stderr = proc.communicate(timeout=timeout)
+                    rc = proc.returncode
                 except subprocess.TimeoutExpired:
                     try:
                         self._active_processes.remove(proc)
                     except ValueError:
                         pass
+                    try:
+                        child_stdout, child_stderr = proc.communicate(timeout=5)
+                    except Exception:
+                        child_stdout, child_stderr = "", ""
                     print(f"[WARN] 重试任务 {task.operator}@Card{task.device_id} 仍然超时")
                     self._terminate_timed_out_process(proc)
+                    _forward_child_output(child_stdout, child_stderr)
                     partial = _try_recover_partial_results(output_file)
                     if partial:
                         completed_ids = {r.case_id for r in partial}
@@ -976,7 +1046,12 @@ class ProcessPoolCoordinator:
                 except ValueError:
                     pass
 
+                _forward_child_output(child_stdout, child_stderr)
+
                 if rc != 0:
+                    crash_diag = _extract_crash_diag(rc, child_stdout, child_stderr)
+                    if crash_diag:
+                        print(f"[WARN] 重试 {task.operator}@Card{task.device_id}:{crash_diag}", flush=True)
                     if _is_oom_killed(proc, rc):
                         partial = _try_recover_partial_results(output_file)
                         if partial:
@@ -997,7 +1072,7 @@ class ProcessPoolCoordinator:
                         failed = _synthesize_failure_cases(
                             remaining,
                             "subprocess_failure",
-                            f"重试后仍异常退出 rc={rc}",
+                            f"重试后仍异常退出 rc={rc}{crash_diag}",
                         )
                         print(
                             f"[INFO] {task.operator}: 重试异常退出后恢复 {len(partial)} 个已完成用例，"
@@ -1005,7 +1080,7 @@ class ProcessPoolCoordinator:
                         )
                         return (task, partial + failed)
                     return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
-                        f"重试后仍异常退出 rc={rc}"))
+                        f"重试后仍异常退出 rc={rc}{crash_diag}"))
 
                 try:
                     data = json.loads(Path(output_file).read_text())

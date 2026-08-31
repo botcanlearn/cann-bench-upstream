@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -24,6 +25,108 @@ from .data.data_generator import INPUT_DIST_CHOICES
 
 
 CaseKey = Tuple[str, int]
+
+
+# ---------------------------------------------------------------------------
+# CANN 构建/运行版本一致性护栏
+# ---------------------------------------------------------------------------
+#
+# 背景（2026-08 incident）：950PR runner 容器内并存多套 CANN（如 cann-9.1.0 与
+# cann-9.1.0-beta.1，ascend-toolkit/latest 指向 beta.1）。提交方 build.sh 若重新
+# source 默认 toolkit，会用与评测运行不同的 CANN 构建 kernel。版本错配的 kernel
+# 在 profiler 下经 __asc_LaunchAndProfiling → AscendCGetProfkTypeImpl 查询 kType
+# 元数据时，rtFunctionGetMetaInfo 返回成功但元数据指针为 NULL，CANN 自带 stub
+# AscendCFunctionGetMetaInfoKtype 不做空指针检查直接解引用，评测子进程 SIGSEGV。
+# 正确性阶段不开 profiler，因此该类错配表现为"精度全过、性能采集必崩"。
+#
+# 本护栏在编译成功后、正确性/性能阶段前比对构建日志与运行环境使用的 CANN
+# 版本目录名；可判定的不一致直接按编译失败终止，给出可操作的错误信息，
+# 避免评测进程崩溃且分数被静默按 0 计入。
+
+_ASCEND_CANN_DIR_RE = re.compile(r"/usr/local/Ascend/(cann-[\w.\-]+)")
+
+
+def _cann_home_dirname(path: str) -> Optional[str]:
+    """把 CANN 安装路径规范化为版本目录名（如 cann-9.1.0）。
+
+    解析 ascend-toolkit/latest 等符号链接；无法识别为 cann-* 目录时返回 None。
+    """
+    if not path:
+        return None
+    resolved = os.path.realpath(path)
+    name = os.path.basename(resolved.rstrip("/"))
+    return name if name.startswith("cann-") else None
+
+
+def _detect_build_cann_dirname(source_dir: Path) -> Optional[str]:
+    """从编译产物识别构建使用的 CANN 版本目录名。
+
+    优先 compile_commands.json（cmake 精确记录编译命令），回退统计 _compile.log
+    中出现最多的 /usr/local/Ascend/cann-* 路径。识别不到返回 None（判不了时
+    不误伤——纯 Python 提交等场景没有 CANN 编译痕迹）。
+    """
+    compile_commands = source_dir / "build" / "compile_commands.json"
+    if compile_commands.is_file():
+        try:
+            commands = json.loads(compile_commands.read_text(errors="replace"))
+        except (json.JSONDecodeError, OSError):
+            commands = []
+        kernel_versions: Counter = Counter()
+        fallback_versions: Counter = Counter()
+        for entry in commands:
+            cmd = entry.get("command", "") if isinstance(entry, dict) else ""
+            found = _ASCEND_CANN_DIR_RE.findall(cmd)
+            if not found:
+                continue
+            if "bisheng" in cmd or "ccec_compiler" in cmd:
+                kernel_versions.update(found)
+            else:
+                fallback_versions.update(found)
+        for versions in (kernel_versions, fallback_versions):
+            if versions:
+                return versions.most_common(1)[0][0]
+
+    compile_log = source_dir / "_compile.log"
+    if compile_log.is_file():
+        try:
+            text = compile_log.read_text(errors="replace")
+        except OSError:
+            return None
+        versions = Counter(_ASCEND_CANN_DIR_RE.findall(text))
+        if versions:
+            return versions.most_common(1)[0][0]
+    return None
+
+
+def _check_build_cann_consistency(args: argparse.Namespace) -> Optional[str]:
+    """构建与运行 CANN 版本一致性检查。
+
+    返回 None 表示一致或无法判定（不误伤）；否则返回可操作的 mismatch 描述。
+    """
+    if not args.source_dir:
+        return None
+    build_dirname = _detect_build_cann_dirname(Path(args.source_dir))
+    run_dirname = _cann_home_dirname(os.environ.get("ASCEND_HOME_PATH", ""))
+    if not build_dirname or not run_dirname or build_dirname == run_dirname:
+        return None
+    return (
+        f"提交代码构建使用的 CANN 版本 ({build_dirname}) 与评测运行环境 "
+        f"({run_dirname}) 不一致。版本错配的 kernel 在 profiler 性能采集阶段会触发 "
+        f"CANN 运行时元数据查询空指针解引用（SIGSEGV），导致性能项被按 0 计入。"
+        f"请修正 build.sh 使其使用评测方提供的 CANN 环境（ASCEND_HOME_PATH），"
+        f"不要重新 source 其他版本的 set_env.sh。"
+    )
+
+
+def _write_cann_mismatch_report(args: argparse.Namespace, bench_root: str, message: str) -> None:
+    """把 CANN 版本错配合成为提交级编译失败报告（result_stage=compile_failed）。"""
+    cfg = _make_config(args, bench_root, enable_profiler=False)
+    from .eval.evaluator import Evaluator
+
+    evaluator = Evaluator(cfg, bench_name=args.bench_name)
+    failures = [evaluator.failure_synthesizer.synthesize_submission_compile_failure(message)]
+    _save_report(args, cfg, failures, stage="compile_failed", contains_performance=False)
+    evaluator.shutdown()
 
 
 def _case_num_from_value(value) -> int:
@@ -416,6 +519,14 @@ def run(args: argparse.Namespace) -> int:
     compile_rc = _compile(args, bench_root)
     if compile_rc != 0:
         return compile_rc
+
+    # CANN 构建/运行版本一致性护栏：错配的 kernel 会在 profiler 下使评测子进程
+    # SIGSEGV（详见函数注释），此处按编译失败显式终止，而不是让性能项静默按 0 计入。
+    mismatch = _check_build_cann_consistency(args)
+    if mismatch is not None:
+        print(f"[staged_eval] compile rejected: {mismatch}")
+        _write_cann_mismatch_report(args, bench_root, mismatch)
+        return 1
 
     print("[staged_eval] stage 2/3: correctness")
     correctness_cfg = _make_config(args, bench_root, enable_profiler=False)
