@@ -41,7 +41,7 @@ from ..base.loaders import TaskLoader, CaseLoader, OperatorDirMixin, GoldenLoade
 from ..config import get_project_root
 from ..utils.naming import camel_to_snake
 from ..base.models import AttrSpec, TaskSpec, CaseSpec
-from ..base.enums import DifficultyLevel
+from ..base.enums import DifficultyLevel, InvalidDifficulty
 from .cann_spec import CannTaskSpec, CannCaseSpec, CannInputSpec, CannOutputSpec
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,10 @@ class CannTaskLoader(OperatorDirMixin, TaskLoader):
                 task_spec = self.get_task(rel_path)
                 if task_spec:
                     operators.append(task_spec)
+            except InvalidDifficulty:
+                # 难度声明错了不能降级成 warn-and-skip: 那只是把 "被当成 L1"
+                # 换成 "从列表里消失", 一样静默, 而且更难查.
+                raise
             except Exception as e:
                 logger.warning("Failed to load operator from %s: %s", proto_path, e)
         return operators
@@ -140,6 +144,9 @@ class CannTaskLoader(OperatorDirMixin, TaskLoader):
                     if op_name.lower() == operator.lower():
                         rel_path = str(op_dir.relative_to(self.bench_root))
                         return self.get_operator(rel_path)
+            except InvalidDifficulty:
+                # 同 list_tasks: 难度声明错了要报出来, 而不是让算子 "查不到".
+                raise
             except Exception as e:
                 logger.warning("Failed to parse proto.yaml at %s: %s", proto_path, e)
         return None
@@ -185,16 +192,9 @@ class CannTaskLoader(OperatorDirMixin, TaskLoader):
                 index_gather=output_data.get('index_gather'),
             ))
 
-        difficulty_str = data.get('difficulty', 'L1')
-        difficulty = DifficultyLevel.L1
-        if difficulty_str in ('L2', 'l2'):
-            difficulty = DifficultyLevel.L2
-        elif difficulty_str in ('L3', 'l3'):
-            difficulty = DifficultyLevel.L3
-        elif difficulty_str in ('L4', 'l4'):
-            difficulty = DifficultyLevel.L4
-        elif difficulty_str in ('L5', 'l5'):
-            difficulty = DifficultyLevel.L5
+        if 'difficulty' not in data:
+            raise InvalidDifficulty(f"{rel_path} 的 proto.yaml 未声明 operator.difficulty")
+        difficulty = DifficultyLevel.parse(data['difficulty'])
 
         return CannTaskSpec(
             task_id=rel_path,

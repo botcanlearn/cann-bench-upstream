@@ -161,8 +161,9 @@ class TaskSpec:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def get_level_id(self) -> int:
-        mapping = {"L1": 1, "L2": 2, "L3": 3, "L4": 4, "L5": 5}
-        return mapping.get(self.difficulty.value, 1)
+        # Why 不再用字面量表: 那张表与 DifficultyLevel 平行, 且 .get 默认值 1 会把
+        # 新增级别静默算成 L1. 序号直接取自枚举成员名, 加级别时无需第二处改动.
+        return int(self.difficulty.value[1:])
 
     def get_input_names(self) -> List[str]:
         return [inp.name for inp in self.inputs]

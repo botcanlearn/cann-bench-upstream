@@ -104,14 +104,8 @@ class TestLoaderParsesL5:
             assert spec.difficulty is expected
             assert spec.get_level_id() == level_id
 
-    def test_unknown_difficulty_still_falls_back_to_l1(self):
-        """未知字符串保持既有回落语义，避免误把 L5 支持写成宽松解析。"""
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            rel = _write_op(root, "level1", "L9")
-            spec = CannTaskLoader(str(root)).get_task(rel)
-            assert spec.difficulty is DifficultyLevel.L1
-            assert spec.get_level_id() == 1
+    # 未知 difficulty 的回落语义已被取消 (静默串成 L1 是级别漂移的根源),
+    # 现在的 "必须报错" 契约见 tests/ut/test_difficulty_source.py
 
 
 class TestBenchLabNewOps:

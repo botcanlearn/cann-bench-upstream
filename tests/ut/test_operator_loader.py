@@ -81,7 +81,7 @@ class TestOperatorLoaderGetOperator:
             (level_dir / "golden.py").write_text("def add(*args):\n    return args\n", encoding="utf-8")
             (level_dir / "cases.yaml").write_text("cases: []\n", encoding="utf-8")
             (level_dir / "proto.yaml").write_text(
-                "operator:\n  name: Add\n  schema: add(Tensor a, Tensor b) -> Tensor\n",
+                "operator:\n  name: Add\n  difficulty: L1\n  schema: add(Tensor a, Tensor b) -> Tensor\n",
                 encoding="utf-8"
             )
 
@@ -126,7 +126,7 @@ class TestOperatorLoaderListOperators:
             (valid_dir / "golden.py").write_text("def add(*args):\n    return args\n", encoding="utf-8")
             (valid_dir / "cases.yaml").write_text("cases: []\n", encoding="utf-8")
             (valid_dir / "proto.yaml").write_text(
-                "operator:\n  name: Add\n  schema: add(Tensor a, Tensor b) -> Tensor\n",
+                "operator:\n  name: Add\n  difficulty: L1\n  schema: add(Tensor a, Tensor b) -> Tensor\n",
                 encoding="utf-8"
             )
             # 损坏的算子
@@ -158,7 +158,7 @@ class TestOperatorLoaderGetByOperatorName:
             (level_dir / "golden.py").write_text("def my_op(*args):\n    return args\n", encoding="utf-8")
             (level_dir / "cases.yaml").write_text("cases: []\n", encoding="utf-8")
             (level_dir / "proto.yaml").write_text(
-                "operator:\n  name: MyOp\n  schema: my_op(Tensor a) -> Tensor\n",
+                "operator:\n  name: MyOp\n  difficulty: L2\n  schema: my_op(Tensor a) -> Tensor\n",
                 encoding="utf-8"
             )
 
@@ -188,7 +188,8 @@ class TestOperatorLoaderGetStatistics:
                 (op_dir / "golden.py").write_text(f"def {dir_name}(*args):\n    return args\n", encoding="utf-8")
                 (op_dir / "cases.yaml").write_text("cases: []\n", encoding="utf-8")
                 (op_dir / "proto.yaml").write_text(
-                    f"operator:\n  name: {op_name}\n  schema: {dir_name}(Tensor a, Tensor b) -> Tensor\n",
+                    f"operator:\n  name: {op_name}\n  difficulty: L1\n"
+                    f"  schema: {dir_name}(Tensor a, Tensor b) -> Tensor\n",
                     encoding="utf-8"
                 )
 
