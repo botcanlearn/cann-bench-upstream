@@ -99,11 +99,6 @@ class Config:
     # 为 True 时 op_runner 以 use_input_pool=True 调 run_profiled。内存占用按 InputPool 上限裁剪。
     perf_rotate_inputs: bool = True
 
-    # 将同一 eval-child / TaskUnit 内通过精度复检的多个 case 合并到一次
-    # profiler 会话。默认开启；任一 CSV 结构不变量或反作弊归属不确定时
-    # 自动回退到逐 case profiler，可通过 CLI 显式关闭。
-    perf_batch_cases: bool = True
-
     # 防作弊：监听 AI 算子在执行时是否直接调用了 torch.matmul / conv / softmax
     # 等内置数学 API（=把计算甩给 PyTorch，跳过自己写的 AscendC kernel）。
     # off=不监听；warn=记日志不阻断（便于排查）；block=直接抛错（默认）。

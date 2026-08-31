@@ -36,7 +36,6 @@ class TestConfig:
         assert config.device_id == 0
         assert config.warmup == 3
         assert config.repeat == 5
-        assert config.perf_batch_cases is True
 
     def test_custom_config(self):
         """自定义配置"""

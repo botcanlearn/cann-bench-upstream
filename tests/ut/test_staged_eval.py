@@ -66,13 +66,6 @@ def test_compile_failure_filter_uses_selected_operators():
     assert _compile_failure_operator_filter(args) == ["Conv3DBackpropFilter"]
 
 
-def test_perf_batch_cases_defaults_on_and_can_be_disabled():
-    parser = create_parser()
-
-    assert parser.parse_args([]).perf_batch_cases is True
-    assert parser.parse_args(["--no-perf-batch-cases"]).perf_batch_cases is False
-
-
 def test_max_cases_per_task_unit_defaults_and_can_be_overridden():
     parser = create_parser()
 

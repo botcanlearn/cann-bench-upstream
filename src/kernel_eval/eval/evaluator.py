@@ -495,23 +495,6 @@ class Evaluator:
 
         return self.run_cases(cases, operator, rel_path)
 
-    def _should_batch_perf(self, cases: list) -> bool:
-        if not getattr(self.config, 'perf_batch_cases', False):
-            return False
-        if len(cases) < 2 or self._pypto_pro_jit_isolation:
-            return False
-        if self.perf_evaluator is None or not self.config.enable_profiler:
-            return False
-        if not self.device_manager.is_npu_mode():
-            return False
-        strategy = self.perf_evaluator.perf_metric_strategy
-        if strategy is None or strategy.get_strategy_name() != 'kernel_details':
-            return False
-        return not any(
-            (getattr(case, 'attrs', None) or {}).get('mc2_distributed', False)
-            for case in cases
-        )
-
     def run_cases(self, cases: list, operator: str, rel_path: str) -> EvalOperatorResult:
         """评测一组已加载的用例
 
@@ -526,9 +509,6 @@ class Evaluator:
 
         self.operator_matcher.clear_cache()
         results = []
-        batch_perf = self._should_batch_perf(cases)
-        if batch_perf:
-            self.op_runner.begin_perf_batch()
         consecutive_failures = 0
         # 设备状态: healthy → recovering → unrecoverable
         device_state = "healthy"
@@ -554,8 +534,6 @@ class Evaluator:
 
             result = self.evaluate_case(case)
             results.append(result)
-            if batch_perf and not result.success:
-                self.op_runner.cancel_perf_batch_case(case_id_str)
 
             # 增量输出：子进程模式下，每个用例完成后刷新写入部分结果
             # 使 OOM Kill 时已完成的用例结果可被主进程恢复
@@ -674,42 +652,6 @@ class Evaluator:
                 elif result.failure_type == "skipped":
                     failure_tag = " [跳过]"
                 print(f"[{i}/{len(cases)}] {case_id_str}: {status_icon}{failure_tag} {error_hint}")
-
-        if batch_perf:
-            try:
-                perf_results = self.op_runner.finalize_perf_batch()
-            except Exception as exc:
-                perf_results = {}
-                print(
-                    f"[WARN] 批量性能采集异常，结果按未采集处理: "
-                    f"{type(exc).__name__}: {exc}"
-                )
-            for result in results:
-                perf_result = perf_results.get(result.case_id)
-                if not result.success or perf_result is None:
-                    continue
-                result.perf_result = perf_result
-                if result.ai_run_result is not None:
-                    result.ai_run_result.perf_result = perf_result
-                    result.ai_run_result.elapsed_us = perf_result.elapsed_us
-            if self.incremental_output_path:
-                self._write_incremental_output(
-                    operator, rel_path, results, len(cases),
-                )
-            measured = sum(
-                1 for result in results
-                if result.perf_result is not None
-                and result.perf_result.elapsed_us > 0
-            )
-            fallback = sum(
-                1 for result in results
-                if result.perf_result is not None
-                and result.perf_result.metadata.get('perf_batch_fallback')
-            )
-            print(
-                f"[INFO] 批量性能采集完成: {measured}/{len(results)} 有效, "
-                f"{fallback} 个 case 回退逐 case"
-            )
 
         passed = sum(1 for r in results if r.success)
         failed = sum(1 for r in results if not r.success and r.failure_type not in ("cascade_device", "skipped"))

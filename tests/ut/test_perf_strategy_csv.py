@@ -29,7 +29,6 @@ from kernel_eval.base.perf_strategy import (
     ProfFileLocations,
     KernelDetailsStrategy,
     MsProfSummaryStrategy,
-    parse_csv_kernel_batches,
     parse_csv_kernels,
 )
 from kernel_eval.base.result import PerfResult
@@ -80,88 +79,6 @@ class TestParseCsvKernelsIncludesCustom:
         assert data["total_kernel_us"] == pytest.approx(_EXPECTED_TOTAL)
         # 绝不能退化成只有 Fill 的 2us
         assert data["total_kernel_us"] != pytest.approx(2.0)
-
-
-def _write_batched_kernel_details_csv(path, *, timestamps=None, extra_delimiter=False):
-    """Write two cases, each with one warmup and three measured steps."""
-    fieldnames = ["Start Time(us)", "Name", "Type", "Duration(us)", "Input Shapes"]
-    rows = []
-    clock = 0
-    for case_idx in range(2):
-        for step_idx in range(4):
-            rows.append({
-                "Start Time(us)": str(clock),
-                "Name": "cache_clean",
-                "Type": "_Z19CannBenchCacheCleanIDhEvPhS0_llj",
-                "Duration(us)": "90",
-                "Input Shapes": "",
-            })
-            clock += 1
-            duration = (
-                (7, 10, 12, 14)[step_idx]
-                if case_idx == 0
-                else (17, 20, 30, 40)[step_idx]
-            )
-            rows.append({
-                "Start Time(us)": str(clock),
-                "Name": "case0_custom" if case_idx == 0 else "case1_custom",
-                "Type": "custom",
-                "Duration(us)": str(duration),
-                "Input Shapes": "",
-            })
-            clock += 1
-    if extra_delimiter:
-        rows.append({
-            "Start Time(us)": str(clock),
-            "Name": "spoofed_cache_clean",
-            "Type": "CannBenchCacheClean",
-            "Duration(us)": "1",
-            "Input Shapes": "",
-        })
-    if timestamps is not None:
-        for row, timestamp in zip(rows, timestamps):
-            row["Start Time(us)"] = str(timestamp)
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-class TestParseCsvKernelBatches:
-    """NPU-only CSV must be split deterministically by cache-clean markers."""
-
-    def test_splits_cases_and_ignores_each_case_warmup(self, tmp_path):
-        csv_path = tmp_path / "kernel_details.csv"
-        _write_batched_kernel_details_csv(csv_path)
-
-        batches = parse_csv_kernel_batches(
-            str(csv_path), n_cases=2, warmup=1, repeat=3,
-        )
-
-        assert batches[0]["device_kernels"] == {"case0_custom": 12.0}
-        assert batches[0]["total_kernel_us"] == pytest.approx(12.0)
-        assert batches[1]["device_kernels"] == {"case1_custom": 30.0}
-        assert batches[1]["total_kernel_us"] == pytest.approx(30.0)
-
-    def test_rejects_delimiter_count_mismatch(self, tmp_path):
-        csv_path = tmp_path / "kernel_details.csv"
-        _write_batched_kernel_details_csv(csv_path, extra_delimiter=True)
-
-        with pytest.raises(ValueError, match="delimiter count"):
-            parse_csv_kernel_batches(
-                str(csv_path), n_cases=2, warmup=1, repeat=3,
-            )
-
-    def test_rejects_non_monotonic_device_order(self, tmp_path):
-        csv_path = tmp_path / "kernel_details.csv"
-        timestamps = list(range(16))
-        timestamps[9] = -1
-        _write_batched_kernel_details_csv(csv_path, timestamps=timestamps)
-
-        with pytest.raises(ValueError, match="not monotonic"):
-            parse_csv_kernel_batches(
-                str(csv_path), n_cases=2, warmup=1, repeat=3,
-            )
 
 
 class TestKernelDetailsStrategyPrefersCsv:
