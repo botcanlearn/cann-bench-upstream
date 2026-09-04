@@ -4,18 +4,30 @@
 #   uv sync --extra vision      # 追加 torchvision（roi_align / nms golden）
 # Triton-Ascend 环境继续安装 requirements-triton.txt。
 
-# torch / torch_npu==2.10.0 仅由华为云镜像提供，默认 PyPI 无此版本；pip 不读取
+# torch_npu 仅由华为云镜像提供，默认 PyPI 无此版本；pip 不读取
 # pyproject.toml 的 [[tool.uv.index]] 配置，故在此显式指定同一镜像，令
 # `pip install -r requirements.txt` 可直接安装（对齐 pyproject default index）。
 # 区域外可用 PIP_INDEX_URL 环境变量覆盖（对应 pyproject 的 UV_INDEX_URL）。
 --index-url https://mirrors.huaweicloud.com/repository/pypi/simple
 
+# torch +cpu wheel（torch_npu x86_64 版的硬性依赖，见下文说明）只在
+# pytorch.org 官方 CPU 索引发布，华为云镜像不含 +cpu 版本。
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # ==================== 核心依赖（对齐 pyproject.toml [project].dependencies）====================
-# torch / torch_npu 精确钉 2.10.0，版本须严格匹配，详见 https://www.hiascend.com/document
+# torch / torch_npu 版本须严格匹配，详见 https://www.hiascend.com/document
 # torch_npu 是 NPU 评测路径的硬依赖（cli.py / evaluator.py 等无条件 import）；仅 CPU-only 单测可省略。
+#
+# torch 按 CPU 架构分开钉版（torch_npu 2.10.0.post4 的依赖声明因架构而异）：
+#   - x86_64: torch_npu 要求 torch==2.10.0+cpu；华为云镜像的 torch 2.10.0 x86_64
+#     是 CUDA 构建，装它与 torch_npu 冲突，故 x86_64 必须钉 +cpu 版
+#     （由上方 download.pytorch.org/whl/cpu 索引提供）。
+#   - aarch64: torch_npu 要求 torch==2.10.0，华为云镜像的 aarch64 wheel
+#     即为 CPU 构建，直接匹配。
 build
-torch==2.10.0
-torch_npu==2.10.0
+torch==2.10.0+cpu; platform_machine == 'x86_64'
+torch==2.10.0; platform_machine == 'aarch64'
+torch_npu==2.10.0.post4
 numpy>=1.21.0
 pyyaml>=6.0
 scipy

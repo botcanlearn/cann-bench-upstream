@@ -6,6 +6,13 @@ cmake_minimum_required(VERSION 3.16)
 set(PKG_NAME cann_bench)
 project(${PKG_NAME} VERSION 1.0.0)
 
+# CMake >= 3.31 默认向链接器传递 --dependency-file 参数
+# （CMAKE_LINK_DEPENDS_USE_LINKER=ON）。毕昇链接器（cce-ld）不支持该参数，
+# 链接 _C.so 时会报 "ignoring unkown argurment: --dependency-file=..." 而失败，
+# 这里显式关闭。该变量用于初始化 LINK_DEPENDS_USE_LINKER 目标属性，
+# 必须在所有 add_library()/add_executable() 之前设置；对 CMake < 3.31 无副作用。
+set(CMAKE_LINK_DEPENDS_USE_LINKER FALSE)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

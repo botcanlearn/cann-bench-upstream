@@ -98,6 +98,16 @@ cann-bench/
 ### 环境要求
 
 - 910B / 910_93 / 950 开发环境
+- **CANN 9.1.0 及以上版本**，并正确配置环境变量：
+
+  ```bash
+  # 以默认安装路径为例（如安装在其他路径，请相应调整）
+  source /usr/local/Ascend/ascend-toolkit/set_env.sh
+  # 或显式指定 CANN 安装目录（构建脚本按此变量定位工具链）
+  export ASCEND_HOME_PATH=/usr/local/Ascend/ascend-toolkit/latest
+  ```
+
+  > **为什么要求 CANN 9.1.0+**：ACLNN 示例（[examples/aclnn_launch_example/](examples/aclnn_launch_example/)）的算子代码引用了 `aclnn_kernels/contiguous.h` 头文件，该头文件仅在 CANN 9.1.0+ 提供。若 `ASCEND_HOME_PATH` 指向 CANN 9.0.1 等更低版本，`cann_bench_utils` 与 ACLNN 示例会编译失败，请切换到 9.1.0+ 后重新 source 对应的 `set_env.sh`。（另注：CMake 3.31+ 默认向链接器传递 `--dependency-file` 参数，bisheng 链接器不支持该参数，仓库构建脚本已内置规避，详见 `src/cann_bench_utils/QUICKSTART.md`。）
 
 ## 🚀 Quick Start
 
@@ -111,7 +121,7 @@ cann-bench/
    ```
 
 2. **安装依赖**
-- 确保已安装CANN开发环境 和TorchNpu扩展
+- 确保已安装CANN开发环境（**9.1.0 及以上版本**，要求见上文"环境要求"）和TorchNpu扩展
 - 确保已安装Ascend C 算子开发工具链。
 ```bash
 # 安装依赖
@@ -198,6 +208,20 @@ x = torch.randn(10, 32, dtype=torch.float32).npu()
 y = torch.randn(10, 32, dtype=torch.float32).npu()
 result = cann_bench.add(x, y)
 ```
+
+> ⚠️ **注意：`cann_bench` 包名冲突**。仓库中存在两个同名的 `cann_bench` Python 包，二者**互斥**，同时只应安装其一：
+>
+> - **Golden 参考 wheel**：由 `./scripts/utils/build_golden_wheel.sh` 构建，将 `tasks/` 下的 golden.py 打包为纯 Python 包（提供 exp/gelu/sigmoid 等 golden 算子，注册到 `torch.ops.cann_bench`），仅用于 golden 自验证；
+> - **ACLNN 示例 wheel**：由 [examples/aclnn_launch_example/](examples/aclnn_launch_example/) 构建（`dist/cann_bench-*.whl`），提供 `cann_bench.add` / `cann_bench.sqrt` 等自定义算子。
+>
+> 若安装了 golden wheel，再调用 `cann_bench.add()` 会报 `module 'cann_bench' has no attribute 'add'`。此时需先卸载 golden wheel，再安装 ACLNN 示例 wheel；或将示例工程目录加入 `PYTHONPATH` 以导入正确的包：
+>
+> ```bash
+> pip uninstall -y cann_bench
+> pip install examples/aclnn_launch_example/dist/cann_bench-*.whl
+> # 或改用 PYTHONPATH 导入示例包（需先完成示例构建）
+> export PYTHONPATH="$(pwd)/examples/aclnn_launch_example:${PYTHONPATH}"
+> ```
 
 ## 👥 社区贡献
 

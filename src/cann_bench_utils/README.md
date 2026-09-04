@@ -113,6 +113,11 @@ src/cann_bench_utils/
 ## Requirements
 
 - CANN toolkit (with bisheng compiler)
+- CMake >= 3.16
+  - 注意：CMake 3.31+ 默认向链接器传递 `--dependency-file`，毕昇链接器
+    （cce-ld）不支持该参数；本工程 CMakeLists.txt 已设置
+    `CMAKE_LINK_DEPENDS_USE_LINKER=FALSE` 规避，无需额外操作
+    （该设置对 CMake < 3.31 无副作用）。
 - torch >= 2.0
 - torch_npu
 - Python >= 3.8

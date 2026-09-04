@@ -12,20 +12,29 @@
 # 测试运行脚本
 #
 # 用法:
-#   ./run_test.sh                       # 运行全部测试（ut + e2e）
+#   ./run_test.sh                       # 运行全部测试（ut + e2e；ut 失败仍会继续执行 e2e，最后汇总，任一失败则整体非零退出）
 #   ./run_test.sh ut                    # 只运行单元测试
 #   ./run_test.sh e2e                   # 只运行端到端测试
 #   ./run_test.sh ut -v                 # 单元测试 + 详细模式
 #   ./run_test.sh ut -k "config"        # 单元测试 + 按关键字筛选
 #   ./run_test.sh ut -f test_config.py  # 单元测试 + 指定文件
 #   ./run_test.sh e2e -v                # 端到端测试 + 详细模式
-
-set -e
+#
+# 说明:
+#   - 不使用 set -e：默认模式（ut + e2e）逐个收集各测试类型的退出码，
+#     全部执行完后汇总报告；任一失败则脚本以非零退出码结束。
+#   - 默认导出 ASCEND_RT_VISIBLE_DEVICES=0：cann_bench_utils 的自定义算子
+#     （cann_bench_copy 等）仅注册 NPU 实现，UT 需要可见的 NPU 设备；
+#     若环境中已显式设置该变量，则尊重现有配置。
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/.."
 SRC_DIR="${PROJECT_DIR}/src"
 TESTS_DIR="${PROJECT_DIR}/tests"
+
+# cann_bench_utils 的自定义算子（cann_bench_copy 等）仅注册 NPU 实现，
+# UT/e2e 需要可见的 NPU 设备；默认暴露 0 号设备，已显式设置时尊重现有配置。
+export ASCEND_RT_VISIBLE_DEVICES="${ASCEND_RT_VISIBLE_DEVICES:-0}"
 
 # 默认：执行全部
 TARGETS=("ut" "e2e")
@@ -49,7 +58,7 @@ show_help() {
 测试类型:
   ut                  只运行单元测试（tests/ut/）
   e2e                 只运行端到端测试（tests/e2e/）
-  不指定              运行全部测试（ut + e2e）
+  不指定              运行全部测试（ut + e2e；某类失败后仍继续执行其余类型，最后汇总退出码）
 
 选项:
   -v, --verbose       详细模式，显示每个测试名称和结果
@@ -154,6 +163,29 @@ run_target() {
     PYTHONPATH="${SRC_DIR}" python -m pytest "${PYTEST_ARGS[@]}"
 }
 
+# 逐个执行目标并收集退出码：不使用 set -e，保证默认模式（ut + e2e）下
+# 一类测试失败后仍执行其余测试类型，最终统一汇总并以非零退出码上报。
+EXIT_CODE=0
+SUMMARY=()
+
 for target in "${TARGETS[@]}"; do
     run_target "$target"
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
+        SUMMARY+=("  ${target}: 通过")
+    else
+        SUMMARY+=("  ${target}: 失败 (退出码 ${rc})")
+        [[ $EXIT_CODE -eq 0 ]] && EXIT_CODE=$rc
+    fi
 done
+
+if [[ ${#TARGETS[@]} -gt 1 ]]; then
+    echo ""
+    echo "=========================================="
+    echo "  测试汇总"
+    echo "=========================================="
+    printf '%s\n' "${SUMMARY[@]}"
+    echo "=========================================="
+fi
+
+exit $EXIT_CODE

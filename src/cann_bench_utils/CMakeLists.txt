@@ -6,6 +6,14 @@ cmake_minimum_required(VERSION 3.16)
 set(PKG_NAME cann_bench_utils)
 project(${PKG_NAME} VERSION 1.0.0)
 
+# CMake >= 3.31 passes --dependency-file to the linker by default
+# (CMAKE_LINK_DEPENDS_USE_LINKER=ON). The Bisheng linker (cce-ld) does not
+# support this flag and fails the link step with
+# "ignoring unkown argurment: --dependency-file=...", so disable it here.
+# Must be set before any add_library()/add_executable(): it initializes the
+# LINK_DEPENDS_USE_LINKER target property. Harmless on CMake < 3.31.
+set(CMAKE_LINK_DEPENDS_USE_LINKER FALSE)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

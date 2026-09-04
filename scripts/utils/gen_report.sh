@@ -104,7 +104,8 @@ for op_data in data.get('operators', []):
 
 # 构造 EvalReport
 report = EvalReport(
-    version=data.get('version', '1.0'),
+    framework_version=data.get('framework_version', data.get('version', '')),
+    tasks_version=data.get('tasks_version', ''),
     eval_code=data.get('eval_code', ''),
     timestamp=data.get('timestamp', ''),
     device=data.get('device', ''),

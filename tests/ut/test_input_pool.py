@@ -32,6 +32,64 @@ from kernel_eval.eval.input_pool import (
 )
 
 
+def _detect_test_device() -> str:
+    """选择 UT 运行后端：优先 NPU，不可用时回退 CPU。
+
+    input_pool 内部 clone 优先走 cann_bench_utils 的自定义算子
+    cann_bench_copy，该算子只注册了 NPU（PrivateUse1）实现，
+    因此 NPU 可用时测试张量必须创建在 NPU 上。
+    """
+    try:
+        import torch_npu  # noqa: F401
+        if torch.npu.is_available():
+            return "npu:0"
+    except Exception:
+        pass
+    return "cpu"
+
+
+DEVICE = _detect_test_device()
+
+try:
+    import cann_bench_utils  # noqa: F401
+    _HAS_CANN_BENCH_UTILS = True
+except ImportError:
+    _HAS_CANN_BENCH_UTILS = False
+
+# 已安装 cann_bench_utils 但 NPU 不可用时，clone 会命中只有 NPU 实现的
+# cann_bench_copy，CPU 张量无法运行；此时对涉及输入池 clone 的用例显式
+# skip（带原因，不静默吞掉），配置类等纯 CPU 逻辑用例仍照常执行。
+requires_pool_backend = pytest.mark.skipif(
+    _HAS_CANN_BENCH_UTILS and DEVICE == "cpu",
+    reason=(
+        "cann_bench_utils 已安装，其 clone 走自定义算子 cann_bench_copy（仅注册 NPU 实现）；"
+        "当前环境 NPU 不可用（torch.npu.is_available()=False），无法在后端为 CPU 时运行。"
+        "请在 NPU 环境通过 scripts/run_test.sh 运行（脚本默认导出 ASCEND_RT_VISIBLE_DEVICES=0），"
+        "或先 export ASCEND_RT_VISIBLE_DEVICES=0 再执行 pytest。"
+    ),
+)
+
+
+def _randn(*args, **kwargs):
+    kwargs.setdefault("device", DEVICE)
+    return torch.randn(*args, **kwargs)
+
+
+def _randint(*args, **kwargs):
+    kwargs.setdefault("device", DEVICE)
+    return torch.randint(*args, **kwargs)
+
+
+def _ones(*args, **kwargs):
+    kwargs.setdefault("device", DEVICE)
+    return torch.ones(*args, **kwargs)
+
+
+def _zeros(*args, **kwargs):
+    kwargs.setdefault("device", DEVICE)
+    return torch.zeros(*args, **kwargs)
+
+
 class TestInputPoolConfig:
     """InputPoolConfig 数据类测试"""
 
@@ -48,18 +106,19 @@ class TestInputPoolConfig:
         assert config.max_memory_mb == 1024
 
 
+@requires_pool_backend
 class TestInputPool:
     """InputPool 类测试"""
 
     def test_basic_creation(self):
         """基本创建"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=4)
         assert pool.size() == 4
 
     def test_get_next_returns_clone(self):
         """get_next 返回 clone"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=2)
 
         item1 = pool.get_next()
@@ -71,7 +130,7 @@ class TestInputPool:
 
     def test_rotation(self):
         """轮换使用"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=2)
 
         # 获取多次，应轮换
@@ -85,8 +144,8 @@ class TestInputPool:
     def test_nested_inputs(self):
         """嵌套输入"""
         inputs = [
-            torch.randn(2, 3),
-            [torch.randn(1, 2), torch.randn(3, 4)],
+            _randn(2, 3),
+            [_randn(1, 2), _randn(3, 4)],
         ]
         pool = InputPool(inputs, pool_size=2)
         item = pool.get_next()
@@ -96,7 +155,7 @@ class TestInputPool:
     def test_memory_limit(self):
         """内存限制"""
         # 创建大张量
-        large_tensor = torch.randn(1000, 1000)  # ~4MB
+        large_tensor = _randn(1000, 1000)  # ~4MB
         inputs = [large_tensor]
 
         # 设置较小内存限制
@@ -109,7 +168,7 @@ class TestInputPool:
 
     def test_max_pool_size_limit(self):
         """池大小限制"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         config = InputPoolConfig(max_pool_size=4)
         pool = InputPool(inputs, pool_size=10, config=config)
         # 请求 10 但限制为 4
@@ -125,7 +184,7 @@ class TestInputPool:
 
     def test_clear_pool_raises_on_get_next(self):
         """clear 后 pool 为空，get_next 抛 RuntimeError"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=2)
         assert pool.size() == 2
         pool.clear()
@@ -134,7 +193,7 @@ class TestInputPool:
 
     def test_clear_pool(self):
         """清空池"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=2)
         assert pool.size() == 2
         pool.clear()
@@ -143,13 +202,13 @@ class TestInputPool:
 
     def test_len_method(self):
         """len 方法"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=4)
         assert len(pool) == 4
 
     def test_single_pool_size(self):
         """单个池大小"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=1)
         assert pool.size() == 1
         item1 = pool.get_next()
@@ -160,8 +219,8 @@ class TestInputPool:
     def test_preserves_dtype(self):
         """保持 dtype"""
         inputs = [
-            torch.randn(2, 3, dtype=torch.float16),
-            torch.randint(0, 10, (2, 3), dtype=torch.int32),
+            _randn(2, 3, dtype=torch.float16),
+            _randint(0, 10, (2, 3), dtype=torch.int32),
         ]
         pool = InputPool(inputs, pool_size=2)
         item = pool.get_next()
@@ -169,19 +228,20 @@ class TestInputPool:
         assert item[1].dtype == torch.int32
 
 
+@requires_pool_backend
 class TestCreateInputPool:
     """create_input_pool 函数测试"""
 
     def test_basic_creation(self):
         """基本创建"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = create_input_pool(inputs, warmup=3, repeat=5)
         # pool_size = warmup + repeat = 8
         assert pool.size() == 8
 
     def test_with_memory_limit(self):
         """带内存限制"""
-        inputs = [torch.randn(100, 100)]  # ~40KB
+        inputs = [_randn(100, 100)]  # ~40KB
         pool = create_input_pool(inputs, warmup=5, repeat=10, max_memory_mb=1)
         # 40KB * 15 = 600KB < 1MB，应正常创建 15 个
         # 但 max_pool_size 默认为 warmup+repeat
@@ -189,25 +249,26 @@ class TestCreateInputPool:
 
     def test_warmup_repeat_zero(self):
         """预热和重复为零"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = create_input_pool(inputs, warmup=0, repeat=0)
         # pool_size = 0，至少创建 1 个
         assert pool.size() >= 1
 
     def test_returns_input_pool(self):
         """返回 InputPool 实例"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = create_input_pool(inputs, warmup=2, repeat=3)
         assert isinstance(pool, InputPool)
 
 
+@requires_pool_backend
 class TestInputPoolMemoryEstimation:
     """输入池内存估算测试"""
 
     def test_estimate_tensor_memory(self):
         """估算张量内存"""
         # float32: 4 bytes per element
-        tensor = torch.randn(1000, 1000, dtype=torch.float32)  # 4MB
+        tensor = _randn(1000, 1000, dtype=torch.float32)  # 4MB
         inputs = [tensor]
         pool = InputPool(inputs, pool_size=1)
 
@@ -218,8 +279,8 @@ class TestInputPoolMemoryEstimation:
     def test_estimate_nested_memory(self):
         """估算嵌套张量内存"""
         inputs = [
-            torch.randn(500, 500),  # 1MB
-            [torch.randn(500, 500), torch.randn(500, 500)],  # 2MB
+            _randn(500, 500),  # 1MB
+            [_randn(500, 500), _randn(500, 500)],  # 2MB
         ]
         pool = InputPool(inputs, pool_size=1)
         # 总 ~3MB
@@ -228,7 +289,7 @@ class TestInputPoolMemoryEstimation:
     def test_mixed_types_memory(self):
         """混合类型内存估算"""
         inputs = [
-            torch.randn(1000, 1000),  # float32 tensor
+            _randn(1000, 1000),  # float32 tensor
             42,  # scalar (不计入内存)
             "string",  # string (不计入内存)
         ]
@@ -237,12 +298,13 @@ class TestInputPoolMemoryEstimation:
         assert pool.size() == 1
 
 
+@requires_pool_backend
 class TestInputPoolIntegration:
     """输入池集成测试"""
 
     def test_performance_measurement_scenario(self):
         """性能测量场景"""
-        inputs = [torch.randn(10, 10)]
+        inputs = [_randn(10, 10)]
         pool = create_input_pool(inputs, warmup=3, repeat=5)
 
         # 模拟性能测量循环
@@ -256,8 +318,8 @@ class TestInputPoolIntegration:
     def test_different_tensors_in_pool(self):
         """池中不同张量"""
         inputs = [
-            torch.randn(2, 3),
-            torch.randn(4, 5),
+            _randn(2, 3),
+            _randn(4, 5),
         ]
         pool = InputPool(inputs, pool_size=2)
         item = pool.get_next()
@@ -268,7 +330,7 @@ class TestInputPoolIntegration:
 
     def test_pool_rotation_correctness(self):
         """池轮换正确性"""
-        inputs = [torch.randn(2, 3)]
+        inputs = [_randn(2, 3)]
         pool = InputPool(inputs, pool_size=3)
 
         # 获取 9 次，应循环 3 次
@@ -285,16 +347,17 @@ class TestInputPoolIntegration:
         assert ptrs[2] == ptrs[5] == ptrs[8]
 
 
+@requires_pool_backend
 class TestCallInputPool:
     """CallInputPool（args+kwargs 调用级轮换）测试 —— issue #71 性能阶段防 data_ptr 缓存"""
 
     def test_size_respects_pool_size(self):
-        pool = CallInputPool((torch.randn(2, 3),), {}, pool_size=4)
+        pool = CallInputPool((_randn(2, 3),), {}, pool_size=4)
         assert len(pool) == 4
 
     def test_get_next_returns_clone_values_equal(self):
         """get_next 返回 clone：值逐位相等，但张量对象/地址不同。"""
-        x = torch.randn(4, 5)
+        x = _randn(4, 5)
         pool = CallInputPool((x,), {}, pool_size=2)
         (a0,), _ = pool.get_next()
         assert torch.equal(a0, x)          # 值相等
@@ -302,7 +365,7 @@ class TestCallInputPool:
 
     def test_rotation_changes_data_ptr(self):
         """池大小 >= 2 时，相邻两次调用的张量地址不同（data_ptr 缓存会 miss）。"""
-        pool = CallInputPool((torch.randn(2, 3),), {}, pool_size=2)
+        pool = CallInputPool((_randn(2, 3),), {}, pool_size=2)
         (a0,), _ = pool.get_next()
         (a1,), _ = pool.get_next()
         (a2,), _ = pool.get_next()
@@ -311,7 +374,7 @@ class TestCallInputPool:
 
     def test_kwargs_tensors_cloned_attrs_shared(self):
         """kwargs 中张量被 clone；非张量 attr 按引用共享、值不变。"""
-        w = torch.randn(3, 3)
+        w = _randn(3, 3)
         pool = CallInputPool((), {"weight": w, "dim": -1, "scale": 1.5}, pool_size=2)
         _, kw = pool.get_next()
         assert torch.equal(kw["weight"], w)
@@ -320,7 +383,7 @@ class TestCallInputPool:
 
     def test_nested_list_tensors_cloned(self):
         """嵌套于 list 的张量也被 clone（如 grouped 类算子的张量列表入参）。"""
-        t = torch.randn(2, 2)
+        t = _randn(2, 2)
         pool = CallInputPool((), {"tensors": [t]}, pool_size=2)
         _, kw = pool.get_next()
         assert torch.equal(kw["tensors"][0], t)
@@ -329,13 +392,13 @@ class TestCallInputPool:
     def test_memory_cap_shrinks_pool(self):
         """大张量在内存上限下自动收缩池大小（避免 OOM）。"""
         # 4x1024x1024 float32 ≈ 16MB/份；上限 10MB → 池收缩为 1
-        big = torch.randn(4, 1024, 1024)
+        big = _randn(4, 1024, 1024)
         cfg = InputPoolConfig(max_memory_mb=10)
         pool = CallInputPool((big,), {}, pool_size=8, config=cfg)
         assert len(pool) == 1
 
     def test_clear_then_get_next_raises(self):
-        pool = CallInputPool((torch.randn(2, 3),), {}, pool_size=2)
+        pool = CallInputPool((_randn(2, 3),), {}, pool_size=2)
         pool.clear()
         with pytest.raises(RuntimeError):
             pool.get_next()
@@ -348,8 +411,8 @@ class TestCallInputPool:
             seen_ptrs.append(x.data_ptr())
             return x + bias
 
-        x = torch.ones(2, 2)
-        bias = torch.zeros(2, 2)
+        x = _ones(2, 2)
+        bias = _zeros(2, 2)
         pool = CallInputPool((x,), {"bias": bias}, pool_size=2)
         outs = []
         for _ in range(4):

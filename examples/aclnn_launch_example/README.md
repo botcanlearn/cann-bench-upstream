@@ -45,6 +45,8 @@ aclnn_launch_example/
 
 ## 构建方法
 
+> **环境要求：CANN 9.1.0 及以上版本。** 本示例的算子代码引用了 `aclnn_kernels/contiguous.h` 头文件（见 `csrc/ops/*/op_api/aclnn_*.cpp`），该头文件仅存在于 CANN 9.1.0+；编译前请 source 对应版本的环境脚本（如 `source /usr/local/Ascend/ascend-toolkit/set_env.sh`），确保 `ASCEND_HOME_PATH` 指向 9.1.0+ 的 CANN 安装目录，否则编译失败。
+
 ```bash
 bash build.sh --soc=ascend910b
 # 或指定其他 SoC 如 --soc=ascend910_93 / --soc=ascend950
@@ -300,6 +302,8 @@ export LD_LIBRARY_PATH=$ASCEND_HOME_PATH/opp/vendors/custom_ops/op_api/lib/:${LD
 ```bash
 pip install dist/cann_bench-*.whl
 ```
+
+> ⚠️ **包名冲突提示**：本示例构建的 wheel 与仓库 golden 自验证 wheel（`scripts/utils/build_golden_wheel.sh` 产物）同名，都叫 `cann_bench`，二者互斥、不能同时安装。若当前环境已安装 golden wheel，调用 `cann_bench.add()` 会报 `module 'cann_bench' has no attribute 'add'`，请先 `pip uninstall -y cann_bench` 卸载后再安装本示例 wheel；或将本工程目录加入 `PYTHONPATH` 以优先导入本包。
 
 ### Python API
 ```python

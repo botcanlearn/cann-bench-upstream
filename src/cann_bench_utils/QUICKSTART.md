@@ -99,6 +99,30 @@ which bisheng
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 ```
 
+### 链接失败：cce-ld 报 "ignoring unkown argurment: --dependency-file=..."
+
+**原因**：CMake 3.31 起默认向链接器传递 `--dependency-file` 参数
+（`CMAKE_LINK_DEPENDS_USE_LINKER=ON`），而毕昇（bisheng）工具链的链接器
+cce-ld 不支持该参数，导致 `_C.so` 链接失败。
+
+**解决**：本项目 `CMakeLists.txt` 已内置修复（在所有 `add_library()` 之前设置
+`CMAKE_LINK_DEPENDS_USE_LINKER=FALSE`，对旧版本 CMake 无副作用），
+拉取最新代码后重新执行 `bash build.sh --clean` 即可。
+
+**版本兼容性说明**：
+
+| 组件 | 要求 |
+| --- | --- |
+| CMake | >= 3.16（3.31+ 需使用含上述修复的 CMakeLists.txt） |
+| 毕昇编译器（bisheng） | 随 CANN toolkit 提供，建议 CANN >= 8.0 |
+
+若你自行维护基于本工程修改的 CMake 工程，请在 `project()` 之后、
+任何 `add_library()`/`add_executable()` 之前加上：
+
+```cmake
+set(CMAKE_LINK_DEPENDS_USE_LINKER FALSE)
+```
+
 ### Build fails with "torch_npu not found"
 
 ```bash

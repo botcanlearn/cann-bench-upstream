@@ -26,6 +26,23 @@ if src_path.exists():
     sys.path.insert(0, str(src_path))
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _init_npu_backend():
+    """NPU 可用时初始化 torch.npu 后端。
+
+    cann_bench_utils 的自定义算子（cann_bench_copy 等）只注册了 NPU
+    （PrivateUse1）实现，依赖它的 UT 需要在 NPU 后端运行。
+    无 NPU 环境下静默跳过初始化，相关用例由各自文件内的 skipif 显式跳过。
+    """
+    try:
+        import torch
+        import torch_npu  # noqa: F401
+        if torch.npu.is_available():
+            torch.npu.set_device("npu:0")
+    except Exception:
+        pass
+
+
 @pytest.fixture(autouse=True)
 def _save_restore_global_config():
     """自动保存/恢复全局配置，防止测试间状态泄漏"""

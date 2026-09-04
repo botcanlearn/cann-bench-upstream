@@ -12,18 +12,11 @@ import tilelang
 from tilelang import language as T
 import torch
 
-# ========== Configuration ==========
-pass_configs = {
-    tilelang.PassConfigKey.TL_ASCEND_AUTO_SYNC: False,
-    tilelang.PassConfigKey.TL_ASCEND_MEMORY_PLANNING: True,
-    tilelang.PassConfigKey.TL_ASCEND_AUTO_CV_COMBINE: True,
-}
+from ._common import PASS_CONFIGS, PASS_CONFIGS_MANUAL_SYNC
 
-pass_configs_autosync = {
-    tilelang.PassConfigKey.TL_ASCEND_AUTO_SYNC: True,
-    tilelang.PassConfigKey.TL_ASCEND_MEMORY_PLANNING: True,
-    tilelang.PassConfigKey.TL_ASCEND_AUTO_CV_COMBINE: True,
-}
+# ========== Configuration ==========
+pass_configs = PASS_CONFIGS_MANUAL_SYNC
+pass_configs_autosync = PASS_CONFIGS
 
 CAST_MODE_LOW2HIGH = "CAST_NONE"
 CAST_MODE_HIGH2LOW = "CAST_RINT"

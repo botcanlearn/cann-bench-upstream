@@ -9,7 +9,13 @@
 - Python 3.10+
 - PyTorch 2.0+
 - torch_npu（NPU 模式）
-- CANN 环境（NPU 模式）
+- CANN 9.1.0 及以上版本（NPU 模式）
+
+> CANN 版本不得低于 9.1.0：ACLNN 示例（examples/aclnn_launch_example）引用的 `aclnn_kernels/contiguous.h` 头文件仅在 CANN 9.1.0+ 提供。使用前请 source 对应版本的环境脚本并确认 `ASCEND_HOME_PATH` 指向 9.1.0+ 的 CANN 安装目录：
+>
+> ```bash
+> source /usr/local/Ascend/ascend-toolkit/set_env.sh   # 按实际安装路径调整
+> ```
 
 ## 安装
 
@@ -141,6 +147,14 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 # 2. 评测（golden 作为 AI 算子，golden(CPU fp64) 作为参考）
 ./scripts/run_evaluation.sh --task-dir tasks/level1/exp --no-perf
 ```
+
+> ⚠️ **`cann_bench` 包名冲突**：golden whl 与 [examples/aclnn_launch_example](../../examples/aclnn_launch_example/) 构建的 wheel 同名（都叫 `cann_bench`），二者互斥。golden wheel 是纯 Python 包，只提供 `torch.ops.cann_bench` 下的 golden 算子（exp/gelu/sigmoid 等），**不包含**示例的 `cann_bench.add` / `cann_bench.sqrt`。golden 自验证完成后如需使用示例算子，请先卸载 golden wheel，再安装示例 wheel 或将示例目录加入 `PYTHONPATH`：
+>
+> ```bash
+> pip uninstall -y cann_bench
+> pip install examples/aclnn_launch_example/dist/cann_bench-*.whl
+> # 或：export PYTHONPATH="$(pwd)/examples/aclnn_launch_example:${PYTHONPATH}"
+> ```
 
 ## 评测报告
 

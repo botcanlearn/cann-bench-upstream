@@ -29,12 +29,27 @@ bash build.sh           # 构建wheel包
 
 ### 前置条件
 
-1. 安装 tilelang-ascend（NPU 版 TileLang）：
+1. 安装 TileLang-Ascend（昇腾适配版 TileLang）：
+
+> **注意**：本示例使用的 `tilelang.PassConfigKey.TL_ASCEND_*` 配置项为 TileLang-Ascend 特有，
+> PyPI 上的上游 `tilelang`（当前 0.1.x，如 0.1.13）**不包含** Ascend 后端，
+> 直接 `pip install tilelang` 会在 `import cann_bench` 时报错。必须安装 TileLang-Ascend：
+
 ```bash
-pip install -e /path/to/tilelang-ascend
-# 或通过 PYTHONPATH 注入：
-export PYTHONPATH=/mnt/workspace/gitCode/tilelang-ascend:$PYTHONPATH
+# 方式一：官方预编译 wheel（推荐）
+# 从 https://github.com/tile-ai/tilelang-ascend 获取 wheel 包后：
+pip install tilelang-*.whl
+
+# 方式二：源码编译安装
+git clone --recursive https://github.com/tile-ai/tilelang-ascend.git
+cd tilelang-ascend
+bash install_ascend.sh
+
+# 方式三：通过 PYTHONPATH 注入已有的 tilelang-ascend 源码目录
+export PYTHONPATH=/path/to/tilelang-ascend:$PYTHONPATH
 ```
+
+环境要求（TileLang-Ascend 官方文档）：CANN ≥ 8.3.RC1，torch-npu ≥ 2.6.0.RC1。
 
 2. 安装 cann-bench 依赖：
 ```bash
