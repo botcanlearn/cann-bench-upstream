@@ -717,3 +717,130 @@ class TestNormalRegionSamePrecisionGate:
         r = self._cmp(self._mk(k=0), self._mk(k=100))
         assert r.normal_error_count == 0
         assert r.normal_passed is True and r.passed is True
+
+
+class TestMergedHostConversion:
+    """精度对比临时副本合并（host 内存优化）后的数值一致性。
+
+    旧路径：native 输出 ``.cpu()`` 产生一份原生 dtype 全量 host 副本，
+    再 ``.double()`` 产生第二份 fp64 全量 host 副本。
+    新路径：单次 ``.to(device="cpu", dtype=torch.float64)`` 完成 device→host+dtype。
+    以下用例断言新旧转换的数值语义完全一致（MERE/MARE/各计数逐位相等）。
+
+    测试数据全部落在正常值域（|golden| ∈ [1, 2)，远高于 float32 的
+    small_value_threshold=2**-14 与 cancel_boundary=2**-8），
+    使 display MERE/MARE 等于整体有效位置的统计值，便于精确比对。
+    """
+
+    @staticmethod
+    def _legacy_fp64(output, golden):
+        """旧两步转换 + 标准相对误差公式（与 _compare_single_tensor 相同算子序）"""
+        output_fp64 = output.cpu().double()
+        golden_truncated = golden.to(output.dtype).double()
+        diff = torch.abs(output_fp64 - golden_truncated)
+        denominator = torch.abs(golden_truncated) + 1e-7
+        relative_error = diff / denominator
+        valid_mask = ~(torch.isnan(relative_error) | torch.isinf(relative_error))
+        return golden_truncated, diff, relative_error, valid_mask
+
+    def test_float_pass_path_matches_legacy_conversion(self):
+        """整体通过路径：mere/mare/max_diff/mean_diff 与旧两步转换逐位一致"""
+        torch.manual_seed(0)
+        golden = torch.rand(512, dtype=torch.float64) + 1.0
+        output = (golden + torch.rand(512, dtype=torch.float64) * 1e-5).float()
+
+        result = compare_tensors(output, golden, "float32")
+
+        _, diff, relative_error, valid_mask = self._legacy_fp64(output, golden)
+        valid_rel = relative_error[valid_mask]
+        valid_diff = diff[valid_mask]
+        assert result.passed is True
+        assert result.mere == float(valid_rel.mean())
+        assert result.mare == float(valid_rel.max())
+        assert result.max_diff == float(valid_diff.max())
+        assert result.mean_diff == float(valid_diff.mean())
+        assert result.total_count == output.numel()
+        sr = result.output_results[0]
+        assert sr.metadata['mere'] == result.mere
+        assert sr.metadata['mare'] == result.mare
+
+    def test_normal_region_failure_counts_match_legacy(self):
+        """正常值域失败路径（含 native 参考）：各计数与旧两步转换一致"""
+        golden = torch.rand(256, dtype=torch.float64) + 1.0
+        output = golden.float()
+        output[0] = 10.0
+        output[1] = -10.0
+        output[2] = 100.0
+        native = golden.float()  # 完美截断：同精度参考自身零误差
+
+        result = compare_tensors(output, golden, "float32", native_output=native)
+
+        golden_truncated, _, relative_error, valid_mask = self._legacy_fp64(output, golden)
+        mare_threshold = 10 * 2**-13
+        expected_mismatch = int(((relative_error > mare_threshold) & valid_mask).sum())
+        # 旧两步转换的同精度参考路径：native.cpu().double() 与 golden_truncated 比较
+        cpu_output_fp64 = native.cpu().double()
+        cpu_relative_error = (
+            torch.abs(cpu_output_fp64 - golden_truncated) / (torch.abs(golden_truncated) + 1e-7)
+        )
+        expected_cpu_errors = int((cpu_relative_error > mare_threshold).sum())
+
+        assert result.passed is False
+        assert result.mismatch_count == expected_mismatch == 3
+        assert result.normal_error_count == 3
+        assert result.normal_cpu_error_count == expected_cpu_errors == 0
+        assert result.normal_passed is False
+        # 全部落在正常值域：小值域/相消计数为零
+        assert result.small_value_total_count == 0
+        assert result.cancel_total_count == 0
+        # 正常值域兜底失败时显示排除小值域/相消后的 MERE/MARE，此处即全量有效位置
+        valid_rel = relative_error[valid_mask]
+        assert result.mere == float(valid_rel.mean())
+        assert result.mare == float(valid_rel.max())
+
+    def test_inf_saturation_does_not_mutate_caller_tensor(self):
+        """inf 饱和替换发生在 fp64 转换副本上，调用方原生 dtype 张量不被改写"""
+        golden = torch.tensor([60000.0, 1.0], dtype=torch.float64)  # 60000 在 fp16 范围内
+        output = torch.tensor([float("inf"), 1.0], dtype=torch.float16)  # NPU 饱和到 inf
+
+        result = compare_tensors(output, golden, "float16")
+
+        assert result.passed is False  # 65504 vs 60000 相对误差 ~9% 必然超标
+        assert torch.isinf(output[0]).item()  # 调用方张量保持原值，未被替换为 65504
+
+    def test_all_nan_early_return_uses_converted_copy(self):
+        """全 NaN 早退路径：total_count 取自 fp64 转换副本（numel 不变）"""
+        golden = torch.tensor([float("nan"), float("nan")], dtype=torch.float64)
+        output = torch.tensor([float("nan"), float("nan")], dtype=torch.float32)
+
+        result = compare_tensors(output, golden, "float32")
+
+        assert result.passed is True
+        assert result.total_count == 2
+
+    def test_bit_exact_path_unchanged(self):
+        """bit-exact 路径（逐输出阈值=0）仍需原生 dtype host 副本，行为不变
+
+        注：compare_tensors 的 threshold 形参不参与逐输出对比，
+        逐输出阈值来自 custom_thresholds / 默认阈值表，故经 custom_thresholds 触发。
+        """
+        zero_threshold = {"float32": 0.0}
+        golden = torch.tensor([1.0, -0.0], dtype=torch.float64)
+        output_same = golden.float()
+        assert compare_tensors(output_same, golden, "float32",
+                               custom_thresholds=zero_threshold).passed is True
+        # +0.0 vs -0.0 字节不等 → 失败
+        output_flip = torch.tensor([1.0, 0.0], dtype=torch.float32)
+        result = compare_tensors(output_flip, golden, "float32",
+                                 custom_thresholds=zero_threshold)
+        assert result.passed is False
+        assert "bit-exact" in result.output_results[0].error_msg
+
+    def test_integer_path_unchanged(self):
+        """整数路径（原生 dtype host 副本 + torch.equal）行为不变"""
+        golden = torch.tensor([1, 2, 3], dtype=torch.int64)
+        assert compare_tensors(golden.clone(), golden, "int64").passed is True
+        output = torch.tensor([1, 2, 4], dtype=torch.int64)
+        result = compare_tensors(output, golden, "int64")
+        assert result.passed is False
+        assert result.mismatch_count == 1

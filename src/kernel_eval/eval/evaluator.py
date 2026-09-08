@@ -65,6 +65,12 @@ from ..registry.matcher_registry import get_operator_matcher
 from .. import benches as _benches
 
 
+# RSS 主动清理阈值环境变量（单位 MB）；<=0 表示禁用
+_RSS_TRIM_ENV_VAR = "KERNEL_EVAL_RSS_TRIM_MB"
+# 默认 48 GiB：runner 容器 128 GiB 限额下，为单 case 的 fp64 golden 峰值预留余量
+_RSS_TRIM_DEFAULT_MB = 48 * 1024
+
+
 def _write_json_atomic(path: str, payload: dict) -> None:
     """Write JSON without exposing a truncated destination to the parent."""
     output_path = Path(path)
@@ -84,6 +90,47 @@ def _write_json_atomic(path: str, payload: dict) -> None:
             os.unlink(temp_path)
         except FileNotFoundError:
             pass
+
+
+def _read_rss_mb() -> Optional[float]:
+    """读取 /proc/self/status 的 VmRSS（MB）。任何失败静默返回 None。"""
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as status_file:
+            for line in status_file:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024.0
+    except Exception:
+        return None
+    return None
+
+
+def _rss_trim_threshold_mb() -> Optional[float]:
+    """RSS 主动清理阈值（MB）。
+
+    默认 48 GiB；环境变量 KERNEL_EVAL_RSS_TRIM_MB 覆盖；
+    <=0 表示禁用（返回 None）；非法值回退默认。
+    """
+    raw = os.environ.get(_RSS_TRIM_ENV_VAR)
+    if raw is None:
+        return float(_RSS_TRIM_DEFAULT_MB)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return float(_RSS_TRIM_DEFAULT_MB)
+    return value if value > 0 else None
+
+
+def _malloc_trim() -> bool:
+    """通过 ctypes 调用 glibc malloc_trim(0)，将空闲堆页归还内核。
+
+    非 glibc 平台或任何调用失败静默降级（返回 False），不影响评测主流程。
+    """
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+        return True
+    except Exception:
+        return False
 
 
 class Evaluator:
@@ -313,6 +360,9 @@ class Evaluator:
                                                   input_tensors, enable_perf=use_profiler,
                                                   operator_name=case.operator)
             if not ai_result.success:
+                # 先释放输出张量再清理，gc/empty_cache 才能真正回收这批内存
+                self._release_outputs(golden_result)
+                self._release_outputs(ai_result)
                 self._cleanup_memory()
                 return EvalCaseResult(
                     case_id=case_id_str,
@@ -320,8 +370,8 @@ class Evaluator:
                     operator=case.operator,
                     case_num=case.case_id,
                     success=False,
-                    golden_run_result=self._release_outputs(golden_result),
-                    ai_run_result=self._release_outputs(ai_result),
+                    golden_run_result=golden_result,
+                    ai_run_result=ai_result,
                     error_msg=self._format_run_failure("AI算子执行失败", ai_result),
                     baseline_perf_us=case.baseline_perf_us,
                     t_hw_us=case.t_hw_us,
@@ -334,6 +384,11 @@ class Evaluator:
 
             # 同精度参考输出（用于 checker 小值域判断）
             # native_cpu/native_npu 时 golden 已是同精度，直接复用以避免重复计算
+            # native_* 名称先初始化为 None：仅 fp64_cpu 策略的 else 分支会赋值，
+            # 尾部统一释放大对象时按已定义名称处理
+            native_inputs = None
+            native_params = None
+            native_result = None
             golden_strategy = getattr(self.bench_config, 'golden_precision', 'fp64_cpu')
             if golden_strategy in ('native_cpu', 'native_npu'):
                 native_out = golden_result.outputs
@@ -446,6 +501,24 @@ class Evaluator:
                         fail_reasons.append(accuracy_result.error_msg)
                     error_msg = f"精度不达标: {', '.join(fail_reasons)}" if fail_reasons else "精度不达标"
 
+            # 精度对比与索引校验已完成，后续只消费标量指标（结果序列化仅取
+            # elapsed_us 等标量，见 results.py）。立即释放本 case 的大局部对象——
+            # fp64 golden 输入副本、golden/native/AI 输出——不等函数返回，
+            # 避免巨型 case 的 fp64 golden 峰值之后 host 匿名内存继续单调累积。
+            # 紧随的 _cleanup_memory() 内的 gc.collect() 使释放立即生效。
+            input_tensors = None
+            params = None
+            golden_inputs = None
+            golden_params = None
+            golden_outs = None
+            ai_outs = None
+            native_out = None
+            native_inputs = None
+            native_params = None
+            native_result = None
+            self._release_outputs(golden_result)
+            self._release_outputs(ai_result)
+
             self._cleanup_memory()
 
             return EvalCaseResult(
@@ -456,8 +529,8 @@ class Evaluator:
                 success=accuracy_result.is_passed(),
                 accuracy_result=accuracy_result,
                 perf_result=perf_result,
-                golden_run_result=self._release_outputs(golden_result),
-                ai_run_result=self._release_outputs(ai_result),
+                golden_run_result=golden_result,
+                ai_run_result=ai_result,
                 error_msg=error_msg,
                 baseline_perf_us=case.baseline_perf_us,
                 t_hw_us=case.t_hw_us,
@@ -1283,6 +1356,11 @@ class Evaluator:
         注意：当 NPU 设备因 AICPU 异常进入错误状态后，
         torch_npu.npu.empty_cache() 会因设备同步失败而抛出 RuntimeError。
         必须静默处理，避免掩盖原始算子错误。
+
+        RSS 主动清理：VmRSS 超过阈值（默认 48 GiB，可用环境变量
+        KERNEL_EVAL_RSS_TRIM_MB 覆盖，<=0 禁用）时追加 malloc_trim(0)，
+        把 glibc 持有的空闲堆页归还内核，缓解 eval-child 的 RSS 单调累积。
+        /proc 读取与 malloc_trim 调用失败均静默降级，不影响评测主流程。
         """
         try:
             import torch_npu
@@ -1292,6 +1370,15 @@ class Evaluator:
             pass
         import gc
         gc.collect()
+        threshold_mb = _rss_trim_threshold_mb()
+        if threshold_mb is None:
+            return
+        rss_mb = _read_rss_mb()
+        if rss_mb is None or rss_mb <= threshold_mb:
+            return
+        if _malloc_trim():
+            print(f"[INFO] VmRSS {rss_mb:.0f}MB 超过阈值 {threshold_mb:.0f}MB，"
+                  f"已执行 malloc_trim 归还空闲堆页")
 
     def _release_outputs(self, op_run_result: OpRunResult) -> OpRunResult:
         """释放 outputs tensor，保留元数据

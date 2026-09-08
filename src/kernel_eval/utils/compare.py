@@ -51,6 +51,15 @@ _INTEGER_DTYPES = (
     torch.uint8, torch.uint16, torch.uint32, torch.uint64,
 )
 
+# Bit-exact 浮点路径支持的 fp -> int view 映射（字节级比较）。
+# 提到模块级：device 归一化需要在进入分支前判断是否走 bit-exact 路径。
+_BIT_VIEW = {
+    torch.float16: torch.int16,
+    torch.bfloat16: torch.int16,
+    torch.float32: torch.int32,
+    torch.float64: torch.int64,
+}
+
 
 @dataclass
 class SingleOutputResult:
@@ -238,22 +247,25 @@ def _compare_single_tensor(
         )
 
     # Golden runs on CPU while the AI op runs on NPU.
-    # Normalize both sides to CPU so subtract/equal don't trip on mixed devices.
-    if output.is_cuda or output.device.type == "npu":
-        output = output.cpu()
+    # Normalize golden to CPU so subtract/equal don't trip on mixed devices.
     if golden.is_cuda or golden.device.type == "npu":
         golden = golden.cpu()
+
+    # output 的 host 化按比较路径区分（内存优化：避免全量 host 副本重复驻留）：
+    # - bit-exact / 整数路径需要原生 dtype 的 host 副本，在此 .cpu()；
+    # - 浮点 MERE/MARE 路径在下方直接单次完成 device→host + fp64 转换，
+    #   不再额外驻留一份原生 dtype 的全量 host 临时张量（巨型 case 可省数 GB 峰值）。
+    needs_native_host_copy = (
+        output.dtype in _INTEGER_DTYPES
+        or (threshold == 0 and output.is_floating_point() and output.dtype in _BIT_VIEW)
+    )
+    if needs_native_host_copy and (output.is_cuda or output.device.type == "npu"):
+        output = output.cpu()
 
     # Bit-exact 浮点路径: 当 threshold == 0 且为浮点 dtype 时, 通过 .view(int dtype)
     # 做字节级比较, 这样 +0.0 / -0.0 不会被 IEEE 754 相等性当作同值放过, NaN payload
     # 也按字节区分。整数 dtype 已经天然字节唯一, 走下方 torch.equal 路径即可。
     if threshold == 0 and output.is_floating_point():
-        _BIT_VIEW = {
-            torch.float16: torch.int16,
-            torch.bfloat16: torch.int16,
-            torch.float32: torch.int32,
-            torch.float64: torch.int64,
-        }
         int_dtype = _BIT_VIEW.get(output.dtype)
         if int_dtype is not None:
             golden_cast = golden.to(output.dtype).contiguous()
@@ -370,7 +382,9 @@ def _compare_single_tensor(
     # Golden 主动截断到 output.dtype，模拟算子输出的精度限制
     target_dtype = output.dtype
     golden_truncated = golden.to(target_dtype).double()
-    output_fp64 = output.double()
+    # 单次完成 device→host + fp64 转换（等价于旧的 .cpu() 再 .double()，数值不变），
+    # 消除一份原生 dtype 的全量 host 临时副本；调用方持有的原张量不受影响。
+    output_fp64 = output.to(device="cpu", dtype=torch.float64)
 
     # 处理 NaN
     if torch.any(torch.isnan(output_fp64)) or torch.any(torch.isnan(golden_truncated)):
@@ -456,13 +470,13 @@ def _compare_single_tensor(
         #   维持兼容；调用方可基于 mismatch_count 决定是否进一步排查）
         # - 全部位置都是 Inf 且符号匹配 → 同上（已由 inf_match_mask 保证）
         # 若调用方需要更严格的判定，可在外层检查 (mere==0 and total>0)。
-        has_nan = torch.isnan(output).any().item() if output.numel() > 0 else False
+        has_nan = torch.isnan(output_fp64).any().item() if output_fp64.numel() > 0 else False
         if has_nan:
             _logger.warning(
                 "compare: 所有有效位置均为 NaN/Inf 且匹配；两个算子均输出 NaN 的"
                 "极端情况可能掩盖独立的数值 bug，请人工核查 case 输入分布。"
                 " (total=%d, dtype=%s)",
-                output.numel(), dtype,
+                output_fp64.numel(), dtype,
             )
         return CompareResult(
             passed=True,
@@ -473,7 +487,7 @@ def _compare_single_tensor(
             max_diff=0.0,
             mean_diff=0.0,
             mismatch_count=0,
-            total_count=output.numel(),
+            total_count=output_fp64.numel(),
             mismatch_ratio=0.0,
             cancel_error_count=0,
             cancel_cpu_error_count=0,
@@ -487,7 +501,7 @@ def _compare_single_tensor(
     valid_diff = diff[valid_mask]
     max_diff = float(valid_diff.max()) if len(valid_diff) > 0 else 0.0
     mean_diff = float(valid_diff.mean()) if len(valid_diff) > 0 else 0.0
-    total_count = output.numel()
+    total_count = output_fp64.numel()
 
     # ============================================================
     # 第一阶段：整体相对误差判定（优先判定）
@@ -549,11 +563,11 @@ def _compare_single_tensor(
     # 重要：native 和 NPU 的比较基准必须一致，都使用 golden_truncated（FP64 → target_dtype → FP64）
     # 这样才能公平比较两者在相同精度限制下与理论真值的误差差异
     if native_output is not None:
-        # F088: native_output 应在 CPU 上但调用方契约不强制；防御性 .cpu() 后再
-        # .double() 避免 NPU 上的 .double() 失败或与 golden_truncated 跨设备运算
-        if native_output.device.type != "cpu":
-            native_output = native_output.cpu()
-        cpu_output_fp64 = native_output.double()
+        # F088: native_output 应在 CPU 上但调用方契约不强制；防御性 device→host +
+        # fp64 单次转换（等价于旧的 .cpu() 再 .double()，数值不变），
+        # 避免 NPU 上的 .double() 失败或与 golden_truncated 跨设备运算，
+        # 同时消除一份原生 dtype 的全量 host 临时副本。
+        cpu_output_fp64 = native_output.to(device="cpu", dtype=torch.float64)
         # 同精度差异也与截断后的 golden 比较，保持基准一致
         cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
     else:
