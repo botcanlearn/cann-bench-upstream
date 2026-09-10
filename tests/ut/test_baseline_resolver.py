@@ -61,6 +61,17 @@ class TestResolveHardware:
         """910B2 变体"""
         assert resolve_hardware("Ascend910_9362B") == "910b2"
 
+    def test_950dt_aliases(self):
+        """950DT 别名（含子型号前缀匹配）"""
+        assert resolve_hardware("950dt") == "950dt"
+        assert resolve_hardware("Ascend950DT") == "950dt"
+        assert resolve_hardware("Ascend950DT_9581") == "950dt"
+
+    def test_950dt_does_not_collide_with_950pr(self):
+        """950DT 与 950PR 前缀互不误匹配"""
+        assert resolve_hardware("Ascend950PR_9579") == "950pr"
+        assert resolve_hardware("Ascend950DT_9581") != "950pr"
+
     def test_longest_prefix_wins(self):
         """最长前缀优先"""
         # "Ascend910" 不匹配任何 key 的前缀（"Ascend910B2" 不是 "Ascend910" 的前缀）
@@ -76,11 +87,12 @@ class TestPlatformAlias:
         assert "Ascend910_9362" in PLATFORM_ALIAS
         assert "910b2" in PLATFORM_ALIAS
         assert "Ascend310P" in PLATFORM_ALIAS
+        assert "Ascend950DT" in PLATFORM_ALIAS
 
     def test_all_values_are_logical_names(self):
         """所有值是逻辑名"""
         for key, value in PLATFORM_ALIAS.items():
-            assert value in ("910b2", "910b1", "310p", "950pr")
+            assert value in ("910b2", "910b1", "310p", "950pr", "950dt")
 
 
 class TestDefaultHardware:

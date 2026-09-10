@@ -49,6 +49,7 @@ DEFAULT_HARDWARE: str = "910b2"
 #   Ascend 910B1 系列 → "910b1"
 #   Ascend 310P 系列 → "310p"
 #   Ascend 950PR 系列 → "950pr"
+#   Ascend 950DT 系列 → "950dt"（与 950PR 同构，仅 HBM 读带宽更高）
 #   未来新增平台只需在此处加一行映射 + 在 metadata/ 下加对应 JSON 文件。
 #
 # 产品型号对照（华为官方命名）：
@@ -57,6 +58,7 @@ DEFAULT_HARDWARE: str = "910b2"
 #   Ascend910_9361  = Ascend 910B1 (Atlas A2 推理卡)
 #   Ascend310P_???  = Ascend 310P (Atlas 推理卡)
 #   Ascend950PR_??? = Ascend 950PR (Atlas 推理加速卡)
+#   Ascend950DT_??? = Ascend 950DT (Atlas 推理加速卡，高带宽变体)
 # ---------------------------------------------------------------------------
 PLATFORM_ALIAS: Dict[str, str] = {
     # 910B2 (Atlas A2 训练卡)
@@ -75,6 +77,9 @@ PLATFORM_ALIAS: Dict[str, str] = {
     # 950PR (Atlas 推理加速卡) — key 是前缀，子型号由 resolve_hardware 前缀匹配
     "Ascend950PR": "950pr",
     "950pr": "950pr",
+    # 950DT (Atlas 推理加速卡，高带宽变体) — key 是前缀，子型号由前缀匹配
+    "Ascend950DT": "950dt",
+    "950dt": "950dt",
 }
 
 
