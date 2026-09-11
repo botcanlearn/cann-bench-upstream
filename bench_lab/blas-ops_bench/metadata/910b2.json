@@ -1,0 +1,177 @@
+{
+ "_metadata": {
+  "description": "BLAS ops bench（blas_trsv 三角求解、blas_trmv 三角矩阵-向量乘）baseline 性能数据",
+  "hardware": "910b2",
+  "generated_at": "2026-08-30T09:46:42.657876",
+  "source": "bench_lab/blas-ops_bench/blas_trsv/cases.yaml 的 20 条用例。baseline_perf_us 为 torch 参考实现（torch.linalg.solve_triangular）在 910b2 NPU 上的 TTK e2e 实测 DEVICE 耗时（us，kernel 级 avg，aclnnTriangularSolve，2026-08-30 采集）。",
+  "baseline_source": {
+   "measured": "TTK e2e（ops-test-kit）真机实测：Backend npu，blas_trsv: torch.linalg.solve_triangular（FP32 的 trans=C 按 T 精确等价映射，README: FP32 下 C≡T）；blas_trmv: torch.matmul（torch 无三角感知 matvec，全矩阵 GEMV 口径，含约 2x 三角访存/计算，desc.md 记录）。两者均为 A 方阵/n×n + B/x (n,1) 或 (n,) 列向量等价形式，incx 属存储布局不进入 API，值域与 cases.yaml 一致。blas_trsv 20/20、blas_trmv 20/20 全部测得且 PASS；DEVICE 为 NPU 侧 kernel 平均耗时。",
+   "derived_from_t_hw": "t_hw 按 hap-ascend-910b2-v2 skill 的 roofline 方法计算: ①访存只计被消费字节(A 的 uplo 三角 n(n+1)/2 + b 向量 n 个; 行主序三角前缀/后缀连续, 未引用三角不发地址), 读=字节/1.92TB/s, 写=L2 优先(远小于 192MB, 全走 6.4TB/s); ②向量: n²/2 次 FMA(mul/add 分别按 6 TFLOPS fp32 计) + n 次除法(1.5 TFLOPS); complex64: 每累加项 8 实数算术, 字节 ×8; ③串行依赖处理: trsv 总计算量恒为 n²/2 FMA(每元素恰用一次, 无逐层重处理, 区别于 scan 类), 分治并行化深度 O(log²n) 不放大总工作量, 理想模型下取 throughput 口径; 全部用例瓶颈为 hbm_read(读:算术 ≈ 6:1)。注: arch22 参考实现为严格串行(ops-blas README), 真实可达性能高于本理想下界属正常。",
+   "note": "torch_npu 的三角求解在 NPU 上经 aclnnTriangularSolve(AiCPU) 执行，与自研 kernel 打榜口径存在实现差异，评审时可参考。ops-blas README 的 ctrsv GPU cuBLAS 标杆（48.28/95.79/155.81us @n=512/1024/2048）为另一独立口径。用例集已全部为 float32：complex64（aclblasCtrsv 接口）因当前栈无 NPU 可执行的复数参考实现（排查记录见 git 历史/desc.md），打榜用例暂不覆盖，proto 仍声明该能力。"
+  }
+ },
+ "blas_trsv": {
+  "1": {
+   "baseline_perf_us": 132.583,
+   "t_hw_us": 4.167e-06
+  },
+  "2": {
+   "baseline_perf_us": 165.51,
+   "t_hw_us": 1.042e-05
+  },
+  "3": {
+   "baseline_perf_us": 141.447,
+   "t_hw_us": 2.917e-05
+  },
+  "4": {
+   "baseline_perf_us": 217.54,
+   "t_hw_us": 7.292e-05
+  },
+  "5": {
+   "baseline_perf_us": 200.953,
+   "t_hw_us": 9.167e-05
+  },
+  "6": {
+   "baseline_perf_us": 210.653,
+   "t_hw_us": 0.004331
+  },
+  "7": {
+   "baseline_perf_us": 211.318,
+   "t_hw_us": 0.004467
+  },
+  "8": {
+   "baseline_perf_us": 261.923,
+   "t_hw_us": 0.004604
+  },
+  "9": {
+   "baseline_perf_us": 154.337,
+   "t_hw_us": 1.042e-05
+  },
+  "10": {
+   "baseline_perf_us": 204.751,
+   "t_hw_us": 4.167e-05
+  },
+  "11": {
+   "baseline_perf_us": 155.036,
+   "t_hw_us": 2.917e-05
+  },
+  "12": {
+   "baseline_perf_us": 228.504,
+   "t_hw_us": 0.0003167
+  },
+  "13": {
+   "baseline_perf_us": 238.192,
+   "t_hw_us": 0.01747
+  },
+  "14": {
+   "baseline_perf_us": 375.974,
+   "t_hw_us": 0.06853
+  },
+  "15": {
+   "baseline_perf_us": 316.573,
+   "t_hw_us": 0.06907
+  },
+  "16": {
+   "baseline_perf_us": 620.087,
+   "t_hw_us": 0.2747
+  },
+  "17": {
+   "baseline_perf_us": 1603.925,
+   "t_hw_us": 1.095
+  },
+  "18": {
+   "baseline_perf_us": 5555.753,
+   "t_hw_us": 4.375
+  },
+  "19": {
+   "baseline_perf_us": 1427.682,
+   "t_hw_us": 1.085
+  },
+  "20": {
+   "baseline_perf_us": 4917.347,
+   "t_hw_us": 4.375
+  }
+ },
+ "blas_trmv": {
+  "1": {
+   "baseline_perf_us": 2.42,
+   "t_hw_us": 4.167e-06
+  },
+  "2": {
+   "baseline_perf_us": 4.787,
+   "t_hw_us": 1.042e-05
+  },
+  "3": {
+   "baseline_perf_us": 4.653,
+   "t_hw_us": 2.917e-05
+  },
+  "4": {
+   "baseline_perf_us": 4.687,
+   "t_hw_us": 7.292e-05
+  },
+  "5": {
+   "baseline_perf_us": 4.293,
+   "t_hw_us": 9.167e-05
+  },
+  "6": {
+   "baseline_perf_us": 5.44,
+   "t_hw_us": 0.004331
+  },
+  "7": {
+   "baseline_perf_us": 5.2,
+   "t_hw_us": 0.004467
+  },
+  "8": {
+   "baseline_perf_us": 5.16,
+   "t_hw_us": 0.004604
+  },
+  "9": {
+   "baseline_perf_us": 4.373,
+   "t_hw_us": 1.042e-05
+  },
+  "10": {
+   "baseline_perf_us": 4.52,
+   "t_hw_us": 4.167e-05
+  },
+  "11": {
+   "baseline_perf_us": 4.8,
+   "t_hw_us": 2.917e-05
+  },
+  "12": {
+   "baseline_perf_us": 4.907,
+   "t_hw_us": 0.0003167
+  },
+  "13": {
+   "baseline_perf_us": 4.853,
+   "t_hw_us": 0.01747
+  },
+  "14": {
+   "baseline_perf_us": 4.667,
+   "t_hw_us": 0.06853
+  },
+  "15": {
+   "baseline_perf_us": 4.213,
+   "t_hw_us": 0.06907
+  },
+  "16": {
+   "baseline_perf_us": 4.893,
+   "t_hw_us": 0.2747
+  },
+  "17": {
+   "baseline_perf_us": 6.293,
+   "t_hw_us": 1.095
+  },
+  "18": {
+   "baseline_perf_us": 18.847,
+   "t_hw_us": 4.375
+  },
+  "19": {
+   "baseline_perf_us": 7.213,
+   "t_hw_us": 1.085
+  },
+  "20": {
+   "baseline_perf_us": 19.08,
+   "t_hw_us": 4.375
+  }
+ }
+}
