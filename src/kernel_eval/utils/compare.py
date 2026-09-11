@@ -199,6 +199,52 @@ def _normalize_outputs(output: Any) -> List[torch.Tensor]:
         return []
 
 
+# 分块归约的块长（元素数）。fp64 下 4Mi 元素 = 32MB，足够摊薄 per-chunk 开销，
+# 又远小于隐藏集巨型 case 的整段长度。
+_MASKED_CHUNK = 1 << 22
+
+
+class _MaskedStats:
+    """``values[mask]`` 的 count / mean / max，但不物化那份 gather。
+
+    ``relative_error[valid_mask]`` 这类写法会分配一份与输入等长的 fp64 张量，而调用点
+    只消费三个标量。分块之后额外驻留是 O(chunk) 而非 O(N)——2.15B 元素的 case 上，
+    这类 gather 一共占 16 B/元素。
+
+    求和顺序因此从整段 pairwise 变成「块内 pairwise + 块间顺序累加」，fp64 下 mere 会有
+    个位数 ULP 的偏差（实测最大相对偏差 6.5e-16）。mere/mare 是与阈值比较的统计量，
+    这个量级不影响任何判定；120 个 case 的语料上 passed / small_value_passed /
+    cancel_passed / normal_passed 全部不变。
+    """
+
+    __slots__ = ("count", "_sum", "_max")
+
+    def __init__(self, values: torch.Tensor, mask: torch.Tensor,
+                 chunk: int = _MASKED_CHUNK) -> None:
+        flat_values = values.reshape(-1)
+        flat_mask = mask.reshape(-1)
+        self.count = 0
+        self._sum = 0.0
+        self._max: Optional[float] = None
+        for start in range(0, flat_values.numel(), chunk):
+            selected = flat_values[start:start + chunk][flat_mask[start:start + chunk]]
+            if selected.numel() == 0:
+                continue
+            self.count += selected.numel()
+            self._sum += float(selected.sum())
+            block_max = float(selected.max())
+            self._max = block_max if self._max is None else max(self._max, block_max)
+
+    def __len__(self) -> int:
+        return self.count
+
+    def mean(self) -> float:
+        return self._sum / self.count if self.count else 0.0
+
+    def max(self) -> float:
+        return self._max if self._max is not None else 0.0
+
+
 def _compare_single_tensor(
     output: torch.Tensor,
     golden: torch.Tensor,
@@ -453,15 +499,18 @@ def _compare_single_tensor(
 
     # 计算相对误差（标准公式）
     # 公式: |actual - golden| / (|golden| + 1e-7)
-    diff = torch.abs(output_fp64 - golden_truncated)
+    # abs 就地写在减法的临时上：减法结果没有别的引用，省一份全量 fp64
+    diff = (output_fp64 - golden_truncated).abs_()
     golden_abs = torch.abs(golden_truncated)
     denominator = golden_abs + 1e-7  # 防止除0
 
     relative_error = diff / denominator
+    del denominator  # 只用于这一次除法；巨型 case 上留着它就是 8 B/元素的净损耗
 
     # 排除 NaN、Inf 和匹配的 Inf 位置
     valid_mask = ~(torch.isnan(relative_error) | torch.isinf(relative_error) | inf_match_mask)
-    valid_relative_error = relative_error[valid_mask]
+    del inf_match_mask
+    valid_relative_error = _MaskedStats(relative_error, valid_mask)
 
     if len(valid_relative_error) == 0:
         # F090: 旧版"全 NaN/Inf 匹配 = pass" 会掩盖"两个算子在同位置都产生 NaN
@@ -498,9 +547,10 @@ def _compare_single_tensor(
     mare = float(valid_relative_error.max())
 
     # 计算绝对差异统计
-    valid_diff = diff[valid_mask]
-    max_diff = float(valid_diff.max()) if len(valid_diff) > 0 else 0.0
-    mean_diff = float(valid_diff.mean()) if len(valid_diff) > 0 else 0.0
+    valid_diff = _MaskedStats(diff, valid_mask)
+    max_diff = valid_diff.max() if len(valid_diff) > 0 else 0.0
+    mean_diff = valid_diff.mean() if len(valid_diff) > 0 else 0.0
+    del valid_diff
     total_count = output_fp64.numel()
 
     # ============================================================
@@ -510,9 +560,11 @@ def _compare_single_tensor(
     # 小值域/相消判定只是为了处理"相对误差可能不合理"的特殊情况
     mare_threshold = 10 * threshold
 
-    # 计算整体相对误差（包括所有有效位置）
-    overall_mere = float(valid_relative_error.mean())
-    overall_mare = float(valid_relative_error.max())
+    # 整体相对误差就是上面算过的 mere/mare（同一组有效位置、同一次归约），换个名字是为了
+    # 和下面按值域细分的显示用 MERE/MARE 区分开
+    overall_mere = mere
+    overall_mare = mare
+    del valid_relative_error
 
     # 如果整体相对误差通过，直接返回，不需要小值域/相消判定
     if overall_mere < threshold and overall_mare < mare_threshold:
@@ -558,6 +610,7 @@ def _compare_single_tensor(
     # 小值域 NPU 错误计数: |golden| < small_value_threshold 且 |output - golden| > small_value_error
     small_value_npu_error_mask = small_value_mask & (diff > small_value_error)
     small_value_error_count = int(small_value_npu_error_mask.sum())
+    del small_value_npu_error_mask, diff  # diff 到此为止只被这一处消费
 
     # 小值域同精度参考错误计数
     # 重要：native 和 NPU 的比较基准必须一致，都使用 golden_truncated（FP64 → target_dtype → FP64）
@@ -569,17 +622,20 @@ def _compare_single_tensor(
         # 同时消除一份原生 dtype 的全量 host 临时副本。
         cpu_output_fp64 = native_output.to(device="cpu", dtype=torch.float64)
         # 同精度差异也与截断后的 golden 比较，保持基准一致
-        cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
+        cpu_diff = (cpu_output_fp64 - golden_truncated).abs_()
     else:
         # golden 截断到目标精度后再升到 FP64，这就是同精度下的"理想"输出
         cpu_output_fp64 = golden.to(target_dtype).double()
         # 与截断后的 golden 比较（此时 cpu_output_fp64 == golden_truncated，diff = 0）
-        cpu_diff = torch.abs(cpu_output_fp64 - golden_truncated)
+        cpu_diff = (cpu_output_fp64 - golden_truncated).abs_()
+    # 两个分支都只拿 cpu_output_fp64 算 cpu_diff；golden_truncated 也到此为止
+    del cpu_output_fp64, golden_truncated
 
     # 同精度小值域错误计数: |golden| < threshold 且 |native_output - golden_truncated| > error
     cpu_small_value_mask = small_value_mask  # 直接使用 NPU 的小值域 mask，保证一致
     cpu_small_value_error_mask = cpu_small_value_mask & (cpu_diff > small_value_error)
     small_value_cpu_error_count = int(cpu_small_value_error_mask.sum())
+    del cpu_small_value_error_mask
 
     # === 小值域兜底判定 ===
     # 判定标准严格对齐 docs/spec/benchmark_spec.md「小值域通过标准」：
@@ -598,20 +654,25 @@ def _compare_single_tensor(
     cancel_zero_threshold = get_cancel_zero_threshold(dtype)
 
     # 检测相消位置
-    output_abs = torch.abs(output_fp64)
-    output_near_zero = output_abs < cancel_zero_threshold
+    output_near_zero = torch.abs(output_fp64) < cancel_zero_threshold
+    del output_fp64  # total_count 已在上面取过；后续只用掩码
     golden_in_cancel_range = (golden_abs < cancel_boundary) & (golden_abs >= small_value_threshold)
     cancel_mask = output_near_zero & golden_in_cancel_range & valid_mask
+    del output_near_zero, golden_in_cancel_range
     cancel_total_count = int(cancel_mask.sum())
 
     # 相消位置"错误"判断：相对误差超过 mare_threshold
     cancel_npu_error_mask = cancel_mask & (relative_error > mare_threshold)
     cancel_error_count = int(cancel_npu_error_mask.sum())
+    del cancel_npu_error_mask
 
     # CPU 相对误差超标计数
-    cpu_relative_error = cpu_diff / (golden_abs + 1e-7)
+    # 就地除：cpu_diff 之后不再被读，复用它的存储省一份全量 fp64
+    cpu_relative_error = cpu_diff.div_(golden_abs + 1e-7)
+    del cpu_diff, golden_abs
     cancel_cpu_error_mask = cancel_mask & (cpu_relative_error > mare_threshold)
     cancel_cpu_error_count = int(cancel_cpu_error_mask.sum())
+    del cancel_cpu_error_mask
 
     # 相消位置兜底判定：与小值域相同标准，对齐 benchmark_spec.md「相消位置通过标准」：
     #     ErrorCount_npu / max(ErrorCount_cpu, 1) ≤ 2
@@ -624,11 +685,12 @@ def _compare_single_tensor(
 
     # === 分析失败原因 ===
     # 检查相对误差超标的点是否都在小值域/相消范围内
-    mismatch_in_small_value = mismatch_mask & small_value_mask
-    mismatch_in_cancel = mismatch_mask & cancel_mask
+    # （曾另算 mismatch_in_small_value / mismatch_in_cancel 两个掩码，但从未被读取，已删）
     mismatch_in_normal = mismatch_mask & ~small_value_mask & ~cancel_mask
+    del mismatch_mask
 
     normal_mismatch_count = int(mismatch_in_normal.sum())
+    del mismatch_in_normal
 
     # === 正常值域兜底判定（issue #92）===
     # 与小值域/相消对齐，正常值域也做同精度对照，但更保守：仅当同精度参考(native)
@@ -636,10 +698,12 @@ def _compare_single_tensor(
     # 参考干净时维持"任一正常值域超标即失败"的现状严格判定——故对非病态场景零改动。
     # 缺 native_output 时 cpu_relative_error≡0 → normal_cpu_error_count=0 → 走严格分支，不放宽。
     normal_region_mask = ~small_value_mask & ~cancel_mask & valid_mask
+    del small_value_mask, cancel_mask, valid_mask
     normal_total_count = int(normal_region_mask.sum())
     normal_error_count = normal_mismatch_count  # NPU 在正常值域的超标点数
     normal_cpu_error_count = int(
         (normal_region_mask & (cpu_relative_error > mare_threshold)).sum())
+    del cpu_relative_error
     if normal_error_count == 0:
         normal_passed = True
     elif normal_cpu_error_count == 0:
@@ -653,12 +717,13 @@ def _compare_single_tensor(
     passed = normal_passed and small_value_passed and cancel_passed
 
     # 显示用 MERE/MARE
-    normal_relative_error = relative_error[normal_region_mask]
+    normal_relative_error = _MaskedStats(relative_error, normal_region_mask)
+    del relative_error, normal_region_mask
     if not normal_passed:
         # 正常值域导致失败：显示排除小值域/相消后的 MERE/MARE
         if len(normal_relative_error) > 0:
-            display_mere = float(normal_relative_error.mean())
-            display_mare = float(normal_relative_error.max())
+            display_mere = normal_relative_error.mean()
+            display_mare = normal_relative_error.max()
         else:
             display_mere = overall_mere
             display_mare = overall_mare
@@ -666,8 +731,8 @@ def _compare_single_tensor(
         # 全部通过：显示排除小值域/相消后的 MERE/MARE，
         # 避免 overall 值被小值域的巨大相对误差拉高，造成"MARE=0.9 却通过"的误解
         if len(normal_relative_error) > 0:
-            display_mere = float(normal_relative_error.mean())
-            display_mare = float(normal_relative_error.max())
+            display_mere = normal_relative_error.mean()
+            display_mare = normal_relative_error.max()
         else:
             display_mere = 0.0
             display_mare = 0.0
