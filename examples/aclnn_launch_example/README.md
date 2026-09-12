@@ -38,7 +38,8 @@ aclnn_launch_example/
 ├── scripts/            # 打包脚本
 │   ├── build_run.sh
 │   └── build_wheel.sh
-├── tests/
+├── CMakeLists.txt      # 顶层CMake配置
+├── requirements.txt    # Python依赖
 ├── build.sh            # 统一构建入口
 └── setup.py
 ```

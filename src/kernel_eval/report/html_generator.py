@@ -64,6 +64,10 @@ def _fr(r: float) -> str: return f'{r:.0%}' if r > 0 else '0%'
 def _fsp(sp: float) -> str: return f'{sp:.2f}x' if sp > 0 else '—'
 def _fs(s: float) -> str: return f'{s:.0f}'
 
+def _fmt_or_na(value, spec: str) -> str:
+    # JSON 报告中的 null（如未运行精度阶段的 pass_rate）显示为 N/A，而不是抛 TypeError
+    return format(value, spec) if isinstance(value, (int, float)) else 'N/A'
+
 
 # ---------------------------------------------------------------------------
 # Section 2: Experiment Setup
@@ -130,9 +134,9 @@ def _render_section2(setup: Dict) -> str:
 # ---------------------------------------------------------------------------
 
 def _render_kpi(report: EvalReport) -> str:
-    r = report.summary['pass_rate']
+    r = report.summary.get('pass_rate')
     genuine_r = report.summary.get('genuine_pass_rate', r)
-    cascade = report.summary.get('cascade_cases', 0)
+    cascade = report.summary.get('cascade_cases', 0) or 0
 
     # 级联失败提示块（仅在有级联失败时显示）
     cascade_note = ''
@@ -143,13 +147,13 @@ def _render_kpi(report: EvalReport) -> str:
         <div class="kpi-sub">不计入真实失败率</div>
       </div>
       <div class="kpi-item">
-        <div class="kpi-value">{genuine_r:.1%}</div>
+        <div class="kpi-value">{_fmt_or_na(genuine_r, '.1%')}</div>
         <div class="kpi-label">Genuine Pass Rate / 真实通过率</div>
         <div class="kpi-sub">排除级联失败后</div>
       </div>'''
 
     return f'''      <div class="kpi-item">
-        <div class="kpi-value">{r:.1%}</div>
+        <div class="kpi-value">{_fmt_or_na(r, '.1%')}</div>
         <div class="kpi-label">Pass Rate / 通过率</div>
         <div class="kpi-sub">{report.passed_cases} / {report.total_cases} cases</div>
       </div>
@@ -168,7 +172,7 @@ def _render_kpi(report: EvalReport) -> str:
         <div class="kpi-label">Error Case Number / 失败用例数量</div>
       </div>
 {cascade_note}      <div class="kpi-item">
-        <div class="kpi-value">{report.overall_score:.0f}</div>
+        <div class="kpi-value">{_fmt_or_na(report.overall_score, '.0f')}</div>
         <div class="kpi-label">Total Score / 总得分</div>
       </div>'''
 
@@ -476,11 +480,11 @@ def render_html_report(
         html = re.sub(r'BaseModel为[一-鿿\w\s]*', 'BaseModel为', html)
 
     # 通过率 & 得分 — 从 report 获取
-    r = report.summary['pass_rate']
+    r = report.summary.get('pass_rate')
     html = re.sub(
         r'整体通过率为 [\d.]+%（[\d,]+/[\d,]+），总得分为 [\d.]+（满分 [\d,]+）',
-        f'整体通过率为 {r:.1%}（{report.passed_cases}/{report.total_cases}），'
-        f'总得分为 {report.overall_score:.0f}（满分 {report.total_operators * 100}）',
+        f'整体通过率为 {_fmt_or_na(r, ".1%")}（{report.passed_cases}/{report.total_cases}），'
+        f'总得分为 {_fmt_or_na(report.overall_score, ".0f")}（满分 {report.total_operators * 100}）',
         html
     )
 

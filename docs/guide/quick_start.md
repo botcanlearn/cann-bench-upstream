@@ -16,6 +16,15 @@
 > ```bash
 > source /usr/local/Ascend/ascend-toolkit/set_env.sh   # 按实际安装路径调整
 > ```
+>
+> ⚠️ **已知问题（CANN 9.2.0）**：在 CANN 9.2.0 环境下，ACLNN 示例构建出的 `.run` 包安装验证可能失败，报 `undefined symbol: aclnnInnerMlaPrologV3V1`（该符号在 9.2.0 中由 `libopapi_transformer.so` 而非 `libopapi.so` 提供），即使加 `--force` 跳过验证，`import cann_bench` 也会失败。规避方法：`--force` 安装后在运行前预加载该库：
+>
+> ```bash
+> ./dist/cann_bench_*.run --quiet --force
+> export LD_PRELOAD="$ASCEND_HOME_PATH/$(uname -m)-linux/lib64/libopapi_transformer.so:${LD_PRELOAD}"
+> ```
+>
+> 在 CANN 9.1.0 环境下无此问题；如条件允许，快速体验建议使用 CANN 9.1.0。
 
 ## 安装
 

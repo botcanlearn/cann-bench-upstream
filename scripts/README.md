@@ -8,7 +8,7 @@
 scripts/
 ├── run_evaluation.sh        # AI算子源码评测（完整流程：编译→安装→评测）
 ├── run_auto_pipeline.sh     # auto_pipeline 的 python -m 包装入口
-├── run_ut.sh                # 单元测试运行
+├── run_test.sh              # 测试运行（ut/e2e）
 ├── utils/
 │   ├── build_golden_wheel.sh # Golden whl 打包（Shell 入口）
 │   ├── build_golden_wheel.py # Golden whl 打包（Python 逻辑）
@@ -214,15 +214,19 @@ Golden whl 打包脚本，将 tasks/ 下 golden.py 函数收集打包成纯 Pyth
 
 ---
 
-## run_ut.sh
+## run_test.sh
 
-单元测试运行脚本，基于 pytest。
+测试运行脚本，基于 pytest，支持单元测试（ut）与端到端测试（e2e）。
 
 ### 用法
 
 ```bash
-./scripts/run_ut.sh [选项]
+./scripts/run_test.sh [ut|e2e] [选项]
 ```
+
+- `ut`：只运行单元测试（tests/ut/）
+- `e2e`：只运行端到端测试（tests/e2e/）
+- 不指定：运行全部测试（ut + e2e；某类失败后仍继续执行其余类型，最后汇总退出码）
 
 ### 命令行选项
 
@@ -231,7 +235,7 @@ Golden whl 打包脚本，将 tasks/ 下 golden.py 函数收集打包成纯 Pyth
 | `-v, --verbose` | 详细模式，显示每个测试名称和结果 |
 | `-q, --quiet` | 静默模式，只显示最终统计 |
 | `-k, --keyword <kw>` | 按关键字筛选测试（pytest -k） |
-| `-f, --file <name>` | 指定测试文件（如 test_config.py） |
+| `-f, --file <name>` | 指定测试文件（如 test_config.py，自动定位到对应 tests 子目录） |
 | `-t, --test <spec>` | 指定测试方法（如 TestConfig::test_default_config） |
 | `-x, --fail-fast` | 首次失败即停止 |
 | `-s, --no-capture` | 不捕获 stdout/stderr（调试用） |
@@ -242,26 +246,32 @@ Golden whl 打包脚本，将 tasks/ 下 golden.py 函数收集打包成纯 Pyth
 ### 使用示例
 
 ```bash
-# 全部单元测试
-./scripts/run_ut.sh
+# 全部测试（ut + e2e）
+./scripts/run_test.sh
 
-# 详细模式
-./scripts/run_ut.sh -v
+# 只跑单元测试
+./scripts/run_test.sh ut
 
-# 按关键字筛选
-./scripts/run_ut.sh -k "config"
+# 单元测试 + 详细模式
+./scripts/run_test.sh ut -v
+
+# 单元测试 + 按关键字筛选
+./scripts/run_test.sh ut -k "config"
 
 # 指定测试文件
-./scripts/run_ut.sh -f test_config.py
+./scripts/run_test.sh ut -f test_config.py
 
 # 指定测试方法
-./scripts/run_ut.sh -f test_config.py -t TestConfig::test_default_config
+./scripts/run_test.sh ut -f test_config.py -t TestConfig::test_default_config
 
-# 失败即停 + 详细输出
-./scripts/run_ut.sh -x -v
+# 端到端测试 + 详细模式
+./scripts/run_test.sh e2e -v
+
+# 全部测试 + 失败即停 + 详细输出
+./scripts/run_test.sh -x -v
 
 # 无捕获 + 失败调试
-./scripts/run_ut.sh -s --pdb
+./scripts/run_test.sh ut -s --pdb
 ```
 
 ---
