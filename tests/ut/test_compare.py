@@ -27,6 +27,37 @@ from kernel_eval.utils.compare import (
 )
 
 
+def _npu_available():
+    try:
+        import torch_npu  # noqa: F401
+        return bool(torch.npu.is_available())
+    except Exception:
+        return False
+
+
+# _compare_single_tensor 只在"候选输出不在 host 上"时才区分两条 host 化分支：
+# bit-exact / 整数路径取原生 dtype 的 .cpu() 副本，浮点 MERE/MARE 路径直接
+# device->host+fp64 一步转。全 CPU 的用例里 .cpu() 是 identity，两条分支退化成
+# 同一串算子，覆盖不到这个分叉。
+requires_npu = pytest.mark.skipif(
+    not _npu_available(),
+    reason="需要 Ascend NPU（torch.npu.is_available()=False）；请在 NPU 机器上执行",
+)
+
+_SCALAR_FIELDS = (
+    "passed", "dtype", "threshold", "mere", "mare", "max_diff", "mean_diff",
+    "mismatch_count", "total_count", "mismatch_ratio",
+    "small_value_error_count", "small_value_cpu_error_count", "small_value_total_count",
+    "cancel_error_count", "cancel_cpu_error_count", "cancel_total_count",
+    "normal_error_count", "normal_cpu_error_count", "normal_total_count",
+    "small_value_passed", "cancel_passed", "normal_passed",
+)
+
+
+def _scalars(result):
+    return {name: getattr(result, name, None) for name in _SCALAR_FIELDS}
+
+
 class TestSingleOutputResult:
     """SingleOutputResult 数据类测试"""
 
@@ -844,3 +875,77 @@ class TestMergedHostConversion:
         result = compare_tensors(output, golden, "int64")
         assert result.passed is False
         assert result.mismatch_count == 1
+
+
+@requires_npu
+class TestDeviceResidentOutput:
+    """候选输出留在 NPU 上时，对比结果必须与同数据的全 CPU 对比逐字段一致。
+
+    这是 host 化分支（原生 dtype .cpu() 副本 vs 直接 device->host+fp64）唯一会
+    分叉的场景；TestMergedHostConversion 全部用 CPU 张量，走不到这里。
+    """
+
+    @staticmethod
+    def _make(dtype, n=4096):
+        torch.manual_seed(20260908)
+        golden = torch.rand(n, dtype=torch.float64) + 1.0
+        noise = torch.rand(n, dtype=torch.float64) * 1e-5
+        return golden, (golden + noise).to(dtype)
+
+    @pytest.mark.parametrize("dtype_str", ["float32", "float16", "bfloat16"])
+    def test_float_path_matches_cpu(self, dtype_str):
+        dtype = getattr(torch, dtype_str)
+        golden, out_cpu = self._make(dtype)
+        native = golden.to(dtype)
+
+        on_cpu = compare_tensors(out_cpu, golden, dtype_str, native_output=native)
+        on_npu = compare_tensors(out_cpu.to("npu"), golden, dtype_str, native_output=native)
+
+        assert on_npu.passed is True
+        assert _scalars(on_npu) == _scalars(on_cpu)
+
+    @pytest.mark.parametrize("dtype_str", ["float32", "float16"])
+    def test_float_failure_path_matches_cpu(self, dtype_str):
+        dtype = getattr(torch, dtype_str)
+        golden, out_cpu = self._make(dtype)
+        out_cpu[0] = 10.0
+        out_cpu[1] = -10.0
+
+        on_cpu = compare_tensors(out_cpu, golden, dtype_str)
+        on_npu = compare_tensors(out_cpu.to("npu"), golden, dtype_str)
+
+        assert on_npu.passed is False
+        assert _scalars(on_npu) == _scalars(on_cpu)
+
+    def test_bit_exact_path_matches_cpu(self):
+        # threshold==0 走 .view(int) 字节比较，需要原生 dtype 的 host 副本
+        zero_threshold = {"float32": 0.0}
+        golden = torch.tensor([1.0, -0.0, 3.5], dtype=torch.float64)
+        out_cpu = golden.float()
+
+        on_cpu = compare_tensors(out_cpu, golden, "float32", custom_thresholds=zero_threshold)
+        on_npu = compare_tensors(out_cpu.to("npu"), golden, "float32",
+                                 custom_thresholds=zero_threshold)
+
+        assert on_npu.passed is True
+        assert _scalars(on_npu) == _scalars(on_cpu)
+
+    def test_integer_path_matches_cpu(self):
+        golden = torch.tensor([1, 2, 3, 4], dtype=torch.int32)
+        out_cpu = torch.tensor([1, 2, 4, 4], dtype=torch.int32)
+
+        on_cpu = compare_tensors(out_cpu, golden, "int32")
+        on_npu = compare_tensors(out_cpu.to("npu"), golden, "int32")
+
+        assert on_npu.passed is False
+        assert _scalars(on_npu) == _scalars(on_cpu)
+
+    def test_inf_saturation_does_not_mutate_device_tensor(self):
+        # inf 饱和替换是 in-place 的，必须落在转换副本上而不是调用方的 device 张量
+        golden = torch.tensor([60000.0, 1.0], dtype=torch.float64)
+        out_npu = torch.tensor([float("inf"), 1.0], dtype=torch.float16).to("npu")
+
+        result = compare_tensors(out_npu, golden, "float16")
+
+        assert result.passed is False
+        assert torch.isinf(out_npu.cpu()[0]).item()

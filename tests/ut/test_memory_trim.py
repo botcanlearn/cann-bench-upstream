@@ -19,8 +19,14 @@ host 内存优化单元测试（evaluator 侧）
 2. _cleanup_memory 的 RSS 触发 / 不触发 / 降级路径
 3. evaluate_case 精度对比后即时释放大对象的端到端回归
    （stub 掉 loader/runner 等协作者，验证结果正确且 run result 输出已释放）
+4. 用 weakref 观测"提前释放"本身：进入 _cleanup_memory 时大对象必须已经无人引用。
+   仅断言 run_result.outputs is None 是不够的——那在释放点后移到函数返回之后时同样成立。
 """
 
+import os
+import platform
+import sys
+import weakref
 from types import SimpleNamespace
 
 import pytest
@@ -40,10 +46,22 @@ from kernel_eval.eval.op_runner import OpRunResult
 _RSS_ENV = "KERNEL_EVAL_RSS_TRIM_MB"
 _DEFAULT_MB = float(48 * 1024)
 
+# 两个"真调用"用例依赖 Linux/glibc：/proc/self/status 与 libc.so.6 的 malloc_trim。
+# 被测函数在其它平台上按设计静默降级，所以这里 skip 而不是断言降级值——降级路径
+# 已由同文件的 monkeypatch 用例覆盖。评测目标平台是 linux/aarch64 + Ascend NPU。
+requires_proc = pytest.mark.skipif(
+    not os.path.exists("/proc/self/status"), reason="needs procfs (Linux)"
+)
+requires_glibc = pytest.mark.skipif(
+    sys.platform != "linux" or platform.libc_ver()[0] != "glibc",
+    reason="needs glibc (malloc_trim)",
+)
+
 
 class TestReadRss:
     """_read_rss_mb：读取 /proc/self/status 的 VmRSS"""
 
+    @requires_proc
     def test_real_proc_returns_positive_mb(self):
         rss = _read_rss_mb()
         assert rss is not None
@@ -80,9 +98,18 @@ class TestRssTrimThreshold:
         monkeypatch.setenv(_RSS_ENV, value)
         assert _rss_trim_threshold_mb() is None
 
-    def test_invalid_value_falls_back_to_default(self, monkeypatch):
-        monkeypatch.setenv(_RSS_ENV, "not-a-number")
+    @pytest.mark.parametrize("value", ["not-a-number", "nan", "NaN", "-nan"])
+    def test_invalid_value_falls_back_to_default(self, monkeypatch, value):
+        # nan 能被 float() 接受，但它与任何数的比较都为 False，不显式拦就会走成
+        # "静默禁用"，与 docstring 承诺的"非法值回退默认"相反。
+        monkeypatch.setenv(_RSS_ENV, value)
         assert _rss_trim_threshold_mb() == _DEFAULT_MB
+
+    @pytest.mark.parametrize("value", ["inf", "1e12"])
+    def test_huge_value_is_kept_as_disabled_in_practice(self, monkeypatch, value):
+        # inf / 极大值是合法的"实际上永不触发"，不当作非法值处理
+        monkeypatch.setenv(_RSS_ENV, value)
+        assert _rss_trim_threshold_mb() == float(value)
 
 
 class TestCleanupMemoryRssTrim:
@@ -129,18 +156,41 @@ class TestCleanupMemoryRssTrim:
         self._call_cleanup()  # 不抛异常
         assert trim_calls == []
 
-    def test_malloc_trim_real_call_succeeds_on_glibc(self):
-        # 本环境为 glibc Linux：真实调用应成功；非 glibc 平台则静默 False
+    @requires_glibc
+    def test_malloc_trim_real_call_does_not_raise(self):
+        # 真实调用不抛异常即可。返回值不能断言 True：malloc_trim 返回 0（当前无空闲
+        # 堆页可归还）是完全正常的结果，取决于进程此刻的堆状态。
+        assert isinstance(_malloc_trim(), bool)
+
+    def test_malloc_trim_returns_false_when_nothing_released(self, monkeypatch):
+        # rc=0 表示什么都没归还，对调用方而言与"没执行"等价，不应让日志谎报归还
+        monkeypatch.setattr(evaluator_mod, "_libc",
+                            lambda: SimpleNamespace(malloc_trim=lambda _pad: 0))
+        assert _malloc_trim() is False
+
+    def test_malloc_trim_returns_true_when_pages_released(self, monkeypatch):
+        monkeypatch.setattr(evaluator_mod, "_libc",
+                            lambda: SimpleNamespace(malloc_trim=lambda _pad: 1))
         assert _malloc_trim() is True
 
-    def test_malloc_trim_failure_degrades_silently(self, monkeypatch):
-        import ctypes
-
-        def _boom(*args, **kwargs):
-            raise OSError("no libc")
-
-        monkeypatch.setattr(ctypes, "CDLL", _boom)
+    def test_malloc_trim_without_glibc_degrades_silently(self, monkeypatch):
+        monkeypatch.setattr(evaluator_mod, "_libc", lambda: None)
         assert _malloc_trim() is False
+
+    def test_malloc_trim_call_failure_degrades_silently(self, monkeypatch):
+        def _boom(_pad):
+            raise OSError("call failed")
+
+        monkeypatch.setattr(evaluator_mod, "_libc",
+                            lambda: SimpleNamespace(malloc_trim=_boom))
+        assert _malloc_trim() is False
+
+    def test_libc_handle_is_resolved_once(self):
+        # 解析 libc 是每次 _cleanup_memory 都可能走到的路径，必须缓存
+        evaluator_mod._libc.cache_clear()
+        first = evaluator_mod._libc()
+        assert evaluator_mod._libc() is first
+        assert evaluator_mod._libc.cache_info().hits >= 1
 
 
 class _StubCase:
@@ -191,16 +241,31 @@ class _StubParamBuilder:
 
 
 class _StubOpRunner:
-    """run() 真实调用传入函数产生输出；run_ai_op 可注入输出或失败"""
+    """run() 真实调用传入函数产生输出；run_ai_op 可注入输出或失败
 
-    def __init__(self, ai_output=None, ai_success=True):
+    golden_success / ai_raises 用于驱动 evaluate_case 的另外两条出口
+    （golden 执行失败、评测异常），它们与成功路径共用同一套释放逻辑。
+    """
+
+    def __init__(self, ai_output=None, ai_success=True, golden_success=True, ai_raises=None):
         self._ai_output = ai_output
         self._ai_success = ai_success
+        self._golden_success = golden_success
+        self._ai_raises = ai_raises
+        self._run_calls = 0
 
     def run(self, func, params, case_id_str, inputs, to_device=False, enable_profiler=False):
-        return OpRunResult(success=True, outputs=[func(**params)], elapsed_us=1.0)
+        outputs = [func(**params)]
+        self._run_calls += 1
+        # 第一次 run() 是 golden；同精度参考（native）走的是同一个入口，不该被打成失败
+        if not self._golden_success and self._run_calls == 1:
+            return OpRunResult(success=False, outputs=outputs,
+                               error="stub golden crash", elapsed_us=0)
+        return OpRunResult(success=True, outputs=outputs, elapsed_us=1.0)
 
     def run_ai_op(self, ai_op_func, params, case_id_str, input_tensors, enable_perf=False):
+        if self._ai_raises is not None:
+            raise self._ai_raises
         if not self._ai_success:
             return OpRunResult(success=False, error="stub ai crash", elapsed_us=0)
         out = self._ai_output if self._ai_output is not None else ai_op_func(**params)
@@ -260,11 +325,97 @@ def _build_stub_evaluator(op_runner):
     return evaluator
 
 
+class _RecordingOpRunner(_StubOpRunner):
+    """在 _StubOpRunner 之上，对每个产出的张量登记一个 weakref。
+
+    用于观测"提前释放"本身：只断言 run_result.outputs is None 是不够的，
+    因为把释放点挪回函数返回之后，那个断言依然成立。
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.refs = []
+
+    def _track(self, run_result):
+        for tensor in run_result.outputs or []:
+            if isinstance(tensor, torch.Tensor):
+                self.refs.append(weakref.ref(tensor))
+        return run_result
+
+    def run(self, *args, **kwargs):
+        return self._track(super().run(*args, **kwargs))
+
+    def run_ai_op(self, *args, **kwargs):
+        return self._track(super().run_ai_op(*args, **kwargs))
+
+
+def _alive_when_cleanup_runs(monkeypatch, runner, evaluator):
+    """跑一次 evaluate_case，返回 (结果, 进入 _cleanup_memory 时仍存活的张量数)"""
+    alive = []
+    original = Evaluator._cleanup_memory
+
+    def _spy(self):
+        alive.append(sum(1 for ref in runner.refs if ref() is not None))
+        return original(self)
+
+    monkeypatch.setattr(Evaluator, "_cleanup_memory", _spy)
+    result = evaluator.evaluate_case(_StubCase())
+    assert runner.refs, "stub runner 没有产出任何张量，用例失去意义"
+    assert alive, "_cleanup_memory 没有被调用"
+    return result, alive[-1]
+
+
+class TestEarlyRelease:
+    """大对象必须在 _cleanup_memory 之前就已经无人引用，否则其中的 gc.collect() 空转。
+
+    这是 _release_outputs + 局部名置 None 的实际意图；把释放挪到函数返回之后，
+    TestEvaluateCaseRelease 里的断言仍然全绿，只有这里会红。
+    """
+
+    def test_pass_path_releases_before_cleanup(self, monkeypatch):
+        runner = _RecordingOpRunner()
+        result, alive = _alive_when_cleanup_runs(
+            monkeypatch, runner, _build_stub_evaluator(runner))
+
+        assert result.success is True
+        assert alive == 0, f"{alive}/{len(runner.refs)} 个输出张量在 _cleanup_memory 时仍存活"
+
+    def test_ai_run_failure_releases_before_cleanup(self, monkeypatch):
+        # 巨型 case 最可能走的就是这条路径，释放尤其不能等到函数返回
+        runner = _RecordingOpRunner(ai_success=False)
+        result, alive = _alive_when_cleanup_runs(
+            monkeypatch, runner, _build_stub_evaluator(runner))
+
+        assert result.success is False
+        assert "AI算子执行失败" in result.error_msg
+        assert alive == 0, f"{alive}/{len(runner.refs)} 个输出张量在 _cleanup_memory 时仍存活"
+
+    def test_golden_failure_path_cleans_up(self, monkeypatch):
+        # golden 执行失败此前既不释放也不 _cleanup_memory，fp64 输入副本一路活到返回
+        runner = _RecordingOpRunner(golden_success=False)
+        result, alive = _alive_when_cleanup_runs(
+            monkeypatch, runner, _build_stub_evaluator(runner))
+
+        assert result.success is False
+        assert "Golden执行失败" in result.error_msg
+        assert alive == 0
+
+    def test_evaluation_exception_path_cleans_up(self, monkeypatch):
+        # 异常路径的 traceback 会一直引用本帧，不显式置 None 就释放不掉
+        runner = _RecordingOpRunner(ai_raises=RuntimeError("boom"))
+        result, alive = _alive_when_cleanup_runs(
+            monkeypatch, runner, _build_stub_evaluator(runner))
+
+        assert result.success is False
+        assert "评测异常" in result.error_msg
+        assert alive == 0
+
+
 class TestEvaluateCaseRelease:
     """精度对比完成后立即释放 fp64 golden 输入副本 / golden/native/AI 输出的回归
 
-    早期释放在函数外部不可直接观测，这里验证的是端到端行为不被破坏
-    （无 NameError / use-after-release），且两个 run result 的 outputs 均已清空。
+    这一组只保证端到端行为不被破坏（无 NameError / use-after-release）且两个
+    run result 的 outputs 均已清空；释放时机本身由 TestEarlyRelease 覆盖。
     """
 
     def test_pass_path_releases_outputs(self):

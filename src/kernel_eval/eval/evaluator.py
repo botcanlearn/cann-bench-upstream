@@ -26,12 +26,15 @@
 - 算子匹配移至 operator_matcher.py
 """
 
+import ctypes
 import json
+import math
 import os
 import shutil
 import sys
 import tempfile
 import traceback
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Any
 from inspect import Parameter, signature
@@ -108,7 +111,7 @@ def _rss_trim_threshold_mb() -> Optional[float]:
     """RSS 主动清理阈值（MB）。
 
     默认 48 GiB；环境变量 KERNEL_EVAL_RSS_TRIM_MB 覆盖；
-    <=0 表示禁用（返回 None）；非法值回退默认。
+    <=0 表示禁用（返回 None）；非法值（含 nan/inf）回退默认。
     """
     raw = os.environ.get(_RSS_TRIM_ENV_VAR)
     if raw is None:
@@ -117,18 +120,42 @@ def _rss_trim_threshold_mb() -> Optional[float]:
         value = float(raw)
     except (TypeError, ValueError):
         return float(_RSS_TRIM_DEFAULT_MB)
+    # nan 的所有比较都为 False，不做显式判断的话会走成"静默禁用"，
+    # 与文档承诺的"非法值回退默认"相反。
+    if math.isnan(value):
+        return float(_RSS_TRIM_DEFAULT_MB)
     return value if value > 0 else None
 
 
-def _malloc_trim() -> bool:
-    """通过 ctypes 调用 glibc malloc_trim(0)，将空闲堆页归还内核。
+@lru_cache(maxsize=1)
+def _libc() -> Optional["ctypes.CDLL"]:
+    """glibc handle（已声明 malloc_trim 签名）；非 glibc 平台返回 None。
 
-    非 glibc 平台或任何调用失败静默降级（返回 False），不影响评测主流程。
+    _cleanup_memory 每个 case 都会走到，故只解析一次。
     """
     try:
-        import ctypes
-        ctypes.CDLL("libc.so.6").malloc_trim(0)
-        return True
+        libc = ctypes.CDLL("libc.so.6")
+        # 不声明签名时 ctypes 按 c_int 传参/取返回值；malloc_trim(size_t) 在
+        # 64 位下靠零扩展侥幸可用，显式声明才是有定义的行为。
+        libc.malloc_trim.argtypes = [ctypes.c_size_t]
+        libc.malloc_trim.restype = ctypes.c_int
+        return libc
+    except Exception:
+        return None
+
+
+def _malloc_trim() -> bool:
+    """调用 glibc malloc_trim(0) 归还空闲堆页，返回是否真的归还了内存。
+
+    malloc_trim 返回 1 表示确实释放了页，0 表示无事可做——后者对调用方而言
+    与"没执行"等价，所以一并返回 False，避免日志谎报归还。
+    非 glibc 平台或任何调用失败静默降级（返回 False），不影响评测主流程。
+    """
+    libc = _libc()
+    if libc is None:
+        return False
+    try:
+        return bool(libc.malloc_trim(0))
     except Exception:
         return False
 
@@ -226,6 +253,13 @@ class Evaluator:
             merged_thresholds = self._get_merged_thresholds(case.rel_path)
             return MC2DistributedEvaluator(self.config).evaluate_case(
                 case, custom_thresholds=merged_thresholds)
+
+        # 本 case 的大对象局部名先声明：下方 finally 统一释放它们，而异常可能发生在
+        # 任何一次赋值之前，未声明的名字会让 finally 自己抛 UnboundLocalError。
+        input_tensors = params = None
+        golden_inputs = golden_params = golden_result = golden_outs = None
+        native_inputs = native_params = native_result = native_out = None
+        ai_result = ai_outs = None
 
         try:
             # 1. 获取golden函数
@@ -325,7 +359,7 @@ class Evaluator:
                     operator=case.operator,
                     case_num=case.case_id,
                     success=False,
-                    golden_run_result=self._release_outputs(golden_result),
+                    golden_run_result=golden_result,
                     error_msg=self._format_run_failure("Golden执行失败", golden_result),
                     baseline_perf_us=case.baseline_perf_us,
                     t_hw_us=case.t_hw_us,
@@ -345,7 +379,7 @@ class Evaluator:
                         operator=case.operator,
                         case_num=case.case_num,
                         success=False,
-                        golden_run_result=self._release_outputs(golden_result),
+                        golden_run_result=golden_result,
                         error_msg=f"AI算子加载失败: {load_err}",
                         baseline_perf_us=case.baseline_perf_us,
                         t_hw_us=case.t_hw_us,
@@ -360,10 +394,6 @@ class Evaluator:
                                                   input_tensors, enable_perf=use_profiler,
                                                   operator_name=case.operator)
             if not ai_result.success:
-                # 先释放输出张量再清理，gc/empty_cache 才能真正回收这批内存
-                self._release_outputs(golden_result)
-                self._release_outputs(ai_result)
-                self._cleanup_memory()
                 return EvalCaseResult(
                     case_id=case_id_str,
                     rel_path=case.rel_path,
@@ -384,11 +414,6 @@ class Evaluator:
 
             # 同精度参考输出（用于 checker 小值域判断）
             # native_cpu/native_npu 时 golden 已是同精度，直接复用以避免重复计算
-            # native_* 名称先初始化为 None：仅 fp64_cpu 策略的 else 分支会赋值，
-            # 尾部统一释放大对象时按已定义名称处理
-            native_inputs = None
-            native_params = None
-            native_result = None
             golden_strategy = getattr(self.bench_config, 'golden_precision', 'fp64_cpu')
             if golden_strategy in ('native_cpu', 'native_npu'):
                 native_out = golden_result.outputs
@@ -501,26 +526,6 @@ class Evaluator:
                         fail_reasons.append(accuracy_result.error_msg)
                     error_msg = f"精度不达标: {', '.join(fail_reasons)}" if fail_reasons else "精度不达标"
 
-            # 精度对比与索引校验已完成，后续只消费标量指标（结果序列化仅取
-            # elapsed_us 等标量，见 results.py）。立即释放本 case 的大局部对象——
-            # fp64 golden 输入副本、golden/native/AI 输出——不等函数返回，
-            # 避免巨型 case 的 fp64 golden 峰值之后 host 匿名内存继续单调累积。
-            # 紧随的 _cleanup_memory() 内的 gc.collect() 使释放立即生效。
-            input_tensors = None
-            params = None
-            golden_inputs = None
-            golden_params = None
-            golden_outs = None
-            ai_outs = None
-            native_out = None
-            native_inputs = None
-            native_params = None
-            native_result = None
-            self._release_outputs(golden_result)
-            self._release_outputs(ai_result)
-
-            self._cleanup_memory()
-
             return EvalCaseResult(
                 case_id=case_id_str,
                 rel_path=case.rel_path,
@@ -539,7 +544,6 @@ class Evaluator:
 
         except Exception as e:
             tb_str = traceback.format_exc()
-            self._cleanup_memory()
             return EvalCaseResult(
                 case_id=case_id_str,
                 rel_path=case.rel_path,
@@ -549,6 +553,25 @@ class Evaluator:
                 error_msg=f"评测异常: {type(e).__name__}: {e}\n{tb_str.rstrip()}",
                 failure_type=FAILURE_TYPE_COMPILE_RUNTIME_ERROR,
             )
+
+        finally:
+            # 本 case 的大对象（fp64 golden 输入副本、golden/native/AI 输出）在这里统一
+            # 释放，而不是等函数返回随帧回收。放在 finally 而不是各个 return 之前，是为了
+            # 覆盖全部四条出口：golden 执行失败、AI 算子加载失败、AI 执行失败、评测异常。
+            # 异常出口尤其需要——traceback 会一直引用本帧，不置 None 的话这些对象要活到
+            # 调用方丢弃 EvalCaseResult 为止，而这正是巨型 case 最可能走的那条路径。
+            #
+            # 安全性：返回值只消费标量指标（序列化仅取 elapsed_us 等，见 results.py），
+            # AccuracyResult 不持有张量；EvalCaseResult 自己持有 golden/ai run result 的
+            # 引用，这里置空的只是局部名。
+            self._release_outputs(golden_result)
+            self._release_outputs(ai_result)
+            input_tensors = params = None
+            golden_inputs = golden_params = golden_result = golden_outs = None
+            native_inputs = native_params = native_result = native_out = None
+            ai_result = ai_outs = None
+            # 紧随的 gc.collect() 让上面的释放立即生效
+            self._cleanup_memory()
 
     def evaluate_operator(self, operator: str, rel_path: str, case_filter: Dict = None) -> EvalOperatorResult:
         """评测单个算子
@@ -1377,8 +1400,10 @@ class Evaluator:
         if rss_mb is None or rss_mb <= threshold_mb:
             return
         if _malloc_trim():
+            after_mb = _read_rss_mb()
+            now = f"{after_mb:.0f}MB" if after_mb is not None else "未知"
             print(f"[INFO] VmRSS {rss_mb:.0f}MB 超过阈值 {threshold_mb:.0f}MB，"
-                  f"已执行 malloc_trim 归还空闲堆页")
+                  f"malloc_trim 已归还空闲堆页（现 {now}）")
 
     def _release_outputs(self, op_run_result: OpRunResult) -> OpRunResult:
         """释放 outputs tensor，保留元数据
