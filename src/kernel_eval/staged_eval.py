@@ -164,6 +164,18 @@ def _make_config(args: argparse.Namespace, bench_root: str, *, enable_profiler: 
     cfg.warmup = args.warmup
     cfg.repeat = args.repeat
     cfg.enable_profiler = enable_profiler
+    cfg.perf_batch_cases = bool(
+        getattr(args, 'perf_batch_cases', cfg.perf_batch_cases)
+    )
+    cfg.perf_batch_case_memory_limit_mb = float(getattr(
+        args, 'perf_batch_case_memory_limit_mb',
+        cfg.perf_batch_case_memory_limit_mb,
+    ))
+    cfg.monitor_case_memory = bool(
+        not enable_profiler
+        and cfg.perf_batch_cases
+        and cfg.perf_batch_case_memory_limit_mb > 0
+    )
     cfg.profiler_level = args.profiler_level
     cfg.timeout_per_operator = args.timeout_per_operator
     cfg.reports_dir = args.reports_dir
@@ -350,6 +362,46 @@ def _passed_case_keys(operator_results: List[EvalOperatorResult]) -> Set[CaseKey
         for case in op_result.results
         if case.success
     }
+
+
+def _partition_performance_case_keys(
+    operator_results: List[EvalOperatorResult],
+    *,
+    batch_enabled: bool,
+    memory_limit_mb: float,
+) -> Tuple[Set[CaseKey], Set[CaseKey]]:
+    """按正确性阶段 VmRSS 峰值把通过 case 分为批量/逐 case 两组。"""
+    batched: Set[CaseKey] = set()
+    individual: Set[CaseKey] = set()
+    for op_result in operator_results:
+        for case in op_result.results:
+            if not case.success:
+                continue
+            key = _case_result_key(case)
+            peak_mb = getattr(case, "memory_peak_mb", None)
+            if not batch_enabled:
+                individual.add(key)
+            elif memory_limit_mb <= 0:
+                batched.add(key)
+            elif peak_mb is None or peak_mb > memory_limit_mb:
+                # 采样缺失时 fail closed，性能仍会测，只是不进入共享会话。
+                individual.add(key)
+            else:
+                batched.add(key)
+    return batched, individual
+
+
+def _combine_operator_results(
+    groups: Iterable[List[EvalOperatorResult]],
+) -> List[EvalOperatorResult]:
+    from .eval.process_pool import aggregate_by_operator
+
+    return aggregate_by_operator([
+        case
+        for operator_results in groups
+        for op_result in operator_results
+        for case in op_result.results
+    ])
 
 
 def _merge_results(
@@ -543,7 +595,18 @@ def run(args: argparse.Namespace) -> int:
         return min(failed, 255)
 
     allowlist = _passed_case_keys(correctness_ops)
-    print(f"[staged_eval] stage 3/3: performance ({len(allowlist)} correctness-passed cases)")
+    memory_limit_mb = float(getattr(
+        args, "perf_batch_case_memory_limit_mb", 32 * 1024))
+    batch_allowlist, individual_allowlist = _partition_performance_case_keys(
+        correctness_ops,
+        batch_enabled=bool(getattr(args, "perf_batch_cases", True)),
+        memory_limit_mb=memory_limit_mb,
+    )
+    print(
+        f"[staged_eval] stage 3/3: performance ({len(allowlist)} correctness-passed cases; "
+        f"{len(batch_allowlist)} batch eligible, "
+        f"{len(individual_allowlist)} per-case profiler)"
+    )
     performance_cfg = _make_config(args, bench_root, enable_profiler=True)
     matched = _install_or_scan(args, performance_cfg)
     rel_paths = _operator_rel_paths(matched, bench_root, selected=args.selected_operators)
@@ -554,7 +617,23 @@ def run(args: argparse.Namespace) -> int:
         filter_prefix=filter_prefix,
         allowlist=allowlist,
     )
-    performance_ops = _evaluate_cases(args, performance_cfg, performance_cases, enable_profiler=True)
+    batch_cases = [
+        case for case in performance_cases
+        if _case_spec_key(case) in batch_allowlist
+    ]
+    individual_cases = [
+        case for case in performance_cases
+        if _case_spec_key(case) in individual_allowlist
+    ]
+
+    batch_ops = _evaluate_cases(
+        args, performance_cfg, batch_cases, enable_profiler=True)
+    individual_cfg = _make_config(args, bench_root, enable_profiler=True)
+    individual_cfg.perf_batch_cases = False
+    individual_cfg.monitor_case_memory = False
+    individual_ops = _evaluate_cases(
+        args, individual_cfg, individual_cases, enable_profiler=True)
+    performance_ops = _combine_operator_results([batch_ops, individual_ops])
     _save_report(args, performance_cfg, performance_ops, stage="performance", contains_performance=True)
 
     merged_ops = _merge_results(correctness_ops, performance_ops)
@@ -585,6 +664,17 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reports-dir", default="reports")
     parser.add_argument("--eval-code", default=None)
     parser.add_argument("--no-perf", action="store_true")
+    parser.add_argument("--perf-batch-cases", dest="perf_batch_cases",
+                        action="store_true",
+                        help="同一 TaskUnit 的 case 共用一次 profiler（默认开启）")
+    parser.add_argument("--no-perf-batch-cases", dest="perf_batch_cases",
+                        action="store_false",
+                        help="关闭批量 case 性能采集，恢复逐 case profiler")
+    parser.set_defaults(perf_batch_cases=True)
+    parser.add_argument("--perf-batch-case-memory-limit-mb", type=float,
+                        default=32 * 1024,
+                        help="正确性阶段单 case VmRSS 峰值上限（MB，默认: 32768）；"
+                             "超过或采样失败的 case 改为逐 case profiler，<=0 禁用分流")
     parser.add_argument("--profiler-level", choices=["Level1", "Level2"], default="Level1")
     parser.add_argument("--perf-metric-strategy", default=None)
     parser.add_argument("--torch-op-guard-mode", choices=["off", "warn", "block"], default=None)

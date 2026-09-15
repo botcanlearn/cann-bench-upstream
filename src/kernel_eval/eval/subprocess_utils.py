@@ -44,14 +44,17 @@ def _signal_process_group(proc: subprocess.Popen, sig: int) -> None:
     Popen 直接对象会把这些后代留在 NPU 上，因此 POSIX 环境下必须
     按进程组清理。非 POSIX 或进程组不存在时回退到 Popen API。
     """
-    if proc.poll() is not None:
-        return
     try:
+        # start_new_session=True 令 pgid 等于子进程 pid。即便组长已经被
+        # OOM killer 回收，msprof/parser 后代仍可能留在这个进程组中，
+        # 因此不能以 proc.poll() 为提前返回条件。
         os.killpg(proc.pid, sig)
         return
     except (AttributeError, ProcessLookupError, PermissionError, OSError):
         pass
 
+    if proc.poll() is not None:
+        return
     try:
         if sig == signal.SIGKILL:
             proc.kill()
@@ -63,25 +66,25 @@ def _signal_process_group(proc: subprocess.Popen, sig: int) -> None:
 
 def _terminate_process_group(proc: subprocess.Popen, grace_sec: float = 10.0) -> None:
     """终止子进程及其同进程组后代，并回收直接子进程。"""
-    if proc.poll() is not None:
-        return
-
     _signal_process_group(proc, signal.SIGTERM)
-    try:
-        proc.wait(timeout=grace_sec)
-        return
-    except subprocess.TimeoutExpired:
-        pass
+    if proc.poll() is None:
+        try:
+            proc.wait(timeout=grace_sec)
+        except subprocess.TimeoutExpired:
+            pass
 
+    # 无论直接子进程是否已退出，都再向原进程组发 SIGKILL。这样能清理
+    # 被 OOM 杀掉组长之后仍存活的 profiler/parser 后代。
     _signal_process_group(proc, signal.SIGKILL)
-    try:
-        proc.wait(timeout=grace_sec)
-    except subprocess.TimeoutExpired:
+    if proc.poll() is None:
         # 极端情况下再尝试回收直接子进程，不让清理无限阻塞。
         try:
-            proc.kill()
-        except (ProcessLookupError, OSError):
-            pass
+            proc.wait(timeout=grace_sec)
+        except subprocess.TimeoutExpired:
+            try:
+                proc.kill()
+            except (ProcessLookupError, OSError):
+                pass
 
 
 def _installed_package_sources(pkg_dir: str) -> List[Path]:

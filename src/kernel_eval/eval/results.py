@@ -130,6 +130,11 @@ class EvalCaseResult:
     #        'perf_failure_type': str, 'note': str}
     perf_recheck: Optional[Dict[str, Any]] = None
 
+    # 正确性阶段进程 RSS 采样结果。用于决定该 case 是否允许进入批量
+    # profiler；None 表示平台不支持或本次未启用采样。
+    memory_peak_mb: Optional[float] = None
+    memory_baseline_mb: Optional[float] = None
+
     def get_speedup(self) -> float:
         """计算加速比（保留为诊断指标）
 
@@ -185,6 +190,8 @@ class EvalCaseResult:
             't_hw_us': self.t_hw_us,
             'failure_type': self.failure_type,
             'perf_recheck': self.perf_recheck,
+            'memory_peak_mb': self.memory_peak_mb,
+            'memory_baseline_mb': self.memory_baseline_mb,
         }
 
     @classmethod
@@ -275,6 +282,8 @@ class EvalCaseResult:
             t_hw_us=data.get('t_hw_us', 0.0),
             failure_type=data.get('failure_type'),
             perf_recheck=data.get('perf_recheck'),
+            memory_peak_mb=data.get('memory_peak_mb'),
+            memory_baseline_mb=data.get('memory_baseline_mb'),
         )
 
 

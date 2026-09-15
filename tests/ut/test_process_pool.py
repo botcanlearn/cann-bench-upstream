@@ -397,6 +397,69 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         idx = cmd.index("--reports-dir")
         self.assertEqual(cmd[idx + 1], "/tmp/cann-bench-reports")
 
+    def test_build_child_cmd_propagates_perf_batch_flag(self):
+        """默认开启时父进程显式向 eval-child 传递批量模式。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.perf_batch_cases = True
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json",
+        )
+
+        self.assertIn("--perf-batch-cases", cmd)
+
+    def test_build_child_cmd_propagates_disabled_perf_batch_flag(self):
+        """父进程显式关闭时，eval-child 不得回落到默认开启。"""
+        self.base_config.device_type = "cpu"
+        self.base_config.perf_batch_cases = False
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1)],
+            device_id=0,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json",
+        )
+
+        self.assertIn("--no-perf-batch-cases", cmd)
+
+    def test_task_override_forces_per_case_profiler(self):
+        self.base_config.device_type = "cpu"
+        self.base_config.perf_batch_cases = True
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        task = TaskUnit(
+            operator="Exp",
+            rel_path="level1/test",
+            cases=[make_case("Exp", 1), make_case("Exp", 2)],
+            device_id=0,
+            perf_batch_cases=False,
+        )
+
+        cmd = coordinator._build_child_cmd(
+            task, "/tmp/cases.json", "/tmp/out.json")
+
+        self.assertIn("--no-perf-batch-cases", cmd)
+        self.assertNotIn("--perf-batch-cases", cmd)
+
     def test_non_pypto_child_cmd_keeps_original_arguments(self):
         """非 PyPTO Pro worker 不接收隔离模式新增参数。"""
         self.base_config.device_type = "cpu"
@@ -424,7 +487,7 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         self.base_config.pypto_pro_outer_case_isolation = False
         coordinator = ProcessPoolCoordinator(
             base_config=self.base_config,
-            process_config=ProcessConfig(),
+            process_config=ProcessConfig(enable_profiler=False),
         )
         proc = MagicMock()
         proc.wait.return_value = 0
@@ -445,7 +508,7 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         self.base_config.pypto_pro_outer_case_isolation = False
         coordinator = ProcessPoolCoordinator(
             base_config=self.base_config,
-            process_config=ProcessConfig(),
+            process_config=ProcessConfig(enable_profiler=False),
         )
         proc = MagicMock()
         proc.poll.side_effect = [None, 0, 0]
@@ -459,6 +522,27 @@ class TestProcessPoolCoordinator(unittest.TestCase):
         proc.terminate.assert_called_once_with()
         proc.kill.assert_not_called()
         signal_group.assert_not_called()
+        self.assertEqual(coordinator._active_processes, [])
+
+    def test_profiler_shutdown_signals_group_even_when_leader_already_died(self):
+        self.base_config.device_type = "cpu"
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(enable_profiler=True),
+        )
+        proc = MagicMock()
+        proc.poll.return_value = -9
+        coordinator._active_processes = [proc]
+
+        with patch(
+            "src.kernel_eval.eval.process_pool._signal_process_group"
+        ) as signal_group:
+            coordinator.shutdown()
+
+        self.assertEqual(signal_group.call_args_list, [
+            call(proc, signal.SIGTERM),
+            call(proc, signal.SIGKILL),
+        ])
         self.assertEqual(coordinator._active_processes, [])
 
     def test_build_child_cmd_propagates_outer_isolation_and_timeout(self):
@@ -688,6 +772,22 @@ class TestSubprocessUtils(unittest.TestCase):
             [call(4321, signal.SIGTERM), call(4321, signal.SIGKILL)],
         )
 
+    def test_terminate_process_group_cleans_descendants_after_leader_died(self):
+        proc = MagicMock()
+        proc.pid = 4321
+        proc.poll.return_value = -9
+
+        with patch(
+            "src.kernel_eval.eval.subprocess_utils.os.killpg", create=True
+        ) as killpg:
+            _terminate_process_group(proc, grace_sec=1)
+
+        self.assertEqual(
+            killpg.call_args_list,
+            [call(4321, signal.SIGTERM), call(4321, signal.SIGKILL)],
+        )
+        proc.wait.assert_not_called()
+
     def test_detect_pypto_pro_submission_from_package_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             pkg_dir = Path(tmp) / "cann_bench"
@@ -855,8 +955,26 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.output, '/tmp/output.json')
         self.assertEqual(args.reports_dir, '/tmp/reports')
         self.assertTrue(args.no_perf)
+        self.assertTrue(args.perf_batch_cases)
         self.assertTrue(args.pypto_pro_outer_case_isolation)
         self.assertEqual(args.timeout_per_operator, 123)
+
+    def test_cli_perf_batch_cases_can_be_disabled(self):
+        """eval 与 eval-child 都支持显式恢复逐 case profiler。"""
+        from src.kernel_eval.cli import create_parser
+        parser = create_parser()
+
+        eval_args = parser.parse_args(['eval', '--no-perf-batch-cases'])
+        self.assertFalse(eval_args.perf_batch_cases)
+
+        child_args = parser.parse_args([
+            'eval-child',
+            '--device-id', '0',
+            '--cases-file', '/tmp/cases.json',
+            '--output', '/tmp/output.json',
+            '--no-perf-batch-cases',
+        ])
+        self.assertFalse(child_args.perf_batch_cases)
 
     def test_cli_eval_max_cases_per_task_unit(self):
         from src.kernel_eval.cli import create_parser
@@ -1206,6 +1324,86 @@ class TestDynamicDispatch(unittest.TestCase):
 
         # 第一次失败 + 1次重试 = 2 次调用
         self.assertEqual(call_count[0], 2)
+
+    @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
+    def test_batch_oom_stops_group_and_retries_every_case_individually(self, mock_detect):
+        mock_detect.return_value = 2
+        self.base_config.perf_batch_cases = True
+        coordinator = ProcessPoolCoordinator(
+            base_config=self.base_config,
+            process_config=ProcessConfig(
+                processes_per_card=1,
+                enable_profiler=True,
+                retry_on_oom=True,
+                max_retries=1,
+            ),
+        )
+        cases = [make_case("Exp", 1), make_case("Exp", 2)]
+        task = TaskUnit(
+            operator="Exp", rel_path="level1/test",
+            cases=cases, device_id=0,
+        )
+        submitted = []
+        child_flags = []
+
+        def result_payload(case_data):
+            return {
+                "case_id": case_data["case_id"],
+                "rel_path": case_data["rel_path"],
+                "operator": case_data["operator"],
+                "case_num": case_data["case_num"],
+                "success": True,
+                "accuracy": {"passed": True, "metadata": {}},
+                "perf": {"elapsed_us": 10.0, "metadata": {}},
+            }
+
+        def mock_popen(cmd, **kwargs):
+            del kwargs
+            case_data = json.loads(Path(
+                cmd[cmd.index('--cases-file') + 1]).read_text())
+            submitted.append([item["case_id"] for item in case_data])
+            child_flags.append(
+                "individual" if "--no-perf-batch-cases" in cmd else "batch")
+            proc = Mock()
+            proc.pid = 12000 + len(submitted)
+            proc.communicate = Mock(return_value=("", ""))
+            output_file = cmd[cmd.index('--output') + 1]
+            if len(submitted) == 1:
+                proc.returncode = -9
+                proc.poll = Mock(return_value=-9)
+                Path(output_file).write_text('{"case_results": []}')
+            else:
+                proc.returncode = 0
+                proc.poll = Mock(return_value=0)
+                Path(output_file).write_text(json.dumps({
+                    "case_results": [result_payload(case_data[0])],
+                }))
+            proc.wait = Mock(return_value=proc.returncode)
+            return proc
+
+        with patch(
+            'src.kernel_eval.eval.process_pool.subprocess.Popen',
+            side_effect=mock_popen,
+        ), patch(
+            'src.kernel_eval.eval.process_pool._write_oom_score_adj',
+            return_value=True,
+        ), patch(
+            'src.kernel_eval.eval.process_pool._terminate_process_group',
+        ) as terminate_group:
+            raw_results = coordinator.evaluate_task_units([task])
+
+        self.assertEqual(len(submitted), 3)
+        self.assertEqual(child_flags.count("batch"), 1)
+        self.assertEqual(child_flags.count("individual"), 2)
+        self.assertEqual(sorted(len(batch) for batch in submitted), [1, 1, 2])
+        terminate_group.assert_called_once()
+        aggregated = aggregate_by_operator(raw_results)[0]
+        self.assertEqual(aggregated.total_cases, 2)
+        self.assertEqual(aggregated.passed_cases, 2)
+        self.assertTrue(all(
+            case.perf_result.metadata["perf_batch_external_retry"]
+            for case in aggregated.results
+        ))
 
     @patch('src.kernel_eval.eval.process_pool.ProcessPoolCoordinator._detect_cards')
     def test_sigsegv_recovers_partial_results_and_retries_only_remaining(self, mock_detect):

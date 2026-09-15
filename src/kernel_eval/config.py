@@ -99,6 +99,12 @@ class Config:
     # 为 True 时 op_runner 以 use_input_pool=True 调 run_profiled。内存占用按 InputPool 上限裁剪。
     perf_rotate_inputs: bool = True
 
+    # 同一 TaskUnit 内多个 case 共用 profiler 会话。正确性阶段会记录每个
+    # case 的 host RSS 峰值；超过阈值的 case 在性能阶段自动改走逐 case profiler。
+    perf_batch_cases: bool = True
+    perf_batch_case_memory_limit_mb: float = 32 * 1024
+    monitor_case_memory: bool = False
+
     # 防作弊：监听 AI 算子在执行时是否直接调用了 torch.matmul / conv / softmax
     # 等内置数学 API（=把计算甩给 PyTorch，跳过自己写的 AscendC kernel）。
     # off=不监听；warn=记日志不阻断（便于排查）；block=直接抛错（默认）。

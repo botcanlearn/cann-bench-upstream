@@ -31,6 +31,7 @@ import torch
 
 from ..utils.device_manager import DeviceManager
 from .perf_eval import PerfEvaluator, PerfResult
+from .input_pool import CallInputPool
 
 
 @contextmanager
@@ -62,12 +63,191 @@ class OpRunResult:
     captured_output: Optional[str] = None  # 捕获的 stdout/stderr
 
 
+class _DeferredProfileCall:
+    """Lazily rebuild one case's device inputs for the batched profiler."""
+
+    def __init__(self, runner, func: Callable, params: Dict,
+                 input_tensors: List, pool_size: int, rotate_inputs: bool):
+        self.runner = runner
+        self.func = func
+        self.params = params
+        self.input_tensors = input_tensors
+        self.pool_size = pool_size
+        self.rotate_inputs = rotate_inputs
+        self._state = None
+
+    def _prepare(self):
+        if self._state is not None:
+            return
+        device_tensors = self.runner.device_manager.to_device_batch(
+            self.input_tensors
+        )
+        updated_params = self.runner._update_params(
+            self.params, device_tensors
+        )
+        pool = None
+        if self.rotate_inputs:
+            pool = CallInputPool((), updated_params, self.pool_size)
+        self._state = {
+            'device_tensors': device_tensors,
+            'updated_params': updated_params,
+            'pool': pool,
+        }
+
+    def prepare(self):
+        """Materialize device inputs and the rotation pool before profiling."""
+        self._prepare()
+
+    def __call__(self):
+        self._prepare()
+        pool = self._state['pool']
+        if pool is not None:
+            args, kwargs = pool.get_next()
+            return self.func(*args, **kwargs)
+        return self.func(**self._state['updated_params'])
+
+    def release(self):
+        if self._state is not None:
+            pool = self._state.get('pool')
+            if pool is not None:
+                pool.clear()
+        self._state = None
+
+
 class OpRunner:
     """算子执行器"""
 
     def __init__(self, device_manager: DeviceManager, perf_evaluator: PerfEvaluator = None):
         self.device_manager = device_manager
         self.perf_evaluator = perf_evaluator
+        self._perf_batch_active = False
+        self._perf_batch_cases: Dict[str, _DeferredProfileCall] = {}
+
+    @property
+    def perf_batch_active(self) -> bool:
+        return self._perf_batch_active
+
+    def begin_perf_batch(self) -> None:
+        if self._perf_batch_active:
+            raise RuntimeError("performance batch is already active")
+        self._perf_batch_active = True
+        self._perf_batch_cases = {}
+
+    def cancel_perf_batch_case(self, case_id: str) -> None:
+        pending = self._perf_batch_cases.pop(case_id, None)
+        if pending is not None:
+            pending.release()
+
+    def _queue_perf_batch_case(self, case_id: str, func: Callable,
+                               params: Dict, input_tensors: List) -> None:
+        if self.perf_evaluator is None:
+            return
+        rotate_inputs = getattr(
+            self.perf_evaluator.config, 'perf_rotate_inputs', True
+        )
+        pool_size = self.perf_evaluator.warmup + self.perf_evaluator.repeat
+        previous = self._perf_batch_cases.pop(case_id, None)
+        if previous is not None:
+            previous.release()
+        self._perf_batch_cases[case_id] = _DeferredProfileCall(
+            self, func, params, input_tensors, pool_size, rotate_inputs,
+        )
+
+    def _profile_guard(self):
+        from ..security.torch_op_guard import TorchOpGuard
+        from ..security.device_residency_guard import DeviceResidencyGuard
+
+        guard_mode = getattr(
+            self.perf_evaluator.config, 'torch_op_guard_mode', 'block'
+        )
+        drg_mode = getattr(
+            self.perf_evaluator.config,
+            'device_residency_guard_mode',
+            guard_mode,
+        )
+        return TorchOpGuard(mode=guard_mode), DeviceResidencyGuard(mode=drg_mode)
+
+    def finalize_perf_batch(self) -> Dict[str, PerfResult]:
+        """Run queued cases together and fall back individually on any doubt."""
+        pending = list(self._perf_batch_cases.items())
+        self._perf_batch_cases = {}
+        self._perf_batch_active = False
+        if not pending or self.perf_evaluator is None:
+            return {}
+
+        perf = self.perf_evaluator
+        results: Dict[str, PerfResult] = {}
+        fallback_reasons: Dict[str, int] = {}
+        try:
+            if perf.freq_boost:
+                perf._prepare_warmup_tensors()
+                perf._boost_freq_and_clear_cache()
+            try:
+                torch_guard, residency_guard = self._profile_guard()
+                with torch_guard, residency_guard:
+                    results = perf.run_profiled_batch(pending)
+            except Exception as exc:
+                results = {
+                    case_id: PerfResult(
+                        error_msg=(
+                            f"batch guarded execution failed: "
+                            f"{type(exc).__name__}: {exc}"
+                        ),
+                        metadata={
+                            'case_id': case_id,
+                            'perf_batch_failed': True,
+                        },
+                    )
+                    for case_id, _ in pending
+                }
+
+            for case_id, fn in pending:
+                batch_result = results.get(case_id)
+                if batch_result is not None and batch_result.is_success():
+                    continue
+
+                batch_error = (
+                    batch_result.error_msg
+                    if batch_result is not None
+                    else "batch profiler returned no result"
+                )
+                reason = " ".join(str(batch_error).splitlines()).strip()
+                if len(reason) > 500:
+                    reason = f"{reason[:497]}..."
+                fallback_reasons[reason] = fallback_reasons.get(reason, 0) + 1
+                fn.release()
+                if perf.freq_boost:
+                    perf._boost_freq_and_clear_cache()
+                try:
+                    torch_guard, residency_guard = self._profile_guard()
+                    with torch_guard, residency_guard:
+                        _outputs, fallback = perf.run_profiled(case_id, fn)
+                except Exception as exc:
+                    fallback = PerfResult(
+                        error_msg=(
+                            f"per-case fallback failed: "
+                            f"{type(exc).__name__}: {exc}"
+                        ),
+                        metadata={'case_id': case_id},
+                    )
+                fallback.metadata['perf_batch_attempted'] = True
+                fallback.metadata['perf_batch_fallback'] = True
+                fallback.metadata['perf_batch_fallback_reason'] = batch_error
+                results[case_id] = fallback
+
+            for reason, count in sorted(
+                fallback_reasons.items(), key=lambda item: (-item[1], item[0])
+            ):
+                print(
+                    f"[WARN] 批量性能采集回退原因 ({count} 个 case): "
+                    f"{reason}"
+                )
+
+            perf.wait_all()
+            return results
+        finally:
+            for _, fn in pending:
+                fn.release()
 
     def run(self, func: Callable, params: Dict, case_id: str, input_tensors: List,
             to_device: bool = True, enable_profiler: bool = False) -> OpRunResult:
@@ -182,10 +362,18 @@ class OpRunner:
         drg_mode = guard_mode
         if self.perf_evaluator is not None:
             drg_mode = getattr(self.perf_evaluator.config, 'device_residency_guard_mode', guard_mode)
-        if enable_perf and self.perf_evaluator is not None:
+        if (enable_perf and self.perf_evaluator is not None
+                and not self._perf_batch_active):
             self.perf_evaluator._prepare_warmup_tensors()
             self.perf_evaluator._boost_freq_and_clear_cache()
         with TorchOpGuard(mode=guard_mode), DeviceResidencyGuard(mode=drg_mode):
+            if enable_perf and self._perf_batch_active:
+                result = self._run_simple(ai_op_func, params, input_tensors)
+                if result.success:
+                    self._queue_perf_batch_case(
+                        case_id, ai_op_func, params, input_tensors,
+                    )
+                return result
             # 如果需要性能采集且evaluator可用，临时启用
             if enable_perf and self.perf_evaluator:
                 return self.run(ai_op_func, params, case_id, input_tensors,

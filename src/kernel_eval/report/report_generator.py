@@ -58,6 +58,8 @@ class EvalResult:
     # "skipped"          — 因设备不可恢复而跳过
     failure_type: Optional[str] = None
     perf_recheck: Optional[Dict[str, Any]] = None
+    memory_peak_mb: Optional[float] = None
+    memory_baseline_mb: Optional[float] = None
 
     def resolve_profiling(self):
         if self._perf_result is not None:
@@ -105,6 +107,8 @@ class EvalResult:
             timestamp=datetime.now().isoformat(),
             failure_type=result.failure_type,
             perf_recheck=result.perf_recheck,
+            memory_peak_mb=result.memory_peak_mb,
+            memory_baseline_mb=result.memory_baseline_mb,
         )
 
 

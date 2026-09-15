@@ -180,7 +180,20 @@ def run_profiled(case_id, func, *args, warmup=3, repeat=5):
 | `_run_simple()` | 简单计时执行（Profiler 禁用时） |
 | `_update_params()` | 将设备张量替换参数中的 CPU 张量引用 |
 
-### 4.3 InputPool
+### 4.3 批量会话的内存保护与回退
+
+三阶段评测在 correctness 阶段以 50 ms 周期采样每个 case 的进程
+`VmRSS` 峰值，并随 case 结果序列化。性能阶段仅把峰值不超过
+`perf_batch_case_memory_limit_mb` 的 case 放入共享 Profiler 会话；超限或
+无法读取 `/proc/self/status` 的 case 仍参与性能评测，但使用独立会话。
+
+若多个单独合格的 case 在共享会话内叠加后触发 OOM，父调度进程会按
+`start_new_session=True` 建立的进程组同时清理 eval-child、msprof 和 parser
+后代，丢弃该批不完整的性能结果，并把整批拆成单 case TaskUnit，以
+`--no-perf-batch-cases` 各重试一次。这样 correctness 结果不会因性能采集
+OOM 丢失，也不会遗留占用 NPU 的 Profiler 会话。
+
+### 4.4 InputPool
 
 **职责**：防止 data_ptr 缓存攻击。
 
@@ -441,6 +454,8 @@ def _parse_case_id(case_id):
 | `freq_boost` | PerfEvaluator 初始化 | True | 是否升频清 Cache |
 | `archive_prof` | PerfEvaluator 初始化 | True | 是否归档 Trace 数据 |
 | `use_input_pool` | run_profiled 参数 | False | 是否启用 InputPool |
+| `perf_batch_cases` | Config / CLI `--perf-batch-cases` / `--no-perf-batch-cases` | True | 同一 TaskUnit 复用一次 Profiler；解析或反作弊归属不确定时逐 case 回退 |
+| `perf_batch_case_memory_limit_mb` | Config / CLI `--perf-batch-case-memory-limit-mb` | 32768 | correctness 阶段单 case VmRSS 峰值上限；超限或采样缺失时不进入批量会话 |
 | `profiler_level` | Config / CLI `--profiler-level` | `Level1` | Profiler 级别，可选 `Level1` / `Level2` |
 
 > CLI 完整参数与默认值，见 [evaluator_design.md §3.3](./evaluator_design.md#33-命令行参数)。
@@ -539,6 +554,8 @@ profiler 相关配置见 §10；CLI 完整参数表（多卡 / 子进程隔离 /
 - `--warmup <n>`：预热次数（默认 3）
 - `--repeat <n>`：采集次数（默认 5）
 - `--no-perf`：关闭性能采集
+- `--perf-batch-cases`：合并同一 TaskUnit 的 case 到一个 Profiler 会话（默认开启）
+- `--no-perf-batch-cases`：关闭批量 case，恢复逐 case Profiler 会话
 - `--profiler-level Level1|Level2`：Profiler 级别（默认 Level1）
 
 **源码评测**：

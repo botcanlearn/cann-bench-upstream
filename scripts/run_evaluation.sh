@@ -48,6 +48,8 @@ TIMEOUT_PER_PROCESS=300
 WARMUP=3
 REPEAT=5
 NO_PERF=false
+PERF_BATCH_CASES=true
+PERF_BATCH_CASE_MEMORY_LIMIT_MB=32768
 PROFILER_LEVEL="Level1"
 EVAL_SEED=""  # 评测种子（默认: 0 = 确定性，-1 = 纯随机）
 INPUT_DIST=""  # 输入数据分布（空 = 用 CLI 默认值 uniform）
@@ -103,6 +105,10 @@ print_help() {
     echo "  --warmup <n>              预热次数（默认: 3）"
     echo "  --repeat <n>              采集次数（默认: 5）"
     echo "  --no-perf                 关闭性能采集，仅做精度验证"
+    echo "  --perf-batch-cases        同一 TaskUnit 的 case 共用一次 Profiler（默认开启）"
+    echo "  --no-perf-batch-cases     关闭批量 case，恢复逐 case Profiler"
+    echo "  --perf-batch-case-memory-limit-mb <mb>"
+    echo "                            正确性阶段单 case VmRSS 峰值上限（默认: 32768）"
     echo "  --profiler-level <level>  Profiler 级别: Level1, Level2（默认: Level1）"
     echo "  --eval-seed <n>           输入生成确定性种子（默认: 0 = 自动确定性）。"
     echo "                            改变种子可获得不同但可复现的输入。-1 表示纯随机。"
@@ -232,6 +238,18 @@ while [[ $# -gt 0 ]]; do
         --no-perf)
             NO_PERF=true
             shift
+            ;;
+        --perf-batch-cases)
+            PERF_BATCH_CASES=true
+            shift
+            ;;
+        --no-perf-batch-cases)
+            PERF_BATCH_CASES=false
+            shift
+            ;;
+        --perf-batch-case-memory-limit-mb)
+            PERF_BATCH_CASE_MEMORY_LIMIT_MB="$2"
+            shift 2
             ;;
         --profiler-level)
             PROFILER_LEVEL="$2"
@@ -382,6 +400,7 @@ build_cmd_args() {
             CMD_ARGS="${CMD_ARGS} --warmup ${WARMUP}"
             CMD_ARGS="${CMD_ARGS} --repeat ${REPEAT}"
             CMD_ARGS="${CMD_ARGS} --profiler-level ${PROFILER_LEVEL}"
+            CMD_ARGS="${CMD_ARGS} --perf-batch-case-memory-limit-mb ${PERF_BATCH_CASE_MEMORY_LIMIT_MB}"
 
             # 评测种子（确保可复现）
             if [[ -n "${EVAL_SEED}" ]]; then
@@ -395,6 +414,11 @@ build_cmd_args() {
 
             if [[ "${NO_PERF}" == true ]]; then
                 CMD_ARGS="${CMD_ARGS} --no-perf"
+            fi
+            if [[ "${PERF_BATCH_CASES}" == true ]]; then
+                CMD_ARGS="${CMD_ARGS} --perf-batch-cases"
+            else
+                CMD_ARGS="${CMD_ARGS} --no-perf-batch-cases"
             fi
 
             # 多进程并行参数（通过环境变量传递给底层）
@@ -527,6 +551,10 @@ main() {
         log_info "Profiler: ${PROFILER_LEVEL}"
         if [[ "${NO_PERF}" == true ]]; then
             log_info "性能采集: 关闭（仅精度验证）"
+        elif [[ "${PERF_BATCH_CASES}" == true ]]; then
+            log_info "性能采集: 批量 case（VmRSS 阈值 ${PERF_BATCH_CASE_MEMORY_LIMIT_MB}MB，OOM 自动逐 case 回退）"
+        else
+            log_info "性能采集: 逐 case Profiler（已显式关闭批量 case）"
         fi
         if [[ "${STAGED_EVAL}" == true && "${BENCH_NAME}" == "cann" && "${DEVICE_TYPE:-npu}" == "npu" ]]; then
             log_info "评测模式: 编译/精度/性能三阶段"

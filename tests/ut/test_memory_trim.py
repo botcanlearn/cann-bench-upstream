@@ -37,6 +37,7 @@ from kernel_eval.base.result import FAILURE_TYPE_COMPILE_RUNTIME_ERROR
 from kernel_eval.eval.accuracy_eval import AccuracyEvaluator
 from kernel_eval.eval.evaluator import (
     Evaluator,
+    _CaseMemoryMonitor,
     _malloc_trim,
     _read_rss_mb,
     _rss_trim_threshold_mb,
@@ -81,6 +82,26 @@ class TestReadRss:
                             lambda *a, **k: io.StringIO("Name:\tproc\nBadLine\n"))
         assert _read_rss_mb() is None
 
+
+class TestCaseMemoryMonitor:
+    def test_tracks_baseline_and_peak(self, monkeypatch):
+        samples = iter([100.0, 150.0, 125.0])
+        monkeypatch.setattr(evaluator_mod, "_read_rss_mb", lambda: next(samples))
+
+        with _CaseMemoryMonitor(True, interval_sec=10) as monitor:
+            monitor._sample()
+
+        assert monitor.baseline_mb == 100.0
+        assert monitor.peak_mb == 150.0
+
+    def test_unavailable_rss_is_preserved_as_none(self, monkeypatch):
+        monkeypatch.setattr(evaluator_mod, "_read_rss_mb", lambda: None)
+
+        with _CaseMemoryMonitor(True, interval_sec=10) as monitor:
+            pass
+
+        assert monitor.baseline_mb is None
+        assert monitor.peak_mb is None
 
 class TestRssTrimThreshold:
     """_rss_trim_threshold_mb：阈值解析与禁用语义"""

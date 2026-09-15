@@ -129,6 +129,8 @@ class TaskUnit:
     retry_count: int = 0        # 重试次数
     excluded_devices: set = None  # 排除的设备ID集合
     parent_task_id: str = None  # 父任务ID（用于追踪）
+    # None 跟随 base_config；False 用于批量 profiler OOM 后强制逐 case。
+    perf_batch_cases: Optional[bool] = None
 
     def __post_init__(self):
         if self.excluded_devices is None:
@@ -582,6 +584,19 @@ class ProcessPoolCoordinator:
         # profiler 配置
         if not self.process_config.enable_profiler:
             cmd.append("--no-perf")
+        batch_cases = task.perf_batch_cases
+        if batch_cases is None:
+            batch_cases = getattr(self.base_config, "perf_batch_cases", True)
+        if batch_cases:
+            cmd.append("--perf-batch-cases")
+        else:
+            cmd.append("--no-perf-batch-cases")
+        if getattr(self.base_config, "monitor_case_memory", False):
+            cmd.append("--monitor-case-memory")
+        memory_limit_mb = getattr(
+            self.base_config, "perf_batch_case_memory_limit_mb", None)
+        if memory_limit_mb is not None:
+            cmd += ["--perf-batch-case-memory-limit-mb", str(memory_limit_mb)]
         profiler_level = getattr(self.base_config, "profiler_level", None)
         if profiler_level:
             cmd += ["--profiler-level", str(profiler_level)]
@@ -615,13 +630,29 @@ class ProcessPoolCoordinator:
 
         return cmd
 
-    def _terminate_timed_out_process(self, proc: subprocess.Popen) -> None:
+    def _task_uses_perf_batch(self, task: TaskUnit) -> bool:
+        batch_cases = task.perf_batch_cases
+        if batch_cases is None:
+            batch_cases = getattr(self.base_config, "perf_batch_cases", True)
+        return bool(
+            batch_cases
+            and self.process_config.enable_profiler
+            and len(task.cases) > 1
+        )
+
+    def _terminate_timed_out_process(
+        self, proc: subprocess.Popen, task: Optional[TaskUnit] = None,
+    ) -> None:
         """按评测模式终止超时 worker。
 
-        PyPTO Pro worker 可能派生 profiler/Runtime 后代，需要清理整个
-        进程组；其他评测保持修改前只终止直接子进程的行为。
+        Profiler 或 PyPTO Pro worker 可能派生 msprof/parser/Runtime 后代，
+        必须清理整个进程组；纯 correctness worker 保持只终止直接子进程。
         """
-        if getattr(self.base_config, "pypto_pro_outer_case_isolation", False):
+        if (
+            getattr(self.base_config, "pypto_pro_outer_case_isolation", False)
+            or self.process_config.enable_profiler
+            or (task is not None and self._task_uses_perf_batch(task))
+        ):
             _terminate_process_group(proc)
             return
 
@@ -722,7 +753,7 @@ class ProcessPoolCoordinator:
                         child_stdout, child_stderr = "", ""
 
                     print(f"[WARN] TaskUnit {task.operator}@Card{task.device_id} 超时 ({timeout}s)")
-                    self._terminate_timed_out_process(proc)
+                    self._terminate_timed_out_process(proc, task)
                     _forward_child_output(child_stdout, child_stderr)
                     # 超时：尝试恢复部分结果，失败则合成全量 timeout 失败
                     partial = _try_recover_partial_results(output_file)
@@ -757,10 +788,35 @@ class ProcessPoolCoordinator:
                 _forward_child_output(child_stdout, child_stderr)
 
                 if rc != 0:
+                    batch_task = self._task_uses_perf_batch(task)
+                    if self.process_config.enable_profiler or batch_task:
+                        _terminate_process_group(proc, grace_sec=1.0)
                     crash_diag = _extract_crash_diag(rc, child_stdout, child_stderr)
                     if crash_diag:
                         print(f"[WARN] {task.operator}@Card{task.device_id}:{crash_diag}", flush=True)
                     if _is_oom_killed(proc, rc):
+                        if batch_task:
+                            should_retry = (
+                                self.process_config.retry_on_oom and
+                                task.retry_count < self.process_config.max_retries
+                            )
+                            print(
+                                f"[WARN] {task.operator}@Card{task.device_id}: "
+                                f"批量 profiler OOM Kill，已停止 profiler 进程组；"
+                                f"{len(task.cases)} 个 case 将逐 case 回退"
+                            )
+                            return (
+                                task,
+                                _synthesize_failure_cases(
+                                    task.cases,
+                                    "oom_killed",
+                                    "批量 profiler 子进程被 OOM Killer 杀死；"
+                                    "已清理 profiler 会话并切换逐 case 性能重试",
+                                ),
+                                should_retry,
+                                "perf_batch_oom",
+                                task.cases,
+                            )
                         # OOM Kill：尝试恢复部分结果 + 合成剩余用例的 oom_killed 失败
                         partial = _try_recover_partial_results(output_file)
                         if partial:
@@ -918,21 +974,36 @@ class ProcessPoolCoordinator:
                             # 只有还有需要重试的case时才创建重试任务
                             if cases_to_retry:
                                 # 创建重试任务（device_id 占位，_process_retry_queue 中由设备池动态分配）
-                                retry_task = TaskUnit(
-                                    operator=task.operator,
-                                    rel_path=task.rel_path,
-                                    cases=cases_to_retry,
-                                    device_id=task.device_id,
-                                    retry_count=task.retry_count + 1,
-                                    excluded_devices=task.excluded_devices | {task.device_id},
-                                    parent_task_id=f"{task.operator}@Card{task.device_id}"
+                                retry_groups = (
+                                    [[case] for case in cases_to_retry]
+                                    if failure_type == "perf_batch_oom"
+                                    else [cases_to_retry]
                                 )
-                                retry_queue.append(retry_task)
+                                for retry_cases in retry_groups:
+                                    retry_task = TaskUnit(
+                                        operator=task.operator,
+                                        rel_path=task.rel_path,
+                                        cases=retry_cases,
+                                        device_id=task.device_id,
+                                        retry_count=task.retry_count + 1,
+                                        excluded_devices=task.excluded_devices | {task.device_id},
+                                        parent_task_id=f"{task.operator}@Card{task.device_id}",
+                                        perf_batch_cases=(
+                                            False if failure_type == "perf_batch_oom"
+                                            else task.perf_batch_cases
+                                        ),
+                                    )
+                                    retry_queue.append(retry_task)
                                 excluded_count = len(failed_cases) - len(cases_to_retry)
                                 excluded_msg = f", 排除 {excluded_count} 个多次失败的用例" if excluded_count > 0 else ""
+                                retry_mode = (
+                                    "逐 case profiler"
+                                    if failure_type == "perf_batch_oom"
+                                    else "普通重试"
+                                )
                                 print(f"[INFO] 重试任务已加入队列: {task.operator} "
-                                      f"(retry {retry_task.retry_count}/{self.process_config.max_retries}, "
-                                      f"{len(cases_to_retry)} 个用例{excluded_msg}, "
+                                      f"(retry {task.retry_count + 1}/{self.process_config.max_retries}, "
+                                      f"{len(cases_to_retry)} 个用例{excluded_msg}, {retry_mode}, "
                                       f"原卡 Card{task.device_id} 故障 ({failure_type}), 将动态分配新卡)")
 
                         # 定期清理已退出的子进程引用，避免内存累积
@@ -1029,7 +1100,7 @@ class ProcessPoolCoordinator:
                     except Exception:
                         child_stdout, child_stderr = "", ""
                     print(f"[WARN] 重试任务 {task.operator}@Card{task.device_id} 仍然超时")
-                    self._terminate_timed_out_process(proc)
+                    self._terminate_timed_out_process(proc, task)
                     _forward_child_output(child_stdout, child_stderr)
                     partial = _try_recover_partial_results(output_file)
                     if partial:
@@ -1049,6 +1120,11 @@ class ProcessPoolCoordinator:
                 _forward_child_output(child_stdout, child_stderr)
 
                 if rc != 0:
+                    if (
+                        self.process_config.enable_profiler
+                        or self._task_uses_perf_batch(task)
+                    ):
+                        _terminate_process_group(proc, grace_sec=1.0)
                     crash_diag = _extract_crash_diag(rc, child_stdout, child_stderr)
                     if crash_diag:
                         print(f"[WARN] 重试 {task.operator}@Card{task.device_id}:{crash_diag}", flush=True)
@@ -1085,6 +1161,19 @@ class ProcessPoolCoordinator:
                 try:
                     data = json.loads(Path(output_file).read_text())
                     case_results = [EvalCaseResult.from_dict(r) for r in data.get("case_results", [])]
+                    if task.perf_batch_cases is False and task.parent_task_id:
+                        for result in case_results:
+                            if result.perf_result is None:
+                                continue
+                            result.perf_result.metadata.update({
+                                "perf_batch_attempted": True,
+                                "perf_batch_fallback": True,
+                                "perf_batch_external_retry": True,
+                                "perf_batch_fallback_reason": (
+                                    "batch eval-child was OOM-killed; "
+                                    "reran in an isolated per-case profiler"
+                                ),
+                            })
                     return (task, case_results)
                 except (json.JSONDecodeError, OSError) as e:
                     return (task, _synthesize_failure_cases(task.cases, "subprocess_failure",
@@ -1176,20 +1265,22 @@ class ProcessPoolCoordinator:
     def shutdown(self):
         """关闭所有活跃子进程
 
-        PyPTO Pro 清理整个进程组；其他评测保持原有 Popen 终止行为。
+        Profiler/PyPTO Pro 清理整个进程组；纯 correctness 评测保持原有
+        Popen 终止行为。
         """
         grace_sec = 5
         outer_isolation = bool(getattr(
             self.base_config, "pypto_pro_outer_case_isolation", False))
+        terminate_groups = outer_isolation or self.process_config.enable_profiler
         for proc in self._active_processes:
-            if proc.poll() is None:
-                if outer_isolation:
-                    _signal_process_group(proc, signal.SIGTERM)
-                else:
-                    try:
-                        proc.terminate()
-                    except Exception:
-                        pass
+            if terminate_groups:
+                # 组长可能已经被 OOM killer 回收；仍需按原 pgid 清理后代。
+                _signal_process_group(proc, signal.SIGTERM)
+            elif proc.poll() is None:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
 
         if self._active_processes:
             deadline = time.time() + grace_sec
@@ -1203,18 +1294,18 @@ class ProcessPoolCoordinator:
                     pass
 
         for proc in self._active_processes:
-            if proc.poll() is None:
-                if outer_isolation:
-                    _signal_process_group(proc, signal.SIGKILL)
+            if terminate_groups:
+                _signal_process_group(proc, signal.SIGKILL)
+                if proc.poll() is None:
                     try:
                         proc.wait(timeout=1)
                     except subprocess.TimeoutExpired:
                         pass
-                else:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
+            elif proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
         self._active_processes = []
 
     def get_stats(self) -> Dict:

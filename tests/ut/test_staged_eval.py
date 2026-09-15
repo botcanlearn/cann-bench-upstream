@@ -16,6 +16,7 @@ from kernel_eval.staged_eval import (
     _compile_failure_operator_filter,
     _detect_build_cann_dirname,
     _merge_results,
+    _partition_performance_case_keys,
     create_parser,
 )
 
@@ -28,6 +29,7 @@ def _case(
     accuracy_result=None,
     perf_result=None,
     error_msg=None,
+    memory_peak_mb=None,
 ):
     return EvalCaseResult(
         case_id=f"level2/dynamic_quant_{case_num}",
@@ -41,6 +43,7 @@ def _case(
         baseline_perf_us=100.0,
         t_hw_us=10.0,
         failure_type=failure_type,
+        memory_peak_mb=memory_peak_mb,
     )
 
 
@@ -71,6 +74,68 @@ def test_compile_failure_filter_uses_selected_operators():
 
     args.operator = "Conv3DBackpropFilter"
     assert _compile_failure_operator_filter(args) == ["Conv3DBackpropFilter"]
+
+
+def test_perf_batch_cases_defaults_on_and_can_be_disabled():
+    parser = create_parser()
+
+    assert parser.parse_args([]).perf_batch_cases is True
+    assert parser.parse_args(["--no-perf-batch-cases"]).perf_batch_cases is False
+
+
+def test_perf_batch_memory_limit_defaults_and_can_be_overridden():
+    parser = create_parser()
+
+    assert parser.parse_args([]).perf_batch_case_memory_limit_mb == 32 * 1024
+    assert parser.parse_args([
+        "--perf-batch-case-memory-limit-mb", "24576",
+    ]).perf_batch_case_memory_limit_mb == 24576
+
+
+def test_partition_performance_cases_by_correctness_peak_memory():
+    operator_results = [_op([
+        _case(1, success=True, memory_peak_mb=1024),
+        _case(2, success=True, memory_peak_mb=4096),
+        _case(3, success=True, memory_peak_mb=None),
+        _case(4, success=False, memory_peak_mb=128),
+    ])]
+
+    batched, individual = _partition_performance_case_keys(
+        operator_results, batch_enabled=True, memory_limit_mb=2048)
+
+    assert batched == {("level2/dynamic_quant", 1)}
+    assert individual == {
+        ("level2/dynamic_quant", 2),
+        ("level2/dynamic_quant", 3),
+    }
+
+
+def test_partition_memory_gate_can_be_disabled():
+    operator_results = [_op([
+        _case(1, success=True, memory_peak_mb=None),
+        _case(2, success=True, memory_peak_mb=999999),
+    ])]
+
+    batched, individual = _partition_performance_case_keys(
+        operator_results, batch_enabled=True, memory_limit_mb=0)
+
+    assert len(batched) == 2
+    assert individual == set()
+
+
+def test_case_memory_measurement_survives_result_and_report_conversion():
+    case = _case(1, success=True, memory_peak_mb=1536.5)
+    case.memory_baseline_mb = 256.0
+
+    roundtrip = EvalCaseResult.from_dict(case.to_dict())
+    assert roundtrip.memory_peak_mb == 1536.5
+    assert roundtrip.memory_baseline_mb == 256.0
+
+    from src.kernel_eval.report.report_generator import EvalResult
+
+    report_case = EvalResult.from_eval_case_result(roundtrip)
+    assert report_case.memory_peak_mb == 1536.5
+    assert report_case.memory_baseline_mb == 256.0
 
 
 def test_max_cases_per_task_unit_defaults_and_can_be_overridden():
