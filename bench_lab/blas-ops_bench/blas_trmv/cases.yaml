@@ -32,9 +32,9 @@ cases:
   - [7, 10]
   - [7]
   dtype: [float32, float32]
-  attrs: {"uplo": "UPPER", "trans": "T", "diag": "UNIT", "incx": 1, "lda": 10}
+  attrs: {"uplo": "UPPER", "trans": "T", "diag": "UNIT", "incx": 1}
   value_range: [[-10.0, 10.0], [-10.0, 10.0]]
-  note: "S-float32-7x7-非对齐-单位对角-lda填充-非对齐-uplo=UPPER-trans=T-diag=UNIT-incx=1-lda=10"
+  note: "S-float32-7x7-非对齐-单位对角-lda填充-非对齐-uplo=UPPER-trans=T-diag=UNIT-incx=1"
 - operator: Trmv
   case_id: 5
   input_shape:

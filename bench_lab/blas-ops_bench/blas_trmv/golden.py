@@ -60,7 +60,6 @@ def trmv(
     trans="N",
     diag="NON_UNIT",
     incx: int = 1,
-    lda=None,
     **kwargs,
 ) -> torch.Tensor:
     """计算 op(A) * vec，返回覆写后的 x 缓冲区。
@@ -72,15 +71,12 @@ def trmv(
         trans: N/T/C，指定 op(A)
         diag: NON_UNIT/UNIT
         incx: x 的存储增量，非零
-        lda: A 的前导维（信息性参数，实际以 A.shape[1] 为准）
     """
     incx = int(incx)
     if incx == 0:
         raise ValueError("incx 不能为 0")
 
     n = int(A.shape[0])
-    if lda is not None and int(lda) != int(A.shape[1]):
-        raise ValueError(f"lda({lda}) 与 A.shape[1]({A.shape[1]}) 不一致")
     if n == 0:
         return x.clone()
 

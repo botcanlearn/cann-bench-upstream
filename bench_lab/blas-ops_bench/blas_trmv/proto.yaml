@@ -19,18 +19,22 @@ operator:
   - name: uplo
     type: str
     default: LOWER
+    required: false
     description: 指定 A 的三角部分：UPPER(121) 上三角；LOWER(122) 下三角
   - name: trans
     type: str
     default: N
+    required: false
     description: op(A) 的形式：N(111) 不转置；T(112) 转置 A^T；C(113) 共轭转置 A^H（FP32 下与 T 等价）
   - name: diag
     type: str
     default: NON_UNIT
+    required: false
     description: 对角线语义：NON_UNIT(131) 对角元从 A 读取；UNIT(132) 对角元固定为 1
   - name: incx
     type: int
     default: 1
+    required: false
     description: x 的存储增量，不可为 0（Ctrmv 仅支持 >0）
   inputs:
   - name: A

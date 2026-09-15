@@ -71,6 +71,8 @@ aclblasStatus_t aclblasCtrmv(aclblasHandle_t handle, aclblasFillMode_t uplo,
 | x | 输入/输出 | 向量，输入为原始向量，输出原地覆写为结果；缓冲区长度 (n-1)·\|incx\|+1 |
 | incx | 输入 | x 中连续元素之间的步长，不可为 0 |
 
+注：`n`、`lda` 为底层 C API 形参，cann_bench python 接口（proto schema）不单独暴露——n 由 A.shape[0] 与 x 长度隐含，lda 由 A.shape[1] 隐含。cases.yaml/csv 的 attrs 键名仅与 proto 声明的 uplo/trans/diag/incx 对应（contributing.md §4.2）。
+
 ## 4. 约束说明（摘自 ops-blas README）
 
 - n ≥ 0（Ctrmv：n ∈ [1, 8192]）

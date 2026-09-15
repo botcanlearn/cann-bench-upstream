@@ -71,6 +71,17 @@ aclblasStatus_t aclblasCtrsv(aclblasHandle_t handle, aclblasFillMode_t uplo,
 | x | 输入/输出 | 输入存右端 b，输出原地覆写为解；缓冲区长度 (n-1)·\|incx\|+1，按 incx 步长访问 |
 | incx | 输入 | x 的存储增量，incx ≠ 0（可正可负） |
 
+注：`n`、`lda` 为底层 C API 形参，cann_bench python 接口（proto schema）不单独暴露——n 由 A.shape[0] 与 x 长度隐含，lda 由 A.shape[1] 隐含。cases.yaml/csv 的 attrs 键名仅与 proto 声明的 uplo/trans/diag/incx 对应（contributing.md §4.2）。
+
+### 数据类型
+
+| 输入 dtype（A / x） | 输出 dtype（原地覆写 x） | 对应 C API |
+|---------------------|--------------------------|------------|
+| float32             | float32                  | aclblasStrsv |
+| complex64           | complex64                | aclblasCtrsv |
+
+A 与 x 的 dtype 必须一致；输出原地覆写 x，输出 dtype 与输入一致。当前打榜用例集全部为 float32（complex64 覆盖缺口见 §8）。
+
 ## 4. 约束说明（摘自 ops-blas README）
 
 - n ≥ 0，n == 0 时为空操作直接返回成功
@@ -81,7 +92,96 @@ aclblasStatus_t aclblasCtrsv(aclblasHandle_t handle, aclblasFillMode_t uplo,
 - incx ≠ 0（可正可负）
 - n > 0 时 A、x 不可为 nullptr
 
-## 5. 实现参考要点（arch22 / DAV_2201 实测源码行为）
+## 5. 标准 Golden 代码
+
+Torch Golden 参考实现（与 `golden.py` 一致，求解 `op(A) * sol = b`，原地覆写返回 x 缓冲区）：
+
+```python
+import torch
+
+
+def trsv(
+    A: torch.Tensor,
+    x: torch.Tensor,
+    uplo="LOWER",
+    trans="N",
+    diag="NON_UNIT",
+    incx: int = 1,
+) -> torch.Tensor:
+    """求解 op(A) * sol = b，返回覆写后的 x 缓冲区。
+
+    Args:
+        A: n×lda 三角矩阵（行主序），仅 uplo 指定三角被引用
+        x: 右端向量 b 的缓冲区，长度 (n-1)*|incx|+1，按 incx 步长访问
+        uplo: UPPER/LOWER；trans: N/T/C；diag: NON_UNIT/UNIT
+        incx: x 的存储增量（非零，可负）
+    """
+    incx = int(incx)
+    n = int(A.shape[0])
+    if n == 0:
+        return x.clone()
+
+    # op(A)：N -> A；T -> A^T；C -> A^H（实数 conj 为恒等）
+    # uplo 描述 A 的存储三角；先清掉另一侧再转置（转置后三角自然翻转）
+    M = A[:, :n]
+    M = M.triu() if uplo == "UPPER" else M.tril()
+    if trans == "T":
+        M = M.t()
+    elif trans == "C":
+        M = M.t().conj()
+    is_upper = (uplo == "UPPER") ^ (trans in ("T", "C"))
+
+    # 按 incx 步长取出右端向量
+    # incx<0 为 BLAS 反向存储约定: vec[i] = x[(n-1-i)*|incx|]
+    # （torch 切片不支持负步长, 用 flip(0)+正步长等价实现）
+    if incx > 0:
+        vec = x[::incx]
+    else:
+        vec = x.flip(0)[::(-incx)]
+
+    # 升精度计算（FP32/complex64 求解以 FP64/complex128 作参考，降低 golden 自身误差）
+    compute_dtype = torch.complex128 if A.is_complex() else torch.float64
+    sol = torch.linalg.solve_triangular(
+        M.to(compute_dtype),
+        vec.to(compute_dtype).unsqueeze(-1),
+        upper=is_upper,
+        unitriangular=(diag == "UNIT"),
+        left=True,
+    ).squeeze(-1).to(x.dtype)
+
+    # 原地覆写语义：仅 strided 位置写入解，其余位置保持输入值
+    out = x.clone()
+    if incx > 0:
+        out[::incx] = sol
+    else:
+        out = out.flip(0)
+        out[::(-incx)] = sol
+        out = out.flip(0)
+    return out
+```
+
+## 6. 额外信息
+
+### 算子调用示例
+
+```python
+import torch
+import cann_bench
+
+# LOWER / N / NON_UNIT：前向代换，incx=1 连续访问
+n = 1024
+A = torch.randn(n, n, dtype=torch.float32, device="npu")  # 仅 uplo 指定三角被引用
+x = torch.randn(n, dtype=torch.float32, device="npu")     # 输入存右端 b，输出原地覆写为解
+sol = cann_bench.trsv(A, x, uplo="LOWER", trans="N", diag="NON_UNIT", incx=1)
+
+# UPPER / T / UNIT：后向代换 + incx=2 步长访问，x 缓冲区长度 (n-1)*|incx|+1
+n = 512
+A = torch.randn(n, n, dtype=torch.float32, device="npu")
+x = torch.randn((n - 1) * 2 + 1, dtype=torch.float32, device="npu")
+sol = cann_bench.trsv(A, x, uplo="UPPER", trans="T", diag="UNIT", incx=2)
+```
+
+## 7. 实现参考要点（arch22 / DAV_2201 实测源码行为）
 
 以下要点来自 `ops-blas/blas/trsv/arch22/` 的 host/kernel 源码，供实现与评审核对：
 
@@ -91,7 +191,7 @@ aclblasStatus_t aclblasCtrsv(aclblasHandle_t handle, aclblasFillMode_t uplo,
 - **ctrsv（complex64）**：panel 分块算法（b=64），对角块 UB 驻留串行求解 + off-diagonal 向量化更新；多核 useCoreNum=min(8, nBlocks)，跨核 SyncAll 屏障同步
 - **三角求解段沿对角线严格串行**（n 步，数学约束），是 arch22 上的主要性能瓶颈
 
-## 6. 评测注意与用例设计说明
+## 8. 评测注意与用例设计说明
 
 - **原地覆写语义**：解只写入按 incx 步长访问的位置，x 缓冲区其余位置保持输入值不变。golden 输出与 kernel 输出均须满足此语义
 - **数值稳定性与值域设计**：随机三角矩阵求解的解量级随 n 指数放大（实测 n=64、A∈[1,10] 时解已达 ~1e9，n≥128 溢出）。因此本任务用例采用如下构造：
