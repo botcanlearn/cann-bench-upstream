@@ -1,61 +1,64 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software; you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------
+
 operator:
   name: DynamicMxQuant
-  category: Quantization
+  category: FusedComposite
   difficulty: L3
-  platform: Ascend 950PR / 950DT
   formula: |
-    shared_exp = floor(log2(max(|V_i|))) - emax;
-    mxscale = 2^shared_exp;
-    y_i = cast(V_i / mxscale, round_mode)
-  description: 对输入张量执行 Microscaling (MX) 动态量化，按 blocksize 分组计算共享指数，输出低精度量化结果和对应的量化 scale
-  shape_support: 输入支持 1-7D 张量，输出 y 与输入同 shape，mxscale 为 rank(x)+1 维张量
+    shared_exp = floor(log2(max_i(|V_i|))) - emax          # 标准 OCP MX 算法, i 遍历一个 block
+    mxscale = 2^shared_exp                                  # E8M0
+    P_i = cast_to_dst_type(V_i / mxscale, round_mode)
+  description: |
+    MX (microscaling) 动态量化：在给定轴 axis 上按 blocksize 分块，每块计算 E8M0 共享尺度
+    mxscale，块内元素除以 mxscale 后按 round_mode 舍入到 dst_type (FP8)。采用标准 OCP MX
+    算法（floor(log2(amax)) - emax），不支持其他 scale 算法。
+    FP4 目标类型 (dst_type=40/41) 不在本任务范围（torch CPU golden 无法表示 packed FP4，
+    见 desc.md 规则与约束）。
+  shape_support: |
+    x: 1-7 维 ND；输出 y: 同 x；输出 mxscale: rank 与 x 一致，
+    量化轴维 = ceil(x.shape[axis]/blocksize)，其余维度与 x 一致
   attrs:
   - name: axis
-    type: int
-    default: -1
-    description: 量化轴，范围 [-rank, rank-1]
-    required: false
+    type: int64
+    description: 量化发生的轴，取值 [-D, D-1]，D 为 x 的维数
+    required: true
   - name: round_mode
-    type: str
+    type: string
     default: rint
-    description: 舍入模式，支持 rint/floor/round
+    description: 舍入模式；FP8 目标类型仅支持 "rint"
     required: false
   - name: dst_type
-    type: int
-    default: 40
-    description: 输出量化类型编码，35=FP8_E5M2, 36=FP8_E4M3FN, 40=FP4_E2M1, 41=FP4_E1M2
+    type: int64
+    description: '目标数据类型枚举：35=float8_e5m2, 36=float8_e4m3fn（40/41=FP4 不支持）'
     required: true
   - name: blocksize
-    type: int
-    default: 32
-    description: 量化分组大小，32 的倍数且不超过 1024
-    required: false
-  - name: scale_alg
-    type: int
-    default: 0
-    description: Scale 计算算法，0=基础共享指数, 1=FP8块缩放, 2=FP4自定义max
-    required: false
-  - name: dst_type_max
-    type: float
-    default: 0.0
-    description: 自定义量化范围上限，仅 scale_alg=2 时有效，0.0 或 [6.0, 12.0]
-    required: false
+    type: int64
+    description: 每次量化的元素个数，须为 32 的倍数且不超过 1024；x 为 float32 时必须为 32
+    required: true
   inputs:
   - name: x
-    description: 输入张量，1-7 维
+    description: 待量化数据；float32 输入仅支持 blocksize=32 且量化轴维度不小于 32
     dtype:
     - float16
     - bfloat16
+    - float32
   outputs:
   - name: y
-    description: 量化后的输出张量，与输入同 shape
+    description: 量化后的张量，shape 与 x 一致
     dtype:
-    - float8_e5m2
     - float8_e4m3fn
-    - float4_e2m1
-    - float4_e1m2
+    - float8_e5m2
   - name: mxscale
-    description: 量化 scale 张量，dtype 为 FP8_E8M0，shape 为 rank(x)+1 维
+    description: 每个分组对应的量化尺度 (E8M0)，rank 与 x 一致，量化轴维 = ceil(x.shape[axis]/blocksize)
     dtype:
-    - float8_e8m0
-  schema: dynamic_mx_quant(Tensor x, int axis=-1, str round_mode="rint", int dst_type=40, int blocksize=32, int scale_alg=0, float dst_type_max=0.0) -> (Tensor y, Tensor mxscale)
+    - float8_e8m0fnu
+  schema: dynamic_mx_quant(Tensor x, int axis, str round_mode, int dst_type, int blocksize)
+    -> (Tensor y, Tensor mxscale)

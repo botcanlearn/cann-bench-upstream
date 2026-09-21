@@ -3,424 +3,215 @@
 
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# This program is free software; you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
 import torch
-import numpy
 
 """
 DynamicMxQuant 算子 Torch Golden 参考实现
 
-对输入张量执行 Microscaling (MX) 动态量化，按 blocksize 分组计算共享指数，
-输出低精度量化结果和对应的量化 scale。
+MX (microscaling) 动态量化：在 axis 维上按 blocksize 分块，每块计算 E8M0 共享尺度
+mxscale，块内元素除以 mxscale 后按 round_mode 舍入到 dst_type (FP8)。
 
-支持 3 种 scale 算法：
-  - scale_alg=0: 基础共享指数（适用所有 dst_type）
-  - scale_alg=1: FP8 块缩放 cuBLAS 风格（仅 FP8 类型）
-  - scale_alg=2: FP4 自定义 max（仅 FP4_E2M1）
+公式 (标准 OCP MX 算法):
+    shared_exp = floor(log2(max_i(|V_i|))) - emax
+    mxscale    = 2^shared_exp
+    P_i        = cast_to_dst_type(V_i / mxscale, round_mode)
 
-参考来源: addrmsnormdynamicmxquant 融合算子 PTA 调测文件
+mxscale 为逐块尺度张量：rank 与 x 一致，量化轴维 = ceil(x.shape[axis]/blocksize)，
+第 b 块的尺度直接存于量化轴维下标 b 处；不做偶数补齐与交织。
+
+参考 ops-nn 仓 quant/dynamic_mx_quant/tests/assets/golden.py 的 scale_alg=0 路径，
+使用纯 torch 接口拼接实现，数值语义逐分支对齐。
 """
 
-# dst_type 编码到格式字符串的映射
-DST_TYPE_MAP = {
-    35: "float8_e5m2",
-    36: "float8_e4m3fn",
-    40: "float4_e2m1",
-    41: "float4_e1m2",
+# dst_type (int64 枚举) -> (torch dtype 名, emax, exp_bits, mantissa_bits)
+# emax: 目标类型最大正则数的指数；exp_bits/mantissa_bits 用于尾数舍入仿真
+_DST_TYPE_INFO = {
+    35: ("float8_e5m2", 15, 5, 2),
+    36: ("float8_e4m3fn", 8, 4, 3),
 }
 
-def _get_dtype_range(dt):
-    """获取数据类型的表示范围"""
-    if "float4_e2m1" in str(dt):
-        return -6.0, 6.0
-    if "float4_e1m2" in str(dt):
-        return -1.75, 1.75
-    if "float8_e8m0" in str(dt):
-        return 2.0 ** -127, 2.0 ** 127
-    if "float8_e5m2" in str(dt):
-        return -57344.0, 57344.0
-    if "float8_e4m3fn" in str(dt):
-        return -448.0, 448.0
-    numpy_dtype = numpy.dtype(dt)
-    if numpy_dtype.kind in "iu":
-        info = numpy.iinfo(numpy_dtype)
-    else:
-        info = numpy.finfo(numpy_dtype)
-    return info.min, info.max
+# FP8/E8M0 输出格式: dtype -> (偏置指数 bias, 尾数位宽 mant_bits)
+_FP8_FORMATS = {
+    torch.float8_e4m3fn: (7, 3),
+    torch.float8_e5m2: (15, 2),
+    torch.float8_e8m0fnu: (127, 0),
+}
+
+_ROUND_MODES = ("rint", "floor", "round")
+
+_E8M0_MAX_BIASED_EXP = 127  # E8M0 偏置指数范围 [-127, 127]
 
 
-def _mx_round_mantissa(fp_array: numpy.ndarray, round_mode: str):
+def _pow2(exp: torch.Tensor) -> torch.Tensor:
+    """2^exp 的位级精确构造：exp 为 [-127, 127] 内整数或 ±inf/NaN（调用方保证）。
+
+    NPU 的 torch.pow/torch.exp2 对整数指数存在 1 ulp 偏差且次正规数
+    flush-to-zero（如 2^-126 在 NPU 上得 0），golden 作为 CPU 参考与
+    NPU 候选需逐位一致，故按 IEEE-754 位模式直接构造。
     """
-    对尾数进行舍入。
-    - rint: 银行家舍入（tie to even）
-    - round/nearest: 四舍五入（tie away from zero）
-    - floor: 向负无穷舍入
+    e = exp.nan_to_num(nan=0.0, posinf=127.0, neginf=-127.0).to(torch.int32)
+    bits = (e + 127).clamp(1, 254) << 23  # e ∈ [-126, 127]: 正规数位模式
+    bits = torch.where(e == -127, torch.full_like(bits, 0x00400000), bits)  # 2^-127 次正规
+    val = bits.contiguous().view(torch.float32)
+    val = torch.where(exp == -float("inf"), torch.zeros_like(val), val)  # 2^-inf = 0
+    val = torch.where(exp == float("inf"), torch.full_like(val, float("inf")), val)  # 2^inf = inf
+    return torch.where(torch.isnan(exp), torch.full_like(val, float("nan")), val)
+
+
+def _to_fp8(t: torch.Tensor, dtype) -> torch.Tensor:
+    """float32 -> FP8/E8M0：位级编码 + view，规避 NPU 不支持的 d2d fp8 cast。
+
+    NPU 上 ``.to(float8_*)`` 走 aclnnInplaceCopy 拷贝路径：E8M0 全平台不支持，
+    E4M3/E5M2 在部分平台（如 910B）报 561103。改为整数位运算编码后 ``view``
+    （纯元数据操作，无数据搬运），CPU/NPU 数值一致。要求输入值可被目标格式
+    精确表示或为 0/次正规/NaN（本算子的量化构造保证 y/mxscale 满足）。
     """
+    bias, mant_bits = _FP8_FORMATS[dtype]
+    bits = t.contiguous().view(torch.int32)
+    abs_bits = bits & 0x7FFFFFFF
+    if mant_bits == 0:
+        # E8M0 无尾数: 字节 = fp32 偏置指数 (2^e -> e+127, 0 -> 0x00, NaN -> 0xFF)
+        return (abs_bits >> 23).to(torch.uint8).view(dtype)
+    sign = (bits >> 31) & 1
+    mant = abs_bits & 0x7FFFFF
+    e = (abs_bits >> 23) - 127
+    min_exp = 1 - bias
+    # 正规数: 指数字段 e+bias, 尾数字段取 fp32 尾数高位（精确表示保证低位为 0）
+    normal = ((e.clamp_min(min_exp) + bias) << mant_bits) | (mant >> (23 - mant_bits))
+    # 次正规数: m = value / 2^(min_exp - mant_bits) = (2^23 + mant) >> shift
+    sub_shift = (23 - e + min_exp - mant_bits).clamp_min(0)
+    subnormal = ((1 << 23) + mant) >> sub_shift
+    byte = torch.where(e >= min_exp, normal, subnormal)
+    return ((sign << 7) | byte).to(torch.uint8).view(dtype)
+
+
+def _round_mantissa(t: torch.Tensor, round_mode: str) -> torch.Tensor:
+    """按 round_mode 对定点化后的尾数舍入"""
     if round_mode in ("rint", "even"):
-        fp_array = numpy.rint(fp_array)
-    elif round_mode in ("round", "nearest"):
-        sign = numpy.signbit(fp_array)
-        rounded_abs = numpy.floor(numpy.abs(fp_array) + numpy.array([0.5], dtype=fp_array.dtype))
-        fp_array = numpy.where(sign, -rounded_abs, rounded_abs)
-    elif round_mode == "floor":
-        fp_array = numpy.floor(fp_array)
-    elif round_mode == "ceil":
-        fp_array = numpy.ceil(fp_array)
-    elif round_mode == "trunc":
-        fp_array = numpy.trunc(fp_array)
-    else:
-        raise ValueError(f"Unrecognized round method {round_mode}")
-    return fp_array
+        return torch.round(t)  # round-to-nearest-even
+    if round_mode in ("round", "nearest"):
+        return torch.sign(t) * torch.floor(torch.abs(t) + 0.5)
+    if round_mode == "floor":
+        return torch.floor(t)
+    if round_mode == "ceil":
+        return torch.ceil(t)
+    if round_mode == "trunc":
+        return torch.trunc(t)
+    raise RuntimeError(f"Unrecognized round mode: {round_mode}")
 
 
-def _mx_calculate_share_exp(fp_array: numpy.ndarray, scale_axis: int, mx_ele_dtype: str):
-    """Algorithm 0: OCP 标准共享指数计算"""
-    FP32_EXPONENT_BIAS = 127
-    FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
-    max_norm = _get_dtype_range(mx_ele_dtype)[1]
-    ele_emax = int(numpy.log2(max_norm))
-    fp_abs_max = numpy.max(numpy.abs(fp_array), axis=scale_axis, keepdims=True)
-    res = numpy.floor(
-        numpy.log2(fp_abs_max.astype(numpy.float32) + FP32_MIN_NORMAL * (fp_abs_max == 0))
-    ) - ele_emax
-    res[fp_abs_max == 0] = -float("inf")
-    return res
+def _shared_exp_alg0(amax: torch.Tensor, ele_emax: int) -> torch.Tensor:
+    """标准 OCP 算法: shared_exp = floor(log2(amax)) - emax；全零块为 -inf。
 
-
-def _mx_calculate_share_exp_1(fp_array: numpy.ndarray, scale_axis: int, mx_ele_dtype: str,
-                               max_norm: float = None, subnormal: bool = True):
-    """Algorithm 1/2: cuBLAS 风格 scale 计算（通过 FP32 位操作实现向上取整的 log2）
-
-    Args:
-        max_norm: 自定义最大值，None 时从 mx_ele_dtype 推导
-        subnormal: 是否考虑 subnormal 条件（alg2 时为 False）
+    floor(log2(amax)) 直接提取 amax 的 fp32 指数域：正规数下与数学 floor(log2)
+    严格一致。不能用 float32 log2 计算——其在二次幂下边界（如 nextafter(2^k, 0)）
+    会舍入到整数 k，使 floor 抬高一位、mxscale 偏大 2 倍。次正规 amax 的
+    shared_exp 必然低于 -127，由后续 E8M0 钳制兜底（与浮点 log2 路径同结果）。
     """
-    if max_norm is None:
-        max_norm = _get_dtype_range(mx_ele_dtype)[1]
-    fp_abs_max = numpy.max(numpy.abs(fp_array), axis=scale_axis, keepdims=True).astype(numpy.float32)
-    s_fp32 = fp_abs_max / max_norm
-    binary_ints = numpy.array(s_fp32.view(numpy.uint32))
-    exponent_mask = numpy.uint32(0x7F800000)
-    mantissa_mask = numpy.uint32(0x007FFFFF)
-    exponents = (binary_ints & exponent_mask) >> 23
-    exponents_int16 = exponents.astype(numpy.int16)
-    mantissas = (binary_ints & mantissa_mask)
-    # 如果尾数非零，指数向上取整
-    condition_1 = (exponents_int16 > 0) & (exponents_int16 < 254) & (mantissas > 0)
-    if subnormal:
-        condition_2 = (exponents_int16 == 0) & (mantissas > 2 ** 22)
-    else:
-        condition_2 = False
-    exponents_int16 = numpy.where((condition_1 | condition_2), exponents_int16 + 1, exponents_int16)
-    res = (exponents_int16 - 127).astype(numpy.float32)
-    res[fp_abs_max == 0] = -float("inf")
-    return res
+    abs_bits = amax.contiguous().view(torch.int32) & 0x7FFFFFFF
+    exp = ((abs_bits >> 23) - 127).to(torch.float32) - ele_emax
+    # NaN/Inf amax 的对数无定义：保持 NaN/Inf 语义（后续 >127 置 NaN，编码 0xFF）
+    exp = torch.where(torch.isnan(amax), torch.full_like(exp, float("nan")), exp)
+    exp = torch.where(torch.isinf(amax), torch.full_like(exp, float("inf")), exp)
+    # 全零块为 -inf（mxscale 编码 0x00）
+    return torch.where(amax == 0, torch.full_like(exp, -float("inf")), exp)
 
-
-def _mx_calculate_share_exp_dynamic_dtype_range(fp_array: numpy.ndarray, scale_axis: int,
-                                                 mx_ele_dtype: str, max_norm: float,
-                                                 subnormal: bool = False):
-    """Algorithm 2 主路径: 基于 BF16 位操作计算 scale（dst_type_max=6/7 的尾轴场景）
-
-    将 abs_max 转为 bfloat16，通过 BF16 的指数和尾数位判断是否需要向上取整。
-    """
-    from ml_dtypes import bfloat16 as bfloat16_type
-    fp_abs_max = numpy.max(numpy.abs(fp_array), axis=scale_axis, keepdims=True).astype(bfloat16_type)
-    binary_ints = numpy.array(fp_abs_max.view(numpy.uint16))
-    exponent_mask = numpy.uint16(0x7F80)
-    mantissa_mask = numpy.uint16(0x007F)
-    # 提取指数部分
-    exponents = (binary_ints & exponent_mask) >> 7
-    exponents_int16 = exponents.astype(numpy.int16)
-    # 提取尾数部分
-    mantissas = (binary_ints & mantissa_mask).astype(numpy.uint16)
-    # threshold 取决于 max_norm: 6 → 0x0040, 7 → 0x0060
-    threshold = numpy.uint16(0x0040) if max_norm == 6 else numpy.uint16(0x0060)
-    condition = mantissas > threshold
-    exponents_int16_1 = numpy.where(condition, exponents_int16 + 1, exponents_int16)
-    exponents_int16_1 -= 2
-    res = (exponents_int16_1 - 127).astype(numpy.float32)
-    res[exponents_int16 == 255] = float("inf")
-    res[fp_abs_max == 0] = -float("inf")
-    return res
-
-def _mx_reshape_to_blocks(fp_array: numpy.ndarray, axis: int, block_size: int):
-    """将输入在 axis 维度 pad 到 block_size 整数倍，然后 reshape 为 [..., num_blocks, block_size, ...]"""
-    fp_array = numpy.expand_dims(fp_array, axis=axis + 1)
-    orig_shape = fp_array.shape
-    pad = [[0, 0] for _ in range(len(orig_shape))]
-    pad_size = orig_shape[axis] % block_size
-    pad[axis][1] = block_size - pad_size if pad_size > 0 else 0
-    if pad_size > 0:
-        fp_array = numpy.pad(fp_array, pad, 'constant')
-    padded_shape = fp_array.shape
-    reshape = list(padded_shape)
-    reshape[axis + 1] = block_size
-    reshape[axis] = reshape[axis] // block_size
-    fp_array = fp_array.reshape(reshape)
-    return fp_array, orig_shape, padded_shape
-
-
-def _mx_quantize_to_element_format(fp_array: numpy.ndarray, share_exp: numpy.ndarray,
-                                   mx_ele_dtype: str, round_mode: str):
-    """将输入按 share_exp 缩放后，量化到目标 FP4/FP8 格式（精确模拟位宽约束）"""
-    mx_dtype = str(mx_ele_dtype)
-    exp_bits = 0
-    mantissa_bits = 0
-    if "float4_e2m1" in mx_dtype:
-        exp_bits = 2
-        mantissa_bits = 1
-    elif "float4_e1m2" in mx_dtype:
-        exp_bits = 1
-        mantissa_bits = 2
-    elif "float8_e4m3fn" in mx_dtype:
-        exp_bits = 4
-        mantissa_bits = 3
-    elif "float8_e5m2" in mx_dtype:
-        exp_bits = 5
-        mantissa_bits = 2
-
-    max_norm = _get_dtype_range(mx_dtype)[1]
-
-    ret = fp_array / (2 ** share_exp)
-    private_exp = numpy.floor(numpy.log2(numpy.abs(ret.astype(numpy.float32)) + (ret == 0))
-                              ).astype(fp_array.dtype, copy=False)
-    if "float8_e4m3fn" in mx_dtype or "float8_e5m2" in mx_dtype:
-        min_exp = -(2 ** (exp_bits - 1)) + 2
-    else:
-        min_exp = -(2 ** (exp_bits - 1)) + exp_bits
-    private_exp = private_exp.clip(min=min_exp)
-    # Scale up so appropriate number of bits are in the integer portion
-    ret = ret / (2 ** private_exp) * (2 ** mantissa_bits)
-    ret = _mx_round_mantissa(ret, round_mode)
-    # Undo scaling
-    ret = ret / (2 ** mantissa_bits) * (2 ** private_exp)
-    # Clamp to representable range
-    numpy.clip(ret, a_min=-max_norm, a_max=max_norm, out=ret)
-    return ret
-
-
-def _mx_undo_reshape_to_blocks(fp_array: numpy.ndarray, axis: int,
-                               orig_shape: tuple, padded_shape: tuple):
-    """撤销 reshape_to_blocks 的操作，恢复原始 shape"""
-    fp_array = fp_array.reshape(padded_shape)
-    if tuple(padded_shape) != tuple(orig_shape):
-        slices = [slice(0, x) for x in orig_shape]
-        fp_array = fp_array[tuple(slices)]
-    fp_array = numpy.squeeze(fp_array, axis=axis + 1)
-    return fp_array
-
-
-def _interleave(tensor: numpy.ndarray, axis: int, n_group: int = 2) -> numpy.ndarray:
-    """在指定 axis 上做 interleave 重排（非尾轴时需要）"""
-    length = tensor.shape[axis]
-    if length % n_group != 0:
-        raise ValueError(f"Axis length ({length}) must be divisible by n_group ({n_group})")
-
-    group_length = length // n_group
-    shape = list(tensor.shape)
-    new_shape = shape[:axis] + [group_length, 2] + shape[axis + 1:]
-    reshaped = tensor.reshape(new_shape)
-    transpose_order = (
-        list(range(0, axis + 1)) +
-        list(range(axis + 2, len(new_shape))) +
-        [axis + 1]
-    )
-    transposed = reshaped.transpose(transpose_order)
-    return transposed
-
-
-def _pad_to_even(tensor: numpy.ndarray, axis: int) -> numpy.ndarray:
-    """将 axis 维度 pad 到偶数长度（Cube 要求 scale 为偶数个）"""
-    length = tensor.shape[axis]
-    if length % 2 == 0:
-        return tensor
-    pad_width = [(0, 0)] * tensor.ndim
-    pad_width[axis] = (0, 1)
-    padded_tensor = numpy.pad(tensor, pad_width, mode='constant', constant_values=2 ** -127)
-    return padded_tensor
 
 def dynamic_mx_quant(
     x: torch.Tensor,
     axis: int = -1,
     round_mode: str = "rint",
-    dst_type: int = 40,
+    dst_type: int = 36,
     blocksize: int = 32,
-    scale_alg: int = 0,
-    dst_type_max: float = 0.0,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    对输入张量执行 Microscaling (MX) 动态量化。
+):
+    """MX 动态量化 (FP8 目标类型)。
 
     Args:
-        x: 输入张量，支持 float16/bfloat16，1-7D
-        axis: 量化轴，默认 -1（最后一维）
-        round_mode: 舍入模式，rint/floor/round
-        dst_type: 输出类型编码 (35=FP8_E5M2, 36=FP8_E4M3FN, 40=FP4_E2M1, 41=FP4_E1M2)
-        blocksize: 量化分组大小，32 的倍数
-        scale_alg: Scale 算法 (0=基础共享指数, 1=FP8块缩放, 2=FP4自定义max)
-        dst_type_max: 自定义量化范围上限，仅 scale_alg=2 有效
+        x: 输入张量 (float16/bfloat16/float32；评测框架会以 float64 传入，同样接受)
+        axis: 量化发生的轴，[-D, D-1]
+        round_mode: 舍入模式，FP8 目标类型仅支持 "rint"
+        dst_type: 目标类型枚举，35=float8_e5m2, 36=float8_e4m3fn
+        blocksize: 每块元素个数，32 的倍数且不超过 1024
 
     Returns:
-        (y, mxscale): 量化输出和对应的 scale 张量
+        y: 量化后张量 (dst_type 对应 dtype，shape 与 x 一致)
+        mxscale: 每块量化尺度 (torch.float8_e8m0fnu，rank 与 x 一致，
+            量化轴维为 ceil(x.shape[axis]/blocksize)，其余维度与 x 一致)
     """
-    mx_ele_dtype = DST_TYPE_MAP[dst_type]
+    if not x.is_floating_point():
+        raise RuntimeError(f"Unsupported input dtype: {x.dtype}")
+    if dst_type not in _DST_TYPE_INFO:
+        raise RuntimeError(
+            f"Unsupported dst_type: {dst_type} (支持 35=float8_e5m2, 36=float8_e4m3fn)"
+        )
+    dtype_name, ele_emax, exp_bits, mant_bits = _DST_TYPE_INFO[dst_type]
+    out_dtype = getattr(torch, dtype_name)
 
-    # 转为 numpy 计算
-    if x.dtype == torch.bfloat16:
-        from ml_dtypes import bfloat16
-        fp_array = x.to(torch.float32).numpy().astype(bfloat16)
-    elif x.dtype == torch.float16:
-        fp_array = x.numpy().astype(numpy.float16)
-    else:
-        fp_array = x.numpy().astype(numpy.float32)
+    dim = x.dim()
+    if axis < 0:
+        axis += dim
+    if not 0 <= axis < dim:
+        raise RuntimeError(f"axis {axis} out of range for rank {dim}")
+    if blocksize <= 0 or blocksize % 32 != 0 or blocksize > 1024:
+        raise RuntimeError(f"blocksize must be a multiple of 32 and <= 1024, got {blocksize}")
+    if x.dtype == torch.float32 and blocksize != 32:
+        raise RuntimeError("float32 input only supports blocksize=32")
+    if round_mode not in _ROUND_MODES:
+        raise RuntimeError(f"round_mode must be one of {_ROUND_MODES}, got {round_mode}")
 
-    # 规范化 axis
-    axis_norm = len(fp_array.shape) + axis if axis < 0 else axis
+    # 统一到 float32 计算精度，并把量化轴换到末尾按尾轴分块处理
+    xf = x.to(torch.float32)
+    tail_axis = axis == dim - 1
+    xt = xf.movedim(axis, -1) if not tail_axis else xf
 
-    # padding & reshape to block_size
-    fp_array, orig_shape, padded_shape = _mx_reshape_to_blocks(fp_array, axis_norm, blocksize)
+    n = xt.shape[-1]
+    n_blocks = (n + blocksize - 1) // blocksize
+    pad_len = n_blocks * blocksize - n
+    if pad_len > 0:
+        xt = torch.nn.functional.pad(xt, (0, pad_len))  # 不足一块按 0 补齐
+    blocks = xt.unflatten(-1, (n_blocks, blocksize))
 
-    # 计算共享指数
-    if scale_alg == 2:
-        # Algorithm 2: FP4 自定义 max（仅 float4_e2m1）
-        effective_max = dst_type_max if dst_type_max != 0.0 else 6.0
-        # 计算 postAxis 大小（axis 之后的维度乘积，在 reshape_to_blocks 之前）
-        post_axis_size = 1
-        for i in range(axis_norm + 1, len(orig_shape) - 1):  # orig_shape 多了一维
-            post_axis_size *= orig_shape[i]
-        if effective_max == 6 or effective_max == 7:
-            # dst_type_max=6/7: 分两条路径
-            if (post_axis_size < 64 and axis_norm != (len(orig_shape) - 2)
-                    and fp_array.dtype.name in ("float16",)):
-                # 非尾轴 + postAxis < 64 + float16: 走 FP32 位操作路径
-                share_exp = _mx_calculate_share_exp_1(fp_array, scale_axis=axis_norm + 1,
-                                                       mx_ele_dtype=mx_ele_dtype,
-                                                       max_norm=effective_max, subnormal=False)
-            else:
-                # 尾轴或 postAxis >= 64 或 bfloat16: 走 BF16 位操作路径
-                share_exp = _mx_calculate_share_exp_dynamic_dtype_range(
-                    fp_array, scale_axis=axis_norm + 1,
-                    mx_ele_dtype=mx_ele_dtype, max_norm=effective_max, subnormal=False)
-        else:
-            # dst_type_max 非 6/7 (如 8.0, 12.0): 走 FP32 位操作路径
-            share_exp = _mx_calculate_share_exp_1(fp_array, scale_axis=axis_norm + 1,
-                                                   mx_ele_dtype=mx_ele_dtype,
-                                                   max_norm=effective_max, subnormal=False)
-    elif scale_alg == 0 or (mx_ele_dtype in ("float4_e2m1", "float4_e1m2")):
-        share_exp = _mx_calculate_share_exp(fp_array, scale_axis=axis_norm + 1,
-                                            mx_ele_dtype=mx_ele_dtype)
-    else:
-        share_exp = _mx_calculate_share_exp_1(fp_array, scale_axis=axis_norm + 1,
-                                               mx_ele_dtype=mx_ele_dtype)
+    # 每块绝对值最大值 -> 共享指数 -> E8M0 值域裁剪
+    amax = blocks.abs().amax(dim=-1, keepdim=True)
+    share_exp = _shared_exp_alg0(amax, ele_emax)
+    share_exp = torch.where(
+        share_exp > _E8M0_MAX_BIASED_EXP,
+        torch.full_like(share_exp, float("nan")),
+        share_exp,
+    )
+    share_exp = torch.where(share_exp < -_E8M0_MAX_BIASED_EXP, torch.full_like(share_exp, -float(_E8M0_MAX_BIASED_EXP)), share_exp)
+    mxscale_val = _pow2(share_exp)  # [..., n_blocks, 1]
 
-    # 限制 scale 范围
-    scale_emax = 2 ** (8 - 1) - 1  # E8M0: 127
-    share_exp[share_exp > scale_emax] = float("NaN")
-    share_exp[share_exp < -scale_emax] = -scale_emax
+    # 元素级量化：去尺度 -> 私有指数(截断到最小正则指数, 仿真 subnormal) -> 定点舍入 -> 还原
+    ret = blocks / mxscale_val
+    private_exp = torch.floor(torch.log2(torch.abs(ret) + (ret == 0).to(torch.float32)))
+    min_exp = -(2 ** (exp_bits - 1)) + 2
+    private_exp = private_exp.clamp_min(min_exp)
+    ret = ret / _pow2(private_exp) * (2**mant_bits)
+    ret = _round_mantissa(ret, round_mode)
+    ret = ret / (2**mant_bits) * _pow2(private_exp)
+    max_norm = float(torch.finfo(out_dtype).max)
+    ret = ret.clamp(-max_norm, max_norm)
+    ret = torch.nan_to_num(ret, nan=0.0)  # NaN -> 0
 
-    # 量化元素
-    ele_array = _mx_quantize_to_element_format(fp_array, share_exp, mx_ele_dtype, round_mode)
+    # 去掉块内 padding 并把轴换回原位
+    y = ret.flatten(-2)[..., :n]
+    if not tail_axis:
+        y = y.movedim(-1, axis)
+    y = _to_fp8(y, out_dtype)
 
-    # 恢复原始 shape
-    ele_array = _mx_undo_reshape_to_blocks(ele_array, axis_norm, orig_shape, padded_shape)
-    share_exp = numpy.squeeze(share_exp, axis=axis_norm + 1)
+    # mxscale 布局：逐块尺度张量，量化轴维 = n_blocks，其余维度与 x 一致（无补偶/配对/交织）
+    scale_val = mxscale_val.squeeze(-1)
+    if not tail_axis:
+        scale_val = scale_val.movedim(-1, axis)
+    mxscale = _to_fp8(scale_val, torch.float8_e8m0fnu)
 
-    # 构建 scale 数组 (2^share_exp)
-    scale_array = 2 ** share_exp
-
-    # NPU 会将 NaN cast 为 0
-    ele_array = numpy.nan_to_num(ele_array, nan=0.0, copy=False)
-
-    # 将 ele_array 转为目标 dtype 的 uint8 表示
-    if ele_array.dtype.name == "bfloat16":
-        ele_array = ele_array.astype("float32", copy=False)
-
-    # 构建 mxscale 输出（interleaved 格式）
-    scale_array_pad = _pad_to_even(scale_array, axis=axis_norm)
-    result_shape = list(scale_array_pad.shape) + [2]
-    result_shape[axis_norm] = scale_array_pad.shape[axis_norm] // 2
-
-    # 非尾轴需要 interleave
-    if axis_norm != (len(fp_array.shape) - 2):  # -2 因为 reshape_to_blocks 多了一维
-        scale_array_pad = _interleave(scale_array_pad, axis=axis_norm)
-    scale_array_pad = scale_array_pad.reshape(result_shape)
-
-    # 转为 uint8（FP8_E8M0 的位表示）
-    try:
-        from en_dtypes import float8_e8m0
-        scale_out = scale_array_pad.astype(float8_e8m0, copy=False)
-        scale_uint8 = scale_out.view(numpy.uint8)
-    except (ImportError, ModuleNotFoundError):
-        # fallback: 手动编码 E8M0 = biased exponent of power-of-2
-        scale_f32 = scale_array_pad.astype(numpy.float32)
-        scale_uint8_vals = numpy.zeros(scale_f32.shape, dtype=numpy.uint8)
-        valid = numpy.isfinite(scale_f32) & (scale_f32 > 0)
-        log_vals = numpy.zeros_like(scale_f32)
-        log_vals[valid] = numpy.log2(scale_f32[valid])
-        biased = numpy.clip(numpy.round(log_vals) + 127, 0, 254).astype(numpy.uint8)
-        scale_uint8_vals[valid] = biased[valid]
-        scale_uint8_vals[~valid & (scale_f32 == 0)] = 0
-        scale_uint8_vals[numpy.isnan(scale_f32)] = 255
-        # -inf 对应 biased=0
-        scale_uint8_vals[numpy.isneginf(scale_array_pad.astype(numpy.float32))] = 0
-        scale_uint8 = scale_uint8_vals
-
-    # 将 ele_array 转为目标量化 dtype，再 view 为 uint8（与 NPU 输出做字节级精确比较）
-    if mx_ele_dtype in ("float8_e4m3fn", "float8_e5m2"):
-        if mx_ele_dtype == "float8_e4m3fn":
-            from ml_dtypes import float8_e4m3fn
-            ele_typed = ele_array.astype(float8_e4m3fn, copy=False)
-        else:
-            from ml_dtypes import float8_e5m2
-            ele_typed = ele_array.astype(float8_e5m2, copy=False)
-        y_uint8 = ele_typed.view(numpy.uint8).reshape(x.shape)
-        y_tensor = torch.from_numpy(y_uint8.copy())
-    elif mx_ele_dtype in ("float4_e2m1", "float4_e1m2"):
-        # FP4 手动编码：将量化浮点值编码为 4-bit，两两打包成 uint8
-        # NPU 打包格式: byte = low_nibble | (high_nibble << 4)
-        # low_nibble = element[2i], high_nibble = element[2i+1]
-        if mx_ele_dtype == "float4_e2m1":
-            # E2M1: sign(1) exp(2) man(1), values: 0,0.5,1,1.5,2,3,4,6
-            _val_to_code = {
-                0.0: 0, 0.5: 1, 1.0: 2, 1.5: 3, 2.0: 4, 3.0: 5, 4.0: 6, 6.0: 7,
-                -0.0: 8, -0.5: 9, -1.0: 10, -1.5: 11, -2.0: 12, -3.0: 13, -4.0: 14, -6.0: 15,
-            }
-        else:
-            # E1M2: sign(1) exp(1) man(2), values: 0,0.25,0.5,0.75,1,1.25,1.5,1.75
-            _val_to_code = {
-                0.0: 0, 0.25: 1, 0.5: 2, 0.75: 3, 1.0: 4, 1.25: 5, 1.5: 6, 1.75: 7,
-                -0.0: 8, -0.25: 9, -0.5: 10, -0.75: 11, -1.0: 12, -1.25: 13, -1.5: 14, -1.75: 15,
-            }
-        # 构建查找数组：用 float32 值索引
-        ele_flat = ele_array.flatten().astype(numpy.float32)
-        codes = numpy.zeros(len(ele_flat), dtype=numpy.uint8)
-        for val, code in _val_to_code.items():
-            mask = ele_flat == numpy.float32(val)
-            # 处理 -0.0 == 0.0 的问题
-            if val == 0.0 and code == 0:
-                mask = mask & ~numpy.signbit(ele_flat)
-            elif code == 8:  # -0.0
-                mask = (ele_flat == 0.0) & numpy.signbit(ele_flat)
-            codes[mask] = code
-
-        # 打包: 每两个 FP4 code 打包为一个 uint8
-        # NPU 格式: byte = codes[2i] | (codes[2i+1] << 4)
-        codes_pairs = codes.reshape(-1, 2)
-        packed = (codes_pairs[:, 0] | (codes_pairs[:, 1] << 4)).astype(numpy.uint8)
-        y_uint8 = packed.reshape(x.shape[:-1] + (x.shape[-1] // 2,))
-        y_tensor = torch.from_numpy(y_uint8.copy())
-    else:
-        # fallback
-        y_tensor = torch.from_numpy(ele_array.astype(numpy.float32)).reshape(x.shape).to(x.dtype)
-
-    mxscale_tensor = torch.from_numpy(scale_uint8)
-
-    return y_tensor, mxscale_tensor
+    return y, mxscale

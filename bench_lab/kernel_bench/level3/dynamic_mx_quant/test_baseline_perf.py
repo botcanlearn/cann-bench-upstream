@@ -15,6 +15,7 @@ npu_dynamic_mx_quant 算子性能测试脚本
 """
 
 import ast
+import math
 import os
 import sys
 import csv
@@ -47,7 +48,7 @@ DTYPE_MAP = {
     "bfloat16": torch.bfloat16,
 }
 
-# dst_type 到 torch_npu dtype 的映射
+# dst_type 到 torch_npu dtype 的映射（perf 走真实 NPU 算子，FP8/FP4 输出均合法）
 DST_TYPE_NPU_MAP = {
     35: torch.float8_e5m2,
     36: torch.float8_e4m3fn,
@@ -100,7 +101,7 @@ def _parse_attrs(raw):
     attrs = _literal("attrs", raw)
     if not isinstance(attrs, dict):
         raise ValueError(f"attrs 必须是 dict，实际: {raw!r}")
-    for key in ("axis", "round_mode", "dst_type", "blocksize", "scale_alg", "dst_type_max"):
+    for key in ("axis", "round_mode", "dst_type", "blocksize"):
         if key not in attrs:
             raise ValueError(f"attrs 缺少必填字段 {key}")
     if not _is_int(attrs["axis"]):
@@ -109,22 +110,28 @@ def _parse_attrs(raw):
         raise ValueError(f"round_mode 必须是 {sorted(ROUND_MODES)} 之一，实际: {attrs['round_mode']!r}")
     if not _is_int(attrs["dst_type"]) or attrs["dst_type"] not in DST_TYPE_NPU_MAP:
         raise ValueError(f"dst_type 必须是 {sorted(DST_TYPE_NPU_MAP)} 之一，实际: {attrs['dst_type']!r}")
-    if not _is_int(attrs["blocksize"]) or attrs["blocksize"] <= 0:
-        raise ValueError(f"blocksize 必须为正整数，实际: {attrs['blocksize']!r}")
-    if not _is_int(attrs["scale_alg"]) or attrs["scale_alg"] < 0:
-        raise ValueError(f"scale_alg 必须为非负整数，实际: {attrs['scale_alg']!r}")
-    if not _is_number(attrs["dst_type_max"]):
-        raise ValueError(f"dst_type_max 必须为数值，实际: {attrs['dst_type_max']!r}")
+    if not _is_int(attrs["blocksize"]) or not (attrs["blocksize"] % 32 == 0 and attrs["blocksize"] <= 1024):
+        raise ValueError(f"blocksize 必须为 32 的倍数且不超过 1024，实际: {attrs['blocksize']!r}")
     return attrs
+
+
+_SPECIAL_LITERALS = {"inf": float("inf"), "+inf": float("inf"),
+                      "-inf": float("-inf"), "nan": float("nan")}
 
 
 def _parse_value_range(raw):
     vr = _literal("value_range", raw)
     if not isinstance(vr, list) or len(vr) != 2:
         raise ValueError(f"value_range 必须形如 [vmin, vmax]，实际: {raw!r}")
-    if not all(_is_number(v) for v in vr):
-        raise ValueError(f"value_range 元素必须为数值，实际: {vr!r}")
-    return vr
+    parsed = []
+    for v in vr:
+        if _is_number(v):
+            parsed.append(float(v))
+        elif isinstance(v, str) and v.strip().lower() in _SPECIAL_LITERALS:
+            parsed.append(_SPECIAL_LITERALS[v.strip().lower()])
+        else:
+            raise ValueError(f"value_range 元素必须为数值或 inf/-inf/nan，实际: {vr!r}")
+    return parsed
 
 
 def load_cases(csv_path):
@@ -145,8 +152,6 @@ def load_cases(csv_path):
                 "round_mode": attrs["round_mode"],
                 "dst_type": attrs["dst_type"],
                 "blocksize": attrs["blocksize"],
-                "scale_alg": attrs["scale_alg"],
-                "dst_type_max": float(attrs["dst_type_max"]),
                 "value_range": value_range,
                 "note": row.get("note", ""),
             }
@@ -163,7 +168,13 @@ def build_input(case_cfg, device):
     np.random.seed(SEED)
     random.seed(SEED)
 
-    if vmin == 0 and vmax == 0:
+    if math.isnan(vmin) or math.isnan(vmax):
+        x = torch.randn(shape, dtype=torch.float32)
+        x.view(-1)[0] = float("nan")
+    elif math.isinf(vmin) or math.isinf(vmax):
+        x = torch.randn(shape, dtype=torch.float32)
+        x.view(-1)[0] = float("inf") if vmax > 0 else float("-inf")
+    elif vmin == 0 and vmax == 0:
         x = torch.zeros(shape, dtype=dtype)
     else:
         x = torch.rand(shape, dtype=torch.float32) * (vmax - vmin) + vmin
@@ -181,8 +192,7 @@ def run_single_case(case_id, case_cfg, device):
     print(f"[CASE {case_id}] shape={case_cfg['input_shape']}, "
           f"dtype={case_cfg['dtype']}, dst_type={case_cfg['dst_type']}")
     print(f"           axis={case_cfg['axis']}, round_mode={case_cfg['round_mode']}, "
-          f"blocksize={case_cfg['blocksize']}, scale_alg={case_cfg['scale_alg']}, "
-          f"dst_type_max={case_cfg['dst_type_max']}")
+          f"blocksize={case_cfg['blocksize']}")
     print(f"           note: {case_cfg['note']}")
     print(f"{'='*60}")
 
@@ -193,8 +203,6 @@ def run_single_case(case_id, case_cfg, device):
             round_mode=case_cfg["round_mode"],
             dst_type=npu_dtype,
             block_size=case_cfg["blocksize"],
-            scale_alg=case_cfg["scale_alg"],
-            dst_type_max=case_cfg["dst_type_max"],
         )
 
     # 预执行一次，确认算子可运行

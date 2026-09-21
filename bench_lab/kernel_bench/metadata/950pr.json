@@ -9,7 +9,7 @@
       "note": "baseline_perf_us 取每 case 在 NPU 上实际 kernel 的 Task Duration 中位数（warmup=10, trials=50），t_hw_us 由 HAP roofline (hap-ascend-950pr-v1) 计算并 floor 到 1μs。"
     },
     "950pr_platform_notes": {
-      "scale_alg": "950PR arch35 仅支持 dynamic_mx_quant scale_alg=0 或 1；scale_alg=2（FP4 自定义 max）不可用，dynamic_mx_quant case 16/17/18 已改为 scale_alg=0 并在各 case 记录 scale_alg 字段",
+      "scale_alg": "dynamic_mx_quant 用例已重构为标准 OCP 规格（无 scale_alg/dst_type_max）；shape、输入 dtype、dst_type、round_mode 均保留基线测量时配置，baseline 数据按原测量值保留。仅原 scale_alg=1 用例（case 12-15）按标准算法（alg0）执行，与测量时存在差异；FP4 用例（dst_type 40/41）仅用于 perf 基线流程，精度评测不支持",
       "batch_norm_grad_v3": "baseline case 4/5/7 采用 anchor-graph 全图 Task Duration 中位数（BatchNormGradV3 锚点 + BatchNormBackward 子图求和），非逐 kernel 行中位数",
       "add_rms_norm_dynamic_mx_quant": "CANN 9.1.0-beta.1 内置 ascend950-ops 已含 AddRmsNormDynamicMxQuant；9.0.0-beta.2 需 custom_nn 且报 561103。2026-06-30 在 9.1.0 上 msprof 重采 case 10/20：case 10 baseline 57.6 µs 为第 1 次冷启动 Task Duration；case 20 baseline 22.08 µs 为 skip-cold 热态 p50。"
     }
@@ -263,6 +263,88 @@
     }
   },
   "level3": {
+    "add_rms_norm_dynamic_mx_quant": {
+      "1": {
+        "baseline_perf_us": 6.18,
+        "t_hw_us": 2.62
+      },
+      "2": {
+        "baseline_perf_us": 11.09,
+        "t_hw_us": 10.49
+      },
+      "3": {
+        "baseline_perf_us": 4.43,
+        "t_hw_us": 1
+      },
+      "4": {
+        "baseline_perf_us": 4.53,
+        "t_hw_us": 1.31
+      },
+      "5": {
+        "baseline_perf_us": 8.22,
+        "t_hw_us": 5.25
+      },
+      "6": {
+        "baseline_perf_us": 11.07,
+        "t_hw_us": 10.49
+      },
+      "7": {
+        "baseline_perf_us": 8.36,
+        "t_hw_us": 2.62
+      },
+      "8": {
+        "baseline_perf_us": 6.8,
+        "t_hw_us": 3.94
+      },
+      "9": {
+        "baseline_perf_us": 3.87,
+        "t_hw_us": 1
+      },
+      "10": {
+        "baseline_perf_us": 57.6,
+        "t_hw_us": 41.95
+      },
+      "11": {
+        "baseline_perf_us": 3.94,
+        "t_hw_us": 1
+      },
+      "12": {
+        "baseline_perf_us": 5.09,
+        "t_hw_us": 1.96
+      },
+      "13": {
+        "baseline_perf_us": 8.24,
+        "t_hw_us": 5.25
+      },
+      "14": {
+        "baseline_perf_us": 11.37,
+        "t_hw_us": 10.49
+      },
+      "15": {
+        "baseline_perf_us": 12.36,
+        "t_hw_us": 5.25
+      },
+      "16": {
+        "baseline_perf_us": 5.53,
+        "t_hw_us": 2.62
+      },
+      "17": {
+        "baseline_perf_us": 5.97,
+        "t_hw_us": 2.62
+      },
+      "18": {
+        "baseline_perf_us": 5.86,
+        "t_hw_us": 2.62
+      },
+      "19": {
+        "baseline_perf_us": 37.23,
+        "t_hw_us": 20.97
+      },
+      "20": {
+        "baseline_perf_us": 22.08,
+        "t_hw_us": 20.98
+      }
+    },
     "batch_norm_grad_v3": {
       "1": {
         "baseline_perf_us": 3.71,
@@ -512,170 +594,6 @@
         "t_hw_us": 1.48
       }
     },
-    "max_pool3d_grad_with_argmax": {
-      "1": {
-        "baseline_perf_us": 7.19,
-        "t_hw_us": 1
-      },
-      "2": {
-        "baseline_perf_us": 5.95,
-        "t_hw_us": 1
-      },
-      "3": {
-        "baseline_perf_us": 9.0,
-        "t_hw_us": 1
-      },
-      "4": {
-        "baseline_perf_us": 8.35,
-        "t_hw_us": 1
-      },
-      "5": {
-        "baseline_perf_us": 11.76,
-        "t_hw_us": 1
-      },
-      "6": {
-        "baseline_perf_us": 10.58,
-        "t_hw_us": 1
-      },
-      "7": {
-        "baseline_perf_us": 13.66,
-        "t_hw_us": 1
-      },
-      "8": {
-        "baseline_perf_us": 16.04,
-        "t_hw_us": 1
-      },
-      "9": {
-        "baseline_perf_us": 14.06,
-        "t_hw_us": 1
-      },
-      "10": {
-        "baseline_perf_us": 50.67,
-        "t_hw_us": 1
-      },
-      "11": {
-        "baseline_perf_us": 8.42,
-        "t_hw_us": 1
-      },
-      "12": {
-        "baseline_perf_us": 6.27,
-        "t_hw_us": 1
-      },
-      "13": {
-        "baseline_perf_us": 11.35,
-        "t_hw_us": 1
-      },
-      "14": {
-        "baseline_perf_us": 10.14,
-        "t_hw_us": 1
-      },
-      "15": {
-        "baseline_perf_us": 40.66,
-        "t_hw_us": 1
-      },
-      "16": {
-        "baseline_perf_us": 20.34,
-        "t_hw_us": 1
-      },
-      "17": {
-        "baseline_perf_us": 7.44,
-        "t_hw_us": 1
-      },
-      "18": {
-        "baseline_perf_us": 8.96,
-        "t_hw_us": 1
-      },
-      "19": {
-        "baseline_perf_us": 22.34,
-        "t_hw_us": 1
-      },
-      "20": {
-        "baseline_perf_us": 30.65,
-        "t_hw_us": 1
-      }
-    },
-    "add_rms_norm_dynamic_mx_quant": {
-      "1": {
-        "baseline_perf_us": 6.18,
-        "t_hw_us": 2.62
-      },
-      "2": {
-        "baseline_perf_us": 11.09,
-        "t_hw_us": 10.49
-      },
-      "3": {
-        "baseline_perf_us": 4.43,
-        "t_hw_us": 1
-      },
-      "4": {
-        "baseline_perf_us": 4.53,
-        "t_hw_us": 1.31
-      },
-      "5": {
-        "baseline_perf_us": 8.22,
-        "t_hw_us": 5.25
-      },
-      "6": {
-        "baseline_perf_us": 11.07,
-        "t_hw_us": 10.49
-      },
-      "7": {
-        "baseline_perf_us": 8.36,
-        "t_hw_us": 2.62
-      },
-      "8": {
-        "baseline_perf_us": 6.8,
-        "t_hw_us": 3.94
-      },
-      "9": {
-        "baseline_perf_us": 3.87,
-        "t_hw_us": 1
-      },
-      "10": {
-        "baseline_perf_us": 57.6,
-        "t_hw_us": 41.95
-      },
-      "11": {
-        "baseline_perf_us": 3.94,
-        "t_hw_us": 1
-      },
-      "12": {
-        "baseline_perf_us": 5.09,
-        "t_hw_us": 1.96
-      },
-      "13": {
-        "baseline_perf_us": 8.24,
-        "t_hw_us": 5.25
-      },
-      "14": {
-        "baseline_perf_us": 11.37,
-        "t_hw_us": 10.49
-      },
-      "15": {
-        "baseline_perf_us": 12.36,
-        "t_hw_us": 5.25
-      },
-      "16": {
-        "baseline_perf_us": 5.53,
-        "t_hw_us": 2.62
-      },
-      "17": {
-        "baseline_perf_us": 5.97,
-        "t_hw_us": 2.62
-      },
-      "18": {
-        "baseline_perf_us": 5.86,
-        "t_hw_us": 2.62
-      },
-      "19": {
-        "baseline_perf_us": 37.23,
-        "t_hw_us": 20.97
-      },
-      "20": {
-        "baseline_perf_us": 22.08,
-        "t_hw_us": 20.98
-      }
-    },
     "grouped_dynamic_block_quant": {
       "1": {
         "baseline_perf_us": 38.86,
@@ -755,6 +673,88 @@
       },
       "20": {
         "baseline_perf_us": 10.09,
+        "t_hw_us": 1
+      }
+    },
+    "max_pool3d_grad_with_argmax": {
+      "1": {
+        "baseline_perf_us": 7.19,
+        "t_hw_us": 1
+      },
+      "2": {
+        "baseline_perf_us": 5.95,
+        "t_hw_us": 1
+      },
+      "3": {
+        "baseline_perf_us": 9.0,
+        "t_hw_us": 1
+      },
+      "4": {
+        "baseline_perf_us": 8.35,
+        "t_hw_us": 1
+      },
+      "5": {
+        "baseline_perf_us": 11.76,
+        "t_hw_us": 1
+      },
+      "6": {
+        "baseline_perf_us": 10.58,
+        "t_hw_us": 1
+      },
+      "7": {
+        "baseline_perf_us": 13.66,
+        "t_hw_us": 1
+      },
+      "8": {
+        "baseline_perf_us": 16.04,
+        "t_hw_us": 1
+      },
+      "9": {
+        "baseline_perf_us": 14.06,
+        "t_hw_us": 1
+      },
+      "10": {
+        "baseline_perf_us": 50.67,
+        "t_hw_us": 1
+      },
+      "11": {
+        "baseline_perf_us": 8.42,
+        "t_hw_us": 1
+      },
+      "12": {
+        "baseline_perf_us": 6.27,
+        "t_hw_us": 1
+      },
+      "13": {
+        "baseline_perf_us": 11.35,
+        "t_hw_us": 1
+      },
+      "14": {
+        "baseline_perf_us": 10.14,
+        "t_hw_us": 1
+      },
+      "15": {
+        "baseline_perf_us": 40.66,
+        "t_hw_us": 1
+      },
+      "16": {
+        "baseline_perf_us": 20.34,
+        "t_hw_us": 1
+      },
+      "17": {
+        "baseline_perf_us": 7.44,
+        "t_hw_us": 1
+      },
+      "18": {
+        "baseline_perf_us": 8.96,
+        "t_hw_us": 1
+      },
+      "19": {
+        "baseline_perf_us": 22.34,
+        "t_hw_us": 1
+      },
+      "20": {
+        "baseline_perf_us": 30.65,
         "t_hw_us": 1
       }
     }
