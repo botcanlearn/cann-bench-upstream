@@ -20,14 +20,18 @@
 设 `x` 的形状为 `[m, n]`，`rotation` 的形状为 `[k, k]`。旋转变换为：
 
 $$
-Y = (x.\text{reshape}(*, k) @ \text{rotation}).\text{reshape}(m, n)
+Y_{fp32} = (\operatorname{FP32}(x).\text{reshape}(*, k) @ \operatorname{FP32}(\text{rotation})).\text{reshape}(m, n),
+\qquad Y = \operatorname{FP32}(\operatorname{cast}_{dtype(x)}(Y_{fp32}))
 $$
 
 对称动态量化为逐行量化：
 
 $$
 s_i = \frac{\max_{j \in [0,\ n-1]} |Y_{i,j}|}{C_{\text{MAX}}}, \qquad
-y_{i,j} = \frac{Y_{i,j}}{s_i}
+y_{i,j} = \begin{cases}
+\operatorname{round}(Y_{i,j}/s_i), & s_i > 0 \\
+0, & s_i = 0
+\end{cases}
 $$
 
 `C_MAX` 在 int8 场景取 127，quint4x2 场景取 7。本 benchmark 固定 int8 路径，CPU golden 在归一化后执行 round 和 `[-127, 127]` 裁剪。当前 benchmark 固定 `alpha=0.0`，即不做 clamp。
@@ -160,6 +164,8 @@ def rotate_quant(
         raise ValueError(f"rotate_quant expects x to be 2D, got shape {list(x.shape)}")
     if rotation.dim() != 2 or rotation.shape[0] != rotation.shape[1]:
         raise ValueError(f"rotation must be square, got shape {list(rotation.shape)}")
+    if rotation.dtype != x.dtype:
+        raise ValueError(f"rotation dtype ({rotation.dtype}) must match x dtype ({x.dtype})")
 
     m, n = x.shape
     k = rotation.shape[0]

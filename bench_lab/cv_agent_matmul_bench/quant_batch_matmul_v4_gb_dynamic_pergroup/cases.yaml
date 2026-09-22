@@ -2,15 +2,15 @@ cases:
 - operator: QuantBatchMatmulV4
   case_id: 1
   input_shape:
+  - - 16
+    - 1024
+  - - 512
+    - 1024
+  - - 16
+    - 8
   - - 4
-    - 512
-  - - 256
-    - 512
-  - - 4
-    - 4
-  - - 2
-    - 4
-  - - 256
+    - 8
+  - - 512
   dtype:
   - int8
   - int8
@@ -28,19 +28,19 @@ cases:
   value_range:
   - -8
   - 8
-  note: GB-static-M4K512N256
+  note: GB-static-M4K512N256-expanded-M16-K1024-N512
 - operator: QuantBatchMatmulV4
   case_id: 2
   input_shape:
+  - - 32
+    - 1024
+  - - 1024
+    - 1024
+  - - 32
+    - 8
   - - 8
-    - 512
-  - - 512
-    - 512
-  - - 8
-    - 4
-  - - 4
-    - 4
-  - - 512
+    - 8
+  - - 1024
   dtype:
   - int8
   - int8
@@ -58,19 +58,19 @@ cases:
   value_range:
   - -8
   - 8
-  note: GB-static-M8K512N512
+  note: GB-static-M8K512N512-expanded-M32-K1024-N1024
 - operator: QuantBatchMatmulV4
   case_id: 3
   input_shape:
-  - - 16
-    - 512
-  - - 768
-    - 512
-  - - 16
-    - 4
-  - - 6
-    - 4
-  - - 768
+  - - 64
+    - 1024
+  - - 1024
+    - 1024
+  - - 64
+    - 8
+  - - 8
+    - 8
+  - - 1024
   dtype:
   - int8
   - int8
@@ -88,7 +88,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: GB-static-M16K512N768
+  note: GB-static-M16K512N768-expanded-M64-K1024-N1024
 - operator: QuantBatchMatmulV4
   case_id: 4
   input_shape:
@@ -243,40 +243,10 @@ cases:
   case_id: 9
   input_shape:
   - - 1
-    - 512
-  - - 256
-    - 512
-  - - 1
-    - 4
-  - - 2
-    - 4
-  - - 256
-  dtype:
-  - int8
-  - int8
-  - float32
-  - float32
-  - float32
-  attrs:
-    variant: GB_STATIC_PERGROUP
-    transpose_x1: false
-    transpose_x2: true
-    group_size:
-    - 1
-    - 128
-    - 128
-  value_range:
-  - -8
-  - 8
-  note: GB-static-M1K512N256
-- operator: QuantBatchMatmulV4
-  case_id: 10
-  input_shape:
-  - - 3
     - 1024
   - - 512
     - 1024
-  - - 3
+  - - 1
     - 8
   - - 4
     - 8
@@ -298,19 +268,19 @@ cases:
   value_range:
   - -8
   - 8
-  note: GB-static-M3K1024N512
+  note: GB-static-M1K512N256-expanded-M1-K1024-N512
 - operator: QuantBatchMatmulV4
-  case_id: 11
+  case_id: 10
   input_shape:
-  - - 17
-    - 512
-  - - 256
-    - 512
-  - - 17
-    - 4
-  - - 2
-    - 4
-  - - 256
+  - - 12
+    - 1024
+  - - 512
+    - 1024
+  - - 12
+    - 8
+  - - 4
+    - 8
+  - - 512
   dtype:
   - int8
   - int8
@@ -328,7 +298,37 @@ cases:
   value_range:
   - -8
   - 8
-  note: GB-static-M17K512N256
+  note: GB-static-M3K1024N512-expanded-M12-K1024-N512
+- operator: QuantBatchMatmulV4
+  case_id: 11
+  input_shape:
+  - - 34
+    - 1024
+  - - 512
+    - 1024
+  - - 34
+    - 8
+  - - 4
+    - 8
+  - - 512
+  dtype:
+  - int8
+  - int8
+  - float32
+  - float32
+  - float32
+  attrs:
+    variant: GB_STATIC_PERGROUP
+    transpose_x1: false
+    transpose_x2: true
+    group_size:
+    - 1
+    - 128
+    - 128
+  value_range:
+  - -8
+  - 8
+  note: GB-static-M17K512N256-expanded-M34-K1024-N512
 - operator: QuantBatchMatmulV4
   case_id: 12
   input_shape:

@@ -2,13 +2,13 @@ cases:
 - operator: FusedQuantMatMul
   case_id: 1
   input_shape:
-  - - 1
-    - 64
-  - - 64
-    - 64
-  - - 1
-  - - 64
-  - - 64
+  - - 4
+    - 256
+  - - 256
+    - 256
+  - - 4
+  - - 256
+  - - 256
   dtype:
   - int8
   - int8
@@ -32,17 +32,17 @@ cases:
     bias:
     - -5
     - 5
-  note: smoke-aligned-M1K64N64
+  note: smoke-aligned-M1K64N64-expanded-M4-K256-N256
 - operator: FusedQuantMatMul
   case_id: 2
   input_shape:
-  - - 7
+  - - 16
+    - 129
+  - - 129
     - 65
+  - - 16
   - - 65
-    - 33
-  - - 7
-  - - 33
-  - - 33
+  - - 65
   dtype:
   - int8
   - int8
@@ -66,15 +66,15 @@ cases:
     bias:
     - -5
     - 5
-  note: tail-all-axes-M7K65N33
+  note: tail-all-axes-M7K65N33-expanded-tail-M16-K129-N65
 - operator: FusedQuantMatMul
   case_id: 3
   input_shape:
-  - - 17
-    - 769
-  - - 769
+  - - 33
+    - 1025
+  - - 1025
     - 3073
-  - - 17
+  - - 33
   - - 3073
   - - 3073
   dtype:
@@ -100,7 +100,7 @@ cases:
     bias:
     - -5
     - 5
-  note: tail-llm-width-M17K769N3073
+  note: tail-llm-width-M17K769N3073-expanded-tail-M33-K1025-N3073
 - operator: FusedQuantMatMul
   case_id: 4
   input_shape:

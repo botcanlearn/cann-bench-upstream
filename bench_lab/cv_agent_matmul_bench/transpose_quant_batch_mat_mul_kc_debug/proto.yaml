@@ -1,7 +1,7 @@
 operator:
   name: TransposeQuantBatchMatMul
   category: Contraction
-  formula: out = permute((permute(x1) @ permute(x2)) * x1Scale * x2Scale + bias, permY)
+  formula: out = permute(((permute(x1) @ permute(x2)) * x2Scale[..., None, :]) * x1Scale[..., :, None] + bias[..., None, :], permY)
   description: C->V transpose quant batch matmul K-C path.
   shape_support: 'x1: [B,M,K] or [B,K,M] int8
 
@@ -60,7 +60,7 @@ operator:
   - name: out
     dtype:
     - float32
-  schema: transpose_quant_batch_mat_mul(Tensor x1, Tensor x2, Tensor x1Scale, Tensor x2Scale, Tensor bias, list[int] permX1, list[int] permX2, list[int] permY, int groupSize=0, batchSplitFactor, y_dtype) -> Tensor out
+  schema: transpose_quant_batch_mat_mul(Tensor x1, Tensor x2, Tensor x1Scale, Tensor x2Scale, Tensor bias, list[int] permX1, list[int] permX2, list[int] permY, int groupSize=0, int batchSplitFactor=1, str y_dtype="float32") -> Tensor out
   difficulty: L3
 precision:
   outputs:

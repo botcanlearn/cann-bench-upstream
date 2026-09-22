@@ -36,7 +36,9 @@ def quant_matmul_reduce_sum(
         raise ValueError(f"x2 expects 5D NZ [B,N1,K1,16,32], got {list(x2.shape)}")
 
     b, m, k = x1.shape
-    n = x2Scale.numel()
+    if x2Scale.dim() != 1:
+        raise ValueError(f"x2Scale expects 1D [N], got {list(x2Scale.shape)}")
+    n = x2Scale.shape[0]
     if x1Scale.shape != (b, m):
         raise ValueError(f"x1Scale expects shape [{b}, {m}], got {list(x1Scale.shape)}")
 

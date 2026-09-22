@@ -1,9 +1,9 @@
 operator:
   name: Sparse4to2QuantMatmul
   category: Contraction
-  formula: 'out = (x.int32 @ weight.int32.T) * xScale[:, None] * sparseWeightScale[None, :] + bias
+  formula: 'out = (x.int32 @ weight.int32.T) * sparseWeightScale[None, :] * xScale[:, None] + bias
 
-    # weight 必须满足 4:2 稀疏 pattern(每连续 4 元素恰好 2 个为 0)
+    # weight 必须满足 4:2 稀疏 pattern(每连续 4 元素恰好 2 个为 0)，因此 K 必须被 4 整除
 
     # NPU 端通过 aclnnTransSparse4to2Para 自动压缩为 sparseWeight(FRACTAL_NZ) + index(UINT8 4D)
 
@@ -27,6 +27,10 @@ operator:
     description: whether to apply bias
     type: bool
     default: true
+  - name: dtype
+    description: fixed to 27 in this benchmark, denotes BF16 output
+    type: int
+    default: 27
   inputs:
   - name: x
     description: int8 activation matrix
@@ -54,7 +58,7 @@ operator:
     description: dequantized sparse matmul result
     dtype:
     - bfloat16
-  schema: sparse4to2quant_matmul_dequant(Tensor x, Tensor weight, Tensor xScale, Tensor sparseWeightScale, Tensor? bias, bool with_bias=true) -> Tensor out
+  schema: sparse4to2quant_matmul_dequant(Tensor x, Tensor weight, Tensor xScale, Tensor sparseWeightScale, Tensor? bias=None, bool with_bias=true, int dtype=27) -> Tensor out
   difficulty: L3
 precision:
   outputs:

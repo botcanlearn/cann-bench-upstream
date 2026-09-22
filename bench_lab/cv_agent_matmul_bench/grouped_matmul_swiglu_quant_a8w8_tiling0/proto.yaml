@@ -1,7 +1,7 @@
 operator:
   name: GroupedMatmulSwigluQuant
   category: FusedComposite
-  formula: "for expert i:\n  C = (X_i.int32 @ W_i.int32) * xScale_i[:, None] * weightScale_i[None, :]\n  C_act, gate = split(C)\n  S = swish(C_act) * gate\n  yScale = max(abs(S), dim=-1) / 127\n  y = round(S / yScale[:, None]).clamp(-128, 127).to(int8)\n"
+  formula: "for expert i:\n  C = matmul(float32(X_i), float32(W_i)) * xScale_i[:, None] * weightScale_i[None, :]\n  C_act, gate = split(C)\n  S = swish(C_act) * gate\n  yScale = max(abs(S), dim=-1) / 127\n  y = round(S / yScale[:, None]).clamp(-128, 127).to(int8)\n"
   description: grouped_matmul_swiglu_quant A8W8 tiling_key=0 C->V path. This benchmark covers grouped int8 matmul, dequant, SwiGLU, and dynamic int8 quantization in a single selected kernel path.
   shape_support: 'x: [M, K] int8
 
@@ -60,7 +60,7 @@ operator:
     description: per-token output quantization scale
     dtype:
     - float32
-  schema: grouped_matmul_swiglu_quant(Tensor x, Tensor weight, Tensor weightScale, Tensor xScale, Tensor groupList, str variant="A8W8_tiling_key_0", group_list_values, int tiling_key=0) -> (Tensor y)
+  schema: grouped_matmul_swiglu_quant(Tensor x, Tensor weight, Tensor weightScale, Tensor xScale, Tensor groupList, str variant="A8W8_tiling_key_0", list[int] group_list_values=None, int tiling_key=0) -> (Tensor y, Tensor yScale)
   difficulty: L3
 precision:
   outputs:

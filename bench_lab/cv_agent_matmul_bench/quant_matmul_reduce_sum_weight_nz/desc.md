@@ -11,7 +11,7 @@
 设 `x1` 的形状为 `[B, M, K]`，`x2` 的逻辑原始形状为 `[B, K, N]`，物理 NZ 形状为 `[B, ceil(N/32), ceil(K/16), 16, 32]`。
 
 $$
-out = \sum_{b=0}^{B-1} (x1_b @ x2_b) \odot x1Scale_b[:, None] \odot x2Scale[None, :]
+out = \operatorname{BF16\_sequential\_sum}_{b=0}^{B-1}\left(\operatorname{BF16}\left((x1_b @ x2_b) \odot x1Scale_b[:, None] \odot x2Scale[None, :]\right)\right)
 $$
 
 其中 `x1Scale` 的形状为 `[B, M]`，`x2Scale` 的形状为 `[N]`，输出 `out` 的形状为 `[M, N]`。
@@ -54,19 +54,22 @@ quant_matmul_reduce_sum(
 ### 5.1 算子特定说明
 
 - **`out` 阈值归属**:规则 `output_dtype`,固定 BFLOAT16 → 阈值 2^-7。
-- **大 batch 累加风险**:V 段 batch 维 reduce 若使用 fp32 中间再 cast 到 bf16,本阈值合理;若 NPU 实现采用 bf16 累加 + 大 B(≥16),MARE 可能逼近阈值。**实测若超阈值**,需把 `proto.yaml.precision.outputs[out].threshold_rule` 改为 `intermediate_dtype_inherited` 并补 `intermediate_dtype: bfloat16`(阈值仍 2^-7 但语义更准),或考虑放宽到 2^-6。
+- **累加顺序**:Golden 对每个 batch 的反量化结果先 cast 为 BF16，再按 batch 顺序以 BF16 累加；若实现改用 FP32 中间累加，仍需以输出 BF16 的 SPEC 阈值验收，并关注大 batch 的误差变化。
 
 ## 6. 标准 Golden 代码
 
-`golden.py` 先将 NZ 权重还原为逻辑 ND `[B, K, N]`，再执行 matmul、scale 和 batch 维求和：
+`golden.py` 先将 NZ 权重还原为逻辑 ND `[B, K, N]`，再执行 matmul、scale，并将每个 batch 的结果先转换为 BF16，最后按 batch 顺序以 BF16 累加：
 
 ```python
 x2_nd = x2.permute(0, 2, 3, 1, 4).contiguous().reshape(B, K1 * 16, N1 * 32)
 x2_nd = x2_nd[:, :K, :N]
-mm = torch.matmul(x1.float(), x2_nd.float())
+mm = torch.matmul(x1.to(torch.int32), x2_nd.to(torch.int32)).to(torch.float32)
 mm = mm * x1Scale.float().reshape(B, M, 1)
-mm = mm * x2Scale.float().reshape(1, 1, N)
-out = mm.sum(dim=0).to(torch.bfloat16)
+mm = mm * x2Scale.to(torch.bfloat16).float().reshape(1, 1, N)
+batch_out = mm.to(torch.bfloat16)
+out = batch_out[0]
+for b in range(1, B):
+    out = (out.float() + batch_out[b].float()).to(torch.bfloat16)
 ```
 
 ## 7. 额外信息
@@ -122,7 +125,9 @@ def quant_matmul_reduce_sum(
         raise ValueError(f"x2 expects 5D NZ [B,N1,K1,16,32], got {list(x2.shape)}")
 
     b, m, k = x1.shape
-    n = x2Scale.numel()
+    if x2Scale.dim() != 1:
+        raise ValueError(f"x2Scale expects 1D [N], got {list(x2Scale.shape)}")
+    n = x2Scale.shape[0]
     if x1Scale.shape != (b, m):
         raise ValueError(f"x1Scale expects shape [{b}, {m}], got {list(x1Scale.shape)}")
 

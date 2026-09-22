@@ -2,14 +2,13 @@ cases:
 - operator: WeightQuantBatchMatmulV2
   case_id: 1
   input_shape:
-  - - 4
-    - 64
-  - - 64
-    - 32
-  - &id001
-    - 32
-  - *id001
-  - - 32
+  - - 16
+    - 256
+  - - 256
+    - 128
+  - - 128
+  - - 128
+  - - 128
   dtype:
   - bfloat16
   - int8
@@ -25,18 +24,17 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs0-M4K64N32
+  note: antiquant-gs0-M4K64N32-expanded-M16-K256-N128
 - operator: WeightQuantBatchMatmulV2
   case_id: 2
   input_shape:
-  - - 8
-    - 64
-  - - 64
-    - 64
-  - &id002
-    - 64
-  - *id002
-  - - 64
+  - - 16
+    - 256
+  - - 256
+    - 128
+  - - 128
+  - - 128
+  - - 128
   dtype:
   - float16
   - int8
@@ -52,19 +50,19 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs0-M8K64N64
+  note: antiquant-gs0-M8K64N64-expanded-M16-K256-N128
 - operator: WeightQuantBatchMatmulV2
   case_id: 3
   input_shape:
-  - - 6
-    - 128
-  - - 128
-    - 32
-  - &id003
-    - 2
-    - 32
-  - *id003
-  - - 32
+  - - 24
+    - 256
+  - - 256
+    - 64
+  - - 4
+    - 64
+  - - 4
+    - 64
+  - - 64
   dtype:
   - bfloat16
   - int8
@@ -80,7 +78,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs64-M6K128N32
+  note: antiquant-gs64-M6K128N32-expanded-M24-K256-N64
 - operator: WeightQuantBatchMatmulV2
   case_id: 4
   input_shape:
@@ -88,10 +86,10 @@ cases:
     - 128
   - - 128
     - 64
-  - &id004
+  - &id001
     - 2
     - 64
-  - *id004
+  - *id001
   - - 64
   dtype:
   - float16
@@ -112,15 +110,15 @@ cases:
 - operator: WeightQuantBatchMatmulV2
   case_id: 5
   input_shape:
-  - - 5
+  - - 20
+    - 256
+  - - 256
+    - 96
+  - - 8
+    - 96
+  - - 8
     - 96
   - - 96
-    - 48
-  - &id005
-    - 3
-    - 48
-  - *id005
-  - - 48
   dtype:
   - bfloat16
   - int8
@@ -136,7 +134,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs32-M5K96N48
+  note: antiquant-gs32-M5K96N48-expanded-M20-K256-N96
 - operator: WeightQuantBatchMatmulV2
   case_id: 6
   input_shape:
@@ -144,10 +142,10 @@ cases:
     - 192
   - - 192
     - 64
-  - &id006
+  - &id002
     - 3
     - 64
-  - *id006
+  - *id002
   - - 64
   dtype:
   - float16
@@ -168,15 +166,15 @@ cases:
 - operator: WeightQuantBatchMatmulV2
   case_id: 7
   input_shape:
-  - - 3
+  - - 12
+    - 512
+  - - 512
+    - 256
+  - - 4
+    - 256
+  - - 4
     - 256
   - - 256
-    - 128
-  - &id007
-    - 2
-    - 128
-  - *id007
-  - - 128
   dtype:
   - bfloat16
   - int8
@@ -192,7 +190,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs128-M3K256N128
+  note: antiquant-gs128-M3K256N128-expanded-M12-K512-N256
 - operator: WeightQuantBatchMatmulV2
   case_id: 8
   input_shape:
@@ -200,10 +198,10 @@ cases:
     - 128
   - - 128
     - 128
-  - &id008
+  - &id003
     - 2
     - 128
-  - *id008
+  - *id003
   - - 128
   dtype:
   - float16
@@ -228,10 +226,10 @@ cases:
     - 320
   - - 320
     - 64
-  - &id009
+  - &id004
     - 5
     - 64
-  - *id009
+  - *id004
   - - 64
   dtype:
   - bfloat16
@@ -256,10 +254,10 @@ cases:
     - 256
   - - 256
     - 96
-  - &id010
+  - &id005
     - 2
     - 96
-  - *id010
+  - *id005
   - - 96
   dtype:
   - float16
@@ -281,13 +279,12 @@ cases:
   case_id: 11
   input_shape:
   - - 1
+    - 256
+  - - 256
     - 64
   - - 64
-    - 16
-  - &id011
-    - 16
-  - *id011
-  - - 16
+  - - 64
+  - - 64
   dtype:
   - bfloat16
   - int8
@@ -303,19 +300,19 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs0-M1K64N16
+  note: antiquant-gs0-M1K64N16-expanded-M1-K256-N64
 - operator: WeightQuantBatchMatmulV2
   case_id: 12
   input_shape:
-  - - 7
+  - - 28
+    - 320
+  - - 320
+    - 160
+  - - 10
+    - 160
+  - - 10
     - 160
   - - 160
-    - 80
-  - &id012
-    - 5
-    - 80
-  - *id012
-  - - 80
   dtype:
   - float16
   - int8
@@ -331,7 +328,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs32-M7K160N80
+  note: antiquant-gs32-M7K160N80-expanded-M28-K320-N160
 - operator: WeightQuantBatchMatmulV2
   case_id: 13
   input_shape:
@@ -339,10 +336,10 @@ cases:
     - 384
   - - 384
     - 128
-  - &id013
+  - &id006
     - 3
     - 128
-  - *id013
+  - *id006
   - - 128
   dtype:
   - bfloat16
@@ -367,10 +364,10 @@ cases:
     - 256
   - - 256
     - 160
-  - &id014
+  - &id007
     - 4
     - 160
-  - *id014
+  - *id007
   - - 160
   dtype:
   - float16
@@ -395,10 +392,10 @@ cases:
     - 512
   - - 512
     - 128
-  - &id015
+  - &id008
     - 4
     - 128
-  - *id015
+  - *id008
   - - 128
   dtype:
   - bfloat16
@@ -419,15 +416,15 @@ cases:
 - operator: WeightQuantBatchMatmulV2
   case_id: 16
   input_shape:
-  - - 2
-    - 128
-  - - 128
+  - - 8
     - 256
-  - &id016
-    - 2
-    - 256
-  - *id016
   - - 256
+    - 512
+  - - 4
+    - 512
+  - - 4
+    - 512
+  - - 512
   dtype:
   - float16
   - int8
@@ -443,19 +440,19 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs64-M2K128N256
+  note: antiquant-gs64-M2K128N256-expanded-M8-K256-N512
 - operator: WeightQuantBatchMatmulV2
   case_id: 17
   input_shape:
-  - - 18
-    - 192
-  - - 192
-    - 32
-  - &id017
-    - 3
-    - 32
-  - *id017
-  - - 32
+  - - 36
+    - 384
+  - - 384
+    - 64
+  - - 6
+    - 64
+  - - 6
+    - 64
+  - - 64
   dtype:
   - bfloat16
   - int8
@@ -471,7 +468,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: antiquant-gs64-M18K192N32
+  note: antiquant-gs64-M18K192N32-expanded-M36-K384-N64
 - operator: WeightQuantBatchMatmulV2
   case_id: 18
   input_shape:
@@ -479,10 +476,10 @@ cases:
     - 320
   - - 320
     - 192
-  - &id018
+  - &id009
     - 5
     - 192
-  - *id018
+  - *id009
   - - 192
   dtype:
   - float16
@@ -507,10 +504,10 @@ cases:
     - 256
   - - 256
     - 64
-  - &id019
+  - &id010
     - 2
     - 64
-  - *id019
+  - *id010
   - - 64
   dtype:
   - bfloat16
@@ -535,10 +532,10 @@ cases:
     - 512
   - - 512
     - 256
-  - &id020
+  - &id011
     - 4
     - 256
-  - *id020
+  - *id011
   - - 256
   dtype:
   - float16

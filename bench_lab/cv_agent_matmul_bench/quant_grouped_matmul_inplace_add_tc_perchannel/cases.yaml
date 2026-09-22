@@ -2,18 +2,18 @@ cases:
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 1
   input_shape:
-  - - 8
+  - - 32
+    - 256
+  - - 256
     - 128
-  - - 128
-    - 64
   - - 2
     - 1
   - - 2
-    - 64
+    - 128
   - - 2
   - - 2
-    - 8
-    - 64
+    - 32
+    - 128
   dtype:
   - hifloat8
   - hifloat8
@@ -23,15 +23,15 @@ cases:
   - float32
   attrs:
     group_list_values:
-    - 4
-    - 8
+    - 16
+    - 32
     groupListType: 0
     group_size: 0
     variant: TC_PERCHANNEL
   value_range:
   - -8
   - 8
-  note: grouped-inplace-G2M8K128N64
+  note: grouped-inplace-G2M8K128N64-expanded-M32-K256-N128
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 2
   input_shape:
@@ -105,18 +105,18 @@ cases:
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 4
   input_shape:
-  - - 4
-    - 128
-  - - 128
-    - 96
+  - - 16
+    - 256
+  - - 256
+    - 192
   - - 1
     - 1
   - - 1
-    - 96
+    - 192
   - - 1
   - - 1
-    - 4
-    - 96
+    - 16
+    - 192
   dtype:
   - hifloat8
   - hifloat8
@@ -126,14 +126,14 @@ cases:
   - float32
   attrs:
     group_list_values:
-    - 4
+    - 16
     groupListType: 0
     group_size: 0
     variant: TC_PERCHANNEL
   value_range:
   - -8
   - 8
-  note: grouped-inplace-G1M4K128N96
+  note: grouped-inplace-G1M4K128N96-expanded-M16-K256-N192
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 5
   input_shape:
@@ -281,18 +281,18 @@ cases:
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 9
   input_shape:
-  - - 12
-    - 64
-  - - 64
-    - 128
+  - - 24
+    - 256
+  - - 256
+    - 256
   - - 3
     - 1
   - - 3
-    - 128
+    - 256
   - - 3
   - - 3
-    - 12
-    - 128
+    - 24
+    - 256
   dtype:
   - hifloat8
   - hifloat8
@@ -303,15 +303,15 @@ cases:
   attrs:
     group_list_values:
     - 0
-    - 6
     - 12
+    - 24
     groupListType: 0
     group_size: 0
     variant: TC_PERCHANNEL
   value_range:
   - -8
   - 8
-  note: grouped-inplace-G3M12K64N128
+  note: grouped-inplace-G3M12K64N128-expanded-M24-K256-N256
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 10
   input_shape:
@@ -353,17 +353,17 @@ cases:
   case_id: 11
   input_shape:
   - - 1
+    - 256
+  - - 256
     - 64
-  - - 64
-    - 32
   - - 2
     - 1
   - - 2
-    - 32
+    - 64
   - - 2
   - - 2
     - 1
-    - 32
+    - 64
   dtype:
   - hifloat8
   - hifloat8
@@ -381,7 +381,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: grouped-inplace-G2M1K64N32
+  note: grouped-inplace-G2M1K64N32-expanded-M1-K256-N64
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 12
   input_shape:
@@ -420,18 +420,18 @@ cases:
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 13
   input_shape:
-  - - 31
-    - 160
-  - - 160
-    - 64
+  - - 62
+    - 320
+  - - 320
+    - 128
   - - 7
     - 1
   - - 7
-    - 64
+    - 128
   - - 7
   - - 7
-    - 31
-    - 64
+    - 62
+    - 128
   dtype:
   - hifloat8
   - hifloat8
@@ -441,20 +441,20 @@ cases:
   - float32
   attrs:
     group_list_values:
-    - 1
-    - 4
+    - 2
     - 8
-    - 13
-    - 19
-    - 25
-    - 31
+    - 16
+    - 26
+    - 38
+    - 50
+    - 62
     groupListType: 0
     group_size: 0
     variant: TC_PERCHANNEL
   value_range:
   - -8
   - 8
-  note: grouped-inplace-G7M31K160N64
+  note: grouped-inplace-G7M31K160N64-expanded-M62-K320-N128
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 14
   input_shape:
@@ -540,18 +540,18 @@ cases:
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 16
   input_shape:
-  - - 9
-    - 128
-  - - 128
-    - 128
+  - - 36
+    - 256
+  - - 256
+    - 256
   - - 3
     - 1
   - - 3
-    - 128
+    - 256
   - - 3
   - - 3
-    - 9
-    - 128
+    - 36
+    - 256
   dtype:
   - hifloat8
   - hifloat8
@@ -561,16 +561,16 @@ cases:
   - float32
   attrs:
     group_list_values:
-    - 1
-    - 5
-    - 9
+    - 4
+    - 20
+    - 36
     groupListType: 0
     group_size: 0
     variant: TC_PERCHANNEL
   value_range:
   - -8
   - 8
-  note: grouped-inplace-G3M9K128N128
+  note: grouped-inplace-G3M9K128N128-expanded-M36-K256-N256
 - operator: QuantGroupedMatmulInplaceAdd
   case_id: 17
   input_shape:

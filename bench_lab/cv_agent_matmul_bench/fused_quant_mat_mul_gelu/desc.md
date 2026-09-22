@@ -214,7 +214,7 @@ def fused_quant_mat_mul(
 
     out = torch_gelu(qbmmout, approximate="none")
 
-    # aclnnFusedQuantMatmul 这条已选路径的接口输出 dtype 为 BF16。
+    # 接口输出 dtype 为 BF16。
     return out.to(torch.bfloat16)
 ```
 
@@ -271,7 +271,6 @@ assert out.dtype == torch.bfloat16
 - `quant_batch_matmul_v3_pertoken_basic.h`：INT8 矩阵乘与 per-token 后处理路径
 - `quant_batch_matmul_v3_basic_epilogue.h`：FP32 scale、浮点 bias、GELU_ERF 和 BF16 写回路径
 - `tests/st/aclnnFusedQuantMatmul/executor_aclnnFusedQuantMatmul.py`：PyTorch 精度对比参考
-- `tests/st/aclnnFusedQuantMatmul/arch22_atk_aclnnFusedQuantMatmul.json`：按输入分别设置测试值域的参考
 
 ### 参考资料
 

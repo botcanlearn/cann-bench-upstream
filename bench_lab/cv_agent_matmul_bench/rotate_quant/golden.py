@@ -29,6 +29,8 @@ def rotate_quant(
         raise ValueError(f"rotate_quant expects x to be 2D, got shape {list(x.shape)}")
     if rotation.dim() != 2 or rotation.shape[0] != rotation.shape[1]:
         raise ValueError(f"rotation must be square, got shape {list(rotation.shape)}")
+    if rotation.dtype != x.dtype:
+        raise ValueError(f"rotation dtype ({rotation.dtype}) must match x dtype ({x.dtype})")
 
     m, n = x.shape
     k = rotation.shape[0]

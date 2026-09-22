@@ -2,15 +2,15 @@ cases:
 - operator: GroupedMatmul
   case_id: 1
   input_shape:
-  - - 16
+  - - 32
+    - 256
+  - - 2
+    - 256
     - 128
   - - 2
     - 128
-    - 64
   - - 2
-    - 64
-  - - 2
-  - - 16
+  - - 32
   dtype:
   - int8
   - int8
@@ -19,12 +19,12 @@ cases:
   - float32
   attrs:
     group_list_values:
-    - 8
     - 16
+    - 32
   value_range:
   - -2
   - 2
-  note: F2-A8W8O16-bf16scale-E2-M16xK128xN64
+  note: F2-A8W8O16-bf16scale-E2-M16xK128xN64-expanded-M32-K256-N128
 - operator: GroupedMatmul
   case_id: 2
   input_shape:
@@ -111,15 +111,15 @@ cases:
 - operator: GroupedMatmul
   case_id: 5
   input_shape:
-  - - 8
+  - - 32
+    - 512
+  - - 1
+    - 512
     - 256
   - - 1
     - 256
-    - 128
   - - 1
-    - 128
-  - - 1
-  - - 8
+  - - 32
   dtype:
   - int8
   - int8
@@ -128,11 +128,11 @@ cases:
   - float32
   attrs:
     group_list_values:
-    - 8
+    - 32
   value_range:
   - -2
   - 2
-  note: F2-A8W8O16-bf16scale-singleExpert-M8xK256xN128
+  note: F2-A8W8O16-bf16scale-singleExpert-M8xK256xN128-expanded-M32-K512-N256
 - operator: GroupedMatmul
   case_id: 6
   input_shape:
@@ -282,15 +282,15 @@ cases:
 - operator: GroupedMatmul
   case_id: 11
   input_shape:
-  - - 1
+  - - 4
+    - 256
+  - - 2
+    - 256
     - 64
   - - 2
     - 64
-    - 32
   - - 2
-    - 32
-  - - 2
-  - - 1
+  - - 4
   dtype:
   - int8
   - int8
@@ -300,11 +300,11 @@ cases:
   attrs:
     group_list_values:
     - 0
-    - 1
+    - 4
   value_range:
   - -2
   - 2
-  note: F2-A8W8O16-bf16scale-singleToken-emptyExpert
+  note: F2-A8W8O16-bf16scale-singleToken-emptyExpert-expanded-M4-K256-N64
 - operator: GroupedMatmul
   case_id: 12
   input_shape:
@@ -520,15 +520,15 @@ cases:
 - operator: GroupedMatmul
   case_id: 19
   input_shape:
+  - - 32
+    - 512
   - - 8
+    - 512
     - 256
   - - 8
     - 256
-    - 128
   - - 8
-    - 128
-  - - 8
-  - - 8
+  - - 32
   dtype:
   - int8
   - int8
@@ -538,17 +538,17 @@ cases:
   attrs:
     group_list_values:
     - 0
-    - 1
-    - 1
-    - 3
-    - 5
-    - 5
-    - 7
-    - 8
+    - 4
+    - 4
+    - 12
+    - 20
+    - 20
+    - 28
+    - 32
   value_range:
   - -2
   - 2
-  note: F2-A8W8O16-multipleEmptyExperts-K256-N128
+  note: F2-A8W8O16-multipleEmptyExperts-K256-N128-expanded-M32-K512-N256
 - operator: GroupedMatmul
   case_id: 20
   input_shape:

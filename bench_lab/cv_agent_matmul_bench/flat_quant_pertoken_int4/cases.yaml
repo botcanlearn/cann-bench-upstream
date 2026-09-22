@@ -2,13 +2,13 @@ cases:
 - operator: FlatQuant
   case_id: 1
   input_shape:
-  - - 1
-    - 2
-    - 8
-  - - 2
-    - 2
-  - - 8
-    - 8
+  - - 4
+    - 128
+    - 128
+  - - 128
+    - 128
+  - - 128
+    - 128
   dtype:
   - bfloat16
   - bfloat16
@@ -18,17 +18,17 @@ cases:
   value_range:
   - -1
   - 1
-  note: smoke-k1-small-base
+  note: smoke-k1-small-base-expanded-K4-M128-N128
 - operator: FlatQuant
   case_id: 2
   input_shape:
-  - - 3
-    - 65
-    - 10
-  - - 65
-    - 65
-  - - 10
-    - 10
+  - - 8
+    - 127
+    - 32
+  - - 127
+    - 127
+  - - 32
+    - 32
   dtype:
   - bfloat16
   - bfloat16
@@ -38,17 +38,17 @@ cases:
   value_range:
   - -1
   - 1
-  note: smoke-tail-odd-km-base
+  note: smoke-tail-odd-km-base-expanded-K8-M127-N32
 - operator: FlatQuant
   case_id: 3
   input_shape:
-  - - 9
-    - 67
-    - 16
-  - - 67
-    - 67
   - - 16
-    - 16
+    - 125
+    - 32
+  - - 125
+    - 125
+  - - 32
+    - 32
   dtype:
   - bfloat16
   - bfloat16
@@ -58,7 +58,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: smoke-tail-unaligned-m-base
+  note: smoke-tail-unaligned-m-base-expanded-K16-M125-N32
 - operator: FlatQuant
   case_id: 4
   input_shape:

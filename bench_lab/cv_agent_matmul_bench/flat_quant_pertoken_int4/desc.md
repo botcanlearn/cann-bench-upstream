@@ -58,7 +58,7 @@ $$
 计算 per-token 量化因子：
 
 $$
-quantScale[k] = \frac{maxAbs[k]}{7 / clipRatio}
+quantScale[k] = \operatorname{float32}\left(\frac{maxAbs[k] \cdot clipRatio}{7}\right)
 $$
 
 根据量化因子对矩阵乘结果进行归一化：
@@ -78,14 +78,16 @@ out[k,:,:]
 \right)
 $$
 
+当某个非零 token 的 `quantScale` 因 FP32 下溢变为 0 时，按符号饱和输出：正值为 7、负值为 -8、零值为 0（全零 token 的 `quantScale` 为 0，输出仍为 0）。
+
 ### 步骤说明
 
 1. **右矩阵乘**：`x1 = x @ kroneckerP2`，输出 shape 保持 `[K,M,N]`。
 2. **左矩阵乘**：`x2 = kroneckerP1 @ x1`，输出 shape 保持 `[K,M,N]`。
 3. **per-token 归约**：保留 `K` 维，对每个 `[M,N]` 切片求最大绝对值。
-4. **scale 计算**：`quantScale = maxAbs / (7 / clipRatio)`，shape 为 `[K]`。
+4. **scale 计算**：`quantScale = maxAbs * clipRatio / 7`（FP32 计算，`clipRatio` 保留 Host double 精度），shape 为 `[K]`。
 5. **归一化**：将 `[K]` reshape 为 `[K,1,1]`，计算 `x2 / quantScale`。
-6. **全零处理**：当某个 token 的 `maxAbs=0` 时，该 token 的输出为 0。
+6. **全零/下溢处理**：当某个 token 的 `maxAbs=0` 时输出 0；当 `quantScale` 因 FP32 下溢为 0 而 token 非零时，按符号饱和输出（正 7 / 负 -8）。
 7. **INT4 转换**：模拟 AscendC `Cast(..., RoundMode::CAST_RINT, ...)` 的最近偶数舍入，并按 signed INT4 范围 `[-8,7]` 饱和。
 
 Golden 使用 INT8 Tensor 承载上述逻辑 INT4 数值。**强制约束：AscendC 算子的真实输出必须使用物理 INT4，不得以 INT8、FP16、BF16 或 FP32 输出替代；INT8 仅允许作为 Golden 和精度比较器的逻辑承载类型。**
@@ -221,6 +223,8 @@ $$
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
+import math
+
 import torch
 
 
@@ -230,8 +234,9 @@ def flat_quant(x, p1, p2, clipRatio):
     计算语义：
         x1 = x @ p2
         x2 = p1 @ x1
-        quantScale[k] = max(abs(x2[k, :, :])) / (7 / clipRatio)
+        quantScale[k] = max(abs(x2[k, :, :])) * clipRatio / 7
         out = round(x2 / quantScale)，并裁剪到有符号 INT4 范围 [-8, 7]
+        若非零 token 的 quantScale 下溢为 0，正值输出 7，负值输出 -8，零值输出 0。
 
     输入：
         x:
@@ -242,7 +247,8 @@ def flat_quant(x, p1, p2, clipRatio):
         p2:
             shape 为 [N, N]、dtype 为 torch.bfloat16 的非空 Tensor。
         clipRatio:
-            范围为 (0, 1] 的浮点数；None 在 Golden 中按 1.0 处理。
+            范围为 (0, 1] 的有限 Host double 浮点数；None 在 Golden
+            中按 1.0 处理。非有限值或超出范围时抛出 ValueError。
 
     输出：
         out:
@@ -252,6 +258,8 @@ def flat_quant(x, p1, p2, clipRatio):
             和解包由算子运行及比较环节处理。
         quantScale:
             shape 为 [K]、dtype 为 torch.float32 的 per-token 量化因子。
+            全零 token 的 scale 为 0；非零 token 的 scale 也可能因
+            FP32 下溢而变为 0，此时 out 按上述符号饱和规则输出。
 
     典型 case（x、p1、p2 均为 torch.bfloat16）：
         - Smoke：x=[1, 2, 8]，p1=[2, 2]，p2=[8, 8]，clipRatio=1.0。
@@ -262,8 +270,9 @@ def flat_quant(x, p1, p2, clipRatio):
 
     完整测试集合见同目录 cases.csv。
     """
-    if (clipRatio is None):
-        clipRatio = 1.0
+    clipRatio = 1.0 if clipRatio is None else float(clipRatio)
+    if not math.isfinite(clipRatio) or not 0.0 < clipRatio <= 1.0:
+        raise ValueError("clipRatio must be finite and in (0, 1]")
 
     # 输入 x 先右乘 p2，再由 p1 左乘。
     x1 = torch.matmul(x, p2)
@@ -272,25 +281,45 @@ def flat_quant(x, p1, p2, clipRatio):
     # per-token 语义：每个 x2[k, :, :] 独立计算最大绝对值。
     x2_flat = x2.flatten(-2, -1)
     qscale = torch.abs(x2_flat).max(dim=-1, keepdim=True)[0].to(torch.float32)
-    ratio = torch.ones_like(qscale) * 7 / clipRatio
-    quantScale = torch.flatten(qscale / ratio)
+    fp32 = torch.finfo(torch.float32)
+    if clipRatio >= 8 * fp32.tiny:
+        # 此范围内 7 / clipRatio 有限，保留已有 FP32 计算与舍入顺序。
+        ratio = torch.ones_like(qscale) * 7 / clipRatio
+        quantScale = torch.flatten(qscale / ratio)
+    else:
+        # clipRatio = mantissa * 2**exponent。避免先计算溢出的倒数，
+        # 或将极小的 Host double 标量直接转换为 FP32 而过早变成 0。
+        mantissa, exponent = math.frexp(clipRatio)
+        scaled = qscale * (mantissa / 7.0)
+        while exponent < 0:
+            step = min(-exponent, 126)
+            scaled = scaled * math.ldexp(1.0, -step)
+            exponent += step
+        quantScale = torch.flatten(scaled)
 
     # 公式：out = x2 / quantScale。
     # reshape 仅用于将 [K] 的 quantScale 广播到 [K, M, N]。
     scale = quantScale.reshape(x2.shape[0], 1, 1)
 
-    # 内核在 max_abs 为 0 时输出 0，避免产生 0 / 0。
-    normalized = torch.where(
-        scale > 0,
-        x2 / scale,
-        torch.zeros_like(x2),
-    )
+    # 先裁剪分子，再执行除法；与最终饱和到 [-8, 7] 等价，且不会
+    # 因 x2 / scale 超出 FP32 范围而产生 Inf。零 scale 使用安全分母。
+    positive_scale = scale > 0
+    safe_scale = torch.where(positive_scale, scale, torch.ones_like(scale))
+    lower = -8 * safe_scale.clamp(max=fp32.max / 8)
+    upper = 7 * safe_scale
+    bounded = torch.minimum(torch.maximum(x2.to(torch.float32), lower), upper)
+    normalized = bounded / safe_scale
 
     # AscendC 内核使用 Cast(..., RoundMode::CAST_RINT, ...)：舍入到最近整数；
     # 当数值恰好位于两个整数的中点时取偶数（ties-to-even）。
     # 有符号 INT4 的表示范围为 [-8, 7]。
     # Golden 使用 INT8 承载逻辑 INT4；真实算子输出必须使用物理 INT4。
-    out = torch.round(normalized).clamp(-8, 7).to(torch.int8)
+    rounded = torch.round(normalized).clamp(-8, 7)
+
+    # FP32 scale 下溢不等于 token 全零。任何非零 BF16 值都远大于
+    # 此时的 scale，量化后必然饱和；真正的零值仍输出 0。
+    underflow_out = torch.where(x2 > 0, 7.0, torch.where(x2 < 0, -8.0, 0.0))
+    out = torch.where(positive_scale, rounded, underflow_out).to(torch.int8)
 
     return out, quantScale
 ```

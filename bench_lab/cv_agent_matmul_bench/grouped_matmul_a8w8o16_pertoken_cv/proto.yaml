@@ -16,11 +16,11 @@ operator:
     y: [M, N] bfloat16
 
     '
-  attrs:
+  runner_attrs:
   - name: group_list_values
-    description: deterministic cumsum group list used by golden and data preparation
-    type: ListInt
-    default: null
+    description: runner 在调用 Golden 前写入 groupList Tensor 的确定值；不属于算子参数。
+    type: list[int]
+    target_input: groupList
   inputs:
   - name: x
     description: routed activation tokens
@@ -47,7 +47,7 @@ operator:
     description: bfloat16 grouped matmul dequantized output
     dtype:
     - bfloat16
-  schema: grouped_matmul(Tensor x, Tensor weight, Tensor scale, Tensor groupList, Tensor perTokenScale, list[int]? group_list_values=None) -> Tensor y
+  schema: grouped_matmul(Tensor x, Tensor weight, Tensor scale, Tensor groupList, Tensor perTokenScale) -> Tensor y
   difficulty: L3
 precision:
   outputs:

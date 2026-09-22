@@ -63,14 +63,22 @@ def quant_batch_matmul_inplace_add(
     """
     if variant != "MX_STATIC":
         raise ValueError("This benchmark fixes variant=MX_STATIC (static mxFP8)")
+    if transposeX1 is not True or transposeX2 is not False or groupSize != 32:
+        raise ValueError("This benchmark fixes transposeX1=True, transposeX2=False, groupSize=32")
     a = x1.t() if transposeX1 else x1   # [M,K] fp8
     b = x2.t() if transposeX2 else x2   # [K,N] fp8
     m, k = a.shape
     k2, n = b.shape
     if k != k2 or yRef.shape != (m, n):
         raise ValueError("shape mismatch")
-    if x1_scale.shape[-1] != 2 or x2_scale.shape[-1] != 2:
-        raise ValueError(f"E8M0 scale last dim must be 2 (docs L284), got {list(x1_scale.shape)}/{list(x2_scale.shape)}")
+    expected_scale_blocks = (k + 63) // 64
+    expected_x1_scale_shape = (expected_scale_blocks, m, 2)
+    expected_x2_scale_shape = (expected_scale_blocks, n, 2)
+    if tuple(x1_scale.shape) != expected_x1_scale_shape or tuple(x2_scale.shape) != expected_x2_scale_shape:
+        raise ValueError(
+            f"E8M0 scale shapes must be {expected_x1_scale_shape}/{expected_x2_scale_shape}, "
+            f"got {list(x1_scale.shape)}/{list(x2_scale.shape)}"
+        )
     # E8M0 uint8 字节 -> 解码为 2^(raw-127) (严格 2 的幂)
     s1 = torch.pow(2.0, x1_scale.to(torch.float32) - 127.0)
     s2 = torch.pow(2.0, x2_scale.to(torch.float32) - 127.0)

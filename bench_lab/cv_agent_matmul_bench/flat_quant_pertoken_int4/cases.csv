@@ -1,7 +1,7 @@
 operator,case_id,input_shape,dtype,attrs,value_range,note
-FlatQuant,1,"[[1, 2, 8], [2, 2], [8, 8]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 1.0}","[-1, 1]",smoke-k1-small-base
-FlatQuant,2,"[[3, 65, 10], [65, 65], [10, 10]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 0.75}","[-1, 1]",smoke-tail-odd-km-base
-FlatQuant,3,"[[9, 67, 16], [67, 67], [16, 16]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 0.9}","[-1, 1]",smoke-tail-unaligned-m-base
+FlatQuant,1,"[[4, 128, 128], [128, 128], [128, 128]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 1.0}","[-1, 1]",smoke-k1-small-base-expanded-K4-M128-N128
+FlatQuant,2,"[[8, 127, 32], [127, 127], [32, 32]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 0.75}","[-1, 1]",smoke-tail-odd-km-base-expanded-K8-M127-N32
+FlatQuant,3,"[[16, 125, 32], [125, 125], [32, 32]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 0.9}","[-1, 1]",smoke-tail-unaligned-m-base-expanded-K16-M125-N32
 FlatQuant,4,"[[1, 64, 64], [64, 64], [64, 64]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 1.0}","[-1, 1]",llm-decode-h4096-base
 FlatQuant,5,"[[1, 80, 64], [80, 80], [64, 64]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 0.95}","[-1, 1]",llm-decode-h5120-base
 FlatQuant,6,"[[1, 128, 64], [128, 128], [64, 64]]","[""bfloat16"", ""bfloat16"", ""bfloat16""]","{""clipRatio"": 0.9}","[-1, 1]",llm-decode-h8192-base

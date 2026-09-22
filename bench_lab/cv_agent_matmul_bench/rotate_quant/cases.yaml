@@ -2,28 +2,28 @@ cases:
 - operator: RotateQuant
   case_id: 1
   input_shape:
-  - - 4
-    - 128
   - - 16
-    - 16
-  dtype:
-  - bfloat16
-  - bfloat16
-  attrs:
-    alpha: 0.0
-    y_dtype: int8
-  value_range:
-  - -1
-  - 1
-  note: F2-bfloat16-M4xN128xK16-int8
-- operator: RotateQuant
-  case_id: 2
-  input_shape:
-  - - 4
-    - 128
+    - 512
   - - 32
     - 32
   dtype:
+  - bfloat16
+  - bfloat16
+  attrs:
+    alpha: 0.0
+    y_dtype: int8
+  value_range:
+  - -1
+  - 1
+  note: F2-bfloat16-M4xN128xK16-int8-expanded-M16-N512-K32
+- operator: RotateQuant
+  case_id: 2
+  input_shape:
+  - - 16
+    - 512
+  - - 64
+    - 64
+  dtype:
   - float16
   - float16
   attrs:
@@ -32,7 +32,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: F2-float16-M4xN128xK32-int8
+  note: F2-float16-M4xN128xK32-int8-expanded-M16-N512-K64
 - operator: RotateQuant
   case_id: 3
   input_shape:
@@ -139,9 +139,9 @@ cases:
   case_id: 9
   input_shape:
   - - 1
-    - 256
-  - - 64
-    - 64
+    - 512
+  - - 128
+    - 128
   dtype:
   - float16
   - float16
@@ -151,14 +151,14 @@ cases:
   value_range:
   - -1
   - 1
-  note: F2-float16-M1xN256xK64-int8
+  note: F2-float16-M1xN256xK64-int8-expanded-M1-N512-K128
 - operator: RotateQuant
   case_id: 10
   input_shape:
-  - - 3
+  - - 12
+    - 512
+  - - 128
     - 128
-  - - 64
-    - 64
   dtype:
   - bfloat16
   - bfloat16
@@ -168,7 +168,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: F2-bfloat16-M3xN128xK64-blocks2-int8
+  note: F2-bfloat16-M3xN128xK64-blocks2-int8-expanded-M12-N512-K128
 - operator: RotateQuant
   case_id: 11
   input_shape:
@@ -206,10 +206,10 @@ cases:
 - operator: RotateQuant
   case_id: 13
   input_shape:
-  - - 5
-    - 384
-  - - 128
-    - 128
+  - - 20
+    - 768
+  - - 256
+    - 256
   dtype:
   - bfloat16
   - bfloat16
@@ -219,7 +219,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: F2-bfloat16-M5xN384xK128-blocks3-int8
+  note: F2-bfloat16-M5xN384xK128-blocks3-int8-expanded-M20-N768-K256
 - operator: RotateQuant
   case_id: 14
   input_shape:
@@ -257,10 +257,10 @@ cases:
 - operator: RotateQuant
   case_id: 16
   input_shape:
-  - - 12
-    - 512
-  - - 16
-    - 16
+  - - 24
+    - 1024
+  - - 32
+    - 32
   dtype:
   - float16
   - float16
@@ -270,7 +270,7 @@ cases:
   value_range:
   - -1
   - 1
-  note: F2-float16-M12xN512xK16-manyblocks-int8
+  note: F2-float16-M12xN512xK16-manyblocks-int8-expanded-M24-N1024-K32
 - operator: RotateQuant
   case_id: 17
   input_shape:

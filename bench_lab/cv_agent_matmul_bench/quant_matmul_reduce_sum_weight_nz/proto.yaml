@@ -1,7 +1,11 @@
 operator:
   name: QuantMatmulReduceSum
   category: Contraction
-  formula: 'out = sum_b((x1[b].int32 @ x2[b].int32) * x1Scale[b, :, None] * x2Scale[None, :])
+  formula: 'mm_b = (x1[b].int32 @ x2[b].int32) * x1Scale[b, :, None] * x2Scale[None, :]
+
+    batch_out[b] = cast_bfloat16(mm_b)
+
+    out = sequential_bfloat16_sum(batch_out, dim=0)
 
     '
   description: aclnnQuantMatmulReduceSumWeightNz selected path. x1 is ND int8 [B,M,K], x2 is NZ int8 [B,ceil(N/32),ceil(K/16),16,32] for logical [B,K,N]. AIV dequantizes cube output and reduces along batch dimension.

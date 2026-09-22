@@ -63,6 +63,8 @@ def quant_batch_matmul_v4(
     """
     if variant != "GB_STATIC_PERGROUP":
         raise ValueError("This benchmark fixes variant=GB_STATIC_PERGROUP (static G-B)")
+    if transpose_x1 is not False or transpose_x2 is not True or tuple(group_size) != (1, 128, 128):
+        raise ValueError("This benchmark fixes transpose_x1=False, transpose_x2=True, group_size=(1,128,128)")
     a = x1.t() if transpose_x1 else x1
     b = x2.t() if transpose_x2 else x2
     a = a.to(torch.float32)
@@ -74,7 +76,7 @@ def quant_batch_matmul_v4(
     # 主线 G-B 硬约束(文档 L662-663): K%512==0(4*128) 且 N%256==0
     if k % 512 != 0 or n % 256 != 0:
         raise ValueError(f"G-B requires K%512==0 and N%256==0 (docs L662-663), got K={k} N={n}")
-    gs_k = int(group_size[2])  # 128
+    gs_k = 128
     nblk_k = (k + gs_k - 1) // gs_k
     if x1_scale.shape != (m, nblk_k):
         raise ValueError(f"x1_scale expects [{m},{nblk_k}], got {list(x1_scale.shape)}")

@@ -2,18 +2,18 @@ cases:
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 1
   input_shape:
-  - - 64
-    - 4
-  - - 64
-    - 32
-  - - 1
-    - 4
+  - - 128
+    - 16
+  - - 128
+    - 64
+  - - 2
+    - 16
     - 2
-  - - 1
-    - 32
+  - - 2
+    - 64
     - 2
-  - - 4
-    - 32
+  - - 16
+    - 64
   dtype:
   - float8_e4m3fn
   - float8_e4m3fn
@@ -28,7 +28,7 @@ cases:
   value_range:
   - 125
   - 131
-  note: MX-static-M4K64N32
+  note: MX-static-M4K64N32-expanded-M16-K128-N64
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 2
   input_shape:
@@ -122,18 +122,18 @@ cases:
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 5
   input_shape:
-  - - 320
-    - 5
-  - - 320
-    - 48
-  - - 5
-    - 5
+  - - 640
+    - 10
+  - - 640
+    - 96
+  - - 10
+    - 10
     - 2
-  - - 5
-    - 48
+  - - 10
+    - 96
     - 2
-  - - 5
-    - 48
+  - - 10
+    - 96
   dtype:
   - float8_e4m3fn
   - float8_e4m3fn
@@ -148,7 +148,7 @@ cases:
   value_range:
   - 125
   - 131
-  note: MX-static-M5K320N48
+  note: MX-static-M5K320N48-expanded-M10-K640-N96
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 6
   input_shape:
@@ -182,18 +182,18 @@ cases:
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 7
   input_shape:
-  - - 64
-    - 9
-  - - 64
-    - 16
-  - - 1
-    - 9
+  - - 128
+    - 18
+  - - 128
+    - 32
+  - - 2
+    - 18
     - 2
-  - - 1
-    - 16
+  - - 2
+    - 32
     - 2
-  - - 9
-    - 16
+  - - 18
+    - 32
   dtype:
   - float8_e4m3fn
   - float8_e4m3fn
@@ -208,7 +208,7 @@ cases:
   value_range:
   - 125
   - 131
-  note: MX-static-M9K64N16
+  note: MX-static-M9K64N16-expanded-M18-K128-N32
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 8
   input_shape:
@@ -242,18 +242,18 @@ cases:
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 9
   input_shape:
-  - - 256
-    - 3
-  - - 256
-    - 128
-  - - 4
-    - 3
+  - - 512
+    - 6
+  - - 512
+    - 256
+  - - 8
+    - 6
     - 2
-  - - 4
-    - 128
+  - - 8
+    - 256
     - 2
-  - - 3
-    - 128
+  - - 6
+    - 256
   dtype:
   - float8_e4m3fn
   - float8_e4m3fn
@@ -268,7 +268,7 @@ cases:
   value_range:
   - 125
   - 131
-  note: MX-static-M3K256N128
+  note: MX-static-M3K256N128-expanded-M6-K512-N256
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 10
   input_shape:
@@ -302,18 +302,18 @@ cases:
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 11
   input_shape:
-  - - 128
-    - 18
-  - - 128
-    - 160
-  - - 2
-    - 18
+  - - 256
+    - 36
+  - - 256
+    - 320
+  - - 4
+    - 36
     - 2
-  - - 2
-    - 160
+  - - 4
+    - 320
     - 2
-  - - 18
-    - 160
+  - - 36
+    - 320
   dtype:
   - float8_e4m3fn
   - float8_e4m3fn
@@ -328,7 +328,7 @@ cases:
   value_range:
   - 125
   - 131
-  note: MX-static-M18K128N160
+  note: MX-static-M18K128N160-expanded-M36-K256-N320
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 12
   input_shape:
@@ -482,18 +482,18 @@ cases:
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 17
   input_shape:
-  - - 64
-    - 6
-  - - 64
-    - 48
-  - - 1
-    - 6
+  - - 128
+    - 12
+  - - 128
+    - 96
+  - - 2
+    - 12
     - 2
-  - - 1
-    - 48
+  - - 2
+    - 96
     - 2
-  - - 6
-    - 48
+  - - 12
+    - 96
   dtype:
   - float8_e4m3fn
   - float8_e4m3fn
@@ -508,7 +508,7 @@ cases:
   value_range:
   - 125
   - 131
-  note: MX-static-M6K64N48
+  note: MX-static-M6K64N48-expanded-M12-K128-N96
 - operator: QuantBatchMatmulInplaceAdd
   case_id: 18
   input_shape:

@@ -21,6 +21,7 @@ def sparse4to2quant_matmul_dequant(
     sparseWeightScale: torch.Tensor,
     bias: torch.Tensor = None,
     with_bias: bool = True,
+    dtype: int = 27,
 ):
     """Torch golden for aclnnSparse4to2QuantMatmulWeightNz.
 
@@ -37,6 +38,8 @@ def sparse4to2quant_matmul_dequant(
         raise ValueError(f"x expects 2D [M, K], got {list(x.shape)}")
     if weight.dim() != 2:
         raise ValueError(f"weight expects 2D [N, K], got {list(weight.shape)}")
+    if dtype != 27:
+        raise ValueError("This benchmark fixes dtype=27 (BF16 output)")
 
     m, k = x.shape
     n, wk = weight.shape
@@ -44,19 +47,21 @@ def sparse4to2quant_matmul_dequant(
         raise ValueError(f"x.K ({k}) must match weight.K ({wk})")
     if k > 65535:
         raise ValueError(f"K ({k}) exceeds 65535")
+    if k % 4 != 0:
+        raise ValueError(f"K ({k}) must be divisible by 4 for the 4:2 pattern")
     # K and N do NOT need to be aligned: NPU pads K via CeilAlign(K, 8) and pads N
     # via FRACTAL_NZ ceil(N/16). Golden uses dense weight; padding bytes on the
     # NPU side are zero-filled and do not pollute the logical [M, N] output.
-    # (Non-aligned cases are valid; current cases.yaml only exercises aligned shapes.)
-    if xScale.numel() != m:
-        raise ValueError(f"xScale length ({xScale.numel()}) must match M ({m})")
-    if sparseWeightScale.numel() != n:
-        raise ValueError(f"sparseWeightScale length ({sparseWeightScale.numel()}) must match N ({n})")
+    # Non-aligned K/N cases are included in cases.yaml to cover this padding path.
+    if xScale.shape != (m,):
+        raise ValueError(f"xScale expects shape [{m}], got {list(xScale.shape)}")
+    if sparseWeightScale.shape != (n,):
+        raise ValueError(f"sparseWeightScale expects shape [{n}], got {list(sparseWeightScale.shape)}")
     if with_bias:
         if bias is None:
             raise ValueError("with_bias=True but bias tensor is None")
-        if bias.numel() != n:
-            raise ValueError(f"bias length ({bias.numel()}) must match N ({n})")
+        if bias.shape != (n,):
+            raise ValueError(f"bias expects shape [{n}], got {list(bias.shape)}")
 
     # Verify 4:2 sparsity pattern (every 4 consecutive elements have exactly 2 zeros).
     # Reshape weight to [N, K/4, 4] and count zeros per group.

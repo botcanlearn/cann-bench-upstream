@@ -2,14 +2,14 @@ cases:
 - operator: GroupedMatmulSwigluQuant
   case_id: 1
   input_shape:
-  - - 8
-    - 128
-  - - 2
-    - 128
+  - - 32
     - 256
   - - 2
     - 256
-  - - 8
+    - 512
+  - - 2
+    - 512
+  - - 32
   - - 2
   dtype:
   - int8
@@ -20,13 +20,13 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 4
-    - 8
+    - 16
+    - 32
     tiling_key: 0
   value_range:
   - -2
   - 2
-  note: F2-A8W8-tk0-E2-M8xK128xN256
+  note: F2-A8W8-tk0-E2-M8xK128xN256-expanded-M32-K256-N512
 - operator: GroupedMatmulSwigluQuant
   case_id: 2
   input_shape:
@@ -90,14 +90,14 @@ cases:
 - operator: GroupedMatmulSwigluQuant
   case_id: 4
   input_shape:
-  - - 4
-    - 128
-  - - 1
-    - 128
+  - - 16
     - 256
   - - 1
     - 256
-  - - 4
+    - 512
+  - - 1
+    - 512
+  - - 16
   - - 1
   dtype:
   - int8
@@ -108,12 +108,12 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 4
+    - 16
     tiling_key: 0
   value_range:
   - -2
   - 2
-  note: F2-A8W8-tk0-singleExpert-M4
+  note: F2-A8W8-tk0-singleExpert-M4-expanded-M16-K256-N512
 - operator: GroupedMatmulSwigluQuant
   case_id: 5
   input_shape:
@@ -241,14 +241,14 @@ cases:
 - operator: GroupedMatmulSwigluQuant
   case_id: 9
   input_shape:
-  - - 12
-    - 64
-  - - 3
-    - 64
+  - - 24
     - 256
   - - 3
     - 256
-  - - 12
+    - 512
+  - - 3
+    - 512
+  - - 24
   - - 3
   dtype:
   - int8
@@ -260,13 +260,13 @@ cases:
     variant: A8W8_tiling_key_0
     group_list_values:
     - 0
-    - 6
     - 12
+    - 24
     tiling_key: 0
   value_range:
   - -2
   - 2
-  note: F2-A8W8-tk0-emptyFirstExpert
+  note: F2-A8W8-tk0-emptyFirstExpert-expanded-M24-K256-N512
 - operator: GroupedMatmulSwigluQuant
   case_id: 10
   input_shape:
@@ -303,12 +303,12 @@ cases:
   case_id: 11
   input_shape:
   - - 1
-    - 256
-  - - 2
-    - 256
     - 512
   - - 2
     - 512
+    - 1024
+  - - 2
+    - 1024
   - - 1
   - - 2
   dtype:
@@ -326,7 +326,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-A8W8-tk0-singleToken
+  note: F2-A8W8-tk0-singleToken-expanded-M1-K512-N1024
 - operator: GroupedMatmulSwigluQuant
   case_id: 12
   input_shape:
@@ -360,14 +360,14 @@ cases:
 - operator: GroupedMatmulSwigluQuant
   case_id: 13
   input_shape:
-  - - 31
-    - 160
-  - - 7
-    - 160
+  - - 62
     - 320
   - - 7
     - 320
-  - - 31
+    - 640
+  - - 7
+    - 640
+  - - 62
   - - 7
   dtype:
   - int8
@@ -378,18 +378,18 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 1
-    - 4
+    - 2
     - 8
-    - 13
-    - 19
-    - 25
-    - 31
+    - 16
+    - 26
+    - 38
+    - 50
+    - 62
     tiling_key: 0
   value_range:
   - -2
   - 2
-  note: F2-A8W8-tk0-primeM31-E7
+  note: F2-A8W8-tk0-primeM31-E7-expanded-M62-K320-N640
 - operator: GroupedMatmulSwigluQuant
   case_id: 14
   input_shape:
@@ -465,14 +465,14 @@ cases:
 - operator: GroupedMatmulSwigluQuant
   case_id: 16
   input_shape:
-  - - 9
-    - 304
+  - - 36
+    - 608
   - - 3
-    - 304
-    - 64
+    - 608
+    - 256
   - - 3
-    - 64
-  - - 9
+    - 256
+  - - 36
   - - 3
   dtype:
   - int8
@@ -483,14 +483,14 @@ cases:
   attrs:
     variant: A8W8_tiling_key_0
     group_list_values:
-    - 1
-    - 5
-    - 9
+    - 4
+    - 20
+    - 36
     tiling_key: 0
   value_range:
   - -2
   - 2
-  note: F2-A8W8-tk0-K304-smallN64
+  note: F2-A8W8-tk0-K304-smallN64-expanded-M36-K608-N256
 - operator: GroupedMatmulSwigluQuant
   case_id: 17
   input_shape:

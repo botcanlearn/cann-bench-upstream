@@ -2,13 +2,13 @@ cases:
 - operator: Sparse4to2QuantMatmul
   case_id: 1
   input_shape:
-  - - 4
-    - 64
-  - - 32
-    - 64
-  - - 4
-  - - 32
-  - - 32
+  - - 16
+    - 256
+  - - 64
+    - 256
+  - - 16
+  - - 64
+  - - 64
   dtype:
   - int8
   - int8
@@ -20,17 +20,17 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M4xK64xN32-bias-smallest
+  note: F2-int8-M4xK64xN32-bias-smallest-expanded-M16-K256-N64
 - operator: Sparse4to2QuantMatmul
   case_id: 2
   input_shape:
   - - 1
-    - 128
-  - - 32
-    - 128
+    - 256
+  - - 64
+    - 256
   - - 1
-  - - 32
-  - - 32
+  - - 64
+  - - 64
   dtype:
   - int8
   - int8
@@ -42,17 +42,17 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M1xK128xN32-noBias-singleToken
+  note: F2-int8-M1xK128xN32-noBias-singleToken-expanded-M1-K256-N64
 - operator: Sparse4to2QuantMatmul
   case_id: 3
   input_shape:
-  - - 8
-    - 256
-  - - 64
-    - 256
-  - - 8
-  - - 64
-  - - 64
+  - - 32
+    - 512
+  - - 128
+    - 512
+  - - 32
+  - - 128
+  - - 128
   dtype:
   - int8
   - int8
@@ -64,17 +64,17 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M8xK256xN64-bias
+  note: F2-int8-M8xK256xN64-bias-expanded-M32-K512-N128
 - operator: Sparse4to2QuantMatmul
   case_id: 4
   input_shape:
-  - - 16
-    - 512
-  - - 128
-    - 512
-  - - 16
-  - - 128
-  - - 128
+  - - 32
+    - 1024
+  - - 256
+    - 1024
+  - - 32
+  - - 256
+  - - 256
   dtype:
   - int8
   - int8
@@ -86,7 +86,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M16xK512xN128-noBias-OpsExampleAligned
+  note: F2-int8-M16xK512xN128-noBias-OpsExampleAligned-expanded-M32-K1024-N256
 - operator: Sparse4to2QuantMatmul
   case_id: 5
   input_shape:
@@ -178,13 +178,13 @@ cases:
 - operator: Sparse4to2QuantMatmul
   case_id: 9
   input_shape:
-  - - 3
-    - 64
-  - - 32
-    - 64
-  - - 3
-  - - 32
-  - - 32
+  - - 12
+    - 256
+  - - 64
+    - 256
+  - - 12
+  - - 64
+  - - 64
   dtype:
   - int8
   - int8
@@ -196,17 +196,17 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M3xK64xN32-bias-tailM3
+  note: F2-int8-M3xK64xN32-bias-tailM3-expanded-M12-K256-N64
 - operator: Sparse4to2QuantMatmul
   case_id: 10
   input_shape:
-  - - 7
-    - 1024
-  - - 128
-    - 1024
-  - - 7
-  - - 128
-  - - 128
+  - - 28
+    - 2048
+  - - 256
+    - 2048
+  - - 28
+  - - 256
+  - - 256
   dtype:
   - int8
   - int8
@@ -218,17 +218,17 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M7xK1024xN128-noBias-tailM7
+  note: F2-int8-M7xK1024xN128-noBias-tailM7-expanded-M28-K2048-N256
 - operator: Sparse4to2QuantMatmul
   case_id: 11
   input_shape:
-  - - 24
-    - 128
-  - - 64
-    - 128
-  - - 24
-  - - 64
-  - - 64
+  - - 48
+    - 512
+  - - 128
+    - 512
+  - - 48
+  - - 128
+  - - 128
   dtype:
   - int8
   - int8
@@ -240,7 +240,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M24xK128xN64-bias-nonPowM24
+  note: F2-int8-M24xK128xN64-bias-nonPowM24-expanded-M48-K512-N128
 - operator: Sparse4to2QuantMatmul
   case_id: 12
   input_shape:
@@ -332,13 +332,13 @@ cases:
 - operator: Sparse4to2QuantMatmul
   case_id: 16
   input_shape:
-  - - 33
-    - 512
-  - - 96
-    - 512
-  - - 33
-  - - 96
-  - - 96
+  - - 66
+    - 1024
+  - - 192
+    - 1024
+  - - 66
+  - - 192
+  - - 192
   dtype:
   - int8
   - int8
@@ -350,7 +350,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M33xK512xN96-noBias-tailM33-nonPowN96
+  note: F2-int8-M33xK512xN96-noBias-tailM33-nonPowN96-expanded-M66-K1024-N192
 - operator: Sparse4to2QuantMatmul
   case_id: 17
   input_shape:
@@ -398,13 +398,13 @@ cases:
 - operator: Sparse4to2QuantMatmul
   case_id: 19
   input_shape:
-  - - 8
-    - 132
-  - - 64
-    - 132
-  - - 8
-  - - 64
-  - - 64
+  - - 16
+    - 264
+  - - 128
+    - 264
+  - - 16
+  - - 128
+  - - 128
   dtype:
   - int8
   - int8
@@ -416,17 +416,17 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M8xK132xN64-bias-Knot8aligned
+  note: F2-int8-M8xK132xN64-bias-Knot8aligned-expanded-M16-K264-N128
 - operator: Sparse4to2QuantMatmul
   case_id: 20
   input_shape:
-  - - 16
-    - 128
-  - - 33
-    - 128
-  - - 16
-  - - 33
-  - - 33
+  - - 32
+    - 256
+  - - 66
+    - 256
+  - - 32
+  - - 66
+  - - 66
   dtype:
   - int8
   - int8
@@ -438,4 +438,4 @@ cases:
   value_range:
   - -8
   - 8
-  note: F2-int8-M16xK128xN33-noBias-Nnot16aligned
+  note: F2-int8-M16xK128xN33-noBias-Nnot16aligned-expanded-M32-K256-N66

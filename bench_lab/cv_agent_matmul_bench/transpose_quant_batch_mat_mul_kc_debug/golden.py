@@ -28,6 +28,13 @@ def transpose_quant_batch_mat_mul(
     y_dtype: str = "float32",
 ) -> torch.Tensor:
     """Torch golden for transpose_quant_batch_mat_mul K-C path."""
+    allowed_perms = {(0, 1, 2), (0, 2, 1)}
+    for name, perm in (("permX1", permX1), ("permX2", permX2), ("permY", permY)):
+        if tuple(perm) not in allowed_perms:
+            raise ValueError(f"{name} must be [0, 1, 2] or [0, 2, 1]")
+    if groupSize != 0 or batchSplitFactor != 1 or str(y_dtype).lower() != "float32":
+        raise ValueError("This benchmark fixes groupSize=0, batchSplitFactor=1, y_dtype=float32")
+
     a = x1.permute(*permX1).to(torch.float32)
     b = x2.permute(*permX2).to(torch.float32)
     if a.dim() != 3 or b.dim() != 3:
@@ -36,6 +43,8 @@ def transpose_quant_batch_mat_mul(
     batch2, k2, n = b.shape
     if batch != batch2 or k != k2:
         raise ValueError("shape mismatch after permute")
+    if x1Scale.shape != (batch, m) or x2Scale.shape != (batch, n) or bias.shape != (batch, n):
+        raise ValueError("x1Scale, x2Scale, and bias must match the permuted matmul dimensions")
     # int8 matmul accumulates int32 in the cube PE, but the arch35 kernel's
     # cT = MatmulType<VECIN, ND_ALIGN, l0cDtype=float> (transpose_quant_batch_mat_mul_
     # asw_kernel_advanced.h) makes GetTensorC(l0cOutUb_, 0, true) in MMCompute() land the

@@ -1,11 +1,13 @@
 operator:
   name: RotateQuant
   category: Transform
-  formula: 'Y = (x.reshape(M, N//K, K) @ rotation).reshape(M, N)
+  formula: 'Y_fp32 = matmul(float32(x.reshape(M, N//K, K)), float32(rotation))
+
+    Y = cast_to_input_dtype(Y_fp32).to(float32).reshape(M, N)
 
     scale_i = max_j(abs(Y[i, j])) / 127
 
-    y = round(Y / scale[:, None]).clamp(-127, 127).to(int8)
+    y = where(scale_i > 0, round(Y / scale_i), 0).clamp(-127, 127).to(int8)
 
     '
   description: C->V kernel 路径。AIC 完成分块旋转 matmul 写 workspace，AIV 做逐行 absmax、动态 int8 量化和写回。

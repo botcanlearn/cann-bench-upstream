@@ -55,5 +55,5 @@ def fused_quant_mat_mul(
 
     out = torch_gelu(qbmmout, approximate="none")
 
-    # aclnnFusedQuantMatmul 这条已选路径的接口输出 dtype 为 BF16。
+    # 接口输出 dtype 为 BF16。
     return out.to(torch.bfloat16)

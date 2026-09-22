@@ -7,8 +7,12 @@
 ## 2. 算子定义
 
 ```text
-weight_dq = (weight + antiquantOffset) * antiquantScale
-y = x @ weight_dq + bias
+if antiquant_group_size == 0:
+    weight_dq = (weight + antiquantOffset[None, :]) * antiquantScale[None, :]
+else:
+    weight_dq[k, n] = (weight[k, n] + antiquantOffset[k // G, n]) * antiquantScale[k // G, n]
+acc = float32(x) @ float32(weight_dq) + float32(cast(bias, compute_dtype))
+y = float32(cast(acc, compute_dtype))
 ```
 
 `antiquant_group_size=0` 表示 per-channel scale；大于 0 表示 K 维 per-group scale。
@@ -16,7 +20,7 @@ y = x @ weight_dq + bias
 ## 3. 接口规范
 
 ```python
-weight_quant_batch_matmul_v2(x, weight, antiquantScale, antiquantOffset, bias, antiquant_group_size=0) -> y
+weight_quant_batch_matmul_v2(x, weight, antiquantScale, antiquantOffset, bias, transpose_x=False, transpose_weight=False, antiquant_group_size=0, output_quant=False, y_dtype="float32") -> y
 ```
 
 | 参数 | 输入/输出 | dtype | shape | 说明 |
@@ -31,6 +35,7 @@ weight_quant_batch_matmul_v2(x, weight, antiquantScale, antiquantOffset, bias, a
 ## 4. 约束说明
 
 - 固定 `transpose_x=False`、`transpose_weight=False`。
+- 固定 `output_quant=False`、`y_dtype="float32"`；实际计算按输入 `x` 的 FP16/BF16 精度进行窄类型舍入后再返回 float32。
 - 覆盖 per-channel 和 per-group antiquant 两类路径；不覆盖输出量化分支。
 - INT4/FRACTAL_NZ 打包细节不进入 benchmark 数学定义。
 
@@ -44,7 +49,7 @@ weight_quant_batch_matmul_v2(x, weight, antiquantScale, antiquantOffset, bias, a
 
 ## 6. 标准 Golden 代码
 
-`golden.py` 先根据 `antiquant_group_size` 广播 scale/offset 生成 `weight_dq`，再执行 `x @ weight_dq + bias`。
+`golden.py` 先根据 `antiquant_group_size` 广播 scale/offset 生成 `weight_dq`，将反量化权重和 bias 舍入到输入 x 的计算精度，再执行 FP32 累加；最终按输入精度舍入后返回 float32。
 
 ## 7. 额外信息
 
@@ -89,8 +94,15 @@ def weight_quant_batch_matmul_v2(
     y_dtype: str = "float32",
 ) -> torch.Tensor:
     """Torch golden for weight_quant_batch_matmul_v2 antiquant matmul path."""
-    if output_quant:
-        raise ValueError("This benchmark fixes output_quant=False")
+    if transpose_x or transpose_weight or output_quant or str(y_dtype).lower() != "float32":
+        raise ValueError(
+            "This benchmark fixes transpose_x=False, transpose_weight=False, "
+            "output_quant=False, y_dtype=float32"
+        )
+    if x.dtype not in (torch.float16, torch.bfloat16):
+        raise ValueError("x must be float16 or bfloat16")
+    if antiquant_group_size < 0:
+        raise ValueError("antiquant_group_size must be non-negative")
     if transpose_x:
         x = x.transpose(-2, -1)
     if transpose_weight:
@@ -147,10 +159,9 @@ def weight_quant_batch_matmul_v2(
     # Cube matmul accumulates in fp32; bias added in fp32 (MatmulImpl fp32 accum + SetBias, custom.h:74,305).
     y = x.to(torch.float32) @ w_dq.to(torch.float32) + bias_cast.reshape(1, n)
 
-    # y dtype == x dtype (docs: y "与x一致"); round to x dtype, then present as requested y_dtype.
+    # y dtype == x dtype (docs: y "与x一致"); round to x dtype, then present as fixed float32 output.
     y = y.to(compute_dtype)
-    out_dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}.get(y_dtype, torch.float32)
-    return y.to(out_dtype)
+    return y.to(torch.float32)
 
 
 def weight_quant_batch_matmul_v2_oracle(
@@ -172,8 +183,13 @@ def weight_quant_batch_matmul_v2_oracle(
     整条在 fp64 计算，是精确反量化的 fp64 真值上界（不再被下采成 fp32），使
     |bench − oracle| 不再恒为 0。输出 dtype 跟随 x.dtype。
     """
-    if output_quant:
-        raise ValueError("This benchmark fixes output_quant=False")
+    if transpose_x or transpose_weight or output_quant or str(y_dtype).lower() != "float32":
+        raise ValueError(
+            "This benchmark fixes transpose_x=False, transpose_weight=False, "
+            "output_quant=False, y_dtype=float32"
+        )
+    if antiquant_group_size < 0:
+        raise ValueError("antiquant_group_size must be non-negative")
     if transpose_x:
         x = x.transpose(-2, -1)
     if transpose_weight:

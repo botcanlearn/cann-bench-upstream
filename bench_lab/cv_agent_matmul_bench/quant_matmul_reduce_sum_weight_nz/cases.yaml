@@ -2,44 +2,16 @@ cases:
 - operator: QuantMatmulReduceSum
   case_id: 1
   input_shape:
-  - - 2
-    - 16
-    - 64
-  - - 2
-    - 1
-    - 4
-    - 16
-    - 32
-  - - 2
-    - 16
-  - - 32
-  dtype:
-  - int8
-  - int8
-  - float32
-  - bfloat16
-  attrs:
-    dims:
-    - 0
-    keep_dims: false
-    x2_format: NZ
-  value_range:
-  - -2
-  - 2
-  note: F2-NZ-B2xM16xK64xN32
-- operator: QuantMatmulReduceSum
-  case_id: 2
-  input_shape:
   - - 4
-    - 16
-    - 64
+    - 32
+    - 128
   - - 4
     - 2
-    - 4
+    - 8
     - 16
     - 32
   - - 4
-    - 16
+    - 32
   - - 64
   dtype:
   - int8
@@ -54,21 +26,21 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-NZ-B4xM16xK64xN64
+  note: F2-NZ-B2xM16xK64xN32-expanded-B4-M32-K128-N64
 - operator: QuantMatmulReduceSum
-  case_id: 3
+  case_id: 2
   input_shape:
   - - 8
     - 32
-    - 64
+    - 128
   - - 8
-    - 1
     - 4
+    - 8
     - 16
     - 32
   - - 8
     - 32
-  - - 32
+  - - 128
   dtype:
   - int8
   - int8
@@ -82,7 +54,35 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-kernelUT-like-B8xM32xK64xN32
+  note: F2-NZ-B4xM16xK64xN64-expanded-B8-M32-K128-N128
+- operator: QuantMatmulReduceSum
+  case_id: 3
+  input_shape:
+  - - 8
+    - 64
+    - 128
+  - - 8
+    - 2
+    - 8
+    - 16
+    - 32
+  - - 8
+    - 64
+  - - 64
+  dtype:
+  - int8
+  - int8
+  - float32
+  - bfloat16
+  attrs:
+    dims:
+    - 0
+    keep_dims: false
+    x2_format: NZ
+  value_range:
+  - -2
+  - 2
+  note: F2-kernelUT-like-B8xM32xK64xN32-expanded-B8-M64-K128-N64
 - operator: QuantMatmulReduceSum
   case_id: 4
   input_shape:
@@ -171,16 +171,16 @@ cases:
   case_id: 7
   input_shape:
   - - 1
-    - 8
-    - 32
+    - 16
+    - 64
   - - 1
-    - 1
     - 2
+    - 4
     - 16
     - 32
   - - 1
-    - 8
-  - - 32
+    - 16
+  - - 64
   dtype:
   - int8
   - int8
@@ -194,21 +194,21 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-NZ-singleB-M8xK32xN32
+  note: F2-NZ-singleB-M8xK32xN32-expanded-B1-M16-K64-N64
 - operator: QuantMatmulReduceSum
   case_id: 8
   input_shape:
-  - - 3
-    - 17
-    - 80
-  - - 3
-    - 2
-    - 5
+  - - 4
+    - 33
+    - 128
+  - - 4
+    - 3
+    - 8
     - 16
     - 32
-  - - 3
-    - 17
-  - - 48
+  - - 4
+    - 33
+  - - 96
   dtype:
   - int8
   - int8
@@ -222,7 +222,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-NZ-tailM17-K80xN48
+  note: F2-NZ-tailM17-K80xN48-expanded-B4-M33-K128-N96
 - operator: QuantMatmulReduceSum
   case_id: 9
   input_shape:
@@ -311,16 +311,16 @@ cases:
   case_id: 12
   input_shape:
   - - 8
-    - 16
-    - 48
+    - 32
+    - 96
   - - 8
-    - 3
-    - 3
+    - 6
+    - 6
     - 16
     - 32
   - - 8
-    - 16
-  - - 96
+    - 32
+  - - 192
   dtype:
   - int8
   - int8
@@ -334,7 +334,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-NZ-K48xN96-padding
+  note: F2-NZ-K48xN96-padding-expanded-B8-M32-K96-N192
 - operator: QuantMatmulReduceSum
   case_id: 13
   input_shape:
@@ -395,16 +395,16 @@ cases:
   case_id: 15
   input_shape:
   - - 4
-    - 20
-    - 72
+    - 40
+    - 144
   - - 4
-    - 3
     - 5
+    - 9
     - 16
     - 32
   - - 4
-    - 20
-  - - 72
+    - 40
+  - - 144
   dtype:
   - int8
   - int8
@@ -418,7 +418,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-NZ-K72xN72-doublePadding
+  note: F2-NZ-K72xN72-doublePadding-expanded-B4-M40-K144-N144
 - operator: QuantMatmulReduceSum
   case_id: 16
   input_shape:
@@ -507,16 +507,16 @@ cases:
   case_id: 19
   input_shape:
   - - 1
-    - 65
-    - 64
+    - 130
+    - 128
   - - 1
-    - 2
     - 4
+    - 8
     - 16
     - 32
   - - 1
-    - 65
-  - - 64
+    - 130
+  - - 128
   dtype:
   - int8
   - int8
@@ -530,7 +530,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F2-NZ-singleB-tailM65
+  note: F2-NZ-singleB-tailM65-expanded-B1-M130-K128-N128
 - operator: QuantMatmulReduceSum
   case_id: 20
   input_shape:

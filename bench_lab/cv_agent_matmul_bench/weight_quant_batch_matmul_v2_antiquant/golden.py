@@ -27,8 +27,15 @@ def weight_quant_batch_matmul_v2(
     y_dtype: str = "float32",
 ) -> torch.Tensor:
     """Torch golden for weight_quant_batch_matmul_v2 antiquant matmul path."""
-    if output_quant:
-        raise ValueError("This benchmark fixes output_quant=False")
+    if transpose_x or transpose_weight or output_quant or str(y_dtype).lower() != "float32":
+        raise ValueError(
+            "This benchmark fixes transpose_x=False, transpose_weight=False, "
+            "output_quant=False, y_dtype=float32"
+        )
+    if x.dtype not in (torch.float16, torch.bfloat16):
+        raise ValueError("x must be float16 or bfloat16")
+    if antiquant_group_size < 0:
+        raise ValueError("antiquant_group_size must be non-negative")
     if transpose_x:
         x = x.transpose(-2, -1)
     if transpose_weight:
@@ -85,10 +92,9 @@ def weight_quant_batch_matmul_v2(
     # Cube matmul accumulates in fp32; bias added in fp32 (MatmulImpl fp32 accum + SetBias, custom.h:74,305).
     y = x.to(torch.float32) @ w_dq.to(torch.float32) + bias_cast.reshape(1, n)
 
-    # y dtype == x dtype (docs: y "与x一致"); round to x dtype, then present as requested y_dtype.
+    # y dtype == x dtype (docs: y "与x一致"); round to x dtype, then present as fixed float32 output.
     y = y.to(compute_dtype)
-    out_dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}.get(y_dtype, torch.float32)
-    return y.to(out_dtype)
+    return y.to(torch.float32)
 
 
 def weight_quant_batch_matmul_v2_oracle(
@@ -110,8 +116,13 @@ def weight_quant_batch_matmul_v2_oracle(
     整条在 fp64 计算，是精确反量化的 fp64 真值上界（不再被下采成 fp32），使
     |bench − oracle| 不再恒为 0。输出 dtype 跟随 x.dtype。
     """
-    if output_quant:
-        raise ValueError("This benchmark fixes output_quant=False")
+    if transpose_x or transpose_weight or output_quant or str(y_dtype).lower() != "float32":
+        raise ValueError(
+            "This benchmark fixes transpose_x=False, transpose_weight=False, "
+            "output_quant=False, y_dtype=float32"
+        )
+    if antiquant_group_size < 0:
+        raise ValueError("antiquant_group_size must be non-negative")
     if transpose_x:
         x = x.transpose(-2, -1)
     if transpose_weight:

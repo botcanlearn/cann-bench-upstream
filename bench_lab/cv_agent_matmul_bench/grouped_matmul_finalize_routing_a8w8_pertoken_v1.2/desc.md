@@ -316,16 +316,51 @@ def get_input(
     """
     gl = attrs.get("group_list_values")
     if gl is not None:
-        groupList = torch.tensor(list(gl), dtype=torch.int64, device=x1.device)
+        values = [int(value) for value in gl]
+        if len(values) != groupList.numel():
+            raise ValueError(
+                f"group_list_values length ({len(values)}) must match "
+                f"groupList length ({groupList.numel()})"
+            )
+        if not values or values[0] < 0:
+            raise ValueError("group_list_values must be a non-empty non-negative cumsum")
+        if any(values[index] < values[index - 1] for index in range(1, len(values))):
+            raise ValueError("group_list_values must be non-decreasing cumsum")
+        if values[-1] != x1.shape[0]:
+            raise ValueError(
+                f"group_list_values last value ({values[-1]}) must equal M ({x1.shape[0]})"
+            )
+        groupList = torch.tensor(values, dtype=torch.int64, device=x1.device)
     ri = attrs.get("row_index_values")
     if ri is not None:
-        rowIndex = torch.tensor(list(ri), dtype=torch.int64, device=x1.device)
+        values = [int(value) for value in ri]
+        if len(values) != rowIndex.numel():
+            raise ValueError(
+                f"row_index_values length ({len(values)}) must match "
+                f"rowIndex length ({rowIndex.numel()})"
+            )
+        output_bs = attrs.get("output_bs")
+        if output_bs is not None and any(
+            value < 0 or value >= int(output_bs) for value in values
+        ):
+            raise ValueError("row_index_values must be in [0, output_bs)")
+        rowIndex = torch.tensor(values, dtype=torch.int64, device=x1.device)
     return [x1, x2, scale, pertokenScaleOptional, groupList, sharedInput, logit, rowIndex]
 
 
-def _cumsum_groups(groupList: torch.Tensor):
+def _cumsum_groups(groupList: torch.Tensor, total_m: int, expert_num: int):
     """将 cumsum groupList 转换为各专家的 [start, end) 行区间。"""
-    ends = [int(v) for v in groupList.detach().cpu().tolist()]
+    ends = [int(v) for v in groupList.detach().to(device="cpu").reshape(-1).tolist()]
+    if len(ends) != expert_num:
+        raise ValueError(
+            f"groupList length ({len(ends)}) must match expert count ({expert_num})"
+        )
+    if not ends or ends[0] < 0:
+        raise ValueError("groupList must be a non-empty non-negative cumsum")
+    if any(ends[index] < ends[index - 1] for index in range(1, len(ends))):
+        raise ValueError("groupList must be non-decreasing cumsum")
+    if ends[-1] != total_m:
+        raise ValueError(f"groupList last value ({ends[-1]}) must equal M ({total_m})")
     starts = [0] + ends[:-1]
     return list(zip(starts, ends))
 
@@ -374,11 +409,23 @@ def grouped_matmul_finalize_routing(
     输出为 [output_bs, N] FP32，精度路径为 INT8 x INT8 -> INT32 累加 -> FP32 反量化与聚合。
     """
     # x1 已按专家排序，groupList 给出各专家的累积结束位置。
-    groups = _cumsum_groups(groupList)
     m = x1.shape[0]
     n = x2.shape[2]
+    groups = _cumsum_groups(groupList, m, x2.shape[0])
     shared_len = sharedInput.shape[0]
     shared_end = int(sharedInputOffset) + shared_len
+    if output_bs < 1:
+        raise ValueError("output_bs must be positive")
+    if sharedInputOffset < 0 or shared_end > output_bs:
+        raise ValueError("sharedInput range must fit within output_bs")
+
+    row_values = [
+        int(value) for value in rowIndex.detach().to(device="cpu").reshape(-1).tolist()
+    ]
+    if len(row_values) != m:
+        raise ValueError(f"rowIndex length ({len(row_values)}) must equal M ({m})")
+    if any(value < 0 or value >= output_bs for value in row_values):
+        raise ValueError("rowIndex values must be in [0, output_bs)")
 
     route_scale = logit * pertokenScaleOptional
 

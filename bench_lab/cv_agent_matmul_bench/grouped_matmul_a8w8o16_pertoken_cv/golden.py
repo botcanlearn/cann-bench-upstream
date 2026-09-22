@@ -31,7 +31,21 @@ def get_input(
     """
     gl = attrs.get("group_list_values")
     if gl is not None:
-        groupList = torch.tensor(list(gl), dtype=torch.int64, device=x.device)
+        values = [int(value) for value in gl]
+        if len(values) != groupList.numel():
+            raise ValueError(
+                f"group_list_values length ({len(values)}) must match "
+                f"groupList length ({groupList.numel()})"
+            )
+        if not values or values[0] < 0:
+            raise ValueError("group_list_values must be a non-empty non-negative cumsum")
+        if any(values[index] < values[index - 1] for index in range(1, len(values))):
+            raise ValueError("group_list_values must be non-decreasing cumsum")
+        if values[-1] != x.shape[0]:
+            raise ValueError(
+                f"group_list_values last value ({values[-1]}) must equal M ({x.shape[0]})"
+            )
+        groupList = torch.tensor(values, dtype=torch.int64, device=x.device)
     return [x, weight, scale, groupList, perTokenScale]
 
 
@@ -42,7 +56,6 @@ def grouped_matmul(
     scale: torch.Tensor,
     groupList: torch.Tensor,
     perTokenScale: torch.Tensor,
-    group_list_values=None,
 ) -> torch.Tensor:
     """执行 Atlas A3 aclnnGroupedMatmulV5 的 A8W8O16 per-token grouped matmul。
 
@@ -66,10 +79,9 @@ def grouped_matmul(
     输入：
         x:
             shape 为 [M, K]、dtype 为 torch.int8 的 routed token。
-            Atlas A3 路径要求 K < 65536。
         weight:
             shape 为 [E, K, N]、dtype 为 torch.int8 的 ND expert 权重；
-            本 benchmark 固定不转置，且 1 <= E <= 1024、N < 65536。
+            本 benchmark 固定不转置。
         scale:
             shape 为 [E, N]、dtype 为 torch.bfloat16 的 per-expert
             per-channel 反量化因子。
@@ -81,18 +93,12 @@ def grouped_matmul(
         perTokenScale:
             shape 为 [M]、dtype 为 torch.float32 的 per-token 因子。
 
-    Benchmark 辅助参数：
-        group_list_values:
-            runner 用于构造确定性 groupList 的辅助值，不是 ACLNN 参数。
-            为 None 时直接读取 groupList Tensor。
-
     固定场景：
         本函数直接表达单 Tensor 输出、M 轴分组、cumsum groupList 和
         无激活语义，因此不再暴露只负责选路的 ACLNN 属性。
 
     输出：
-        shape 为 [M, N]、dtype 为 torch.bfloat16。最终转换与官方
-        ST reference 一致，使用 PyTorch .to(torch.bfloat16) 表达。
+        shape 为 [M, N]、dtype 为 torch.bfloat16。
 
     典型 case：
         - 常规：x=[16,128]，weight=[2,128,64]，groupList=[8,16]。
@@ -103,9 +109,17 @@ def grouped_matmul(
     """
     m = x.shape[0]
     n = weight.shape[2]
-    groups = group_list_values
-    if groups is None:
-        groups = groupList.detach().to(device="cpu").tolist()
+    groups = [int(v) for v in groupList.detach().to(device="cpu").reshape(-1).tolist()]
+    if len(groups) != weight.shape[0]:
+        raise ValueError(
+            f"groupList length ({len(groups)}) must match expert count ({weight.shape[0]})"
+        )
+    if not groups or groups[0] < 0:
+        raise ValueError("groupList must be a non-empty non-negative cumsum")
+    if any(groups[index] < groups[index - 1] for index in range(1, len(groups))):
+        raise ValueError("groupList must be non-decreasing cumsum")
+    if groups[-1] != m:
+        raise ValueError(f"groupList last value ({groups[-1]}) must equal M ({m})")
 
     out = torch.zeros(m, n, dtype=torch.float32, device=x.device)
 

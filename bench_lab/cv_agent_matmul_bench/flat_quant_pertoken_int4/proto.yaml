@@ -5,9 +5,14 @@ operator:
 
     x2 = kroneckerP1 @ x1
 
-    quantScale[k] = max(abs(x2[k, :, :])) / (7 / clipRatio)
+    maxAbs[k] = max(abs(x2[k, :, :]))
 
-    out = saturate_int4(rint(x2 / quantScale.reshape(K, 1, 1)))
+    quantScale[k] = float32(maxAbs[k] * clipRatio / 7)
+
+    if quantScale[k] > 0:
+      out[k] = saturate_int4(rint(x2[k] / quantScale[k]))
+    else:
+      out[k] = where(x2[k] > 0, 7, where(x2[k] < 0, -8, 0))
 
     '
   description: 'Atlas A2/A3 FlatQuant 的 BF16、per-token INT4、tiling key=1
@@ -18,7 +23,7 @@ operator:
   shape_support: "x: [K,M,N] bfloat16, 1 <= K <= 262144, 1 <= M,N <= 256\nkroneckerP1: [M,M] bfloat16\nkroneckerP2: [N,N] bfloat16\nout: [K,M,N] physical signed int4, N must be even\nquantScale: [K] float32\nbenchmark cases are restricted to tiling key=1 / MM_BASE_MODE:\n  mAlign = ceil_div(M,16)*16, nAlign = ceil_div(N,16)*16\n  M != 1\n  not (mAlign <= 64 and nAlign <= 128 and K > 1)\n  mAlign <= 128 and nAlign <= 128\n  mAlign^2 + nAlign^2 + 4*mAlign*nAlign <= 262144\n"
   attrs:
   - name: clipRatio
-    description: 必选裁剪比例，取值范围为 (0,1]；Golden 仅将显式传入的 None 兜底为 1.0。
+    description: 必选有限裁剪比例，取值范围为 (0,1]，保留 Host double 精度；Golden 仅将显式传入的 None 兜底为 1.0，非有限值或超出范围时抛出 ValueError。
     type: float
   inputs:
   - name: x
@@ -39,7 +44,7 @@ operator:
     dtype:
     - int4
   - name: quantScale
-    description: shape 为 [K] 的 FP32 per-token 量化因子。
+    description: shape 为 [K] 的 FP32 per-token 量化因子；全零 token 或 FP32 下溢时可为 0，out 按 formula 中的零 scale 分支输出。
     dtype:
     - float32
   schema: flat_quant(Tensor x, p1, p2, clipRatio)

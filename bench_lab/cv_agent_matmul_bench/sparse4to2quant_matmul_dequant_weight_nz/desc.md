@@ -16,7 +16,7 @@
 设 `x` 的形状为 `[M, K]`,稠密 `weight` 的形状为 `[N, K]`,且满足 4:2 稀疏 pattern(每连续 4 元素恰好 2 个为 0)。计算公式:
 
 $$
-out = (x \cdot weight^T) \odot xScale[:, None] \odot sparseWeightScale[None, :] + bias
+out = (x \cdot weight^T) \odot sparseWeightScale[None, :] \odot xScale[:, None] + bias
 $$
 
 NPU 实际执行时:
@@ -50,7 +50,7 @@ aclnnStatus aclnnSparse4to2QuantMatmulWeightNz(
 
 ```python
 sparse4to2quant_matmul_dequant(
-    x, weight, xScale, sparseWeightScale, bias=None, with_bias=True
+    x, weight, xScale, sparseWeightScale, bias=None, with_bias=True, dtype=27
 ) -> out
 ```
 
@@ -63,6 +63,8 @@ sparse4to2quant_matmul_dequant(
 | `xScale` | 输入 | `FLOAT32` | ND | `[M]` | per-token 反量化 scale |
 | `sparseWeightScale` | 输入 | `FLOAT32` | ND | `[N]` | per-channel 反量化 scale |
 | `bias` | 输入 | `BFLOAT16` | ND | `[N]` | 可选 bias,`with_bias=true` 时启用 |
+| `with_bias` | 属性 | `bool` | - | 标量 | 是否启用 bias,默认 `true` |
+| `dtype` | 属性 | `int` | - | 标量 | 固定为 `27`,表示 BF16 输出 |
 | `out` | 输出 | `BFLOAT16` | ND | `[M, N]` | 反量化矩阵乘输出 |
 
 ## 4. 约束说明
@@ -71,7 +73,7 @@ Atlas A2/A3 产品约束:
 
 - `K` 不超过 65535(来自 docs 约束;tiling 代码未直接校验,依赖 `aclnnTransSparse4to2Para` 上游)
 - `xScale` 与 `sparseWeightScale` 都不能为 nullptr
-- `weight` 必须满足 4:2 稀疏 pattern(每连续 4 元素恰好 2 个为 0);本 benchmark 数据准备阶段自动生成符合该约束的随机 weight
+- `weight` 必须满足 4:2 稀疏 pattern(每连续 4 元素恰好 2 个为 0)，因此 `K` 必须能被 4 整除；本 benchmark 数据准备阶段自动生成符合该约束的随机 weight
 - `K` **不要求整除 8**:NPU 端通过 `CeilAlign(K, SPARSE_ATOMIC_SIZE=8)` 内部补齐;tiling 校验 `ceil(K/8)*8 == 2 * sparseWeight.K_half`
 - `N` **不要求整除 16**:`sparseWeight` 是 FRACTAL_NZ,StorageShape `[ceil(N/16), ceil(K_half/32), 16, 32]`,NPU 内部按 16 ceil padding;输出 `out` shape 仍为逻辑 `[M, N]`,padding 不污染输出
 - dtype 约束(tiling 硬校验,不可放宽):
@@ -156,6 +158,7 @@ def sparse4to2quant_matmul_dequant(
     sparseWeightScale: torch.Tensor,
     bias: torch.Tensor = None,
     with_bias: bool = True,
+    dtype: int = 27,
 ):
     """Torch golden for aclnnSparse4to2QuantMatmulWeightNz.
 
@@ -172,6 +175,8 @@ def sparse4to2quant_matmul_dequant(
         raise ValueError(f"x expects 2D [M, K], got {list(x.shape)}")
     if weight.dim() != 2:
         raise ValueError(f"weight expects 2D [N, K], got {list(weight.shape)}")
+    if dtype != 27:
+        raise ValueError("This benchmark fixes dtype=27 (BF16 output)")
 
     m, k = x.shape
     n, wk = weight.shape
@@ -179,19 +184,21 @@ def sparse4to2quant_matmul_dequant(
         raise ValueError(f"x.K ({k}) must match weight.K ({wk})")
     if k > 65535:
         raise ValueError(f"K ({k}) exceeds 65535")
+    if k % 4 != 0:
+        raise ValueError(f"K ({k}) must be divisible by 4 for the 4:2 pattern")
     # K and N do NOT need to be aligned: NPU pads K via CeilAlign(K, 8) and pads N
     # via FRACTAL_NZ ceil(N/16). Golden uses dense weight; padding bytes on the
     # NPU side are zero-filled and do not pollute the logical [M, N] output.
-    # (Non-aligned cases are valid; current cases.yaml only exercises aligned shapes.)
-    if xScale.numel() != m:
-        raise ValueError(f"xScale length ({xScale.numel()}) must match M ({m})")
-    if sparseWeightScale.numel() != n:
-        raise ValueError(f"sparseWeightScale length ({sparseWeightScale.numel()}) must match N ({n})")
+    # Non-aligned K/N cases are included in cases.yaml to cover this padding path.
+    if xScale.shape != (m,):
+        raise ValueError(f"xScale expects shape [{m}], got {list(xScale.shape)}")
+    if sparseWeightScale.shape != (n,):
+        raise ValueError(f"sparseWeightScale expects shape [{n}], got {list(sparseWeightScale.shape)}")
     if with_bias:
         if bias is None:
             raise ValueError("with_bias=True but bias tensor is None")
-        if bias.numel() != n:
-            raise ValueError(f"bias length ({bias.numel()}) must match N ({n})")
+        if bias.shape != (n,):
+            raise ValueError(f"bias expects shape [{n}], got {list(bias.shape)}")
 
     # Verify 4:2 sparsity pattern (every 4 consecutive elements have exactly 2 zeros).
     # Reshape weight to [N, K/4, 4] and count zeros per group.

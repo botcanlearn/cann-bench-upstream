@@ -2,12 +2,12 @@ cases:
 - operator: QuantBatchMatmulV3
   case_id: 1
   input_shape:
-  - - 16
-    - 64
-  - - 64
-    - 64
-  - - 64
-  - - 64
+  - - 32
+    - 256
+  - - 256
+    - 256
+  - - 256
+  - - 256
   dtype:
   - int8
   - int8
@@ -19,16 +19,16 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-bf16_basic-M16xK64xN64
+  note: F1-bf16_basic-M16xK64xN64-expanded-M32-K256-N256
 - operator: QuantBatchMatmulV3
   case_id: 2
   input_shape:
-  - - 32
+  - - 64
+    - 256
+  - - 256
     - 128
   - - 128
-    - 64
-  - - 64
-  - - 64
+  - - 128
   dtype:
   - int8
   - int8
@@ -40,16 +40,16 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-bf16_basic-M32xK128xN64
+  note: F1-bf16_basic-M32xK128xN64-expanded-M64-K256-N128
 - operator: QuantBatchMatmulV3
   case_id: 3
   input_shape:
-  - - 17
-    - 64
-  - - 64
-    - 96
-  - - 96
-  - - 96
+  - - 33
+    - 256
+  - - 256
+    - 192
+  - - 192
+  - - 192
   dtype:
   - int8
   - int8
@@ -61,7 +61,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-bf16_basic-tailM17-K64xN96
+  note: F1-bf16_basic-tailM17-K64xN96-expanded-M33-K256-N192
 - operator: QuantBatchMatmulV3
   case_id: 4
   input_shape:
@@ -108,11 +108,11 @@ cases:
   case_id: 6
   input_shape:
   - - 1
-    - 64
-  - - 64
-    - 32
-  - - 32
-  - - 32
+    - 256
+  - - 256
+    - 128
+  - - 128
+  - - 128
   dtype:
   - int8
   - int8
@@ -124,7 +124,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-bf16_basic-singleM-K64xN32
+  note: F1-bf16_basic-singleM-K64xN32-expanded-M1-K256-N128
 - operator: QuantBatchMatmulV3
   case_id: 7
   input_shape:
@@ -170,13 +170,13 @@ cases:
 - operator: QuantBatchMatmulV3
   case_id: 9
   input_shape:
-  - - 16
-    - 64
-  - - 64
-    - 128
-  - - 128
-  - - 128
-  - - 16
+  - - 32
+    - 256
+  - - 256
+    - 256
+  - - 256
+  - - 256
+  - - 32
   dtype:
   - int8
   - int8
@@ -189,7 +189,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-pertoken_basic-M16xK64xN128
+  note: F1-pertoken_basic-M16xK64xN128-expanded-M32-K256-N256
 - operator: QuantBatchMatmulV3
   case_id: 10
   input_shape:
@@ -262,13 +262,13 @@ cases:
 - operator: QuantBatchMatmulV3
   case_id: 13
   input_shape:
-  - - 7
-    - 64
-  - - 64
-    - 96
-  - - 96
-  - - 96
-  - - 7
+  - - 14
+    - 256
+  - - 256
+    - 192
+  - - 192
+  - - 192
+  - - 14
   dtype:
   - int8
   - int8
@@ -281,16 +281,16 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-pertoken_basic-tailM7-K64xN96
+  note: F1-pertoken_basic-tailM7-K64xN96-expanded-M14-K256-N192
 - operator: QuantBatchMatmulV3
   case_id: 14
   input_shape:
   - - 1
+    - 256
+  - - 256
     - 128
   - - 128
-    - 64
-  - - 64
-  - - 64
+  - - 128
   - - 1
   dtype:
   - int8
@@ -304,7 +304,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-pertoken_basic-singleM-fp16out
+  note: F1-pertoken_basic-singleM-fp16out-expanded-M1-K256-N128
 - operator: QuantBatchMatmulV3
   case_id: 15
   input_shape:
@@ -400,13 +400,13 @@ cases:
 - operator: QuantBatchMatmulV3
   case_id: 19
   input_shape:
-  - - 15
-    - 96
-  - - 96
-    - 32
-  - - 32
-  - - 32
-  - - 15
+  - - 30
+    - 256
+  - - 256
+    - 128
+  - - 128
+  - - 128
+  - - 30
   dtype:
   - int8
   - int8
@@ -419,7 +419,7 @@ cases:
   value_range:
   - -2
   - 2
-  note: F1-pertoken_basic-smallN-tailM15
+  note: F1-pertoken_basic-smallN-tailM15-expanded-M30-K256-N128
 - operator: QuantBatchMatmulV3
   case_id: 20
   input_shape:

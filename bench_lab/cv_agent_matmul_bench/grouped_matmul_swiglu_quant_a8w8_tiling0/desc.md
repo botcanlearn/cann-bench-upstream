@@ -14,7 +14,7 @@
 start = 0
 for expert i in [0, E):
     end = groupList[i]
-    C = (x[start:end].int32 @ weight[i].int32)
+    C = matmul(float32(x[start:end]), float32(weight[i]))
     C = C * xScale[start:end, None] * weightScale[i][None, :]
     C_act, gate = split(C, 2, dim=-1)
     S = swish(C_act) * gate
@@ -32,7 +32,7 @@ benchmark 抽象接口：
 ```python
 grouped_matmul_swiglu_quant(
     x, weight, weightScale, xScale, groupList,
-    variant="A8W8_tiling_key_0", tiling_key=0
+    variant="A8W8_tiling_key_0", group_list_values=None, tiling_key=0
 ) -> (y, yScale)
 ```
 
@@ -45,6 +45,7 @@ grouped_matmul_swiglu_quant(
 | `weightScale` | 输入 | `FLOAT32` | `[E, N]` | per-expert per-channel weight scale |
 | `xScale` | 输入 | `FLOAT32` | `[M]` | per-token activation scale |
 | `groupList` | 输入 | `INT64` | `[E]` | cumsum token 边界 |
+| `group_list_values` | 属性 | `list[int]` | `[E]` | 可选的确定性 cumsum 边界；提供时 Golden 优先使用该值 |
 | `y` | 输出 | `INT8` | `[M, N/2]` | SwiGLU 后动态量化输出 |
 | `yScale` | 输出 | `FLOAT32` | `[M]` | 每个 token 的输出量化 scale |
 

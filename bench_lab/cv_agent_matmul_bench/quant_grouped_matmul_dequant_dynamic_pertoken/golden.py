@@ -102,6 +102,8 @@ def quant_grouped_matmul_dequant(
     """
     if quant_mode != "pertoken" or xScaleOptional is not None:
         raise ValueError("This benchmark fixes dynamic per-token path with xScaleOptional=None")
+    if transposeWeight is not True or groupListType != 0:
+        raise ValueError("This benchmark fixes transposeWeight=True and groupListType=0")
     if group_list_values is not None:
         groupList = torch.tensor(group_list_values, dtype=torch.int64, device=x.device)
     # transposeWeight 固定 true(对齐主线): weight 输入 [G,N,K] -> 内部 [G,K,N]
@@ -111,6 +113,14 @@ def quant_grouped_matmul_dequant(
     g, k, n = quantized_weight.shape
     if len(groups) != g or x.shape[1] != k:
         raise ValueError("shape mismatch")
+    if not groups or groups[-1][1] != x.shape[0] or any(
+        start < 0 or end < start or end > x.shape[0] for start, end in groups
+    ):
+        raise ValueError("groupList must be a non-decreasing cumsum ending at M")
+    if weightScale.shape != (g, n):
+        raise ValueError(f"weightScale expects [{g},{n}], got {list(weightScale.shape)}")
+    if bias is not None and bias.shape != (g, n):
+        raise ValueError(f"bias expects [{g},{n}] when provided, got {list(bias.shape)}")
     # 主线硬约束(文档 L347/L289): weight 的 N、K 需 16 整数倍
     if n % 16 != 0 or k % 16 != 0:
         raise ValueError(f"N,K must align to 16 (docs L347/L289), got N={n} K={k}")

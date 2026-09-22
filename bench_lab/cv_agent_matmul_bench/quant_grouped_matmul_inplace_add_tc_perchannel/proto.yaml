@@ -58,7 +58,7 @@ operator:
     description: inplace 累加结果(3D)
     dtype:
     - float32
-  schema: quant_grouped_matmul_inplace_add(Tensor x1, Tensor x2, Tensor scale1, Tensor scale2, Tensor groupList, Tensor yRef, int groupListType=0, int group_size=0, variant, group_list_values) -> Tensor y
+  schema: quant_grouped_matmul_inplace_add(Tensor x1, Tensor x2, Tensor scale1, Tensor scale2, Tensor groupList, Tensor yRef, int groupListType=0, int group_size=0, str variant="TC_PERCHANNEL", list[int] group_list_values=None) -> Tensor y
   difficulty: L3
 precision:
   outputs:

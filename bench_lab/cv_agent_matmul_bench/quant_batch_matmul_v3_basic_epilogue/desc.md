@@ -30,7 +30,7 @@ benchmark 抽象接口：
 
 ```python
 quant_batch_matmul_v3(
-    x1, x2, scale, bias=None, perTokenScale=None,
+    x1, x2, scale, bias, perTokenScale=None,
     variant="bf16_basic", y_dtype="bfloat16"
 ) -> y
 ```

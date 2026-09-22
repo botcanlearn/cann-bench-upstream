@@ -31,6 +31,7 @@ operator:
     description: 未量化激活(主线 FLOAT16)
     dtype:
     - float16
+    - bfloat16
   - name: quantized_weight
     description: INT8 量化权重 [G,N,K](transposeWeight=true)
     dtype:
@@ -43,13 +44,19 @@ operator:
     description: cumsum 分组边界
     dtype:
     - int64
+  - name: bias
+    description: 可选的 per-group bias，在 weightScale 和 xScale 之前加入；benchmark case 不传入
+    dtype:
+    - float16
+    - float32
+    optional: true
   outputs:
   - name: out
     description: 反量化输出(= x dtype)
     dtype:
     - float16
     - bfloat16
-  schema: quant_grouped_matmul_dequant(Tensor x, Tensor quantized_weight, Tensor weightScale, Tensor groupList, Tensor? bias=None, str quant_mode="pertoken", Tensor? xScaleOptional=None, transposeWeight, groupListType, group_list_values) -> Tensor out
+  schema: quant_grouped_matmul_dequant(Tensor x, Tensor quantized_weight, Tensor weightScale, Tensor groupList, Tensor? bias=None, str quant_mode="pertoken", Tensor? xScaleOptional=None, bool transposeWeight=true, int groupListType=0, list[int] group_list_values=None) -> Tensor out
   difficulty: L3
 precision:
   outputs:

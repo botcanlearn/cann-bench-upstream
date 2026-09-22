@@ -2,17 +2,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 1
   input_shape:
-  - - 1
+  - - 2
+    - 1024
     - 512
-    - 512
-  - - 1
+  - - 2
     - 512
     - 128
-  - - 1
-    - 512
-  - - 1
+  - - 2
+    - 1024
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -39,7 +39,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M512K512N128-permY012
+  note: KC-transpose-B1M512K512N128-permY012-expanded-B2-M1024-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 2
   input_shape:
@@ -84,17 +84,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 3
   input_shape:
-  - - 1
+  - - 2
     - 512
-    - 768
-  - - 1
+    - 1024
+  - - 2
     - 512
     - 128
-  - - 1
-    - 768
-  - - 1
+  - - 2
+    - 1024
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -121,7 +121,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M768K512N128-permY012
+  note: KC-transpose-B1M768K512N128-permY012-expanded-B2-M1024-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 4
   input_shape:
@@ -207,17 +207,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 6
   input_shape:
-  - - 1
+  - - 2
     - 512
     - 2048
-  - - 1
+  - - 2
     - 128
     - 512
-  - - 1
+  - - 2
     - 2048
-  - - 1
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -244,7 +244,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M2048K512N128-permY012
+  note: KC-transpose-B1M2048K512N128-permY012-expanded-B2-M2048-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 7
   input_shape:
@@ -330,17 +330,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 9
   input_shape:
-  - - 1
+  - - 2
     - 512
-    - 1280
-  - - 1
+    - 2048
+  - - 2
     - 512
     - 128
-  - - 1
-    - 1280
-  - - 1
+  - - 2
+    - 2048
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -367,7 +367,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M1280K512N128-permY021
+  note: KC-transpose-B1M1280K512N128-permY021-expanded-B2-M2048-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 10
   input_shape:
@@ -412,17 +412,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 11
   input_shape:
-  - - 1
-    - 257
+  - - 2
     - 512
-  - - 1
+    - 512
+  - - 2
     - 128
     - 512
-  - - 1
-    - 257
-  - - 1
+  - - 2
+    - 512
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -449,7 +449,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M257K512N128-permY021
+  note: KC-transpose-B1M257K512N128-permY021-expanded-B2-M512-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 12
   input_shape:
@@ -535,17 +535,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 14
   input_shape:
-  - - 1
+  - - 2
     - 512
     - 2048
-  - - 1
+  - - 2
     - 512
     - 128
-  - - 1
+  - - 2
     - 2048
-  - - 1
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -572,7 +572,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M2048K512N128-permY012
+  note: KC-transpose-B1M2048K512N128-permY012-expanded-B2-M2048-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 15
   input_shape:
@@ -658,17 +658,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 17
   input_shape:
-  - - 1
+  - - 2
     - 512
     - 1024
-  - - 1
+  - - 2
     - 128
     - 512
-  - - 1
+  - - 2
     - 1024
-  - - 1
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -695,7 +695,7 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M1024K512N128-permY021
+  note: KC-transpose-B1M1024K512N128-permY021-expanded-B2-M1024-K512-N128
 - operator: TransposeQuantBatchMatMul
   case_id: 18
   input_shape:
@@ -781,17 +781,17 @@ cases:
 - operator: TransposeQuantBatchMatMul
   case_id: 20
   input_shape:
-  - - 1
-    - 1000
+  - - 2
+    - 1536
     - 512
-  - - 1
+  - - 2
     - 128
     - 512
-  - - 1
-    - 1000
-  - - 1
+  - - 2
+    - 1536
+  - - 2
     - 128
-  - - 1
+  - - 2
     - 128
   dtype:
   - int8
@@ -818,4 +818,4 @@ cases:
   value_range:
   - -8
   - 8
-  note: KC-transpose-B1M1000K512N128-permY021
+  note: KC-transpose-B1M1000K512N128-permY021-expanded-B2-M1536-K512-N128

@@ -9,14 +9,14 @@
 ```text
 A = permute(x1, permX1)
 B = permute(x2, permX2)
-Y = (A @ B) * x1Scale[..., :, None] * x2Scale[..., None, :] + bias[..., None, :]
+Y = ((A @ B) * x2Scale[..., None, :]) * x1Scale[..., :, None] + bias[..., None, :]
 out = permute(Y, permY)
 ```
 
 ## 3. 接口规范
 
 ```python
-transpose_quant_batch_mat_mul(x1, x2, x1Scale, x2Scale, bias, permX1, permX2, permY, groupSize=0) -> out
+transpose_quant_batch_mat_mul(x1, x2, x1Scale, x2Scale, bias, permX1=(0,1,2), permX2=(0,1,2), permY=(0,1,2), groupSize=0, batchSplitFactor=1, y_dtype="float32") -> out
 ```
 
 | 参数 | 输入/输出 | dtype | shape | 说明 |
@@ -30,7 +30,7 @@ transpose_quant_batch_mat_mul(x1, x2, x1Scale, x2Scale, bias, permX1, permX2, pe
 
 ## 4. 约束说明
 
-- 固定 K-C 路径，`K=512`、`N=128`，`groupSize=0`。
+- 固定 K-C 路径，`K=512`、`N=128`，`groupSize=0`、`batchSplitFactor=1`、`y_dtype="float32"`。
 - 覆盖 `permX1/permX2/permY` 的常见 `[0,1,2]` 与 `[0,2,1]` 组合。
 - 目录名中的 `_kc` 用于明确本 benchmark 固定 K-C 量化路径；MX 量化和 FP8 细节不纳入本目录。
 
@@ -90,6 +90,13 @@ def transpose_quant_batch_mat_mul(
     y_dtype: str = "float32",
 ) -> torch.Tensor:
     """Torch golden for transpose_quant_batch_mat_mul K-C path."""
+    allowed_perms = {(0, 1, 2), (0, 2, 1)}
+    for name, perm in (("permX1", permX1), ("permX2", permX2), ("permY", permY)):
+        if tuple(perm) not in allowed_perms:
+            raise ValueError(f"{name} must be [0, 1, 2] or [0, 2, 1]")
+    if groupSize != 0 or batchSplitFactor != 1 or str(y_dtype).lower() != "float32":
+        raise ValueError("This benchmark fixes groupSize=0, batchSplitFactor=1, y_dtype=float32")
+
     a = x1.permute(*permX1).to(torch.float32)
     b = x2.permute(*permX2).to(torch.float32)
     if a.dim() != 3 or b.dim() != 3:
@@ -98,6 +105,8 @@ def transpose_quant_batch_mat_mul(
     batch2, k2, n = b.shape
     if batch != batch2 or k != k2:
         raise ValueError("shape mismatch after permute")
+    if x1Scale.shape != (batch, m) or x2Scale.shape != (batch, n) or bias.shape != (batch, n):
+        raise ValueError("x1Scale, x2Scale, and bias must match the permuted matmul dimensions")
     # int8 matmul accumulates int32 in the cube PE, but the arch35 kernel's
     # cT = MatmulType<VECIN, ND_ALIGN, l0cDtype=float> (transpose_quant_batch_mat_mul_
     # asw_kernel_advanced.h) makes GetTensorC(l0cOutUb_, 0, true) in MMCompute() land the

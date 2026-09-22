@@ -109,6 +109,10 @@ def quant_grouped_matmul_inplace_add(
     x1/x2 经 HIFLOAT8 量化(en_dtypes); yRef 3D (g,M,N); x2 2D 单权重 (K,N).
     规格详见模块顶部「规格对齐说明」。
     """
+    if variant != "TC_PERCHANNEL" or group_size != 0:
+        raise ValueError("This benchmark fixes variant=TC_PERCHANNEL and group_size=0")
+    if groupListType != 0:
+        raise ValueError("This benchmark fixes groupListType=0")
     if group_list_values is not None:
         groupList = torch.tensor(group_list_values, dtype=torch.int64, device=x1.device)
     groups = _groups(groupList, groupListType)
@@ -117,6 +121,14 @@ def quant_grouped_matmul_inplace_add(
     K2, N = x2.shape
     if K != K2:
         raise ValueError(f"K mismatch: x1 K={K} x2 K={K2}")
+    if not groups or groups[-1][1] != M or any(
+        start < 0 or end < start or end > M for start, end in groups
+    ):
+        raise ValueError("groupList must be a non-decreasing cumsum ending at M")
+    if scale1.shape != (g, 1):
+        raise ValueError(f"scale1 expects [{g},1], got {list(scale1.shape)}")
+    if scale2.shape != (g, N):
+        raise ValueError(f"scale2 expects [{g},{N}], got {list(scale2.shape)}")
     if yRef.shape != (g, M, N):
         raise ValueError(f"yRef expects ({g},{M},{N}) [对齐主线 3D], got {list(yRef.shape)}")
     # 对齐主线 T-C: y_i = (x1_i @ x2_i) * scale2(channel) * scale1(tensor) + yRef_i (inplace, 3D)

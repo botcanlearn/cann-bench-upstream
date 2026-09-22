@@ -3826,19 +3826,19 @@ cases:
 - operator: GroupedMatmulFinalizeRouting
   case_id: 14
   input_shape:
-  - - 65
+  - - 130
     - 2048
   - - 8
     - 2048
     - 7168
   - - 8
     - 7168
-  - - 65
+  - - 130
   - - 8
   - - 17
     - 7168
-  - - 65
-  - - 65
+  - - 130
+  - - 130
   dtype:
   - int8
   - int8
@@ -3854,14 +3854,79 @@ cases:
     sharedInputOffset: 16
     group_list_values:
     - 0
-    - 1
-    - 1
-    - 7
-    - 32
-    - 32
+    - 2
+    - 2
+    - 14
     - 64
-    - 65
+    - 64
+    - 128
+    - 130
     row_index_values:
+    - 0
+    - 7
+    - 14
+    - 21
+    - 28
+    - 2
+    - 9
+    - 16
+    - 23
+    - 30
+    - 4
+    - 11
+    - 18
+    - 25
+    - 32
+    - 6
+    - 13
+    - 20
+    - 27
+    - 1
+    - 8
+    - 15
+    - 22
+    - 29
+    - 3
+    - 10
+    - 17
+    - 24
+    - 31
+    - 5
+    - 12
+    - 19
+    - 26
+    - 0
+    - 7
+    - 14
+    - 21
+    - 28
+    - 2
+    - 9
+    - 16
+    - 23
+    - 30
+    - 4
+    - 11
+    - 18
+    - 25
+    - 32
+    - 6
+    - 13
+    - 20
+    - 27
+    - 1
+    - 8
+    - 15
+    - 22
+    - 29
+    - 3
+    - 10
+    - 17
+    - 24
+    - 31
+    - 5
+    - 12
+    - 19
     - 0
     - 7
     - 14
@@ -3953,7 +4018,7 @@ cases:
     rowIndex:
     - 0
     - 32
-  note: routing-E8-M65-B33-empty-experts-nonuniform
+  note: routing-E8-M65-B33-empty-experts-nonuniform-expanded-M130
 - operator: GroupedMatmulFinalizeRouting
   case_id: 15
   input_shape:
@@ -4229,19 +4294,19 @@ cases:
 - operator: GroupedMatmulFinalizeRouting
   case_id: 17
   input_shape:
-  - - 17
+  - - 34
     - 2048
   - - 16
     - 2048
     - 7168
   - - 16
     - 7168
-  - - 17
+  - - 34
   - - 16
   - - 3
     - 7168
-  - - 17
-  - - 17
+  - - 34
+  - - 34
   dtype:
   - int8
   - int8
@@ -4257,22 +4322,39 @@ cases:
     sharedInputOffset: 3
     group_list_values:
     - 0
-    - 1
-    - 1
-    - 1
+    - 2
     - 2
     - 2
     - 4
     - 4
-    - 4
     - 8
     - 8
-    - 12
-    - 12
+    - 8
     - 16
     - 16
-    - 17
+    - 24
+    - 24
+    - 32
+    - 32
+    - 34
     row_index_values:
+    - 0
+    - 0
+    - 0
+    - 1
+    - 2
+    - 2
+    - 3
+    - 4
+    - 4
+    - 4
+    - 4
+    - 5
+    - 6
+    - 7
+    - 7
+    - 8
+    - 8
     - 0
     - 0
     - 0
@@ -4316,23 +4398,23 @@ cases:
     rowIndex:
     - 0
     - 8
-  note: routing-E16-M17-B9-many-empty-experts
+  note: routing-E16-M17-B9-many-empty-experts-expanded-M34
 - operator: GroupedMatmulFinalizeRouting
   case_id: 18
   input_shape:
-  - - 127
+  - - 254
     - 2048
   - - 2
     - 2048
     - 7168
   - - 2
     - 7168
-  - - 127
+  - - 254
   - - 2
   - - 32
     - 7168
-  - - 127
-  - - 127
+  - - 254
+  - - 254
   dtype:
   - int8
   - int8
@@ -4347,9 +4429,136 @@ cases:
     sharedInputWeight: 0.5
     sharedInputOffset: 16
     group_list_values:
-    - 63
-    - 127
+    - 126
+    - 254
     row_index_values:
+    - 3
+    - 14
+    - 25
+    - 36
+    - 47
+    - 58
+    - 5
+    - 16
+    - 27
+    - 38
+    - 49
+    - 60
+    - 7
+    - 18
+    - 29
+    - 40
+    - 51
+    - 62
+    - 9
+    - 20
+    - 31
+    - 42
+    - 53
+    - 0
+    - 11
+    - 22
+    - 33
+    - 44
+    - 55
+    - 2
+    - 13
+    - 24
+    - 35
+    - 46
+    - 57
+    - 4
+    - 15
+    - 26
+    - 37
+    - 48
+    - 59
+    - 6
+    - 17
+    - 28
+    - 39
+    - 50
+    - 61
+    - 8
+    - 19
+    - 30
+    - 41
+    - 52
+    - 63
+    - 10
+    - 21
+    - 32
+    - 43
+    - 54
+    - 1
+    - 12
+    - 23
+    - 34
+    - 45
+    - 56
+    - 3
+    - 14
+    - 25
+    - 36
+    - 47
+    - 58
+    - 5
+    - 16
+    - 27
+    - 38
+    - 49
+    - 60
+    - 7
+    - 18
+    - 29
+    - 40
+    - 51
+    - 62
+    - 9
+    - 20
+    - 31
+    - 42
+    - 53
+    - 0
+    - 11
+    - 22
+    - 33
+    - 44
+    - 55
+    - 2
+    - 13
+    - 24
+    - 35
+    - 46
+    - 57
+    - 4
+    - 15
+    - 26
+    - 37
+    - 48
+    - 59
+    - 6
+    - 17
+    - 28
+    - 39
+    - 50
+    - 61
+    - 8
+    - 19
+    - 30
+    - 41
+    - 52
+    - 63
+    - 10
+    - 21
+    - 32
+    - 43
+    - 54
+    - 1
+    - 12
+    - 23
+    - 34
+    - 45
     - 3
     - 14
     - 25
@@ -4503,7 +4712,7 @@ cases:
     rowIndex:
     - 0
     - 63
-  note: scatter-E2-M127-B64-tail-below-128
+  note: scatter-E2-M127-B64-tail-below-128-expanded-M254
 - operator: GroupedMatmulFinalizeRouting
   case_id: 19
   input_shape:
