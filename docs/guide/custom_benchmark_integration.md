@@ -362,7 +362,7 @@ scheme = ScoringSchemeRegistry.get("simple_comparison")  # 加速比方案
 
 ```python
 from typing import Any, List, Optional
-from kernel_eval.base import ScoringScheme, ScoreInfo, PerfResult
+from kernel_eval.base import ScoringScheme, CaseScoreInfo, PerfResult
 
 class HistoricalComparisonScheme(ScoringScheme):
     """历史数据对比评分方案
@@ -407,7 +407,7 @@ class HistoricalComparisonScheme(ScoringScheme):
     
     def aggregate_operator_scores(
         self,
-        case_scores: List[ScoreInfo],
+        case_scores: List[CaseScoreInfo],
         compile_passed: bool = True,
         total_cases: int = None
     ) -> float:
@@ -452,7 +452,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 import json
 
-from kernel_eval.base import TaskSpec, CaseSpec, TaskLoader, CaseLoader, ScoringScheme, ScoreInfo, PerfResult
+from kernel_eval.base import TaskSpec, CaseSpec, TaskLoader, CaseLoader, ScoringScheme, CaseScoreInfo, PerfResult
 from kernel_eval.registry.loader_registry import LoaderRegistry
 from kernel_eval.registry.scoring_registry import ScoringSchemeRegistry
 
@@ -1198,7 +1198,7 @@ Pass@k：在 n 次尝试中，至少有 k 次成功的概率估计。
 
 ```python
 from math import comb
-from kernel_eval.base import ScoringScheme, ScoreInfo, PerfResult
+from kernel_eval.base import ScoringScheme, CaseScoreInfo, PerfResult
 
 class PassAtKScoringScheme(ScoringScheme):
     """支持 Pass@k 指标的评分方案"""
@@ -1226,7 +1226,7 @@ class PassAtKScoringScheme(ScoringScheme):
     
     def aggregate_operator_scores(
         self,
-        case_scores: List[ScoreInfo],
+        case_scores: List[CaseScoreInfo],
         compile_passed: bool = True,
         total_cases: int = None
     ) -> float:
@@ -1314,7 +1314,7 @@ from math import comb
 import yaml
 import json
 
-from kernel_eval.base import TaskSpec, CaseSpec, TaskLoader, CaseLoader, ScoringScheme, ScoreInfo, CorrectnessChecker, AccuracyResult, PerfResult
+from kernel_eval.base import TaskSpec, CaseSpec, TaskLoader, CaseLoader, ScoringScheme, CaseScoreInfo, CorrectnessChecker, AccuracyResult, PerfResult
 from kernel_eval.registry.loader_registry import LoaderRegistry
 from kernel_eval.registry.scoring_registry import ScoringSchemeRegistry
 from kernel_eval.registry.checker_registry import CheckerRegistry
@@ -1456,7 +1456,7 @@ class SpeedupWithPassAtKScheme(ScoringScheme):
     
     def aggregate_operator_scores(
         self,
-        case_scores: List[ScoreInfo],
+        case_scores: List[CaseScoreInfo],
         compile_passed: bool = True,
         total_cases: int = None
     ) -> Dict[str, Any]:
