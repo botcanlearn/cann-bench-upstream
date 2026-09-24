@@ -241,7 +241,7 @@ def _deep_eq(a: object, b: object, *, float_tol: float = 1e-9) -> bool:
 
     # 类型不同时允许 int ↔ float 互通，以及数值 ↔ 数值字符串互通
     if type(a) is not type(b):
-        if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        if type(a) in (int, float) and type(b) in (int, float):
             af, bf = float(a), float(b)
             if math.isnan(af) and math.isnan(bf):
                 return True
@@ -249,12 +249,12 @@ def _deep_eq(a: object, b: object, *, float_tol: float = 1e-9) -> bool:
                 return af == bf
             return abs(af - bf) <= float_tol
         # 数值 ↔ 数值字符串（如 YAML float 1e-08 vs CSV str "1e-08"）
-        if isinstance(a, (int, float)) and isinstance(b, str):
+        if type(a) in (int, float) and isinstance(b, str):
             try:
                 return abs(float(a) - float(b)) <= float_tol
             except ValueError:
                 return False
-        if isinstance(a, str) and isinstance(b, (int, float)):
+        if isinstance(a, str) and type(b) in (int, float):
             try:
                 return abs(float(a) - float(b)) <= float_tol
             except ValueError:
@@ -292,7 +292,7 @@ def _deep_eq(a: object, b: object, *, float_tol: float = 1e-9) -> bool:
     # str 比较
     if isinstance(a, str):
         # 尝试数值比较：CSV 中科学记数法如 "1e-08" 是字符串但 YAML 中是 float
-        if isinstance(b, (int, float)):
+        if type(b) in (int, float):
             try:
                 return abs(float(a) - float(b)) <= float_tol
             except ValueError:
@@ -301,6 +301,18 @@ def _deep_eq(a: object, b: object, *, float_tol: float = 1e-9) -> bool:
 
     # bool / int / 其他
     return a == b
+
+
+@pytest.mark.parametrize("yaml_value,csv_value", [(True, 1), (False, 0), (True, 1.0), (True, "1")])
+def test_deep_eq_rejects_bool_numeric_coercion(yaml_value, csv_value):
+    """bool 与数值或数值字符串不应因 Python 子类关系被判为相等。"""
+    assert not _deep_eq(yaml_value, csv_value)
+
+
+def test_deep_eq_preserves_numeric_compatibility():
+    """int/float 及科学记数法字符串的既有兼容规则保持不变。"""
+    assert _deep_eq(1, 1.0)
+    assert _deep_eq("1e-08", 1e-8)
 
 
 def _yaml_keys(yaml_cases: list[dict]) -> set[str]:
