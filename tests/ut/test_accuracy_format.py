@@ -22,7 +22,12 @@ from kernel_eval.eval.results import EvalCaseResult, EvalOperatorResult, summari
 from kernel_eval.base.result import AccuracyResult
 from kernel_eval.checkers.relative_error_checker import RelativeErrorChecker
 from kernel_eval.report.summary_generator import calculate_operator_summary
-from kernel_eval.report.report_generator import EvalResult, OperatorReport
+from kernel_eval.report.report_generator import (
+    EvalReport,
+    EvalResult,
+    OperatorReport,
+    ReportGenerator,
+)
 
 
 class TestSummaryGeneratorAccuracyFormat:
@@ -161,7 +166,34 @@ class TestSummaryGeneratorAccuracyFormat:
 class TestReportGeneratorAccuracyFormat:
     """测试 report_generator 对 accuracy 字段的读取"""
 
-    def test_max_diff_from_metadata_nested_format(self):
+    @staticmethod
+    def _render_markdown(eval_result, tmp_path):
+        """通过真实 Markdown 入口渲染一个最小报告"""
+        operator_report = OperatorReport(
+            rel_path=eval_result.rel_path,
+            operator=eval_result.operator,
+            total_cases=1,
+            failed_cases=1,
+            cases=[eval_result],
+        )
+        report = EvalReport(
+            framework_version="test",
+            tasks_version="test",
+            eval_code="accuracy_format",
+            timestamp="test",
+            device="cpu",
+            total_operators=1,
+            total_cases=1,
+            passed_cases=0,
+            failed_cases=1,
+            overall_score=0.0,
+            operators=[operator_report],
+            summary={"pass_rate": 0.0},
+        )
+        generator = ReportGenerator(output_dir=tmp_path, eval_code="accuracy_format")
+        return generator._generate_markdown_content(report)
+
+    def test_max_diff_from_metadata_nested_format(self, tmp_path):
         """新格式：max_diff 在 metadata 中，Markdown 报告应正确显示"""
         torch.manual_seed(42)
         x = torch.randn(100, dtype=torch.float64) * 2
@@ -196,15 +228,13 @@ class TestReportGeneratorAccuracyFormat:
         assert 'max_diff' in eval_result.accuracy['metadata']
         assert eval_result.accuracy['metadata']['max_diff'] > 0
 
-        # 模拟 Markdown 生成逻辑
-        acc_meta = eval_result.accuracy.get('metadata') or {}
-        max_diff = acc_meta.get('max_diff', eval_result.accuracy.get('max_diff', 0))
+        # 通过真实 Markdown 入口验证用户可见的精度误差列
+        content = self._render_markdown(eval_result, tmp_path)
+        expected = f"{eval_result.accuracy['metadata']['max_diff']:.6f}"
+        assert f"| exp_10 |" in content
+        assert f"| {expected} |" in content
 
-        assert max_diff > 0, f"max_diff 应为非零，实际为 {max_diff}"
-        assert abs(max_diff - eval_result.accuracy['metadata']['max_diff']) < 1e-6, \
-            "max_diff 应与 metadata.max_diff 一致"
-
-    def test_max_diff_from_top_level_legacy_format(self):
+    def test_max_diff_from_top_level_legacy_format(self, tmp_path):
         """旧格式：max_diff 在顶层，应保持兼容"""
         old_format_accuracy = {
             'passed': False,
@@ -212,22 +242,18 @@ class TestReportGeneratorAccuracyFormat:
             'output_results': [],
         }
 
-        case_dict = {
-            'case_id': 'test_1',
-            'rel_path': 'level1/test',
-            'operator': 'Test',
-            'case_num': 1,
-            'status': 'failed',
-            'accuracy': old_format_accuracy,
-        }
+        eval_result = EvalResult(
+            rel_path='level1/test',
+            operator='Test',
+            case_id='test_1',
+            status='failed',
+            accuracy=old_format_accuracy,
+        )
 
-        # 模拟 Markdown 生成逻辑
-        acc_meta = case_dict['accuracy'].get('metadata') or {}
-        max_diff = acc_meta.get('max_diff', case_dict['accuracy'].get('max_diff', 0))
+        content = self._render_markdown(eval_result, tmp_path)
+        assert '| 50.000000 |' in content
 
-        assert max_diff == 50.0, f"旧格式 max_diff 应为 50.0，实际为 {max_diff}"
-
-    def test_accuracy_none_case(self):
+    def test_accuracy_none_case(self, tmp_path):
         """accuracy 为 None 时不应崩溃"""
         case_result = EvalCaseResult(
             case_id='test_1',
@@ -241,16 +267,8 @@ class TestReportGeneratorAccuracyFormat:
 
         eval_result = EvalResult.from_eval_case_result(case_result)
         assert eval_result.accuracy is None
-        # 不应崩溃
-        accuracy_str = ""
-        if eval_result.accuracy:
-            acc_meta = eval_result.accuracy.get('metadata') or {}
-            max_diff = acc_meta.get('max_diff', eval_result.accuracy.get('max_diff', 0))
-            accuracy_str = f"{max_diff:.6f}"
-        else:
-            accuracy_str = eval_result.error_msg or "N/A"
-
-        assert accuracy_str == "AI算子执行失败"
+        content = self._render_markdown(eval_result, tmp_path)
+        assert 'AI算子执行失败' in content
 
 
 class TestAccuracyResultSerialization:
