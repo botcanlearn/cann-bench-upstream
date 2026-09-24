@@ -18,6 +18,12 @@ import pytest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SRC_DIR = os.path.join(ROOT, "src")
 KERNEL_EVAL_DIR = os.path.join(SRC_DIR, "kernel_eval")
+VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+")
+
+
+def _is_valid_version(value):
+    """判断版本字符串是否完整匹配 X.Y.Z。"""
+    return VERSION_PATTERN.fullmatch(value) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +50,7 @@ def test_version_file_format():
     """VERSION 文件格式必须为 X.Y.Z（首行）"""
     content = open(os.path.join(ROOT, "VERSION")).read().strip()
     version_line = content.split("\n")[0].strip()
-    assert re.match(r"^\d+\.\d+\.\d+", version_line), \
+    assert _is_valid_version(version_line), \
         f"VERSION 格式不合法: '{version_line}'，应为 X.Y.Z 格式"
 
 
@@ -52,8 +58,14 @@ def test_tasks_version_file_format():
     """tasks/metadata/VERSION 文件格式必须为 X.Y.Z（首行）"""
     content = open(os.path.join(ROOT, "tasks", "metadata", "VERSION")).read().strip()
     version_line = content.split("\n")[0].strip()
-    assert re.match(r"^\d+\.\d+\.\d+", version_line), \
+    assert _is_valid_version(version_line), \
         f"tasks/metadata/VERSION 格式不合法: '{version_line}'，应为 X.Y.Z 格式"
+
+
+@pytest.mark.parametrize("version", ["1.2.3.4", "1.2.3-rc1", "1.2.3foo", "1.2", ""])
+def test_version_format_rejects_invalid_suffixes(version):
+    """版本格式校验必须拒绝额外段、后缀和不完整版本。"""
+    assert not _is_valid_version(version)
 
 
 # ---------------------------------------------------------------------------
