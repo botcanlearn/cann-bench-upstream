@@ -514,7 +514,7 @@ def _cmd_eval_npu(args, bench_root: str, filter_prefix: str, config: Config,
     if args.operator:
         all_cases = [c for c in all_cases if c.operator.lower() == args.operator.lower()]
 
-    if args.case_id:
+    if args.case_id is not None:
         all_cases = [c for c in all_cases if c.case_num == args.case_id]
 
     if not all_cases:
@@ -805,7 +805,7 @@ def cmd_eval(args):
 
     # 构建筛选条件
     operator_filter = [args.operator] if args.operator else None
-    case_filter = {'case_id': args.case_id} if args.case_id else None
+    case_filter = {'case_id': args.case_id} if args.case_id is not None else None
     level_selected_nothing = False
     if args.level is not None and args.device == 'cpu':
         level_operators = set(_operator_names_for_level(bench_name, bench_root, args.level))
