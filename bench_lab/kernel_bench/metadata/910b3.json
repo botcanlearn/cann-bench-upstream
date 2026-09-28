@@ -172,7 +172,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_manifold_constrained_hyper_connection_post": {
+    "manifold_constrained_hyper_connection_post": {
       "1": {
         "baseline_perf_us": 298.76,
         "t_hw_us": null
@@ -994,7 +994,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_moe_init_routing_v3": {
+    "moe_init_routing_v3": {
       "1": {
         "baseline_perf_us": 57.64,
         "t_hw_us": null

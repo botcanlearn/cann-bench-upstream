@@ -4,7 +4,7 @@
     "hardware": "910b2",
     "t_hw_source": "HAP roofline 下界（hap-ascend-910b2-v2 方法学，单 die，floor 1μs）；baseline_perf_us 暂为 null。"
   },
-  "ai_infra_esa_select_topk": {
+  "esa_select_topk": {
     "1": {
       "baseline_perf_us": null,
       "t_hw_us": 168.34
@@ -86,7 +86,7 @@
       "t_hw_us": 48.05
     }
   },
-  "ai_infra_fused_infer_attention_sink": {
+  "fused_infer_attention_sink": {
     "1": {
       "baseline_perf_us": null,
       "t_hw_us": 3640.04
@@ -168,7 +168,7 @@
       "t_hw_us": 1.95
     }
   },
-  "ai_infra_kv_quant_sparse_flash_attention": {
+  "kv_quant_sparse_flash_attention": {
     "1": {
       "baseline_perf_us": null,
       "t_hw_us": 11245.98
@@ -250,7 +250,7 @@
       "t_hw_us": 3.87
     }
   },
-  "ai_infra_sparse_flash_attention_gqa": {
+  "sparse_flash_attention_gqa": {
     "1": {
       "baseline_perf_us": null,
       "t_hw_us": 291.18
@@ -332,7 +332,7 @@
       "t_hw_us": 236.57
     }
   },
-  "ai_infra_sparse_flash_attention_pioneer": {
+  "sparse_flash_attention_pioneer": {
     "1": {
       "baseline_perf_us": null,
       "t_hw_us": 1.0
