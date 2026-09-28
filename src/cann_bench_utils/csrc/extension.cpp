@@ -15,8 +15,8 @@
 #include <torch/all.h>
 
 namespace cann_bench_utils {
-torch::Tensor device_memcpy_npu(const torch::Tensor &src, const torch::Tensor &dst);
-torch::Tensor device_memcpy_meta(const torch::Tensor &src, const torch::Tensor &dst);
+void device_memcpy_npu(const torch::Tensor &src, const torch::Tensor &dst);
+void device_memcpy_meta(const torch::Tensor &src, const torch::Tensor &dst);
 torch::Tensor warmup_npu(const torch::Tensor &x, const torch::Tensor &y, const torch::Tensor &z);
 torch::Tensor cache_clean_npu(const torch::Tensor &x, const torch::Tensor &out);
 torch::Tensor warmup_meta(const torch::Tensor &x, const torch::Tensor &y);

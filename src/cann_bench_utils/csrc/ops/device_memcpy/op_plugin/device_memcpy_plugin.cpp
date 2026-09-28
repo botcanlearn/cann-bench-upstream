@@ -25,13 +25,12 @@ static void device_memcpy_check(const torch::Tensor &src, const torch::Tensor &d
     TORCH_CHECK(src.scalar_type() == dst.scalar_type(), "src and dst must have same dtype");
 }
 
-torch::Tensor device_memcpy_meta(const torch::Tensor &src, const torch::Tensor &dst)
+void device_memcpy_meta(const torch::Tensor &src, const torch::Tensor &dst)
 {
     device_memcpy_check(src, dst);
-    return dst;
 }
 
-torch::Tensor device_memcpy_npu(const torch::Tensor &src, const torch::Tensor &dst)
+void device_memcpy_npu(const torch::Tensor &src, const torch::Tensor &dst)
 {
     c10_npu::NPUGuard guard(src.device().index());
     device_memcpy_check(src, dst);
@@ -50,7 +49,6 @@ torch::Tensor device_memcpy_npu(const torch::Tensor &src, const torch::Tensor &d
         return 0;
     };
     at_npu::native::OpCommand::RunOpApi("CannBenchDeviceMemcpy", acl_call);
-    return dst;
 }
 
 } // namespace cann_bench_utils

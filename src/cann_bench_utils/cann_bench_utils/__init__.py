@@ -16,7 +16,9 @@ from . import _C
 
 torch.library.define("cann_bench_utils::cann_bench_warmup", "(Tensor x, Tensor y) -> Tensor")
 torch.library.define("cann_bench_utils::cann_bench_cache_clean", "(Tensor x) -> Tensor")
-torch.library.define("cann_bench_utils::cann_bench_copy", "(Tensor src, Tensor dst) -> Tensor")
+# The dispatcher op mutates ``dst`` and deliberately has no return value.  The
+# Python wrapper below returns ``dst`` for callers that need the copied tensor.
+torch.library.define("cann_bench_utils::cann_bench_copy", "(Tensor src, Tensor(a!) dst) -> ()")
 
 
 @torch.library.impl("cann_bench_utils::cann_bench_warmup", "PrivateUse1")
@@ -44,14 +46,13 @@ def _cache_clean_meta(x: torch.Tensor) -> torch.Tensor:
 
 
 @torch.library.impl("cann_bench_utils::cann_bench_copy", "PrivateUse1")
-def _copy_npu(src: torch.Tensor, dst: torch.Tensor) -> torch.Tensor:
+def _copy_npu(src: torch.Tensor, dst: torch.Tensor) -> None:
     _C.device_memcpy_npu(src, dst)
-    return dst
 
 
 @torch.library.impl("cann_bench_utils::cann_bench_copy", "Meta")
-def _copy_meta(src: torch.Tensor, dst: torch.Tensor) -> torch.Tensor:
-    return _C.device_memcpy_meta(src, dst)
+def _copy_meta(src: torch.Tensor, dst: torch.Tensor) -> None:
+    _C.device_memcpy_meta(src, dst)
 
 
 def cann_bench_warmup(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -70,7 +71,8 @@ def cann_bench_copy(src: torch.Tensor, dst: torch.Tensor) -> torch.Tensor:
     Safe alternative to aclnnInplaceCopy which may be unavailable after
     anti-cheat TBE kernel tree deletion.  Supports fp16 and fp32.
     """
-    return torch.ops.cann_bench_utils.cann_bench_copy(src, dst)
+    torch.ops.cann_bench_utils.cann_bench_copy(src, dst)
+    return dst
 
 
 def cann_bench_clone(x: torch.Tensor) -> torch.Tensor:
