@@ -23,6 +23,8 @@ static void device_memcpy_check(const torch::Tensor &src, const torch::Tensor &d
     TORCH_CHECK(src.device() == dst.device(), "src and dst must be on same device");
     TORCH_CHECK(src.sizes() == dst.sizes(), "src and dst must have same shape");
     TORCH_CHECK(src.scalar_type() == dst.scalar_type(), "src and dst must have same dtype");
+    TORCH_CHECK(src.is_contiguous() && dst.is_contiguous(),
+                "src and dst must be contiguous for linear byte copy");
 }
 
 void device_memcpy_meta(const torch::Tensor &src, const torch::Tensor &dst)
