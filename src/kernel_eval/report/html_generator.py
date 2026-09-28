@@ -210,7 +210,6 @@ def _render_level_table(report: EvalReport) -> str:
             <td class="col-name" style="white-space:nowrap">{labels.get(lv, f'Level {lv}')}</td>
             <td>{g['ops']}</td><td>{g['cases']}</td><td>{g['passed']}</td>
             <td class="score-cell {rc}">{_fr(gr)}</td>
-            <td class="score-cell {rc}">{_fr(gr)}</td>
             {sp_val}
             <td class="score-cell {sc}">{_fs(gs)}</td>
           </tr>\n'''
@@ -220,7 +219,7 @@ def _render_level_table(report: EvalReport) -> str:
       <table>
         <caption>Table 2. Results by Difficulty Level</caption>
         <thead><tr>
-          <th>Level</th><th>Operators</th><th>Cases</th><th>Passed</th><th>Pass Rate</th><th>Avg Precision</th><th>Avg Speedup</th><th>Total Score</th>
+          <th>Level</th><th>Operators</th><th>Cases</th><th>Passed</th><th>Pass Rate</th><th>Avg Speedup</th><th>Total Score</th>
         </tr></thead>
         <tbody>
 {rows}        </tbody>
@@ -349,7 +348,7 @@ def _render_operator_tables(ops: List[OperatorReport]) -> str:
             sp = o.avg_speedup
             cat = _get_category(o.rel_path)
             lv_s = o.rel_path[5:6] if o.rel_path and len(o.rel_path) > 5 else str(lv)
-            rows += f'''          <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>{cat}</td><td>L{lv_s}</td><td>{o.total_cases}</td><td>{o.passed_cases}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_sp(sp)}">{_fsp(sp)}</td><td class="score-cell {_cls_score(o.score)}">{_fs(o.score)}</td></tr>\n'''
+            rows += f'''          <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>{cat}</td><td>L{lv_s}</td><td>{o.total_cases}</td><td>{o.passed_cases}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_sp(sp)}">{_fsp(sp)}</td><td class="score-cell {_cls_score(o.score)}">{_fs(o.score)}</td></tr>\n'''
 
         label = lv_labels.get(lv, f'Level {lv}')
         result += f'''    <h4>4.{lv} Level {lv} — {label}</h4>
@@ -357,7 +356,7 @@ def _render_operator_tables(ops: List[OperatorReport]) -> str:
       <table>
         <caption>Table {table_idx}. Level {lv} Operator Results</caption>
         <thead><tr>
-          <th>#</th><th>Operator</th><th>Category</th><th>Level</th><th>Cases</th><th>Passed</th><th>Pass Rate</th><th>Avg Precision</th><th>Avg Speedup</th><th>Total Score</th>
+          <th>#</th><th>Operator</th><th>Category</th><th>Level</th><th>Cases</th><th>Passed</th><th>Pass Rate</th><th>Avg Speedup</th><th>Total Score</th>
         </tr></thead>
         <tbody>
 {rows}        </tbody>
