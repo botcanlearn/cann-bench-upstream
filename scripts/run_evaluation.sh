@@ -356,69 +356,69 @@ ensure_reports_dir() {
 
 # 构建命令参数
 build_cmd_args() {
-    CMD_ARGS=""
+    CMD_ARGS=()
 
     case "${ACTION}" in
         eval)
             if [[ "${STAGED_EVAL}" == true && "${BENCH_NAME}" == "cann" && "${DEVICE_TYPE:-npu}" == "npu" ]]; then
-                CMD_ARGS="staged-eval"
+                CMD_ARGS+=(staged-eval)
             else
-                CMD_ARGS="eval"
+                CMD_ARGS+=(eval)
             fi
             # 评测集名称（必须传递）
-            CMD_ARGS="${CMD_ARGS} --bench-name ${BENCH_NAME}"
+            CMD_ARGS+=(--bench-name "${BENCH_NAME}")
             # 报告目录（按 bench_name 分目录）
-            CMD_ARGS="${CMD_ARGS} --reports-dir ${REPORTS_DIR}"
+            CMD_ARGS+=(--reports-dir "${REPORTS_DIR}")
             if [[ -n "${SOURCE_DIR}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --source-dir ${SOURCE_DIR}"
+                CMD_ARGS+=(--source-dir "${SOURCE_DIR}")
             fi
             if [[ -n "${TASK_DIR}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --task-dir ${TASK_DIR}"
+                CMD_ARGS+=(--task-dir "${TASK_DIR}")
             fi
             if [[ -n "${OPERATOR}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --operator ${OPERATOR}"
+                CMD_ARGS+=(--operator "${OPERATOR}")
             fi
             if [[ -n "${CASE_ID}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --case-id ${CASE_ID}"
+                CMD_ARGS+=(--case-id "${CASE_ID}")
             fi
 
             # 设备配置
             if [[ -n "${DEVICE_TYPE}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --device ${DEVICE_TYPE}"
+                CMD_ARGS+=(--device "${DEVICE_TYPE}")
             else
-                CMD_ARGS="${CMD_ARGS} --device npu"
+                CMD_ARGS+=(--device npu)
             fi
 
             # 单卡模式：指定 device-id；多卡模式：不指定
             if [[ -n "${DEVICE_ID}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --device-id ${DEVICE_ID}"
+                CMD_ARGS+=(--device-id "${DEVICE_ID}")
             fi
 
             # 性能配置
-            CMD_ARGS="${CMD_ARGS} --processes-per-card ${PROCESSES_PER_CARD}"
-            CMD_ARGS="${CMD_ARGS} --timeout-per-operator ${TIMEOUT_PER_PROCESS}"
-            CMD_ARGS="${CMD_ARGS} --warmup ${WARMUP}"
-            CMD_ARGS="${CMD_ARGS} --repeat ${REPEAT}"
-            CMD_ARGS="${CMD_ARGS} --profiler-level ${PROFILER_LEVEL}"
-            CMD_ARGS="${CMD_ARGS} --perf-batch-case-memory-limit-mb ${PERF_BATCH_CASE_MEMORY_LIMIT_MB}"
+            CMD_ARGS+=(--processes-per-card "${PROCESSES_PER_CARD}")
+            CMD_ARGS+=(--timeout-per-operator "${TIMEOUT_PER_PROCESS}")
+            CMD_ARGS+=(--warmup "${WARMUP}")
+            CMD_ARGS+=(--repeat "${REPEAT}")
+            CMD_ARGS+=(--profiler-level "${PROFILER_LEVEL}")
+            CMD_ARGS+=(--perf-batch-case-memory-limit-mb "${PERF_BATCH_CASE_MEMORY_LIMIT_MB}")
 
             # 评测种子（确保可复现）
             if [[ -n "${EVAL_SEED}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --eval-seed ${EVAL_SEED}"
+                CMD_ARGS+=(--eval-seed "${EVAL_SEED}")
             fi
 
             # 输入分布（非默认值才透传，保持默认命令行不变）
             if [[ -n "${INPUT_DIST}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --input-dist ${INPUT_DIST}"
+                CMD_ARGS+=(--input-dist "${INPUT_DIST}")
             fi
 
             if [[ "${NO_PERF}" == true ]]; then
-                CMD_ARGS="${CMD_ARGS} --no-perf"
+                CMD_ARGS+=(--no-perf)
             fi
             if [[ "${PERF_BATCH_CASES}" == true ]]; then
-                CMD_ARGS="${CMD_ARGS} --perf-batch-cases"
+                CMD_ARGS+=(--perf-batch-cases)
             else
-                CMD_ARGS="${CMD_ARGS} --no-perf-batch-cases"
+                CMD_ARGS+=(--no-perf-batch-cases)
             fi
 
             # 多进程并行参数（通过环境变量传递给底层）
@@ -426,29 +426,28 @@ build_cmd_args() {
             export TASKS_TIMEOUT_PER_PROCESS="${TIMEOUT_PER_PROCESS}"
 
             if [[ "${VERBOSE}" == true ]]; then
-                if [[ "${CMD_ARGS}" == eval* ]]; then
-                    CMD_ARGS="${CMD_ARGS} -v"
+                if [[ "${CMD_ARGS[0]}" == eval ]]; then
+                    CMD_ARGS+=(-v)
                 fi
             fi
             ;;
         list)
-            CMD_ARGS="list"
-            CMD_ARGS="${CMD_ARGS} --bench-name ${BENCH_NAME}"
+            CMD_ARGS=(list --bench-name "${BENCH_NAME}")
             if [[ -n "${TASK_DIR}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --task-dir ${TASK_DIR}"
+                CMD_ARGS+=(--task-dir "${TASK_DIR}")
             fi
             if [[ -n "${OPERATOR}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --operator ${OPERATOR}"
+                CMD_ARGS+=(--operator "${OPERATOR}")
             fi
             ;;
         info)
-            CMD_ARGS="info"
+            CMD_ARGS=(info)
             if [[ -n "${OPERATOR}" ]]; then
-                CMD_ARGS="${CMD_ARGS} --operator ${OPERATOR}"
+                CMD_ARGS+=(--operator "${OPERATOR}")
             fi
             ;;
         config)
-            CMD_ARGS="config --show"
+            CMD_ARGS=(config --show)
             ;;
         *)
             log_error "未知操作: ${ACTION}"
@@ -457,16 +456,14 @@ build_cmd_args() {
             ;;
     esac
 
-    echo "${CMD_ARGS}"
 }
 
 # 执行命令
 run_cmd() {
-    CMD_ARGS="$1"
-    if [[ "${CMD_ARGS}" == staged-eval* ]]; then
-        PYTHONPATH="${SRC_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python -m kernel_eval.staged_eval ${CMD_ARGS#staged-eval}
+    if [[ "${CMD_ARGS[0]}" == staged-eval ]]; then
+        PYTHONPATH="${SRC_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python -m kernel_eval.staged_eval "${CMD_ARGS[@]:1}"
     else
-        PYTHONPATH="${SRC_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python -m kernel_eval.cli ${CMD_ARGS}
+        PYTHONPATH="${SRC_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python -m kernel_eval.cli "${CMD_ARGS[@]}"
     fi
 }
 
@@ -564,14 +561,14 @@ main() {
     fi
 
     log_info "开始执行..."
-    CMD_ARGS=$(build_cmd_args)
-    if [[ "${CMD_ARGS}" == staged-eval* ]]; then
-        log_info "命令: python -m kernel_eval.staged_eval ${CMD_ARGS#staged-eval}"
+    build_cmd_args
+    if [[ "${CMD_ARGS[0]}" == staged-eval ]]; then
+        log_info "命令: python -m kernel_eval.staged_eval $(printf '%q ' "${CMD_ARGS[@]:1}")"
     else
-        log_info "命令: python -m kernel_eval.cli ${CMD_ARGS}"
+        log_info "命令: python -m kernel_eval.cli $(printf '%q ' "${CMD_ARGS[@]}")"
     fi
 
-    if run_cmd "${CMD_ARGS}"; then
+    if run_cmd; then
         log_success "执行完成"
 
         if [[ "${ACTION}" == "eval" ]]; then

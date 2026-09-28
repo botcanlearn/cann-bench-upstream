@@ -282,7 +282,7 @@ class TestCliWiring:
         sh = (get_project_root() / 'scripts' / 'run_evaluation.sh').read_text()
         assert '--input-dist)' in sh, "shell 未解析 --input-dist"
         assert 'INPUT_DIST=' in sh, "shell 未初始化 INPUT_DIST"
-        assert '--input-dist ${INPUT_DIST}' in sh, "shell 未透传 --input-dist"
+        assert 'CMD_ARGS+=(--input-dist "${INPUT_DIST}")' in sh, "shell 未透传 --input-dist"
 
     def test_choices_derived_from_registry(self):
         """argparse choices 必须由 INPUT_DISTRIBUTIONS 派生，避免两处清单漂移"""
