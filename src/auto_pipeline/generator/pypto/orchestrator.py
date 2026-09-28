@@ -541,7 +541,7 @@ def _worktree_name(prompt: RunnerPrompt, task_info: CaseMaterial) -> str:
             task_fingerprint,
         ]
     )
-    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return "__".join(
         [
             _safe_path_name(task_info.bench_name),
