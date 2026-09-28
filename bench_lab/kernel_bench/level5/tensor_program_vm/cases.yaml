@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 cases:
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 1
   input_shape:
   - [4096, 4]
@@ -20,7 +20,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P4096-R64-W1024-long-program
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 2
   input_shape:
   - [4096, 4]
@@ -31,7 +31,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P4096-R8-W8192-wide-regs
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 3
   input_shape:
   - [4096, 4]
@@ -42,7 +42,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P4096-R32-W4096
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 4
   input_shape:
   - [1024, 4]
@@ -53,7 +53,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P1024-R64-W8192-max-regfile
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 5
   input_shape:
   - [1024, 4]
@@ -64,7 +64,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P1024-R32-W1024
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 6
   input_shape:
   - [1024, 4]
@@ -75,7 +75,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P1024-R16-W4096
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 7
   input_shape:
   - [256, 4]
@@ -86,7 +86,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P256-R64-W8192
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 8
   input_shape:
   - [256, 4]
@@ -97,7 +97,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P256-R16-W1024
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 9
   input_shape:
   - [256, 4]
@@ -108,7 +108,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P256-R32-W256
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 10
   input_shape:
   - [64, 4]
@@ -119,7 +119,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P64-R8-W8192-short-program
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 11
   input_shape:
   - [64, 4]
@@ -130,7 +130,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P64-R16-W256-small
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 12
   input_shape:
   - [4096, 4]
@@ -141,7 +141,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: bfloat16-TPV-P4096-R64-W8192-max-all
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 13
   input_shape:
   - [4096, 4]
@@ -152,7 +152,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float16-TPV-P4096-R64-W1024
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 14
   input_shape:
   - [1024, 4]
@@ -163,7 +163,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float16-TPV-P1024-R32-W4096
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 15
   input_shape:
   - [256, 4]
@@ -174,7 +174,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float16-TPV-P256-R16-W8192
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 16
   input_shape:
   - [64, 4]
@@ -185,7 +185,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float16-TPV-P64-R8-W256
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 17
   input_shape:
   - [4096, 4]
@@ -196,7 +196,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float32-TPV-P4096-R64-W1024-highprec
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 18
   input_shape:
   - [1024, 4]
@@ -207,7 +207,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float32-TPV-P1024-R16-W8192-highprec
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 19
   input_shape:
   - [256, 4]
@@ -218,7 +218,7 @@ cases:
   - [0, 1073741823]
   - [-1, 1]
   note: float32-TPV-P256-R32-W4096-highprec
-- operator: TensorProgramVm
+- operator: tensor_program_vm
   case_id: 20
   input_shape:
   - [1024, 4]

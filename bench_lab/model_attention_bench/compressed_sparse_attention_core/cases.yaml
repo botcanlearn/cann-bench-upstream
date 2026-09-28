@@ -1,5 +1,5 @@
 cases:
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 1
   input_shape:
   - - 1
@@ -37,7 +37,7 @@ cases:
   - - -2
     - 2
   note: core-hotspot-L-2.020MiB V4-Flash-head-dim-short-prefill
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 2
   input_shape:
   - - 1
@@ -75,7 +75,7 @@ cases:
   - - -2
     - 2
   note: core-hotspot-L-1.379MiB V4-Pro-head-dim-topk-decode
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 3
   input_shape:
   - - 1
@@ -113,7 +113,7 @@ cases:
   - - -2
     - 2
   note: core-hotspot-L-2.277MiB V4-head-dim-history-chunk
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 4
   input_shape:
   - - 2
@@ -151,7 +151,7 @@ cases:
   - - -2
     - 2
   note: core-hotspot-L-4.504MiB V4-Flash-batched-decode
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 5
   input_shape:
   - - 1
@@ -189,7 +189,7 @@ cases:
   - - -2
     - 2
   note: core-shape-S-0.000MiB tiny-no-compressed-block
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 6
   input_shape:
   - - 2
@@ -227,7 +227,7 @@ cases:
   - - -2
     - 2
   note: core-shape-M-0.277MiB small-prefill-batch
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 7
   input_shape:
   - - 1
@@ -265,7 +265,7 @@ cases:
   - - -2
     - 2
   note: core-shape-S-2.040MiB 32K-context-sparse-decode
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 8
   input_shape:
   - - 1
@@ -303,7 +303,7 @@ cases:
   - - -2
     - 2
   note: core-shape-L-0.613MiB multi-query-shared-kv
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 9
   input_shape:
   - - 1
@@ -341,7 +341,7 @@ cases:
   - - -2
     - 2
   note: core-tail-S-0.022MiB tail-window-eviction-D63-K31
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 10
   input_shape:
   - - 1
@@ -379,7 +379,7 @@ cases:
   - - -2
     - 2
   note: core-tail-S-0.030MiB tail-query-D65-K33
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 11
   input_shape:
   - - 2
@@ -417,7 +417,7 @@ cases:
   - - -2
     - 2
   note: core-tail-S-0.019MiB tail-block-completion-D31
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 12
   input_shape:
   - - 1
@@ -455,7 +455,7 @@ cases:
   - - -2
     - 2
   note: core-dtype-S-0.079MiB fp32-reference-path
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 13
   input_shape:
   - - 1
@@ -493,7 +493,7 @@ cases:
   - - -20
     - 20
   note: core-dtype-S-0.042MiB large-logits-stable-softmax
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 14
   input_shape:
   - - 1
@@ -531,7 +531,7 @@ cases:
   - - 8
     - 12
   note: core-dtype-S-0.029MiB small-values-sink-dominance
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 15
   input_shape:
   - - 1
@@ -569,7 +569,7 @@ cases:
   - - -2
     - 2
   note: core-attr-S-0.014MiB explicit-positive-scale
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 16
   input_shape:
   - - 1
@@ -607,7 +607,7 @@ cases:
   - - -2
     - 2
   note: core-attr-S-0.003MiB zero-origin-padding
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 17
   input_shape:
   - - 1
@@ -645,7 +645,7 @@ cases:
   - - -2
     - 2
   note: core-attr-S-0.001MiB first-completed-block-visible
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 18
   input_shape:
   - - 1
@@ -683,7 +683,7 @@ cases:
   - - 0
     - 0
   note: core-boundary-S-0.012MiB zero-query-constant-kv-analytic
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 19
   input_shape:
   - - 1
@@ -721,7 +721,7 @@ cases:
   - - -2
     - 2
   note: core-boundary-S-0.042MiB all-compressed-padding-window-only
-- operator: CompressedSparseAttentionCore
+- operator: compressed_sparse_attention_core
   case_id: 20
   input_shape:
   - - 1

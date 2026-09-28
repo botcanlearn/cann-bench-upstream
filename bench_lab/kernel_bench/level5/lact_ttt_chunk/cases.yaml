@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 cases:
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 1
   input_shape:
   - - 2
@@ -64,7 +64,7 @@ cases:
     - 0.001
     - 0.05
   note: bfloat16-LaCT-B2L2048-H8D128Dh256-chunk512-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 2
   input_shape:
   - - 1
@@ -115,7 +115,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L4096-H8D128Dh256-chunk2048-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 3
   input_shape:
   - - 4
@@ -166,7 +166,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B4L2048-H8D128Dh256-chunk1024-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 4
   input_shape:
   - - 2
@@ -217,7 +217,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B2L4096-H16D128Dh256-chunk2048-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 5
   input_shape:
   - - 1
@@ -268,7 +268,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L8192-H8D128Dh256-chunk2048-muon0uf0-long
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 6
   input_shape:
   - - 2
@@ -319,7 +319,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B2L2048-H8D128Dh512-chunk512-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 7
   input_shape:
   - - 1
@@ -370,7 +370,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L4096-H16D128Dh512-chunk1024-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 8
   input_shape:
   - - 2
@@ -421,7 +421,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B2L2048-H8D128Dh256-chunk512-muon1uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 9
   input_shape:
   - - 1
@@ -472,7 +472,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L4096-H8D128Dh256-chunk2048-muon1uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 10
   input_shape:
   - - 1
@@ -523,7 +523,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L8192-H16D128Dh256-chunk2048-muon1uf0-long
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 11
   input_shape:
   - - 2
@@ -574,7 +574,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B2L2048-H8D128Dh256-chunk512-muon0uf1
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 12
   input_shape:
   - - 1
@@ -625,7 +625,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L4096-H8D128Dh512-chunk2048-muon1uf1
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 13
   input_shape:
   - - 2
@@ -676,7 +676,7 @@ cases:
   - *id001
   - *id002
   note: float16-LaCT-B2L2048-H8D128Dh256-chunk512-muon0uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 14
   input_shape:
   - - 1
@@ -727,7 +727,7 @@ cases:
   - *id001
   - *id002
   note: float16-LaCT-B1L4096-H16D128Dh256-chunk1024-muon1uf0
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 15
   input_shape:
   - - 2
@@ -778,7 +778,7 @@ cases:
   - *id001
   - *id002
   note: float16-LaCT-B2L2048-H8D128Dh512-chunk2048-muon0uf1
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 16
   input_shape:
   - - 1
@@ -829,7 +829,7 @@ cases:
   - *id001
   - *id002
   note: float32-LaCT-B1L2048-H8D128Dh256-chunk512-muon0uf0-highprec
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 17
   input_shape:
   - - 1
@@ -880,7 +880,7 @@ cases:
   - *id001
   - *id002
   note: float32-LaCT-B1L2048-H8D128Dh256-chunk512-muon1uf0-highprec
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 18
   input_shape:
   - - 1
@@ -931,7 +931,7 @@ cases:
   - *id001
   - *id002
   note: float32-LaCT-B1L4096-H16D128Dh512-chunk1024-muon1uf1-highprec
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 19
   input_shape:
   - - 1
@@ -985,7 +985,7 @@ cases:
   - *id001
   - *id002
   note: bfloat16-LaCT-B1L2048-H8D128Dh256-chunk512-muon0uf0-zero-input
-- operator: LactTttChunk
+- operator: lact_ttt_chunk
   case_id: 20
   input_shape:
   - - 4

@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: SelectiveScan
+  name: selective_scan
   category: FusedComposite
   difficulty: L4
   formula: |

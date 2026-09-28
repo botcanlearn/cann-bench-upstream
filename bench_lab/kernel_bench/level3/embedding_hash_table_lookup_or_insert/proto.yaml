@@ -1,5 +1,5 @@
 operator:
-  name: EmbeddingHashTableLookupOrInsert
+  name: embedding_hash_table_lookup_or_insert
   category: HashTable
   difficulty: L3
   formula: |

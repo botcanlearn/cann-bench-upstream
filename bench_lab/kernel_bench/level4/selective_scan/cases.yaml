@@ -11,7 +11,7 @@
 # 输入顺序: u [B,L,D], delta [B,L,D], A [D,N], B_mat [B,L,N], C_mat [B,L,N], D_skip [D], z [B,L,D]
 # value_range 按输入独立指定: delta 取 [0.001, 0.1] 保证严格为正, A 取 [-1, -0.01] 保证严格为负
 cases:
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 1
   input_shape:
   - [1, 512, 768]
@@ -32,7 +32,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba130M-B1L512-decode-warmup"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 2
   input_shape:
   - [4, 1024, 768]
@@ -53,7 +53,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba130M-B4L1024-prefill"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 3
   input_shape:
   - [8, 2048, 768]
@@ -74,7 +74,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba130M-B8L2048-large-batch"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 4
   input_shape:
   - [2, 4096, 768]
@@ -95,7 +95,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float16-Mamba130M-B2L4096-long-seq"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 5
   input_shape:
   - [1, 512, 768]
@@ -116,7 +116,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float32-Mamba130M-B1L512-fp32-baseline"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 6
   input_shape:
   - [1, 1024, 2048]
@@ -137,7 +137,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba1.4B-B1L1024-prefill"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 7
   input_shape:
   - [4, 2048, 2048]
@@ -158,7 +158,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba1.4B-B4L2048-prefill-large"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 8
   input_shape:
   - [2, 1024, 2048]
@@ -179,7 +179,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float16-Mamba1.4B-B2L1024-prefill"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 9
   input_shape:
   - [1, 2048, 2048]
@@ -200,7 +200,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float32-Mamba1.4B-B1L2048-fp32-baseline"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 10
   input_shape:
   - [8, 512, 2048]
@@ -221,7 +221,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba1.4B-B8L512-large-batch"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 11
   input_shape:
   - [1, 1024, 5120]
@@ -242,7 +242,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba2.8B-B1L1024-prefill"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 12
   input_shape:
   - [2, 2048, 5120]
@@ -263,7 +263,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba2.8B-B2L2048-prefill-large"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 13
   input_shape:
   - [1, 4096, 5120]
@@ -284,7 +284,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float16-Mamba2.8B-B1L4096-long-seq"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 14
   input_shape:
   - [1, 1024, 5120]
@@ -305,7 +305,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float32-Mamba2.8B-B1L1024-fp32-baseline"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 15
   input_shape:
   - [1, 4096, 768]
@@ -326,7 +326,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba130M-B1L4096-single-batch-long-seq"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 16
   input_shape:
   - [1, 512, 768]
@@ -347,7 +347,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float16-Mamba130M-B1L512-minimal"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 17
   input_shape:
   - [4, 1024, 2048]
@@ -368,7 +368,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float32-Mamba1.4B-B4L1024-fp32-batch"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 18
   input_shape:
   - [4, 1024, 5120]
@@ -389,7 +389,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "bfloat16-Mamba2.8B-B4L1024-large-batch"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 19
   input_shape:
   - [8, 2048, 2048]
@@ -410,7 +410,7 @@ cases:
   - [-1, 1]
   - [-1, 1]
   note: "float16-Mamba1.4B-B8L2048-large-scale"
-- operator: SelectiveScan
+- operator: selective_scan
   case_id: 20
   input_shape:
   - [2, 4096, 5120]

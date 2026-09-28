@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 cases:
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 1
   input_shape:
   - - 2
@@ -34,7 +34,7 @@ cases:
   - - 0.1
     - 2.0
   note: case1-B2-C3-HxW31x29-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 2
   input_shape:
   - - 4
@@ -59,7 +59,7 @@ cases:
   - - 0.1
     - 2.0
   note: case2-B4-C4-HxW64x80-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 3
   input_shape:
   - - 1
@@ -84,7 +84,7 @@ cases:
   - - 0.1
     - 2.0
   note: case3-B1-C8-HxW127x128-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 4
   input_shape:
   - - 1
@@ -109,7 +109,7 @@ cases:
   - - 0.1
     - 2.0
   note: case4-B1-C1-HxW224x256-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 5
   input_shape:
   - - 2
@@ -134,7 +134,7 @@ cases:
   - - 0.1
     - 2.0
   note: case5-B2-C3-HxW16x16-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 6
   input_shape:
   - - 4
@@ -159,7 +159,7 @@ cases:
   - - 0.1
     - 2.0
   note: case6-B4-C4-HxW31x29-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 7
   input_shape:
   - - 1
@@ -184,7 +184,7 @@ cases:
   - - 0.1
     - 2.0
   note: case7-B1-C8-HxW64x80-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 8
   input_shape:
   - - 1
@@ -209,7 +209,7 @@ cases:
   - - 0.1
     - 2.0
   note: case8-B1-C1-HxW127x128-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 9
   input_shape:
   - - 2
@@ -234,7 +234,7 @@ cases:
   - - 0.1
     - 2.0
   note: case9-B2-C3-HxW224x256-out128x160-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 10
   input_shape:
   - - 4
@@ -259,7 +259,7 @@ cases:
   - - 0.1
     - 2.0
   note: case10-B4-C4-HxW16x16-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 11
   input_shape:
   - - 1
@@ -284,7 +284,7 @@ cases:
   - - 0.1
     - 2.0
   note: case11-B1-C8-HxW31x29-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 12
   input_shape:
   - - 1
@@ -309,7 +309,7 @@ cases:
   - - 0.1
     - 2.0
   note: case12-B1-C1-HxW64x80-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 13
   input_shape:
   - - 2
@@ -334,7 +334,7 @@ cases:
   - - 0.1
     - 2.0
   note: case13-B2-C3-HxW127x128-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 14
   input_shape:
   - - 4
@@ -359,7 +359,7 @@ cases:
   - - 0.1
     - 2.0
   note: case14-B4-C4-HxW224x256-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 15
   input_shape:
   - - 1
@@ -384,7 +384,7 @@ cases:
   - - 0.1
     - 2.0
   note: case15-B1-C8-HxW16x16-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 16
   input_shape:
   - - 1
@@ -409,7 +409,7 @@ cases:
   - - 0.1
     - 2.0
   note: case16-B1-C1-HxW31x29-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 17
   input_shape:
   - - 2
@@ -434,7 +434,7 @@ cases:
   - - 0.1
     - 2.0
   note: case17-B2-C3-HxW64x80-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 18
   input_shape:
   - - 4
@@ -459,7 +459,7 @@ cases:
   - - 0.1
     - 2.0
   note: case18-B4-C4-HxW127x128-out16x16-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 19
   input_shape:
   - - 1
@@ -484,7 +484,7 @@ cases:
   - - 0.1
     - 2.0
   note: case19-B1-C8-HxW224x256-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 20
   input_shape:
   - - 1
@@ -509,7 +509,7 @@ cases:
   - - 0.1
     - 2.0
   note: case20-B1-C1-HxW16x16-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 21
   input_shape:
   - - 2
@@ -534,7 +534,7 @@ cases:
   - - 0.1
     - 2.0
   note: case21-B2-C3-HxW31x29-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 22
   input_shape:
   - - 4
@@ -559,7 +559,7 @@ cases:
   - - 0.1
     - 2.0
   note: case22-B4-C4-HxW64x80-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 23
   input_shape:
   - - 1
@@ -584,7 +584,7 @@ cases:
   - - 0.1
     - 2.0
   note: case23-B1-C8-HxW127x128-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 24
   input_shape:
   - - 1
@@ -609,7 +609,7 @@ cases:
   - - 0.1
     - 2.0
   note: case24-B1-C1-HxW224x256-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 25
   input_shape:
   - - 2
@@ -634,7 +634,7 @@ cases:
   - - 0.1
     - 2.0
   note: case25-B2-C3-HxW16x16-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 26
   input_shape:
   - - 4
@@ -659,7 +659,7 @@ cases:
   - - 0.1
     - 2.0
   note: case26-B4-C4-HxW31x29-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 27
   input_shape:
   - - 1
@@ -684,7 +684,7 @@ cases:
   - - 0.1
     - 2.0
   note: case27-B1-C8-HxW64x80-out128x160-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 28
   input_shape:
   - - 1
@@ -709,7 +709,7 @@ cases:
   - - 0.1
     - 2.0
   note: case28-B1-C1-HxW127x128-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 29
   input_shape:
   - - 2
@@ -734,7 +734,7 @@ cases:
   - - 0.1
     - 2.0
   note: case29-B2-C3-HxW224x256-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 30
   input_shape:
   - - 4
@@ -759,7 +759,7 @@ cases:
   - - 0.1
     - 2.0
   note: case30-B4-C4-HxW16x16-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 31
   input_shape:
   - - 1
@@ -784,7 +784,7 @@ cases:
   - - 0.1
     - 2.0
   note: case31-B1-C8-HxW31x29-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 32
   input_shape:
   - - 1
@@ -809,7 +809,7 @@ cases:
   - - 0.1
     - 2.0
   note: case32-B1-C1-HxW64x80-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 33
   input_shape:
   - - 2
@@ -834,7 +834,7 @@ cases:
   - - 0.1
     - 2.0
   note: case33-B2-C3-HxW127x128-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 34
   input_shape:
   - - 4
@@ -859,7 +859,7 @@ cases:
   - - 0.1
     - 2.0
   note: case34-B4-C4-HxW224x256-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 35
   input_shape:
   - - 1
@@ -884,7 +884,7 @@ cases:
   - - 0.1
     - 2.0
   note: case35-B1-C8-HxW16x16-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 36
   input_shape:
   - - 1
@@ -909,7 +909,7 @@ cases:
   - - 0.1
     - 2.0
   note: case36-B1-C1-HxW31x29-out16x16-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 37
   input_shape:
   - - 2
@@ -934,7 +934,7 @@ cases:
   - - 0.1
     - 2.0
   note: case37-B2-C3-HxW64x80-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 38
   input_shape:
   - - 4
@@ -959,7 +959,7 @@ cases:
   - - 0.1
     - 2.0
   note: case38-B4-C4-HxW127x128-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 39
   input_shape:
   - - 1
@@ -984,7 +984,7 @@ cases:
   - - 0.1
     - 2.0
   note: case39-B1-C8-HxW224x256-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 40
   input_shape:
   - - 1
@@ -1009,7 +1009,7 @@ cases:
   - - 0.1
     - 2.0
   note: case40-B1-C1-HxW16x16-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 41
   input_shape:
   - - 2
@@ -1034,7 +1034,7 @@ cases:
   - - 0.1
     - 2.0
   note: case41-B2-C3-HxW31x29-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 42
   input_shape:
   - - 4
@@ -1059,7 +1059,7 @@ cases:
   - - 0.1
     - 2.0
   note: case42-B4-C4-HxW64x80-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 43
   input_shape:
   - - 1
@@ -1084,7 +1084,7 @@ cases:
   - - 0.1
     - 2.0
   note: case43-B1-C8-HxW127x128-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 44
   input_shape:
   - - 1
@@ -1109,7 +1109,7 @@ cases:
   - - 0.1
     - 2.0
   note: case44-B1-C1-HxW224x256-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 45
   input_shape:
   - - 2
@@ -1134,7 +1134,7 @@ cases:
   - - 0.1
     - 2.0
   note: case45-B2-C3-HxW16x16-out128x160-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 46
   input_shape:
   - - 4
@@ -1159,7 +1159,7 @@ cases:
   - - 0.1
     - 2.0
   note: case46-B4-C4-HxW31x29-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 47
   input_shape:
   - - 1
@@ -1184,7 +1184,7 @@ cases:
   - - 0.1
     - 2.0
   note: case47-B1-C8-HxW64x80-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 48
   input_shape:
   - - 1
@@ -1209,7 +1209,7 @@ cases:
   - - 0.1
     - 2.0
   note: case48-B1-C1-HxW127x128-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 49
   input_shape:
   - - 2
@@ -1234,7 +1234,7 @@ cases:
   - - 0.1
     - 2.0
   note: case49-B2-C3-HxW224x256-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 50
   input_shape:
   - - 4
@@ -1259,7 +1259,7 @@ cases:
   - - 0.1
     - 2.0
   note: case50-B4-C4-HxW16x16-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 51
   input_shape:
   - - 1
@@ -1284,7 +1284,7 @@ cases:
   - - 0.1
     - 2.0
   note: case51-B1-C8-HxW31x29-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 52
   input_shape:
   - - 1
@@ -1309,7 +1309,7 @@ cases:
   - - 0.1
     - 2.0
   note: case52-B1-C1-HxW64x80-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 53
   input_shape:
   - - 2
@@ -1334,7 +1334,7 @@ cases:
   - - 0.1
     - 2.0
   note: case53-B2-C3-HxW127x128-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 54
   input_shape:
   - - 4
@@ -1359,7 +1359,7 @@ cases:
   - - 0.1
     - 2.0
   note: case54-B4-C4-HxW224x256-out16x16-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 55
   input_shape:
   - - 1
@@ -1384,7 +1384,7 @@ cases:
   - - 0.1
     - 2.0
   note: case55-B1-C8-HxW16x16-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 56
   input_shape:
   - - 1
@@ -1409,7 +1409,7 @@ cases:
   - - 0.1
     - 2.0
   note: case56-B1-C1-HxW31x29-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 57
   input_shape:
   - - 2
@@ -1434,7 +1434,7 @@ cases:
   - - 0.1
     - 2.0
   note: case57-B2-C3-HxW64x80-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 58
   input_shape:
   - - 4
@@ -1459,7 +1459,7 @@ cases:
   - - 0.1
     - 2.0
   note: case58-B4-C4-HxW127x128-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 59
   input_shape:
   - - 1
@@ -1484,7 +1484,7 @@ cases:
   - - 0.1
     - 2.0
   note: case59-B1-C8-HxW224x256-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 60
   input_shape:
   - - 1
@@ -1509,7 +1509,7 @@ cases:
   - - 0.1
     - 2.0
   note: case60-B1-C1-HxW16x16-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 61
   input_shape:
   - - 2
@@ -1534,7 +1534,7 @@ cases:
   - - 0.1
     - 2.0
   note: case61-B2-C3-HxW31x29-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 62
   input_shape:
   - - 4
@@ -1559,7 +1559,7 @@ cases:
   - - 0.1
     - 2.0
   note: case62-B4-C4-HxW64x80-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 63
   input_shape:
   - - 1
@@ -1584,7 +1584,7 @@ cases:
   - - 0.1
     - 2.0
   note: case63-B1-C8-HxW127x128-out128x160-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 64
   input_shape:
   - - 1
@@ -1609,7 +1609,7 @@ cases:
   - - 0.1
     - 2.0
   note: case64-B1-C1-HxW224x256-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 65
   input_shape:
   - - 2
@@ -1634,7 +1634,7 @@ cases:
   - - 0.1
     - 2.0
   note: case65-B2-C3-HxW16x16-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 66
   input_shape:
   - - 4
@@ -1659,7 +1659,7 @@ cases:
   - - 0.1
     - 2.0
   note: case66-B4-C4-HxW31x29-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 67
   input_shape:
   - - 1
@@ -1684,7 +1684,7 @@ cases:
   - - 0.1
     - 2.0
   note: case67-B1-C8-HxW64x80-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 68
   input_shape:
   - - 1
@@ -1709,7 +1709,7 @@ cases:
   - - 0.1
     - 2.0
   note: case68-B1-C1-HxW127x128-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 69
   input_shape:
   - - 2
@@ -1734,7 +1734,7 @@ cases:
   - - 0.1
     - 2.0
   note: case69-B2-C3-HxW224x256-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 70
   input_shape:
   - - 4
@@ -1759,7 +1759,7 @@ cases:
   - - 0.1
     - 2.0
   note: case70-B4-C4-HxW16x16-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 71
   input_shape:
   - - 1
@@ -1784,7 +1784,7 @@ cases:
   - - 0.1
     - 2.0
   note: case71-B1-C8-HxW31x29-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 72
   input_shape:
   - - 1
@@ -1809,7 +1809,7 @@ cases:
   - - 0.1
     - 2.0
   note: case72-B1-C1-HxW64x80-out16x16-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 73
   input_shape:
   - - 2
@@ -1834,7 +1834,7 @@ cases:
   - - 0.1
     - 2.0
   note: case73-B2-C3-HxW127x128-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 74
   input_shape:
   - - 4
@@ -1859,7 +1859,7 @@ cases:
   - - 0.1
     - 2.0
   note: case74-B4-C4-HxW224x256-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 75
   input_shape:
   - - 1
@@ -1884,7 +1884,7 @@ cases:
   - - 0.1
     - 2.0
   note: case75-B1-C8-HxW16x16-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 76
   input_shape:
   - - 1
@@ -1909,7 +1909,7 @@ cases:
   - - 0.1
     - 2.0
   note: case76-B1-C1-HxW31x29-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 77
   input_shape:
   - - 2
@@ -1934,7 +1934,7 @@ cases:
   - - 0.1
     - 2.0
   note: case77-B2-C3-HxW64x80-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 78
   input_shape:
   - - 4
@@ -1959,7 +1959,7 @@ cases:
   - - 0.1
     - 2.0
   note: case78-B4-C4-HxW127x128-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 79
   input_shape:
   - - 1
@@ -1984,7 +1984,7 @@ cases:
   - - 0.1
     - 2.0
   note: case79-B1-C8-HxW224x256-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 80
   input_shape:
   - - 1
@@ -2009,7 +2009,7 @@ cases:
   - - 0.1
     - 2.0
   note: case80-B1-C1-HxW16x16-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 81
   input_shape:
   - - 2
@@ -2034,7 +2034,7 @@ cases:
   - - 0.1
     - 2.0
   note: case81-B2-C3-HxW31x29-out128x160-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 82
   input_shape:
   - - 4
@@ -2059,7 +2059,7 @@ cases:
   - - 0.1
     - 2.0
   note: case82-B4-C4-HxW64x80-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 83
   input_shape:
   - - 1
@@ -2084,7 +2084,7 @@ cases:
   - - 0.1
     - 2.0
   note: case83-B1-C8-HxW127x128-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 84
   input_shape:
   - - 1
@@ -2109,7 +2109,7 @@ cases:
   - - 0.1
     - 2.0
   note: case84-B1-C1-HxW224x256-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 85
   input_shape:
   - - 2
@@ -2134,7 +2134,7 @@ cases:
   - - 0.1
     - 2.0
   note: case85-B2-C3-HxW16x16-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 86
   input_shape:
   - - 4
@@ -2159,7 +2159,7 @@ cases:
   - - 0.1
     - 2.0
   note: case86-B4-C4-HxW31x29-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 87
   input_shape:
   - - 1
@@ -2184,7 +2184,7 @@ cases:
   - - 0.1
     - 2.0
   note: case87-B1-C8-HxW64x80-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 88
   input_shape:
   - - 1
@@ -2209,7 +2209,7 @@ cases:
   - - 0.1
     - 2.0
   note: case88-B1-C1-HxW127x128-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 89
   input_shape:
   - - 2
@@ -2234,7 +2234,7 @@ cases:
   - - 0.1
     - 2.0
   note: case89-B2-C3-HxW224x256-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 90
   input_shape:
   - - 4
@@ -2259,7 +2259,7 @@ cases:
   - - 0.1
     - 2.0
   note: case90-B4-C4-HxW16x16-out16x16-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 91
   input_shape:
   - - 1
@@ -2284,7 +2284,7 @@ cases:
   - - 0.1
     - 2.0
   note: case91-B1-C8-HxW31x29-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 92
   input_shape:
   - - 1
@@ -2309,7 +2309,7 @@ cases:
   - - 0.1
     - 2.0
   note: case92-B1-C1-HxW64x80-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 93
   input_shape:
   - - 2
@@ -2334,7 +2334,7 @@ cases:
   - - 0.1
     - 2.0
   note: case93-B2-C3-HxW127x128-out128x160-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 94
   input_shape:
   - - 4
@@ -2359,7 +2359,7 @@ cases:
   - - 0.1
     - 2.0
   note: case94-B4-C4-HxW224x256-out224x224-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 95
   input_shape:
   - - 1
@@ -2384,7 +2384,7 @@ cases:
   - - 0.1
     - 2.0
   note: case95-B1-C8-HxW16x16-out256x320-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 96
   input_shape:
   - - 1
@@ -2409,7 +2409,7 @@ cases:
   - - 0.1
     - 2.0
   note: case96-B1-C1-HxW31x29-out16x16-float32-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 97
   input_shape:
   - - 2
@@ -2434,7 +2434,7 @@ cases:
   - - 0.1
     - 2.0
   note: case97-B2-C3-HxW64x80-out32x48-float16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 98
   input_shape:
   - - 4
@@ -2459,7 +2459,7 @@ cases:
   - - 0.1
     - 2.0
   note: case98-B4-C4-HxW127x128-out64x96-bfloat16-alignFalse
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 99
   input_shape:
   - - 1
@@ -2484,7 +2484,7 @@ cases:
   - - 0.1
     - 2.0
   note: case99-B1-C8-HxW224x256-out128x160-float32-alignTrue
-- operator: ImageResizeNormalize
+- operator: image_resize_normalize
   case_id: 100
   input_shape:
   - - 1

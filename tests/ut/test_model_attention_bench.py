@@ -44,7 +44,7 @@ def _bounded_cpu_threads():
     finally:
         torch.set_num_threads(previous)
 
-NAMES = ("channelwise_gated_delta_attention", "compressed_sparse_attention_core")
+NAMES = ("kimi_delta_attention", "compressed_sparse_attention_core")
 TASKS = CannTaskLoader(str(OPERATORS))
 CASES = CannCaseLoader(str(OPERATORS))
 GOLDENS = GoldenLoader(str(OPERATORS))
@@ -90,7 +90,7 @@ def _prepared(name, case_id, seed=20260908):
             if isinstance(x, torch.Tensor):
                 assert torch.equal(x, y), "get_input must not mutate source tensors"
     else:
-        assert name == "channelwise_gated_delta_attention"
+        assert name == "kimi_delta_attention"
     return task, case, tensors
 
 
@@ -233,7 +233,7 @@ def test_all_public_cases_against_fp64_oracle(name, case_id, seed):
     for i, (got, wanted) in enumerate(zip(actual, reference)):
         assert wanted.dtype == torch.float64, "oracle must not silently downcast"
         assert torch.isfinite(got).all() and torch.isfinite(wanted).all()
-        expected_shape = tensors[2].shape if name == "channelwise_gated_delta_attention" else tensors[0].shape
+        expected_shape = tensors[2].shape if name == "kimi_delta_attention" else tensors[0].shape
         if i == 1:
             expected_shape = tensors[5].shape
         assert got.shape == wanted.shape == expected_shape

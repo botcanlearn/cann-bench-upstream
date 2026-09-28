@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: LinearCrossEntropy
+  name: linear_cross_entropy
   category: FusedComposite
   difficulty: L4
   formula: |

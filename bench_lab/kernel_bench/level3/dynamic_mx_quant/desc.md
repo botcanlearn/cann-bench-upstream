@@ -1,4 +1,4 @@
-# DynamicMxQuant 算子 API 描述
+# dynamic_mx_quant 算子 API 描述
 
 ## 1. 算子简介
 

@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: DynamicMxQuant
+  name: dynamic_mx_quant
   category: FusedComposite
   difficulty: L3
   formula: |

@@ -1,4 +1,4 @@
-# KvCacheAppend 算子 API 描述
+# kv_cache_append 算子 API 描述
 
 ## 1. 算子简介
 

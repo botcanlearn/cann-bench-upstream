@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: ImageResizeNormalize
+  name: image_resize_normalize
   category: FusedComposite
   difficulty: L2
   formula: y = (resize_bilinear(x, [out_h, out_w]) - mean) / std

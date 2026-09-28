@@ -2,7 +2,7 @@ operator:
   category: FusedComposite
   difficulty: L4
   note: L4为作者声明和loader分组，不是正式verified_level；本次交付不包含NPU性能基线。
-  name: CompressedSparseAttentionCore
+  name: compressed_sparse_attention_core
   description: V4 CSA核心子图：压缩KV稀疏条目与128滑窗条目共用带sink的softmax；不含压缩器或索引搜索。
   formula: t=query_start+i; E=raw[max(0,t-127):t+1] concatenated with selected completed compressed blocks; z=scale*Q@E^T;
     y=sum(exp(z)*E)/(sum(exp(z))+exp(attn_sink))

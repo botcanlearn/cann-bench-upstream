@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: LactTttChunk
+  name: lact_ttt_chunk
   category: FusedComposite
   difficulty: L5
   formula: |

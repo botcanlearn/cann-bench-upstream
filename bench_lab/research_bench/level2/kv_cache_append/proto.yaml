@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: KvCacheAppend
+  name: kv_cache_append
   category: Transform
   difficulty: L2
   formula: "cache_out.reshape(-1,H,D)[slot_mapping] = new_token"

@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: FftConv
+  name: fft_conv
   category: FusedComposite
   difficulty: L5
   formula: |

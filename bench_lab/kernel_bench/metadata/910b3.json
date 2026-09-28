@@ -254,7 +254,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_manifold_constrained_hyper_connection_post_grad": {
+    "mhc_post_grad": {
       "1": {
         "baseline_perf_us": 654.09,
         "t_hw_us": null
@@ -418,7 +418,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_aggregate_hidden": {
+    "aggregate_hidden": {
       "1": {
         "baseline_perf_us": 101.16,
         "t_hw_us": null
@@ -500,7 +500,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_aggregate_hidden_grad": {
+    "aggregate_hidden_grad": {
       "1": {
         "baseline_perf_us": 354.07,
         "t_hw_us": null
@@ -746,7 +746,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_scatter_block_update": {
+    "scatter_block_update": {
       "1": {
         "baseline_perf_us": 17.2,
         "t_hw_us": null
@@ -912,7 +912,7 @@
         "t_hw_us": null
       }
     },
-    "ai_infra_fused_causal_conv1d": {
+    "fused_causal_conv1d": {
       "1": {
         "baseline_perf_us": 17879.08,
         "t_hw_us": null

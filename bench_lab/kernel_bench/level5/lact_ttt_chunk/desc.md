@@ -1,4 +1,4 @@
-# LactTttChunk 算子 API 描述
+# lact_ttt_chunk 算子 API 描述
 
 ## 1. 算子简介
 

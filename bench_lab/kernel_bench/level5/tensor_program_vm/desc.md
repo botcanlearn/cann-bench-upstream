@@ -1,4 +1,4 @@
-# TensorProgramVm 算子 API 描述
+# tensor_program_vm 算子 API 描述
 
 ## 1. 算子简介
 

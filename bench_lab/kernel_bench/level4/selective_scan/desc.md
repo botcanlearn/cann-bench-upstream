@@ -1,4 +1,4 @@
-# SelectiveScan 算子 API 描述
+# selective_scan 算子 API 描述
 
 ## 1. 算子简介
 

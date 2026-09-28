@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: CategoricalEmbeddingBag
+  name: categorical_embedding_bag
   category: Index
   difficulty: L2
   formula: tokens[b,f] = sum_or_mean(embedding_table[indices[b,f,:]]) + optional bias[f]

@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: TensorProgramVm
+  name: tensor_program_vm
   category: FusedComposite
   difficulty: L5
   formula: |

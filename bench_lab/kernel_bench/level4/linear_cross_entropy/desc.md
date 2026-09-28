@@ -1,4 +1,4 @@
-# LinearCrossEntropy 算子 API 描述
+# linear_cross_entropy 算子 API 描述
 
 ## 1. 算子简介
 

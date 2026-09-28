@@ -9,7 +9,7 @@
 # ----------------------------------------------------------------------------
 
 operator:
-  name: FlashAttentionScoreGradEnhance
+  name: flash_attention_score_grad_enhance
   category: FusedComposite
   difficulty: L4
   formula: Computes query, key, value and rope gradients for FlashAttentionScoreEnhance.

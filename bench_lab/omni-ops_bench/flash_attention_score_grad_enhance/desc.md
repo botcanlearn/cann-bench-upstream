@@ -1,4 +1,4 @@
-# FlashAttentionScoreGradEnhance 算子 API 描述
+# flash_attention_score_grad_enhance 算子 API 描述
 
 ## 1. 算子简介
 

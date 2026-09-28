@@ -1,4 +1,4 @@
-# EmbeddingHashTableLookupOrInsert 算子 API 描述
+# embedding_hash_table_lookup_or_insert 算子 API 描述
 
 ## 1. 算子简介
 

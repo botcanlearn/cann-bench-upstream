@@ -1,7 +1,7 @@
 cases:
 # ========== 基础场景（无过滤） ==========
 # 小规模
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 1
   input_shape:
   - [5]
@@ -14,7 +14,7 @@ cases:
   note: S-int64-小规模-keys1024-bucket1024-emb128
 
 # 中规模
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 2
   input_shape:
   - [5]
@@ -27,7 +27,7 @@ cases:
   note: M-int64-中规模-keys16384-bucket16384-emb256
 
 # 大规模
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 3
   input_shape:
   - [5]
@@ -40,7 +40,7 @@ cases:
   note: L-int64-大规模-keys131072-bucket131072-emb512
 
 # ========== 不同 embedding_dim ==========
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 4
   input_shape:
   - [5]
@@ -52,7 +52,7 @@ cases:
   - [0, 8191]
   note: M-int64-emb64-keys8192
 
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 5
   input_shape:
   - [5]
@@ -66,7 +66,7 @@ cases:
 
 # ========== 多维 keys ==========
 # 2D keys
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 6
   input_shape:
   - [5]
@@ -79,7 +79,7 @@ cases:
   note: M-int64-2D-keys-bucket65536-emb128
 
 # 3D keys
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 7
   input_shape:
   - [5]
@@ -92,7 +92,7 @@ cases:
   note: M-int64-3D-keys-bucket262144-emb256
 
 # ========== 带 default_value ==========
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 8
   input_shape:
   - [5]
@@ -104,7 +104,7 @@ cases:
   - [0, 4095]
   note: S-int64-default_value=0.5
 
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 9
   input_shape:
   - [5]
@@ -117,7 +117,7 @@ cases:
   note: S-int64-default_value=1.0
 
 # ========== 带 filter_key 功能 ==========
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 10
   input_shape:
   - [5]
@@ -129,7 +129,7 @@ cases:
   - [0, 2047]
   note: S-int64-filter_key启用
 
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 11
   input_shape:
   - [5]
@@ -142,7 +142,7 @@ cases:
   note: M-int64-filter_key=-1不生效
 
 # ========== 带多属性组合 ==========
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 12
   input_shape:
   - [5]
@@ -156,7 +156,7 @@ cases:
 
 # ========== 非对齐场景（质数） ==========
 # 质数 bucket_size
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 13
   input_shape:
   - [5]
@@ -169,7 +169,7 @@ cases:
   note: S-int64-质数bucket1021-keys1009
 
 # 质数 embedding_dim
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 14
   input_shape:
   - [5]
@@ -183,7 +183,7 @@ cases:
 
 # ========== 边界值测试 ==========
 # 最小规模
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 15
   input_shape:
   - [5]
@@ -196,7 +196,7 @@ cases:
   note: XS-int64-最小规模-keys64-bucket128-emb32
 
 # 最小 embedding_dim
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 16
   input_shape:
   - [5]
@@ -209,7 +209,7 @@ cases:
   note: XS-int64-最小emb8-keys256
 
 # 大 key 值
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 17
   input_shape:
   - [5]
@@ -223,7 +223,7 @@ cases:
 
 # ========== key 重复场景 ==========
 # key 有重复值
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 18
   input_shape:
   - [5]
@@ -236,7 +236,7 @@ cases:
   note: S-int64-key重复场景-bucket256-keys512
 
 # ========== 超大规模 ==========
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 19
   input_shape:
   - [5]
@@ -248,7 +248,7 @@ cases:
   - [0, 262143]
   note: XL-int64-超大规模-keys262144-emb1024
 
-- operator: EmbeddingHashTableLookupOrInsert
+- operator: embedding_hash_table_lookup_or_insert
   case_id: 20
   input_shape:
   - [5]

@@ -1,4 +1,4 @@
-# CategoricalEmbeddingBag 算子 API 描述
+# categorical_embedding_bag 算子 API 描述
 
 ## 1. 算子简介
 

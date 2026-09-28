@@ -1,4 +1,4 @@
-# CompressedSparseAttentionCore 算子 API 描述
+# compressed_sparse_attention_core 算子 API 描述
 
 版本：2026-09-15 v0.2。已纳入下一版新增题目预告（Issue #177）。作者声明L4用于loader分类，正式Level记录及NPU验证另行完成。
 

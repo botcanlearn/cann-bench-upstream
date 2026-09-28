@@ -824,7 +824,7 @@
       "t_hw_us": 2.46
     }
   },
-  "sparse_lightning_indexer_grad_klloss_enhance": {
+  "sparse_lightning_indexer_grad_kl_loss_enhance": {
     "1": {
       "baseline_perf_us": null,
       "t_hw_us": 167.02
