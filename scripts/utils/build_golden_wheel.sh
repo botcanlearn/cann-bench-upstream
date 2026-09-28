@@ -33,7 +33,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 UTILS_DIR="${SCRIPT_DIR}"
 
 # 默认配置
-OPERATOR=""
+OPERATORS=()
 LEVEL=""
 TASK_DIR=""
 OUTPUT_DIR=""
@@ -85,7 +85,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         --operator)
-            OPERATOR="$2"
+            OPERATORS+=("$2")
             shift 2
             ;;
         --level)
@@ -137,8 +137,8 @@ if [[ -n "${TASK_DIR}" ]]; then
     ARGS+=("--task-dir" "${TASK_DIR}")
 fi
 
-if [[ -n "${OPERATOR}" ]]; then
-    ARGS+=("--operator" "${OPERATOR}")
+if [[ "${#OPERATORS[@]}" -gt 0 ]]; then
+    ARGS+=("--operator" "${OPERATORS[@]}")
 fi
 
 if [[ -n "${LEVEL}" ]]; then
