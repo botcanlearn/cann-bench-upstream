@@ -98,8 +98,10 @@ def digest_report(report: dict) -> None:
         # Collapse failing cases by identical cause — N cases with one root cause is one fact.
         buckets: dict[tuple, list] = {}
         for case in op.get("cases") or []:
-            if case.get("accuracy") is not None and (case.get("elapsed_us") or 0) > 0:
-                continue  # fully healthy case: no verdict gap, no perf gap
+            accuracy = case.get("accuracy")
+            if (isinstance(accuracy, dict) and accuracy.get("passed") is True
+                    and (case.get("elapsed_us") or 0) > 0):
+                continue  # fully healthy case: accuracy passed and perf is present
             key = (case.get("status"), case.get("failure_type"),
                    str(case.get("error_msg") or ""), _acc_error(case),
                    case.get("accuracy") is None, (case.get("elapsed_us") or 0) > 0)
