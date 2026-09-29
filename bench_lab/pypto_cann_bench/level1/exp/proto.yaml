@@ -12,7 +12,7 @@ operator:
   name: Exp
   category: Elementwise
   difficulty: L1
-  formula: y = e^((x * scale + shift) * ln(base))
+  formula: "base <= 0: y = e^(x * scale + shift); base > 0: y = e^((x * scale + shift) * ln(base))"
   description: PyPTO 专用 Exp selected-case 任务，计算 float32 2D 输入张量的指数函数
   shape_support: 本任务仅覆盖 2D 输入张量，输出与输入相同 shape
   attrs:
