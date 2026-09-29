@@ -5,7 +5,7 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You can not use this file except in compliance with the License.
+# Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
@@ -54,8 +54,9 @@ STRUCTURAL_FAILURE_MARKERS = (
     "同精度输出数量不匹配",
     "形状不匹配",
     "shape mismatch",
-    # 输出契约违例 (issue #146), 不是数值误差, 故归结构性失败
+    # 输出接口契约违例不是数值误差，归为结构性失败
     "内存布局非连续",
+    "输出 dtype 不匹配",
     "is None",
     "AI算子执行失败",
     "TypeError:",

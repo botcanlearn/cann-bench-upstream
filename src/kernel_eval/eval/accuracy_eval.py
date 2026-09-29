@@ -5,7 +5,7 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You can not use this file except in compliance with the License.
+# Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
@@ -74,6 +74,9 @@ class AccuracyEvaluator:
         ignore_output_indices: List[int] = None,
         checker_name: Optional[str] = None,
         diagnostic_context: Optional[str] = None,
+        expected_output_dtypes: Optional[List[Union[str, List[str]]]] = None,
+        output_names: Optional[List[str]] = None,
+        output_dtype_source: Any = None,
     ) -> AccuracyResult:
         """
         评测AI算子输出的精度（采用MERE/MARE标准 + 小值域处理）
@@ -87,6 +90,9 @@ class AccuracyEvaluator:
             native_output: 同精度参考输出（用于小值域比较，可为 AI 算子的同精度 golden 执行结果）
             ignore_output_indices: 需要忽略对比的输出索引列表
             checker_name: 精度判断器名称（可选，覆盖实例配置）
+            expected_output_dtypes: proto.yaml 声明的各输出允许 dtype；空声明不限制
+            output_names: 与 expected_output_dtypes 对应的输出名，用于错误信息
+            output_dtype_source: 原始候选输出。存在 get_output 转换时仍按算子原始输出契约校验
 
         Returns:
             AccuracyResult: 精度评测结果（统一接口）
@@ -104,6 +110,22 @@ class AccuracyEvaluator:
                 threshold=0,
                 error_msg=error_msg,
                 metadata={'trial': trial},
+            )
+
+        # dtype 是算子输出契约的一部分，必须依据 proto 声明校验，而不能仅用候选输出
+        # 自己推断比较 dtype。若存在 get_output 后处理，契约仍针对原始算子输出。
+        dtype_outputs = ai_output if output_dtype_source is None else output_dtype_source
+        dtype_error = self._get_output_dtype_error(
+            dtype_outputs,
+            expected_output_dtypes,
+            output_names,
+        )
+        if dtype_error:
+            return AccuracyResult(
+                passed=False,
+                threshold=self._get_threshold(dtype, custom_thresholds),
+                error_msg=dtype_error,
+                metadata={"trial": trial},
             )
 
         # 获取阈值（优先使用自定义阈值）
@@ -185,10 +207,69 @@ class AccuracyEvaluator:
             return ai_output.shape == expected_shape
         return False
 
-    def check_output_dtype(self, ai_output: torch.Tensor, expected_dtype: str) -> bool:
+    def check_output_dtype(
+        self, ai_output: torch.Tensor, expected_dtype: Union[str, List[str]]
+    ) -> bool:
         """检查输出数据类型是否匹配"""
         if isinstance(ai_output, torch.Tensor):
-            from ..utils.dtype_mapper import torch_dtype_to_str
-            actual_dtype = torch_dtype_to_str(ai_output.dtype)
-            return actual_dtype.lower() == expected_dtype.lower()
+            actual_dtype = str(ai_output.dtype).replace("torch.", "").lower()
+            expected_dtypes = (
+                [expected_dtype] if isinstance(expected_dtype, str) else expected_dtype
+            )
+            return actual_dtype in {
+                str(dtype).replace("torch.", "").lower() for dtype in (expected_dtypes or [])
+            }
         return False
+
+    @staticmethod
+    def _normalize_output_sequence(outputs: Any) -> List[Any]:
+        """将单个、多输出或一层嵌套输出规整为比较器使用的顺序。"""
+        if isinstance(outputs, torch.Tensor):
+            return [outputs]
+        if not isinstance(outputs, (tuple, list)):
+            return []
+
+        normalized = []
+        for output in outputs:
+            if isinstance(output, (tuple, list)):
+                normalized.extend(output)
+            else:
+                normalized.append(output)
+        return normalized
+
+    def _get_output_dtype_error(
+        self,
+        outputs: Any,
+        expected_output_dtypes: Optional[List[Union[str, List[str]]]],
+        output_names: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """返回第一个违反 proto 输出 dtype 声明的错误；未声明的输出不受限制。"""
+        if not expected_output_dtypes:
+            return None
+
+        actual_outputs = self._normalize_output_sequence(outputs)
+        for index, expected in enumerate(expected_output_dtypes):
+            expected_dtypes = [expected] if isinstance(expected, str) else list(expected or [])
+            if not expected_dtypes:
+                continue
+
+            name = (
+                output_names[index]
+                if output_names and index < len(output_names)
+                else f"output[{index}]"
+            )
+            if index >= len(actual_outputs):
+                actual_dtype = "missing"
+            else:
+                actual = actual_outputs[index]
+                if not isinstance(actual, torch.Tensor):
+                    actual_dtype = type(actual).__name__
+                else:
+                    if self.check_output_dtype(actual, expected_dtypes):
+                        continue
+                    actual_dtype = str(actual.dtype).replace("torch.", "")
+
+            allowed = ", ".join(str(dtype).replace("torch.", "") for dtype in expected_dtypes)
+            return f"输出 dtype 不匹配: {name} 期望 [{allowed}]，实际 {actual_dtype}"
+
+        return None

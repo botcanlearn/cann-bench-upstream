@@ -478,7 +478,10 @@ class Evaluator:
 
             # 获取算子输出名称（用于填充 SingleOutputResult.name）
             op_info = self.operator_loader.get_operator(case.rel_path)
-            output_names = [out.name for out in op_info.outputs] if op_info and op_info.outputs else []
+            output_names = (
+                [out.name for out in op_info.outputs] if op_info and op_info.outputs else []
+            )
+            output_dtype_contracts = self._get_output_dtype_contracts(op_info)
 
             # 7.5 调用 get_output 后处理（如果存在）
             # 与 get_input 对称：对 golden / AI / native 三路输出统一变换后再对比，
@@ -504,6 +507,9 @@ class Evaluator:
                 native_output=native_out,
                 ignore_output_indices=ignore_output_indices,
                 diagnostic_context=self._format_output_diagnostic(ai_result),
+                expected_output_dtypes=output_dtype_contracts,
+                output_names=output_names,
+                output_dtype_source=ai_result.outputs,
             )
 
             # 防作弊二次验证：用新鲜输入再跑一遍 golden + AI，两次都过才算 pass
@@ -1185,6 +1191,20 @@ class Evaluator:
         return ignore_indices
 
     @staticmethod
+    def _get_output_dtype_contracts(op_info) -> Optional[List[List[str]]]:
+        """读取 proto 输出允许的 dtype；支持 CANN spec 的 dtypes 和通用 dtype 字段。"""
+        if not op_info or not op_info.outputs:
+            return None
+
+        contracts = []
+        for output in op_info.outputs:
+            dtypes = getattr(output, "dtypes", None) or getattr(output, "dtype", None)
+            if isinstance(dtypes, str):
+                dtypes = [dtypes] if dtypes else []
+            contracts.append(list(dtypes or []))
+        return contracts
+
+    @staticmethod
     def _apply_get_output(get_output_func, outputs, op_info, case_attrs):
         """调用 get_output 对算子输出进行后处理，返回变换后的输出列表。
 
@@ -1274,9 +1294,13 @@ class Evaluator:
             # 与主流程一致：若存在 get_output 则对 golden / AI 输出统一变换后再对比
             golden_outs2 = golden_result2.outputs
             ai_outs2 = ai_result2.outputs
+            op_info = self.operator_loader.get_operator(case.rel_path)
+            output_dtype_contracts = self._get_output_dtype_contracts(op_info)
+            output_names = (
+                [out.name for out in op_info.outputs] if op_info and op_info.outputs else []
+            )
             get_output_func = self.golden_loader.get_output_function(case.rel_path)
             if get_output_func is not None:
-                op_info = self.operator_loader.get_operator(case.rel_path)
                 retry_attrs = getattr(case, 'attrs', None) or {}
                 golden_outs2 = self._apply_get_output(
                     get_output_func, golden_outs2, op_info, retry_attrs)
@@ -1290,6 +1314,9 @@ class Evaluator:
                 custom_thresholds=merged_thresholds,
                 native_output=None,
                 ignore_output_indices=ignore_output_indices,
+                expected_output_dtypes=output_dtype_contracts,
+                output_names=output_names,
+                output_dtype_source=ai_result2.outputs,
             )
         except Exception as e:
             # 二次验证基础设施异常不应整体阻断评测；记 warn 并返回第一轮
