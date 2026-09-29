@@ -26,7 +26,7 @@ examples/stanfordbench_example/
 
 AI 算子文件 (`ai_op.py`) 需要满足以下要求：
 
-1. **包含 `Model` 类**: 继承 `torch.nn.Module`，实现 `forward` 方法
+1. **包含 `ModelNew` 类**: 继承 `torch.nn.Module`，实现 `forward` 方法
 2. **匹配 StanfordBench 接口**: forward 的输入输出与 StanfordBench golden 的签名一致
 3. **支持 NPU**: 使用 Triton 或 torch_npu 实现，确保能在 NPU 上执行
 
