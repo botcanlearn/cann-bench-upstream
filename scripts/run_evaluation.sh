@@ -128,7 +128,7 @@ print_help() {
     echo "  $0 --bench-name stanford --operator Softmax"
     echo ""
     echo "  # StanfordBench 从源码目录评测"
-    echo "  $0 --bench-name stanford --source-dir examples/stanfordbench/Softmax --operator Softmax"
+    echo "  $0 --bench-name stanford --source-dir examples/stanfordbench_example/ReLU --operator ReLU"
     echo ""
     echo "  # 从源码目录评测（推荐）"
     echo "  $0 /path/to/ai_ops"

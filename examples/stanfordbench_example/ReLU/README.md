@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-examples/stanfordbench/
+examples/stanfordbench_example/
 ├── ReLU/
 │   ├── ai_op.py        # AI 算子实现（Triton）
 │   └── README.md       # 本文档
