@@ -25,7 +25,7 @@ python3 -c "import torch; import torch_npu; import acl; print('✓ Ready')"
 ### Build
 
 ```bash
-cd /mnt/workspace/gitCode/cann/cann-bench/src/cann_bench_utils
+cd "$(git rev-parse --show-toplevel)/src/cann_bench_utils"
 
 # Build (auto-detects NPU architecture)
 bash build.sh
