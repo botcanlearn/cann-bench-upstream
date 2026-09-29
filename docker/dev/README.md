@@ -103,7 +103,7 @@ bash run.sh shell
 
 ## 4. 启动常驻容器
 
-后台 `sleep infinity`, 多次 `docker exec` 进入; `docker/workspace/` 绑到容器内 `/workspace`:
+后台 `sleep infinity`, 多次 `docker exec` 进入; `docker/dev/workspace/` 绑到容器内 `/workspace`:
 
 ```bash
 bash run.sh dev                          # 起 'cann-bench'
