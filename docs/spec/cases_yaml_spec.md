@@ -48,11 +48,6 @@ TensorList（如 weights）用**嵌套列表**表示：
 ```yaml
 # 单个 TensorList（包含多个 tensor）
 - [[96, 64], [96, 32]]  # TensorList of 2 tensors
-
-# 或使用 YAML anchor 引用
-- &weight_shape
-  - [96, 64]
-- *weight_shape        # 引用上面定义的 shape
 ```
 
 ## 3. dtype 对应规范
