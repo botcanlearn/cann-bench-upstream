@@ -1,12 +1,12 @@
 {
  "_metadata": {
-  "description": "BLAS ops bench（blas_trsv 三角求解、blas_trmv 三角矩阵-向量乘）baseline 性能数据",
+  "description": "BLAS ops bench（blas_trsv 三角求解、blas_trmv 三角矩阵-向量乘、blas_tbmv 三角带状矩阵-向量乘）baseline 性能数据",
   "hardware": "910b2",
-  "generated_at": "2026-08-30T09:46:42.657876",
+  "generated_at": "2026-08-30T14:26:13.726572",
   "source": "bench_lab/blas-ops_bench/blas_trsv/cases.yaml 的 20 条用例。baseline_perf_us 为 torch 参考实现（torch.linalg.solve_triangular）在 910b2 NPU 上的 TTK e2e 实测 DEVICE 耗时（us，kernel 级 avg，aclnnTriangularSolve，2026-08-30 采集）。",
   "baseline_source": {
-   "measured": "TTK e2e（ops-test-kit）真机实测：Backend npu，blas_trsv: torch.linalg.solve_triangular（FP32 的 trans=C 按 T 精确等价映射，README: FP32 下 C≡T）；blas_trmv: torch.matmul（torch 无三角感知 matvec，全矩阵 GEMV 口径，含约 2x 三角访存/计算，desc.md 记录）。两者均为 A 方阵/n×n + B/x (n,1) 或 (n,) 列向量等价形式，incx 属存储布局不进入 API，值域与 cases.yaml 一致。blas_trsv 20/20、blas_trmv 20/20 全部测得且 PASS；DEVICE 为 NPU 侧 kernel 平均耗时。",
-   "derived_from_t_hw": "t_hw 按 hap-ascend-910b2-v2 skill 的 roofline 方法计算: ①访存只计被消费字节(A 的 uplo 三角 n(n+1)/2 + b 向量 n 个; 行主序三角前缀/后缀连续, 未引用三角不发地址), 读=字节/1.92TB/s, 写=L2 优先(远小于 192MB, 全走 6.4TB/s); ②向量: n²/2 次 FMA(mul/add 分别按 6 TFLOPS fp32 计) + n 次除法(1.5 TFLOPS); complex64: 每累加项 8 实数算术, 字节 ×8; ③串行依赖处理: trsv 总计算量恒为 n²/2 FMA(每元素恰用一次, 无逐层重处理, 区别于 scan 类), 分治并行化深度 O(log²n) 不放大总工作量, 理想模型下取 throughput 口径; 全部用例瓶颈为 hbm_read(读:算术 ≈ 6:1)。注: arch22 参考实现为严格串行(ops-blas README), 真实可达性能高于本理想下界属正常。",
+   "measured": "TTK e2e（ops-test-kit）真机实测：Backend npu，blas_trsv: torch.linalg.solve_triangular（FP32 的 trans=C 按 T 精确等价映射，README: FP32 下 C≡T）；blas_trmv: torch.matmul（torch 无三角感知 matvec，全矩阵 GEMV 口径，含约 2x 三角访存/计算，desc.md 记录）；blas_tbmv: 算子拼接基线（cann-bench 'torch 接口功能限制'惯例）——滑窗（gather）+ 逐元素乘 + 归约求和, 数学精确等价带状乘, 工作量 O((k+1)·n), 访存约 3x 带状理想值, warmup=5/repeat=20 同步墙钟均值。blas_trsv/trmv 的 DEVICE 为 NPU 侧 kernel 平均耗时; blas_tbmv 为拼接实现的同步墙钟（含发射开销）。三者 20/20 全部测得且与 golden 数值一致。",
+   "derived_from_t_hw": "t_hw 按 hap-ascend-910b2-v2 skill 的 roofline 方法计算: ① blas_trsv/blas_trmv: 只计被消费字节（uplo 三角 n(n+1)/2 + 向量 n）, 读=字节/1.92TB/s, 写=L2 优先; 向量 = n²/2 次 FMA（mul/add 分别按 6 TFLOPS fp32 计）+ n 次除法（1.5 TFLOPS, trsv）; ② blas_tbmv: 只计带内消费字节（Σ_{b=0}^{k}(n-b)·4）, 向量 = 带内 FMA×2; ③ 串行依赖: trsv 总计算量恒为 n²/2 FMA（每元素恰用一次）取 throughput 口径; trmv/tbmv 输出各元素独立无此问题; ④ 三者瓶颈均为 hbm_read。arch22 参考实现的实际性能高于理想下界属正常。",
    "note": "torch_npu 的三角求解在 NPU 上经 aclnnTriangularSolve(AiCPU) 执行，与自研 kernel 打榜口径存在实现差异，评审时可参考。ops-blas README 的 ctrsv GPU cuBLAS 标杆（48.28/95.79/155.81us @n=512/1024/2048）为另一独立口径。用例集已全部为 float32：complex64（aclblasCtrsv 接口）因当前栈无 NPU 可执行的复数参考实现（排查记录见 git 历史/desc.md），打榜用例暂不覆盖，proto 仍声明该能力。"
   }
  },
@@ -171,6 +171,88 @@
   },
   "20": {
    "baseline_perf_us": 19.08,
+   "t_hw_us": 4.375
+  }
+ },
+ "blas_tbmv": {
+  "1": {
+   "baseline_perf_us": 345.495,
+   "t_hw_us": 4.167e-06
+  },
+  "2": {
+   "baseline_perf_us": 332.158,
+   "t_hw_us": 1.042e-05
+  },
+  "3": {
+   "baseline_perf_us": 224.607,
+   "t_hw_us": 2.708e-05
+  },
+  "4": {
+   "baseline_perf_us": 377.059,
+   "t_hw_us": 2.917e-05
+  },
+  "5": {
+   "baseline_perf_us": 255.427,
+   "t_hw_us": 7.083e-05
+  },
+  "6": {
+   "baseline_perf_us": 255.435,
+   "t_hw_us": 0.001237
+  },
+  "7": {
+   "baseline_perf_us": 314.448,
+   "t_hw_us": 0.004467
+  },
+  "8": {
+   "baseline_perf_us": 316.515,
+   "t_hw_us": 0.001279
+  },
+  "9": {
+   "baseline_perf_us": 252.977,
+   "t_hw_us": 1.042e-05
+  },
+  "10": {
+   "baseline_perf_us": 341.756,
+   "t_hw_us": 3.542e-05
+  },
+  "11": {
+   "baseline_perf_us": 338.646,
+   "t_hw_us": 2.292e-05
+  },
+  "12": {
+   "baseline_perf_us": 375.822,
+   "t_hw_us": 0.0001792
+  },
+  "13": {
+   "baseline_perf_us": 286.737,
+   "t_hw_us": 0.004517
+  },
+  "14": {
+   "baseline_perf_us": 285.493,
+   "t_hw_us": 0.01696
+  },
+  "15": {
+   "baseline_perf_us": 367.143,
+   "t_hw_us": 0.06907
+  },
+  "16": {
+   "baseline_perf_us": 216.405,
+   "t_hw_us": 0.06607
+  },
+  "17": {
+   "baseline_perf_us": 313.753,
+   "t_hw_us": 0.2601
+  },
+  "18": {
+   "baseline_perf_us": 710.257,
+   "t_hw_us": 1.032
+  },
+  "19": {
+   "baseline_perf_us": 283.312,
+   "t_hw_us": 0.1358
+  },
+  "20": {
+   "baseline_perf_us": 4635.203,
    "t_hw_us": 4.375
   }
  }
