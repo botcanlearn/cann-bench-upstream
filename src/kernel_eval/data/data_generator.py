@@ -20,7 +20,7 @@
 3. 支持确定性种子（通过 torch.Generator）确保评测可复现
 """
 
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional
 
 import torch
 
@@ -430,7 +430,18 @@ class DataGenerator:
                 # 递归生成每个元素，保持为 list 结构
                 sub_list = []
                 sub_dtypes = d if isinstance(d, list) else d
-                sub_vr = vr if isinstance(vr, list) and not (len(vr) == 2 and isinstance(vr[0], (int, float))) else None
+                if isinstance(vr, list):
+                    # case schema declares one range per logical input. For a
+                    # TensorList input, broadcast a scalar [min, max] range to
+                    # every member instead of dropping it and using defaults.
+                    is_scalar_range = (
+                        len(vr) == 2
+                        and not isinstance(vr[0], (list, tuple))
+                        and not isinstance(vr[1], (list, tuple))
+                    )
+                    sub_vr = [vr] * len(s) if is_scalar_range else vr
+                else:
+                    sub_vr = None
                 for j, sub_shape in enumerate(s):
                     sub_d = sub_dtypes[j] if isinstance(sub_dtypes, list) and j < len(sub_dtypes) else sub_dtypes
                     if sub_vr and isinstance(sub_vr, list) and j < len(sub_vr):
