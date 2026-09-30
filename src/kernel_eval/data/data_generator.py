@@ -104,11 +104,25 @@ class DataGenerator:
         elif is_int_dtype(dtype):
             if min_val == max_val:
                 return torch.full(shape, int(min_val), dtype=torch_dtype)
+            min_int, max_int = int(min_val), int(max_val)
+            int64_min = -(1 << 63)
+            int64_max = (1 << 63) - 1
+            if (
+                dtype.lower() == "int64"
+                and max_int == int64_max
+                and int64_min <= min_int < max_int
+            ):
+                return self._gen_int64_inclusive_max(
+                    shape, min_int, generator=generator
+                )
             # torch.randint 支持 generator 参数（generator=None 时等同默认 RNG），
             # 直接透传即可保证确定性，无需 rand 缩放
             return torch.randint(
-                int(min_val), int(max_val) + 1, shape,
-                generator=generator, dtype=torch_dtype,
+                min_int,
+                max_int + 1,
+                shape,
+                generator=generator,
+                dtype=torch_dtype,
             )
         elif is_bool_dtype(dtype):
             return self._gen_bool(shape, min_val, max_val, generator=generator)
@@ -187,6 +201,83 @@ class DataGenerator:
             if len(value_ranges) < num_inputs:
                 value_ranges = value_ranges + [value_ranges[-1]] * (num_inputs - len(value_ranges))
             return value_ranges
+
+    @staticmethod
+    def _gen_int64_inclusive_max(
+        shape: List[int],
+        min_val: int,
+        generator: Optional[torch.Generator] = None,
+    ) -> torch.Tensor:
+        """在包含 INT64_MAX 的闭区间内均匀生成 int64。"""
+        int64_min = -(1 << 63)
+        int64_max = (1 << 63) - 1
+        half_range = 1 << 63
+        interval_size = int64_max - min_val + 1
+
+        # torch.randint 的上界是排他的且必须能用有符号 long 表示。
+        # 对不超过 2**63 个值的区间，直接在偏移量域采样。
+        if interval_size < half_range:
+            offsets = torch.randint(
+                0, interval_size, shape, generator=generator, dtype=torch.int64
+            )
+            return offsets + min_val
+        if interval_size == half_range:
+            offsets = torch.randint(
+                int64_min, 0, shape, generator=generator, dtype=torch.int64
+            )
+            return offsets.bitwise_xor(int64_min)
+
+        # 更宽的区间由两个等大的 2**63 域组成。对大于请求区间的偏移拒绝重采，
+        # 使剩余偏移在整个闭区间内保持均匀；分块限制额外工作内存。
+        remainder = interval_size - half_range
+        upper_base = min_val - int64_min
+        result = torch.empty(shape, dtype=torch.int64)
+        flat_result = result.reshape(-1)
+        chunk_size = 1 << 20
+
+        for start in range(0, flat_result.numel(), chunk_size):
+            end = min(start + chunk_size, flat_result.numel())
+            chunk_shape = (end - start,)
+            offsets = torch.randint(
+                int64_min, 0, chunk_shape, generator=generator, dtype=torch.int64
+            ).bitwise_xor(int64_min)
+            upper_half = torch.randint(
+                0, 2, chunk_shape, generator=generator, dtype=torch.int8
+            )
+
+            if remainder < half_range:
+                invalid = upper_half.bool() & (offsets >= remainder)
+                while bool(invalid.any().item()):
+                    replacement_offsets = torch.randint(
+                        int64_min,
+                        0,
+                        chunk_shape,
+                        generator=generator,
+                        dtype=torch.int64,
+                    ).bitwise_xor(int64_min)
+                    replacement_half = torch.randint(
+                        0, 2, chunk_shape, generator=generator, dtype=torch.int8
+                    )
+                    offsets = torch.where(invalid, replacement_offsets, offsets)
+                    upper_half = torch.where(invalid, replacement_half, upper_half)
+                    invalid = upper_half.bool() & (offsets >= remainder)
+
+                # Mask rejected offsets before adding, so even unused intermediate values
+                # remain within the signed int64 range.
+                upper_offsets = torch.where(
+                    offsets < remainder, offsets, torch.zeros_like(offsets)
+                )
+            else:
+                # The full int64 domain: both halves are valid.
+                upper_offsets = offsets
+
+            lower_values = offsets + min_val
+            upper_values = upper_offsets + upper_base
+            flat_result[start:end] = torch.where(
+                upper_half.bool(), upper_values, lower_values
+            )
+
+        return result
 
     def _parse_range(self, value_range: Any, dtype: str) -> tuple:
         """解析值范围"""
