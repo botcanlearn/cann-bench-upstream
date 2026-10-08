@@ -106,11 +106,6 @@ class EvalTarget:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-def read_yaml_mapping(path: Path) -> Dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"expected YAML mapping in {path}")
-    return data
 
 
 def read_case_preview(path: Path, *, limit: int = 3) -> List[Dict[str, Any]]:
