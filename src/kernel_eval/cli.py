@@ -807,6 +807,7 @@ def cmd_eval(args):
     operator_filter = [args.operator] if args.operator else None
     case_filter = {'case_id': args.case_id} if args.case_id is not None else None
     level_selected_nothing = False
+    backend_exit_code = 0
     if args.level is not None and args.device == 'cpu':
         level_operators = set(_operator_names_for_level(bench_name, bench_root, args.level))
         if operator_filter:
@@ -825,11 +826,17 @@ def cmd_eval(args):
     if args.device == 'cpu':
         if not level_selected_nothing:
             from .simulation import simulate
-            simulate(config, bench_name=bench_name,
-                     operator_filter=operator_filter, case_filter=case_filter,
-                     report_generator=report_generator)
+            backend_exit_code = simulate(
+                config,
+                bench_name=bench_name,
+                operator_filter=operator_filter,
+                case_filter=case_filter,
+                report_generator=report_generator,
+            ) or 0
     else:
-        _cmd_eval_npu(args, bench_root, filter_prefix, config, report_generator)
+        backend_exit_code = _cmd_eval_npu(
+            args, bench_root, filter_prefix, config, report_generator
+        ) or 0
 
     # 生成报告
     report = report_generator.generate()
@@ -839,7 +846,8 @@ def cmd_eval(args):
     if compile_failed_ops:
         print(f"[ERROR] 检测到 {compile_failed_ops} 个算子编译失败，本次提交相关算子整批计 0 分，"
               f"退出码非零。请在提交前本地确保编译通过。", file=sys.stderr, flush=True)
-    return _compute_exit_code(report)
+    report_exit_code = _compute_exit_code(report)
+    return min(max(report_exit_code, backend_exit_code), 255)
 
 
 
