@@ -43,7 +43,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B4-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B4-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 2
   input_shape:
@@ -78,7 +78,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B1-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 3
   input_shape:
@@ -113,7 +113,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B1-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 4
   input_shape:
@@ -148,7 +148,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B2-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B2-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 5
   input_shape:
@@ -183,7 +183,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B4-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B4-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 6
   input_shape:
@@ -218,7 +218,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B4-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B4-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 7
   input_shape:
@@ -253,7 +253,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B8-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B8-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 8
   input_shape:
@@ -288,7 +288,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B8-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B8-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 9
   input_shape:
@@ -323,7 +323,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B16-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B16-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 10
   input_shape:
@@ -358,7 +358,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B16-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B16-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 11
   input_shape:
@@ -393,7 +393,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B4-Sq1 reference-aligned coverage; topk=128
+  note: bfloat16 B4-Sq1 reference-aligned coverage; topk=128
 - operator: DenseSparseAttention
   case_id: 12
   input_shape:
@@ -428,7 +428,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq1 reference-aligned coverage; topk=8
+  note: bfloat16 B1-Sq1 reference-aligned coverage; topk=8
 - operator: DenseSparseAttention
   case_id: 13
   input_shape:
@@ -463,7 +463,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq64 reference-aligned coverage; topk=16
+  note: bfloat16 B1-Sq64 reference-aligned coverage; topk=16
 - operator: DenseSparseAttention
   case_id: 14
   input_shape:
@@ -498,7 +498,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq128 reference-aligned coverage; topk=32
+  note: bfloat16 B1-Sq128 reference-aligned coverage; topk=32
 - operator: DenseSparseAttention
   case_id: 15
   input_shape:
@@ -533,7 +533,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq256 reference-aligned coverage; topk=32
+  note: bfloat16 B1-Sq256 reference-aligned coverage; topk=32
 - operator: DenseSparseAttention
   case_id: 16
   input_shape:
@@ -568,7 +568,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq1 reference-aligned coverage; topk=8
+  note: bfloat16 B1-Sq1 reference-aligned coverage; topk=8
 - operator: DenseSparseAttention
   case_id: 17
   input_shape:
@@ -603,7 +603,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq64 reference-aligned coverage; topk=16
+  note: bfloat16 B1-Sq64 reference-aligned coverage; topk=16
 - operator: DenseSparseAttention
   case_id: 18
   input_shape:
@@ -638,7 +638,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq128 reference-aligned coverage; topk=32
+  note: bfloat16 B1-Sq128 reference-aligned coverage; topk=32
 - operator: DenseSparseAttention
   case_id: 19
   input_shape:
@@ -673,7 +673,7 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq256 reference-aligned coverage; topk=32
+  note: bfloat16 B1-Sq256 reference-aligned coverage; topk=32
 - operator: DenseSparseAttention
   case_id: 20
   input_shape:
@@ -708,4 +708,4 @@ cases:
   - - -1
     - 1
   - null
-  note: float16 B1-Sq1 reference-aligned coverage; topk=8
+  note: bfloat16 B1-Sq1 reference-aligned coverage; topk=8
