@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # -----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -22,7 +22,7 @@ else
     echo "[OAT] CRLF detected, auto-fixing and re-running..."
     _TMP="${_SCRIPT}.lf"
     sed 's/\r//' "$_SCRIPT" > "$_TMP" && mv "$_TMP" "$_SCRIPT"
-    exec sh "$_SCRIPT" "$@"
+    exec bash "$_SCRIPT" "$@"
 fi
 
 set -e
