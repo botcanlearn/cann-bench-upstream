@@ -54,5 +54,5 @@ def get_input(q: torch.Tensor, k_cache: torch.Tensor, v_cache: torch.Tensor,
         start = b_idx * logical_blocks
         row = (torch.arange(table_width, device=k_cache.device, dtype=torch.int64) + start) % total_blocks
         rows.append(row)
-    legal_table = torch.stack(rows, dim=0)[:, :logical_blocks].contiguous()
+    legal_table = torch.stack(rows, dim=0)[:, :table_width].contiguous()
     return q, k_cache, v_cache, legal_table.to(dtype=block_table.dtype, device=block_table.device)
