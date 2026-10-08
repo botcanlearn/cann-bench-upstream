@@ -1,6 +1,10 @@
 from html.parser import HTMLParser
 
-from kernel_eval.report.html_generator import _render_level_table, _render_operator_tables
+from kernel_eval.report.html_generator import (
+    _render_level_table,
+    _render_operator_tables,
+    _render_top_tables,
+)
 from kernel_eval.report.report_generator import EvalReport, OperatorReport
 
 
@@ -78,3 +82,41 @@ def test_operator_table_does_not_duplicate_pass_rate_as_precision():
     assert len(parser.headers) == 1
     assert len(parser.rows) == 1
     assert len(parser.headers[0]) == len(parser.rows[0]) == 9
+
+
+def test_html_report_escapes_operator_and_category_text(monkeypatch):
+    from html import escape
+
+    injected = '<img src=x onerror="document.body.dataset.reportInjected=1">'
+    escaped = escape(injected)
+    operators = [
+        OperatorReport(
+            rel_path="level1/add",
+            operator=injected,
+            total_cases=1,
+            passed_cases=1,
+            pass_rate=1.0,
+            avg_speedup=1.0,
+            score=100.0,
+        ),
+        OperatorReport(
+            rel_path="level1/add",
+            operator="Add",
+            total_cases=1,
+            passed_cases=1,
+            pass_rate=1.0,
+            avg_speedup=1.0,
+            score=100.0,
+        ),
+    ]
+    monkeypatch.setattr(
+        "kernel_eval.report.html_generator._get_category", lambda unused_path: injected
+    )
+
+    top_tables = _render_top_tables(operators)
+    details = _render_operator_tables(operators)
+
+    assert injected not in top_tables + details
+    assert top_tables.count(escaped) == 2
+    assert details.count(escaped) == 3
+    assert "Add" in top_tables + details

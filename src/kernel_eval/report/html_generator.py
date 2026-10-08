@@ -275,7 +275,8 @@ def _render_top_tables(ops: List[OperatorReport]) -> str:
     def _prec_rows(items):
         out = ''
         for i, o in enumerate(items, 1):
-            out += f'            <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>L{o.rel_path[5:6] if o.rel_path else "1"}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td></tr>\n'
+            operator = _escape(str(o.operator))
+            out += f'            <tr><td>{i}</td><td class="col-name">{operator}</td><td>L{o.rel_path[5:6] if o.rel_path else "1"}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td></tr>\n'
         return out
 
     def _sp_rows(items):
@@ -283,7 +284,8 @@ def _render_top_tables(ops: List[OperatorReport]) -> str:
         for i, o in enumerate(items, 1):
             sp = o.avg_speedup
             v, cls = (_fsp(sp), _cls_sp(sp)) if sp > 0 else ('—', 'score-low')
-            out += f'            <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>L{o.rel_path[5:6] if o.rel_path else "1"}</td><td class="score-cell {cls}">{v}</td></tr>\n'
+            operator = _escape(str(o.operator))
+            out += f'            <tr><td>{i}</td><td class="col-name">{operator}</td><td>L{o.rel_path[5:6] if o.rel_path else "1"}</td><td class="score-cell {cls}">{v}</td></tr>\n'
         return out
 
     return f'''    <h4>3.3 算子分析</h4>
@@ -346,9 +348,10 @@ def _render_operator_tables(ops: List[OperatorReport]) -> str:
         rows = ''
         for i, o in enumerate(lv_ops, 1):
             sp = o.avg_speedup
-            cat = _get_category(o.rel_path)
+            operator = _escape(str(o.operator))
+            cat = _escape(str(_get_category(o.rel_path)))
             lv_s = o.rel_path[5:6] if o.rel_path and len(o.rel_path) > 5 else str(lv)
-            rows += f'''          <tr><td>{i}</td><td class="col-name">{o.operator}</td><td>{cat}</td><td>L{lv_s}</td><td>{o.total_cases}</td><td>{o.passed_cases}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_sp(sp)}">{_fsp(sp)}</td><td class="score-cell {_cls_score(o.score)}">{_fs(o.score)}</td></tr>\n'''
+            rows += f'''          <tr><td>{i}</td><td class="col-name">{operator}</td><td>{cat}</td><td>L{lv_s}</td><td>{o.total_cases}</td><td>{o.passed_cases}</td><td class="score-cell {_cls_rate(o.pass_rate)}">{_fr(o.pass_rate)}</td><td class="score-cell {_cls_sp(sp)}">{_fsp(sp)}</td><td class="score-cell {_cls_score(o.score)}">{_fs(o.score)}</td></tr>\n'''
 
         label = lv_labels.get(lv, f'Level {lv}')
         result += f'''    <h4>4.{lv} Level {lv} — {label}</h4>
