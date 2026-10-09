@@ -420,17 +420,29 @@ class DataGenerator:
             tensor[nan_mask] = float('nan')
             return tensor
 
+        # 闭区间退化为单个无穷值时，所有样本都必须保持该值。
+        if min_f == max_f and (math.isinf(min_f) or math.isinf(max_f)):
+            return torch.full(shape, min_f, dtype=dtype)
+
         if generator is not None:
             rand_base = torch.rand(shape, dtype=torch.float32, generator=generator)
             tensor = (rand_base * 2 - 1).to(dtype)
         else:
             tensor = torch.randn(shape, dtype=torch.float32).to(dtype)
 
-        # 在边界填充特殊值
+        # 有限端点仍约束普通样本；无穷只注入它实际所在的那一侧。
+        # 例如 [0.1, +inf] 不能混入负值或 -inf，否则会违背用例声明的输入范围。
+        finite_min = min_f if math.isfinite(min_f) else None
+        finite_max = max_f if math.isfinite(max_f) else None
+        if finite_min is not None or finite_max is not None:
+            tensor = torch.clamp(tensor, min=finite_min, max=finite_max)
+
+        # 在对应边界填充特殊值。
         flat = tensor.flatten()
         n = max(1, len(flat) // 20)
-        if min_f == float('-inf') or max_f == float('inf'):
+        if min_f == float('-inf'):
             flat[:n] = float('-inf')
+        if max_f == float('inf'):
             flat[-n:] = float('inf')
 
         return tensor
