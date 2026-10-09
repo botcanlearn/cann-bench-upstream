@@ -19,6 +19,8 @@ Scoring 模块单元测试
 Eq.5 (calculate_overall_score / calculate_level_score)。
 """
 
+from dataclasses import asdict
+
 import pytest
 
 from kernel_eval.base.result import (
@@ -40,7 +42,7 @@ from kernel_eval.report.scoring import (
     aggregate_eq4,
     per_case_sol_score,
 )
-from kernel_eval.report.summary_generator import calculate_operator_summary
+from kernel_eval.report.summary_generator import calculate_operator_summary, generate_summary
 
 
 class TestPerCaseSolScore:
@@ -443,6 +445,98 @@ class TestScoringCalculator:
 
 
 class TestSummaryDictScoring:
+    def test_nested_summary_preserves_profiler_collection_failure(self):
+        op = EvalOperatorResult(
+            rel_path="level1/exp",
+            operator="Exp",
+            total_cases=2,
+            passed_cases=2,
+            failed_cases=0,
+            skipped_cases=0,
+            results=[
+                EvalCaseResult(
+                    case_id="case_1",
+                    rel_path="level1/exp",
+                    operator="Exp",
+                    case_num=1,
+                    success=True,
+                    perf_result=PerfResult(elapsed_us=50),
+                    baseline_perf_us=100,
+                    t_hw_us=50,
+                ),
+                EvalCaseResult(
+                    case_id="case_2",
+                    rel_path="level1/exp",
+                    operator="Exp",
+                    case_num=2,
+                    success=True,
+                    perf_result=PerfResult(
+                        elapsed_us=0,
+                        metadata={"perf_collection_failed": True},
+                    ),
+                    baseline_perf_us=100,
+                    t_hw_us=50,
+                ),
+            ],
+            pass_rate=1.0,
+            avg_speedup=1.0,
+        )
+        summary = generate_summary({"operators": [op.to_dict()]})
+
+        assert summary.operators[0].composite_score == pytest.approx(75.0)
+
+        no_npu_perf = op.to_dict()
+        no_npu_perf["results"][1]["perf"]["metadata"]["perf_collection_failed"] = False
+        summary = generate_summary({"operators": [no_npu_perf]})
+        assert summary.operators[0].composite_score == pytest.approx(0.0)
+
+    def test_flat_report_summary_preserves_profiler_collection_failure(self):
+        op = EvalOperatorResult(
+            rel_path="level1/exp",
+            operator="Exp",
+            total_cases=2,
+            passed_cases=2,
+            failed_cases=0,
+            skipped_cases=0,
+            results=[
+                EvalCaseResult(
+                    case_id="case_1",
+                    rel_path="level1/exp",
+                    operator="Exp",
+                    case_num=1,
+                    success=True,
+                    perf_result=PerfResult(elapsed_us=50),
+                    baseline_perf_us=100,
+                    t_hw_us=50,
+                ),
+                EvalCaseResult(
+                    case_id="case_2",
+                    rel_path="level1/exp",
+                    operator="Exp",
+                    case_num=2,
+                    success=True,
+                    perf_result=PerfResult(
+                        elapsed_us=0,
+                        metadata={"perf_collection_failed": True},
+                    ),
+                    baseline_perf_us=100,
+                    t_hw_us=50,
+                ),
+            ],
+            pass_rate=1.0,
+            avg_speedup=1.0,
+        )
+        score_info = ScoringCalculator().calculate_operator_score(op)
+        report = OperatorReport.from_eval_operator_result(
+            op,
+            score_info.total_score,
+            score_info=score_info,
+        )
+        summary = generate_summary({"operators": [asdict(report)]})
+
+        assert score_info.total_score == pytest.approx(75.0)
+        assert summary.operators[0].composite_score == pytest.approx(score_info.total_score)
+
     def test_json_summary_counts_compile_runtime_failures(self):
         summary = calculate_operator_summary({
             "operator": "Exp",

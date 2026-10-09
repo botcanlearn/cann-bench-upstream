@@ -60,6 +60,7 @@ class EvalResult:
     perf_recheck: Optional[Dict[str, Any]] = None
     memory_peak_mb: Optional[float] = None
     memory_baseline_mb: Optional[float] = None
+    perf_collection_failed: bool = False
 
     def resolve_profiling(self):
         if self._perf_result is not None:
@@ -109,6 +110,10 @@ class EvalResult:
             perf_recheck=result.perf_recheck,
             memory_peak_mb=result.memory_peak_mb,
             memory_baseline_mb=result.memory_baseline_mb,
+            perf_collection_failed=bool(
+                result.perf_result is None
+                or result.perf_result.metadata.get("perf_collection_failed", False)
+            ),
         )
 
 

@@ -145,7 +145,16 @@ def _composite_score_from_dict(op_result: Dict[str, Any]) -> Dict[str, float]:
         if score_i is None:
             t_cand = perf.get("elapsed_us") or case.get("elapsed_us") or 0
             if t_cand <= 0:
-                n_no_perf_pass += 1
+                perf_metadata = perf.get("metadata") or {}
+                collection_failed = perf_metadata.get(
+                    "perf_collection_failed",
+                    case.get(
+                        "perf_collection_failed",
+                        "perf" in case and case.get("perf") is None,
+                    ),
+                )
+                if not collection_failed:
+                    n_no_perf_pass += 1
             t_base = case.get("baseline_perf_us") or 0
             t_hw = case.get("t_hw_us") or 0
             score_i = per_case_sol_score(t_base, t_cand, t_hw, rel_path=rel_path)
