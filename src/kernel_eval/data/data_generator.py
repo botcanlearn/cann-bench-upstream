@@ -511,8 +511,8 @@ class DataGenerator:
             if s is None:
                 # None 形状占位符
                 output.append(None)
-            elif isinstance(s, list) and s and isinstance(s[0], int):
-                # s 是单个 shape [N, C, H, W] -> 单个 tensor
+            elif isinstance(s, list) and (not s or isinstance(s[0], int)):
+                # s 是单个 shape [N, C, H, W] 或 rank-0 标量 shape [] -> 单个 tensor
                 dtype_item = d if isinstance(d, str) else (d[0] if isinstance(d, list) and d else 'float32')
                 vr_item = vr if isinstance(vr, list) and len(vr) == 2 and not isinstance(vr[0], list) else None
                 output.append(self.generate_input_tensor(s, dtype_item, vr_item, generator=generator))
