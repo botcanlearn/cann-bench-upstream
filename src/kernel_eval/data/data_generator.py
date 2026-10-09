@@ -20,6 +20,7 @@
 3. 支持确定性种子（通过 torch.Generator）确保评测可复现
 """
 
+import math
 from typing import Any, List, Optional
 
 import torch
@@ -336,10 +337,14 @@ class DataGenerator:
             return self._gen_float_normal(shape, dtype, min_val, max_val, generator=generator)
 
         # 统一使用 torch.rand + 缩放 路径，支持 generator 参数
-        # 无论 range_val 是否超过 dmax，都通过 float64 中间计算避免溢出
+        # 使用 float64 中间值；端点跨度溢出时改用凸组合计算。
         range_val = max_val - min_val
         rand_f64 = torch.rand(shape, dtype=torch.float64, generator=generator)
-        tensor_f64 = rand_f64 * range_val + min_val
+        if math.isfinite(range_val):
+            tensor_f64 = rand_f64 * range_val + min_val
+        else:
+            # 两个有限的 float64 端点跨过零时，端点差可能溢出；凸组合不需要该差值。
+            tensor_f64 = (1.0 - rand_f64) * min_val + rand_f64 * max_val
         # clamp 确保值严格在 dtype 范围内，避免转换溢出
         tensor_f64 = torch.clamp(tensor_f64, dmin, dmax)
         return tensor_f64.to(dtype)
@@ -370,8 +375,13 @@ class DataGenerator:
         """
         finfo = torch.finfo(dtype)
         range_val = max_val - min_val
-        mu = min_val + range_val / 2.0
-        sigma = range_val / 6.0
+        if math.isfinite(range_val):
+            mu = min_val + range_val / 2.0
+            sigma = range_val / 6.0
+        else:
+            # 端点差溢出时，用半量计算相同的中点和标准差，避免中间值溢出。
+            mu = min_val / 2.0 + max_val / 2.0
+            sigma = max_val / 6.0 - min_val / 6.0
 
         z = torch.randn(shape, dtype=torch.float64, generator=generator)
         tensor_f64 = z * sigma + mu
